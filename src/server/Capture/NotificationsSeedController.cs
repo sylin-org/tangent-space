@@ -1,5 +1,6 @@
 using Koan.Data.Abstractions;
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Koan.Data.Core.Model;
 using Koan.Identity.Roles;
 using Microsoft.AspNetCore.Mvc;
@@ -9,11 +10,10 @@ using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
 using Tangent.Tangents;
-using Tangent.Writer;
 
 namespace Tangent.Capture;
 
-/// <summary>The rows the notifications' captures show, written through the writer when the capture asks: the capture
+/// <summary>The rows the notifications' captures show, sent as commands when the capture asks: the capture
 /// persona's Topic in the discussions, with Mara's reply to it from before she last opened her notifications; then,
 /// since, Lumen's reply, Lumen's Topic that mentions her, Mara's Topic taken on a tangent from hers into the workshop,
 /// Leo making her a moderator, Leo's rewrite of her Topic's opening and his removal of a reply of hers, Mara's report of
@@ -22,7 +22,7 @@ namespace Tangent.Capture;
 /// <c>notifications-unseen</c> puts her notifications checkpoint back at Mara's reply, or
 /// before everything where the place has no such reply, before every width and theme, since opening them moves it.
 /// Compiled only into the capture host, like <see cref="CaptureSeedController"/>; fixed names, words, times and TIDs.</summary>
-public sealed class NotificationsSeedController(WriteLoop writer, RoleCollection roles) : ControllerBase
+public sealed class NotificationsSeedController(RoleCollection roles) : ControllerBase
 {
     private const string Persona = "did:plc:capture4persona";
     private const string Leo = "did:plc:capture4leo";
@@ -99,7 +99,7 @@ public sealed class NotificationsSeedController(WriteLoop writer, RoleCollection
         await roles.Add(role, id, ct);
     }
 
-    private async Task<T> Write<T>(ICommand<T> command, CancellationToken ct) => await writer.Send(command, ct) switch
+    private async Task<T> Write<T>(ICommand<T> command, CancellationToken ct) => await command.Send() switch
     {
         Outcome<T>.Done done => done.Result,
         var other => throw new InvalidOperationException($"The notifications seed's {command.GetType().Name} answered {other}.")
@@ -122,10 +122,10 @@ public sealed class NotificationsSeedController(WriteLoop writer, RoleCollection
         return new string(characters);
     }
 
-    /// <summary>Saves one row as the seed built it, through the writer.</summary>
+    /// <summary>Saves one row as the seed built it, as a command.</summary>
     private sealed record Keep<TEntity>(TEntity Row) : ICommand<TEntity> where TEntity : Entity<TEntity>
     {
-        public async Task<Outcome<TEntity>> Run(Sequences sequences, CancellationToken ct)
+        public async Task<Outcome<TEntity>> Run(CancellationToken ct)
         {
             await Row.Save(ct);
             return new Outcome<TEntity>.Done(Row);

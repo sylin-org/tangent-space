@@ -1,6 +1,6 @@
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Tangent.Participants;
-using Tangent.Writer;
 
 namespace Tangent.Access;
 
@@ -16,14 +16,11 @@ public enum RoleMove
 /// <see cref="Bit.ManageRoles"/> (<see cref="RoleSettings.Actor"/>); the role exists and the actor manages it, and may
 /// move it where it goes (<see cref="People.Manages"/>); everyone stays as it is (<see cref="RoleSettings.EveryoneStays"/>);
 /// the name is a role's; the actor holds each permission given or taken away (<see cref="People.NotHeld"/>); and the
-/// administrator role keeps <see cref="Bit.Administrator"/>. Koan's role writes are not part of a transaction, so
-/// <see cref="Prepare"/> judges and writes them before the transaction opens, and <see cref="Run"/> answers with the role
-/// as it then stands; the log records nothing. A move past either end of the order stays where it is.</summary>
+/// administrator role keeps <see cref="Bit.Administrator"/>. It answers with the role as it then stands; the log records
+/// nothing. A move past either end of the order stays where it is.</summary>
 public sealed record ReviseRole(string ActorId, string Key, string? Name = null, Bit? Permissions = null, RoleMove? Move = null) : ICommand<Role>
 {
-    private Role? _revised;
-
-    public async Task Prepare(CancellationToken ct)
+    public async Task<Outcome<Role>> Run(CancellationToken ct)
     {
         var (space, actor) = await RoleSettings.Actor(ActorId, ct);
         if (Key == Roles.Everyone) throw new Refusal(RoleSettings.EveryoneStays);
@@ -51,9 +48,6 @@ public sealed record ReviseRole(string ActorId, string Key, string? Name = null,
         if (Permissions is { } bits && bits != granted)
             role = await roles.SetPermissions(Key, [.. role.Permissions.Where(token => Bits.InTokens([token]) == Bit.None), .. Bits.Tokens(bits)], ct);
         if (to is { } target && target != role.Position) role = await roles.Move(Key, target, ct);
-        _revised = role;
+        return new Outcome<Role>.Done(role);
     }
-
-    public Task<Outcome<Role>> Run(Sequences sequences, CancellationToken ct)
-        => Task.FromResult<Outcome<Role>>(new Outcome<Role>.Done(_revised ?? throw new InvalidOperationException("A role is changed in its command's Prepare.")));
 }

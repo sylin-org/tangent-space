@@ -5,7 +5,7 @@ namespace Tangent.Lifecycle;
 
 /// <summary>A retired Tangent Space: where the operator names an archive (<see cref="TangentSpaceOptions.Archive"/>), the
 /// server is a static file host of that folder and nothing else, as any other host of it would be, so it takes no write by
-/// having nowhere to take one: no Koan, no database, no writer, and the data folder untouched, so taking the setting away
+/// having nowhere to take one: no Koan, no database, no command, and the data folder untouched, so taking the setting away
 /// brings the place back as it was. An address that holds a page answers it, its closing slash added as a static host
 /// adds it, which its relative links count on; an image at its address answers as what its first bytes say it is, since
 /// the name it keeps has no extension; any other read answers not found, and any write that the place is retired. Its path under a host is served as the base URL configures it.</summary>

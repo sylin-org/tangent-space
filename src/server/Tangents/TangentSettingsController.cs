@@ -1,10 +1,10 @@
+using Koan.Data.Core.Commands;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
 using Tangent.Posts;
 using Tangent.Render;
 using Tangent.Space;
-using Tangent.Writer;
 
 namespace Tangent.Tangents;
 
@@ -17,7 +17,7 @@ namespace Tangent.Tangents;
 /// request reads the Tangent (<c>200</c>); a refusal reads the form again with the reason inline, or a problem with the
 /// gate. Both resolve the address as the Tangent page does (<see cref="PostWrites.Locate"/>) before anything else is
 /// judged, so a Tangent the reader may not view and one no row has answer alike.</summary>
-public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop writer) : ControllerBase
+public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
     public const string Route = "/t/{tangent}/" + TangentWrites.SettingsSegment;
 
@@ -26,7 +26,7 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop 
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var (found, unseen) = await PostWrites.Locate(personId, tangent, null, null, ct);
+        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, null, null, ct);
         if (found is null) return unseen!;
         return Ok(await Page(found, personId, ct));
     }
@@ -38,7 +38,7 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop 
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
-        var (found, unseen) = await PostWrites.Locate(personId, tangent, null, null, ct);
+        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, null, null, ct);
         if (found is null) return unseen!;
         if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
 
@@ -49,14 +49,14 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop 
         var move = TangentWrites.Choice(fields, TangentWrites.MoveField, TangentWrites.Moves, out var moveValid);
         if (!moveValid) return await Refused(found, personId, fields, TangentWrites.MoveRule, ct);
 
-        var outcome = await writer.Send(new ChangeTangent(
+        var outcome = await new ChangeTangent(
             found.Tangent.Id,
             personId ?? "",
             fields.GetValueOrDefault(TangentWrites.NameField),
             fields.GetValueOrDefault(TangentWrites.DescriptionField),
             kind is { } chosenKind ? Enum.GetValues<PostKind>()[chosenKind] : null,
             audience is { } chosenAudience ? Enum.GetValues<Audience>()[chosenAudience] : null,
-            move is { } chosenMove ? Enum.GetValues<Move>()[chosenMove] : null), ct);
+            move is { } chosenMove ? Enum.GetValues<Move>()[chosenMove] : null).Send();
         switch (outcome)
         {
             case Outcome<Tangent>.Done { Result: var changed }:
@@ -64,14 +64,10 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop 
                 var address = PostWrites.TangentAddress(BaseAddress(), changed.Id);
                 return await TangentWrites.Written(HttpContext, changed, BaseAddress(), personId, created: false,
                     move is null ? address : address + "/" + TangentWrites.SettingsSegment, ct);
-            case Outcome<Tangent>.Refused { Reason: ChangeTangent.NoTangent }:
-                return PostWrites.Absent();
-            case Outcome<Tangent>.Refused { Reason: var reason }:
+            case Outcome<Tangent>.Refused { Reason: { Kind: not ReasonKind.Absent } reason }:
                 return await Refused(found, personId, fields, reason, ct);
-            case Outcome<Tangent>.Failed { Cause: var cause }:
-                throw new InvalidOperationException($"Changing the Tangent {tangent} failed.", cause);
             default:
-                throw new InvalidOperationException($"The writer answered {outcome} for changing the Tangent {tangent}.");
+                return PostWrites.Answer(HttpContext, outcome);
         }
     }
 
@@ -88,11 +84,11 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop 
 
     /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the form again, read afresh,
     /// keeping what was sent, with the reason where it belongs.</summary>
-    private async Task<IActionResult> Refused(PostWrites.Located found, string? personId, IReadOnlyDictionary<string, string> fields, string reason,
+    private async Task<IActionResult> Refused(PostWrites.Located found, string? personId, IReadOnlyDictionary<string, string> fields, Reason reason,
         CancellationToken ct)
     {
-        if (PostWrites.WantsJson(Request)) return TangentWrites.Refused(reason);
-        var (again, unseen) = await PostWrites.Locate(personId, found.Tangent.Id, null, null, ct);
+        if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
+        var (again, unseen) = await PostWrites.Locate(HttpContext, personId, found.Tangent.Id, null, null, ct);
         if (again is null) return unseen!;
         var page = await Page(again, personId, ct);
         page = page with
@@ -106,12 +102,12 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop 
         };
         page = TangentWrites.Concerning(reason) switch
         {
-            TangentWrites.About.Name => page with { NameFailure = reason },
-            TangentWrites.About.Description => page with { DescriptionFailure = reason },
-            TangentWrites.About.Sent => page with { Failure = reason },
-            _ => page with { Gate = reason, Change = null }
+            TangentWrites.About.Name => page with { NameFailure = reason.Text },
+            TangentWrites.About.Description => page with { DescriptionFailure = reason.Text },
+            TangentWrites.About.Sent => page with { Failure = reason.Text },
+            _ => page with { Gate = reason.Word, Change = null }
         };
-        return new ObjectResult(page) { StatusCode = TangentWrites.Status(reason) };
+        return new ObjectResult(page) { StatusCode = PostWrites.Status(reason) };
     }
 
     private async Task<TangentSettingsPage> Page(PostWrites.Located found, string? personId, CancellationToken ct)
@@ -141,7 +137,7 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl, WriteLoop 
                 ? TangentWrites.ChangeForm(address + "/" + TangentWrites.SettingsSegment, moderators, movable, FormToken.For(HttpContext))
                 : null,
             capabilities.Can,
-            TangentWrites.ManageGate(capabilities),
+            TangentWrites.ManageGate(capabilities)?.Word,
             TangentWrites.Kinds,
             moderators ? [] : TangentWrites.Audiences,
             personId is null ? baseAddress + Participants.SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,

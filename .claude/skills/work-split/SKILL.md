@@ -9,7 +9,7 @@ The lead plans; an executor builds in a session of its own; the lead verifies an
 
 ## 1. Choose
 
-Take the next package from `FEATURES.md` whose dependencies in `PLAN.md` are met. Assign its role by the plan's rule: first of its kind → Opus 5.5 `high` (`xhigh` for the writer, the evaluator, Koan transaction semantics); a repeat → Opus 5.5 `high`; explorer-grade → Sonnet 5.5 `medium`; mechanical → Haiku 5.5 `low`. A package whose brief would mostly retell what the lead already knows stays with the lead.
+Take the next package from `FEATURES.md` whose dependencies in `PLAN.md` are met. Assign its role by the plan's rule: first of its kind → Opus 5.5 `high` (`xhigh` for the evaluator, Koan transaction semantics); a repeat → Opus 5.5 `high`; explorer-grade → Sonnet 5.5 `medium`; mechanical → Haiku 5.5 `low`. A package whose brief would mostly retell what the lead already knows stays with the lead.
 
 ## 2. Brief
 

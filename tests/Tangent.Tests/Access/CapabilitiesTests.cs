@@ -88,7 +88,7 @@ public sealed class CapabilitiesTests
 
         var capabilities = Capabilities.For(Participant(), bag, PublicPlace, Workshop, overwrites, Now);
 
-        Assert.Equal((row, held, gate), (row, capabilities.Holds(Bit.Topic), capabilities.Gate(Bit.Topic)));
+        Assert.Equal((row, held, gate), (row, capabilities.Holds(Bit.Topic), capabilities.Gate(Bit.Topic)?.Word));
 
         static Bit Rule(string rule, Bit bit, bool deny = false) => rule == (deny ? "deny" : "allow") ? bit : Bit.None;
     }
@@ -247,10 +247,10 @@ public sealed class CapabilitiesTests
         var noRole = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, [], Now);
         var overruled = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, [Over(RoleTokens.Everyone, deny: Bit.Topic), Over(Leo, allow: Bit.Topic)], Now);
 
-        Assert.Equal("everyone denies Topic", everyone.Gate(Bit.Topic));
-        Assert.Equal("role:moderator denies Post", role.Gate(Bit.Post));
-        Assert.Equal("leo denies Post", own.Gate(Bit.Post));
-        Assert.Equal("no role grants ManageSpace", noRole.Gate(Bit.ManageSpace));
+        Assert.Equal("everyone denies Topic", everyone.Gate(Bit.Topic)?.Word);
+        Assert.Equal("role:moderator denies Post", role.Gate(Bit.Post)?.Word);
+        Assert.Equal("leo denies Post", own.Gate(Bit.Post)?.Word);
+        Assert.Equal("no role grants ManageSpace", noRole.Gate(Bit.ManageSpace)?.Word);
         Assert.Null(overruled.Gate(Bit.Topic));
         Assert.Throws<ArgumentException>(() => noRole.Gate(Bit.Post | Bit.Topic));
     }

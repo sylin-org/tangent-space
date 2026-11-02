@@ -1,6 +1,6 @@
 using AngleSharp.Html.Parser;
+using Koan.Data.Core.Commands;
 using Tangent.Participants;
-using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -137,8 +137,8 @@ public sealed class MarkdownTests
     public async Task A_body_that_renders_too_large_or_too_deep_or_mentions_too_many_identities_is_refused_and_nothing_is_kept()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var root = await Started(writer, Ada, "Lanterns", "How do you hang yours?");
+        await Place(tangentSpace);
+        var root = await Started(Ada, "Lanterns", "How do you hang yours?");
         var before = await Counted();
 
         // Sixty kilobytes of pipes fit the body's limit and would render more than half a megabyte of table cells; twenty
@@ -154,27 +154,27 @@ public sealed class MarkdownTests
         foreach (var (body, reason) in new[] { (wide, Post.BodyTooIntricate), (deep, Post.BodyTooIntricate), (nested, Post.BodyRendersTooLong) })
         {
             Assert.Equal(reason, Assert.IsType<Outcome<Post>.Refused>(
-                await writer.Send(new StartTopic(Tids.Mint(), Workshop, "Too much", body, Ada), Cancellation)).Reason);
+                await new StartTopic(Tids.Mint(), Workshop, "Too much", body, Ada).Send(Cancellation)).Reason);
             Assert.Equal(reason, Assert.IsType<Outcome<Post>.Refused>(
-                await writer.Send(new Reply(Tids.Mint(), root.Id, body, Bea), Cancellation)).Reason);
+                await new Reply(Tids.Mint(), root.Id, body, Bea).Send(Cancellation)).Reason);
             Assert.Equal(reason, Assert.IsType<Outcome<Post>.Refused>(
-                await writer.Send(new EditPost(root.Id, 1, body, null, Ada), Cancellation)).Reason);
+                await new EditPost(root.Id, 1, body, null, Ada).Send(Cancellation)).Reason);
         }
 
         Assert.Equal(Post.TooManyMentions, Assert.IsType<Outcome<Post>.Refused>(
-            await writer.Send(new StartTopic(Tids.Mint(), Workshop, "Everyone", crowded, Ada), Cancellation)).Reason);
+            await new StartTopic(Tids.Mint(), Workshop, "Everyone", crowded, Ada).Send(Cancellation)).Reason);
 
         // One identity mentioned over and over: every mention is measured at its longest rendering, whatever handle Bea
         // holds when it is read, so the body is refused — two hundred on lines of their own by the rendered size, and the
         // body's limit of them in one paragraph already by its brackets.
-        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new RecordHandle(Bea, new string('b', 243) + ".bsky"), Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new RecordHandle(Bea, new string('b', 243) + ".bsky").Send(Cancellation));
         var repeated = string.Concat(Enumerable.Repeat($"[x](at://{Bea})\n\n", 200));
         var paragraph = Fill($"[x](at://{Bea}) ");
         Assert.True(MarkdownHtml.Tractable(repeated));
         Assert.Equal(Post.BodyRendersTooLong, Assert.IsType<Outcome<Post>.Refused>(
-            await writer.Send(new StartTopic(Tids.Mint(), Workshop, "Bea", repeated, Ada), Cancellation)).Reason);
+            await new StartTopic(Tids.Mint(), Workshop, "Bea", repeated, Ada).Send(Cancellation)).Reason);
         Assert.Equal(Post.BodyTooIntricate, Assert.IsType<Outcome<Post>.Refused>(
-            await writer.Send(new StartTopic(Tids.Mint(), Workshop, "Bea", paragraph, Ada), Cancellation)).Reason);
+            await new StartTopic(Tids.Mint(), Workshop, "Bea", paragraph, Ada).Send(Cancellation)).Reason);
 
         // Sixty-four kilobytes of unclosed links would take Markdig seconds to parse; the structure check refuses the body
         // where its command is built, in a few milliseconds and before any parse.
@@ -184,11 +184,11 @@ public sealed class MarkdownTests
         Assert.Equal(Post.BodyTooIntricate, unclosed.Refusal);
         Assert.True(watch.ElapsedMilliseconds < 500, $"Judging the body took {watch.ElapsedMilliseconds} ms.");
         Assert.Equal(Post.BodyTooIntricate, Assert.IsType<Outcome<Post>.Refused>(
-            await writer.Send(new Reply(Tids.Mint(), root.Id, unclosed, Bea), Cancellation)).Reason);
+            await new Reply(Tids.Mint(), root.Id, unclosed, Bea).Send(Cancellation)).Reason);
         Assert.Equal(Post.BodyTooIntricate, Assert.IsType<Outcome<Post>.Refused>(
-            await writer.Send(new EditPost(root.Id, 1, string.Concat(Enumerable.Repeat("*a_", 3000)), null, Ada), Cancellation)).Reason);
+            await new EditPost(root.Id, 1, string.Concat(Enumerable.Repeat("*a_", 3000)), null, Ada).Send(Cancellation)).Reason);
         Assert.Equal(Post.BodyTooIntricate, Assert.IsType<Outcome<Post>.Refused>(
-            await writer.Send(new StartTopic(Tids.Mint(), Workshop, "Brackets", new string('[', 3000), Ada), Cancellation)).Reason);
+            await new StartTopic(Tids.Mint(), Workshop, "Brackets", new string('[', 3000), Ada).Send(Cancellation)).Reason);
         Assert.Equal(before, await Counted());
         Assert.Equal(("How do you hang yours?", 1L), ((await Post.Get(root.Id, Cancellation))?.Body, (await Post.Get(root.Id, Cancellation))?.Version));
         Assert.Equal(PostWrites.About.Body, PostWrites.Concerning(Post.BodyRendersTooLong));

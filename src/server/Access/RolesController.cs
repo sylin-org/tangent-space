@@ -1,3 +1,4 @@
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
@@ -5,7 +6,6 @@ using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Render;
 using Tangent.Space;
-using Tangent.Writer;
 
 namespace Tangent.Access;
 
@@ -19,7 +19,7 @@ namespace Tangent.Access;
 /// back to the roles; a JSON request reads the role as the page now lists it, created (<c>201</c>) or changed
 /// (<c>200</c>), or nothing for a deletion (<c>204</c>); a refusal reads the page again with the reason above the list, or
 /// a problem. A reader for whom the place does not exist receives what an address with nothing there receives.</summary>
-public sealed class RolesController(KoanWebBaseUrl baseUrl, WriteLoop writer, RoleCollection roles) : ControllerBase
+public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles) : ControllerBase
 {
     public const string Path = "/settings/roles";
 
@@ -55,7 +55,7 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, WriteLoop writer, Ro
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(place.Gate(Bit.View));
+        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
         var read = await Page(place, personId, Math.Max(page ?? 1, 1), ct);
         return read.Gate is { } gate ? new ObjectResult(read) { StatusCode = PostWrites.Status(gate) } : Ok(read);
     }
@@ -97,20 +97,20 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, WriteLoop writer, Ro
     }
 
     /// <summary>One change: the form's token, the place, the fields; the command <paramref name="command"/> builds from
-    /// them, or the refusal it names for what was sent; then the writer's outcome.</summary>
+    /// them, or the refusal it names for what was sent; then the command's outcome.</summary>
     private async Task<IActionResult> Write(Func<IReadOnlyDictionary<string, string>, object> command, bool created, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(place.Gate(Bit.View));
+        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
         if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
 
         var built = command(fields);
         if (built is string unsent) return await Refused(personId, fields, unsent, created, ct);
         var sent = (ICommand<Role>)built;
-        var outcome = await writer.Send(sent, ct);
+        var outcome = await sent.Send();
         switch (outcome)
         {
             case Outcome<Role>.Done { Result: var role }:
@@ -129,38 +129,26 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, WriteLoop writer, Ro
                     StatusCode = created ? StatusCodes.Status201Created : StatusCodes.Status200OK,
                     ContentTypes = { "application/json" }
                 };
-            case Outcome<Role>.Refused { Reason: ChangeTangentSpace.NoPlace }:
-                return PostWrites.Absent();
             case Outcome<Role>.Refused { Reason: var reason }:
                 return await Refused(personId, fields, reason, created, ct);
-            case Outcome<Role>.Failed { Cause: var cause }:
-                throw new InvalidOperationException($"{sent.GetType().Name} failed.", cause);
             default:
-                throw new InvalidOperationException($"The writer answered {outcome} for {sent.GetType().Name}.");
+                return PostWrites.Answer(HttpContext, outcome);
         }
     }
 
     /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the page again, read afresh,
     /// with the reason above the list, keeping a new role's name and permissions as they were sent.</summary>
-    private async Task<IActionResult> Refused(string? personId, IReadOnlyDictionary<string, string> fields, string reason, bool created,
+    private async Task<IActionResult> Refused(string? personId, IReadOnlyDictionary<string, string> fields, Reason reason, bool created,
         CancellationToken ct)
     {
-        var status = Status(reason);
-        var gate = !Rule(reason) && status is StatusCodes.Status401Unauthorized or StatusCodes.Status403Forbidden;
-        if (PostWrites.WantsJson(Request))
-        {
-            if (gate) return PostWrites.Gated(reason);
-            return Rule(reason)
-                ? new Problem(status, "Not yours to change", reason, reason).ToResult()
-                : new Problem(status, "Not changed", reason).ToResult();
-        }
+        if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
 
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(place.Gate(Bit.View));
+        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
         var page = await Page(place, personId, 1, ct);
         if (page.Gate is null)
         {
-            page = page with { Failure = gate ? PostWrites.Sentence(reason) : reason };
+            page = page with { Failure = reason.Text };
             if (created)
             {
                 page = page with
@@ -171,28 +159,14 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, WriteLoop writer, Ro
             }
         }
 
-        return new ObjectResult(page) { StatusCode = status };
+        return new ObjectResult(page) { StatusCode = PostWrites.Status(reason) };
     }
-
-    /// <summary>The status a refusal answers with: <c>404</c> for a role no one has, <c>403</c> for the rule of who
-    /// changes which role, <c>400</c> for what was sent, and a gate's own otherwise.</summary>
-    private static int Status(string reason) => reason switch
-    {
-        RoleSettings.NoRole => StatusCodes.Status404NotFound,
-        _ when Rule(reason) => StatusCodes.Status403Forbidden,
-        RoleSettings.NameRule or RoleSettings.PermissionsRule or RoleSettings.EveryoneStays or RoleSettings.SeededStays or RoleSettings.Administers
-            or RoleSettings.NoWord or MoveRule => StatusCodes.Status400BadRequest,
-        _ => PostWrites.Status(reason)
-    };
-
-    /// <summary>Whether a refusal is the rule of who changes which role, rather than a missing verb or what was sent.</summary>
-    private static bool Rule(string reason) => reason is RoleSettings.NotManaged or People.NotHeld;
 
     private async Task<RolesPage> Page(Capabilities place, string? personId, int number, CancellationToken ct)
     {
         var baseAddress = BaseAddress();
         var here = baseUrl.PathBase + Path + (number > 1 ? "?" + PageQuery + "=" + number : "");
-        var gate = place.Gate(Bit.ManageRoles);
+        var gate = place.Gate(Bit.ManageRoles)?.Word;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
         var read = gate is null ? await roles.Page(page: number, pageSize: PageSize, ct: ct) : null;
         var listed = read is null ? [] : read.Items.Select(role => Listed(role, place, personId, space, read.TotalCount)).ToList();

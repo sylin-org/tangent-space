@@ -30,13 +30,13 @@
 else if (Model.Gate is { } gate)
 {
     <p class="topic-closed" data-gate="@gate">
-        @if (Model.SignIn is { } signIn && gate == global::Tangent.Access.Capabilities.SignIn)
+        @if (Model.SignIn is { } signIn && gate == global::Tangent.Access.Capabilities.SignIn.Word)
         {
-            @(PostWrites.Sentence(gate) + " ")<a href="@signIn">Sign in</a>
+            @(Access.Capabilities.Sentence(gate) + " ")<a href="@signIn">Sign in</a>
         }
         else
         {
-            @PostWrites.Sentence(gate)
+            @Access.Capabilities.Sentence(gate)
         }
     </p>
 }

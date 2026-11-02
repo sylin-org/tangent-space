@@ -1,8 +1,11 @@
 using System.Globalization;
 using System.Security.Claims;
 using System.Text.Json;
+using Koan.Data.Abstractions.Failures;
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Koan.Web.Auth.Infrastructure;
+using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
 using Tangent.Participants;
@@ -13,7 +16,7 @@ namespace Tangent.Posts;
 /// <summary>What the write routes of a Post share. A write comes as a form a page posted or as JSON an agent sent, to
 /// the same address, and is answered in kind: a form is sent on to the Post's address (<c>303</c>) or, refused, reads
 /// its page again with the reason inline; a JSON request reads the Post with its <c>can</c>, or a problem carrying
-/// the gate. A request a session or a bearer authenticated answers to <see cref="FormToken.Validate"/> before anything
+/// the gate. Refusals answer by their kind, in one place (<see cref="Refused"/>). A request a session or a bearer authenticated answers to <see cref="FormToken.Validate"/> before anything
 /// else is read of it; one that authenticates nobody holds no credential a form could borrow, and its command refuses
 /// it on its own terms.</summary>
 public static class PostWrites
@@ -35,8 +38,8 @@ public static class PostWrites
     /// <summary>The refusal of an edit that names no version.</summary>
     public const string VersionRule = "An edit carries the version of the Post its editor read, as a whole number.";
 
-    /// <summary>What a refusal's reason concerns: a field of what was sent, what was sent as a whole, or a gate, a verb
-    /// the sender does not hold.</summary>
+    /// <summary>Where a form shows a refusal: under a field of what was sent, above what was sent as a whole, or as a gate,
+    /// a verb the sender does not hold.</summary>
     public enum About
     {
         Title,
@@ -115,13 +118,13 @@ public static class PostWrites
     /// sign-in whether an address holds something or nothing; then the missing resource's answer for a Tangent no row
     /// has, a slug no Topic of it has, or an Id no Post of that Topic has. Answers the address found, or what it answers
     /// instead. The reads are the Topic page's: the Tangent, capability's rows, the root by slug and the Post by Id.</summary>
-    public static async Task<(Located? Found, IActionResult? Unseen)> Locate(string? personId, string tangent, string? topic, string? post,
+    public static async Task<(Located? Found, IActionResult? Unseen)> Locate(HttpContext http, string? personId, string tangent, string? topic, string? post,
         CancellationToken ct)
     {
         var row = Slug.IsValid(tangent) ? await Tangents.Tangent.Get(tangent, ct) : null;
         var rows = await Capabilities.LoadRows(personId, row?.Id, ct);
         var here = rows.For(null);
-        if (!here.Exists) return (null, Unseen(here.Gate(Bit.View)));
+        if (!here.Exists) return (null, Unseen(http, here.Gate(Bit.View)));
         if (row is null) return (null, Absent());
         Post? root = null;
         if (topic is not null && (!Slug.IsValid(topic) || (root = await TopicWindow.Topic(row.Id, topic, ct)) is null)) return (null, Absent());
@@ -159,12 +162,12 @@ public static class PostWrites
 
     /// <summary>The body a write route hands its command: written as its sender wrote it, each typed handle of a
     /// participant here their mention, and judged (<see cref="PostBody.Written"/>) only where the person holds the verb
-    /// the command needs here, so a request the writer will refuse at its gate never pays for a parse or a read; left
-    /// unjudged otherwise.</summary>
-    public static async Task<PostBody> Body(IReadOnlyDictionary<string, string> fields, bool mayWrite, CancellationToken ct)
+    /// the command needs here, so a request its gate will refuse never pays for a parse or a read; left unjudged
+    /// otherwise.</summary>
+    public static async Task<PostBody> Body(IReadOnlyDictionary<string, string> fields, bool mayWrite)
     {
         var text = fields.GetValueOrDefault(BodyField) ?? "";
-        return mayWrite ? await PostBody.Written(text, ct) : PostBody.Unjudged(text);
+        return mayWrite ? await PostBody.Written(text, CancellationToken.None) : PostBody.Unjudged(text);
     }
 
     /// <summary>The form that replies in the Topic at <paramref name="topicAddress"/>: a TID minted for it, the body, and
@@ -238,19 +241,17 @@ public static class PostWrites
     public static string Address(string baseUrl, string tangent, string topic, string post)
         => TopicAddress(baseUrl, tangent, topic) + "/" + Uri.EscapeDataString(post);
 
-    /// <summary>What a refusal's reason concerns: the title's and body's rules, the rest of what was sent, or a gate.</summary>
-    public static About Concerning(string reason) => reason switch
+    /// <summary>Where a form shows a refusal: its kind says a gate; the title's and body's rules name their field; anything
+    /// else is about what was sent as a whole.</summary>
+    public static About Concerning(Reason reason) => reason.Kind == ReasonKind.Gated ? About.Gate : reason.Text switch
     {
         Post.NeedsTitle or Post.TitleTooLong => About.Title,
         Post.NeedsBody or Post.BodyTooLong or Post.BodyHasNul or Post.BodyRendersTooLong or Post.TooManyMentions or Post.TooManyImages or Post.BodyTooIntricate => About.Body,
-        Post.NeedsTid or Post.NeedsTangent or Post.NeedsAuthor or Post.NotARoot or Post.TopicLocked or Post.TopicRemoved
-            or Post.NoTitleOnReply or Post.BodyNotJudged or Post.PostRemoved or Post.NeedsRemover or Post.IdTaken or Reply.NoParent or KindRule or VersionRule or Post.NoCover or Post.CoverOnArticle
-            => About.Sent,
-        _ => About.Gate
+        _ => About.Sent
     };
 
     /// <summary>A write that committed: a form is sent on to the Post's address; a JSON request reads the Post with the
-    /// writer's <c>can</c> on it — a reply's judged by its Topic's <paramref name="root"/> — created (<c>201</c>) or
+    /// sender's <c>can</c> on it — a reply's judged by its Topic's <paramref name="root"/> — created (<c>201</c>) or
     /// changed (<c>200</c>), with that address as its <c>Location</c>.</summary>
     public static async Task<IActionResult> Written(HttpContext http, Post post, Post root, string address, string? personId, bool created,
         CancellationToken ct)
@@ -268,11 +269,11 @@ public static class PostWrites
 
     /// <summary>What an address answers that holds nothing the reader may see: the one answer of a missing resource.</summary>
     public static IActionResult Absent()
-        => new Problem(StatusCodes.Status404NotFound, "Not found", "Nothing answers at this address.", Capabilities.Absent).ToResult();
+        => new Problem(StatusCodes.Status404NotFound, "Not found", "Nothing answers at this address.", Capabilities.Absent.Text).ToResult();
 
     /// <summary>What a reader without <see cref="Bit.View"/> where they ask receives: the missing resource's answer where
     /// it is absent to them, otherwise the one step between them and it.</summary>
-    public static IActionResult Unseen(string? gate) => gate is null or Capabilities.Absent ? Absent() : Gated(gate);
+    public static IActionResult Unseen(HttpContext http, Reason? gate) => gate is null ? Absent() : Refused(http, gate);
 
     public static IActionResult TokenRefused()
         => new Problem(StatusCodes.Status400BadRequest, "Open the form again",
@@ -282,48 +283,77 @@ public static class PostWrites
         => new Problem(StatusCodes.Status400BadRequest, "Not a form or a JSON object",
             "A write sends its fields as a form, or as one JSON object.").ToResult();
 
-    /// <summary>The problem a refusal answers as for its reason: a gate, or what was sent.</summary>
-    public static IActionResult Refused(string reason) => Concerning(reason) == About.Gate
-        ? Gated(reason)
-        : new Problem(StatusCodes.Status400BadRequest, "Not written", reason).ToResult();
-
-    /// <summary>The problem a gate answers as: <c>401</c> to sign in, <c>403</c> for every other gate, with the gate.</summary>
-    public static IActionResult Gated(string gate)
-        => new Problem(Status(gate), Heading(gate), Sentence(gate), gate).ToResult();
-
-    public static IActionResult Conflicting(string reason)
-        => new Problem(StatusCodes.Status409Conflict, "Already written", reason).ToResult();
-
-    /// <summary>The status a refusal answers with: a gate's, or <c>400</c> for what was sent.</summary>
-    public static int Status(string reason) => Concerning(reason) != About.Gate
-        ? StatusCodes.Status400BadRequest
-        : reason == Capabilities.SignIn ? StatusCodes.Status401Unauthorized : StatusCodes.Status403Forbidden;
-
-    public static string Heading(string gate) => gate switch
+    /// <summary>The one answer to a command that is not done, as a page or as JSON by the request's <c>Accept</c>, which is
+    /// why it is not Koan's <c>Answer</c>, which answers JSON alone.</summary>
+    public static IActionResult Answer<T>(HttpContext http, Outcome<T> outcome) => outcome switch
     {
-        Capabilities.SignIn => "Sign in first",
-        Capabilities.Apply => "Waiting to be admitted",
-        Capabilities.Declined => "Not admitted",
-        Capabilities.TimedOut => "Timed out",
-        Capabilities.Locked => "Locked",
-        Capabilities.Removed => "Removed",
-        Capabilities.NotYours => "Not yours",
-        _ => "Not open to you"
+        Outcome<T>.Refused { Reason: var reason } => Refused(http, reason),
+        Outcome<T>.Failed failed => Failed(http, failed.Landed, failed.Cause),
+        _ => throw new ArgumentException("A command that is done answers as its route says.", nameof(outcome))
     };
 
-    /// <summary>The one sentence a person reads for a gate, where the form is, and an agent reads as the problem's
-    /// detail.</summary>
-    public static string Sentence(string gate) => gate switch
+    /// <summary>The problem a refusal answers as, by its kind: absent <c>404</c> in one sentence; gated <c>401</c> to sign
+    /// in and <c>403</c> otherwise, with its heading, its word as <c>gate</c>, the sentence of a rule that has no word, and
+    /// its next step as <c>next</c>; conflict <c>409</c>; anything else <c>400</c>. Where a gate means something more
+    /// specific at this address, <paramref name="saying"/> and <paramref name="heading"/> say it.</summary>
+    public static IActionResult Refused(HttpContext http, Reason reason, string? saying = null, string? heading = null) => (reason.Kind switch
     {
-        Capabilities.SignIn => "Sign in to write here.",
-        Capabilities.Apply => "Your application is waiting: you can write here once someone admits you.",
-        Capabilities.Declined => "Your application was declined, so you read here and don’t write.",
-        Capabilities.TimedOut => "You’re timed out: you can read and report here, and post again once it ends.",
-        Capabilities.Locked => "This topic is locked, so no one replies in it.",
-        Capabilities.Removed => "This post is removed, so nothing changes it now.",
-        Capabilities.NotYours => "Only its author, or a moderator, can change this post.",
-        _ => "This isn’t open to you here."
+        ReasonKind.Absent => new Problem(StatusCodes.Status404NotFound, "Not found", reason.Said, Capabilities.Absent.Text),
+        ReasonKind.Gated => new Problem(Status(reason), heading ?? Heading(reason), saying ?? reason.Text,
+            reason.Word ?? reason.Text, reason.Next is { } next ? Next(http, next) : null),
+        ReasonKind.Conflict => new Problem(StatusCodes.Status409Conflict, "Nothing changed", reason.Text),
+        _ => new Problem(StatusCodes.Status400BadRequest, "Not written", reason.Text)
+    }).ToResult();
+
+    /// <summary>What a person reads above a gate's sentence.</summary>
+    private static string Heading(Reason gate) => Headings.GetValueOrDefault(gate) ?? (gate.Word is null ? "Not yours to change" : "Not open to you");
+
+    private static readonly IReadOnlyDictionary<Reason, string> Headings = new Dictionary<Reason, string>
+    {
+        [Capabilities.SignIn] = "Sign in first",
+        [Capabilities.Apply] = "Waiting to be admitted",
+        [Capabilities.Declined] = "Not admitted",
+        [Capabilities.TimedOut] = "Timed out",
+        [Capabilities.Locked] = "Locked",
+        [Capabilities.Removed] = "Removed",
+        [Capabilities.NotYours] = "Not yours"
     };
+
+    /// <summary>The status a refusal answers with, by its kind.</summary>
+    public static int Status(Reason reason) => reason.Kind switch
+    {
+        ReasonKind.Absent => StatusCodes.Status404NotFound,
+        ReasonKind.Gated => reason.Word is { } word ? Status(word) : StatusCodes.Status403Forbidden,
+        ReasonKind.Conflict => StatusCodes.Status409Conflict,
+        _ => StatusCodes.Status400BadRequest
+    };
+
+    /// <summary>The status a page answers with whose reader meets the gate of this word.</summary>
+    public static int Status(string gate) => gate == Capabilities.SignIn.Word ? StatusCodes.Status401Unauthorized : StatusCodes.Status403Forbidden;
+
+    /// <summary>What a command that could not finish answers: it never ran, <c>503</c>, and the sender may send it again
+    /// shortly, or it failed, <c>500</c>, saying what it left and nothing of why, which is logged.</summary>
+    private static IActionResult Failed(HttpContext http, DataCommitOutcome landed, Exception cause)
+    {
+        http.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(PostWrites)).LogError(cause, "A command failed at {Path}", http.Request.Path);
+        if (landed == DataCommitOutcome.NotDispatched)
+        {
+            http.Response.Headers.RetryAfter = "1";
+            return new Problem(StatusCodes.Status503ServiceUnavailable, "Try again", "This place is busy, so nothing was written; your words are safe to send again.").ToResult();
+        }
+
+        return new Problem(StatusCodes.Status500InternalServerError, "Not written",
+            landed == DataCommitOutcome.Unknown ? "This may or may not have been written; look before sending it again." : "This failed, and nothing was written.").ToResult();
+    }
+
+    /// <summary>A gate's next step under the base URL; the address a sign-in comes back to is that of a <c>GET</c>.</summary>
+    private static string Next(HttpContext http, string next)
+    {
+        var address = http.RequestServices.GetRequiredService<KoanWebBaseUrl>().Resolve(http) + next;
+        return HttpMethods.IsGet(http.Request.Method) || HttpMethods.IsHead(http.Request.Method)
+            ? address + "?return=" + Uri.EscapeDataString(http.Request.PathBase + http.Request.Path + http.Request.QueryString)
+            : address;
+    }
 
     /// <summary>Who is signed in, as the shell's account menu shows them, signing out back to <paramref name="back"/>, a
     /// path under the base URL, with the place's settings where they hold <see cref="Bit.ManageSpace"/>,

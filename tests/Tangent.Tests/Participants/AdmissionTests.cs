@@ -1,11 +1,11 @@
 using System.Net;
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
 using Tangent.Events;
 using Tangent.Posts;
 using Tangent.Space;
-using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -125,10 +125,10 @@ public sealed class AdmissionTests
 
         // A member reads the choice and changes nothing, and their rail lists nothing, for they may use none of it.
         var read = await Send(ada.Client, HttpMethod.Get, path, json: true);
-        Assert.Equal((HttpStatusCode.OK, Capabilities.NoRoleGrants(Bit.ManageSpace)), (read.Status, read.Json.GetProperty("gate").GetString()));
+        Assert.Equal((HttpStatusCode.OK, Capabilities.NoRoleGrants(Bit.ManageSpace).Word), (read.Status, read.Json.GetProperty("gate").GetString()));
         Assert.Equal(0, read.Json.GetProperty("sections").GetArrayLength());
         var refused = await Json(ada, "/t/" + Workshop, path, new { admission = "apply" });
-        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageSpace)), (refused.Status, refused.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageSpace).Word), (refused.Status, refused.Gate));
         Assert.Equal(Admission.Join, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Admission);
         Assert.Equal(before + 2, await Event.Count.Exact(Cancellation));
     }
@@ -148,15 +148,15 @@ public sealed class AdmissionTests
         Assert.False(await IsMember(tangentSpace, Grace));
         Assert.Equal([nameof(Bit.View)], await Can(grace, "/t/" + General));
         var started = await StartIn(grace, General, "Hello?");
-        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.Apply), (started.Status, started.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.Apply.Word), (started.Status, started.Gate));
         Assert.Equal(0, await Post.Count.Exact(Cancellation));
 
         var door = await Send(grace.Client, HttpMethod.Get, "/", json: true);
-        Assert.Equal(Capabilities.Apply, door.Json.GetProperty("gate").GetString());
+        Assert.Equal(Capabilities.Apply.Word, door.Json.GetProperty("gate").GetString());
         Assert.Equal([nameof(Bit.View)], door.Json.GetProperty("can").EnumerateArray().Select(verb => verb.GetString()));
         var html = await Send(grace.Client, HttpMethod.Get, "/");
         Assert.Contains("Your application is waiting", html.Body);
-        Assert.Contains($"data-gate=\"{Capabilities.Apply}\"", html.Body);
+        Assert.Contains($"data-gate=\"{Capabilities.Apply.Word}\"", html.Body);
     }
 
     [Fact]
@@ -167,7 +167,7 @@ public sealed class AdmissionTests
         await Given.ATangent(tangentSpace, General, ct: Cancellation);
         var space = (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!;
         space.Admission = Admission.Apply;
-        Assert.IsType<Outcome<TangentSpace>.Done>(await tangentSpace.Services.GetRequiredService<WriteLoop>().Send(new Store<TangentSpace>(space), Cancellation));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(Cancellation));
         using var grace = await SignedIn(tangentSpace, Grace);
         using var hal = await SignedIn(tangentSpace, Hal);
         using var mo = await SignedIn(tangentSpace, Mo);
@@ -211,10 +211,10 @@ public sealed class AdmissionTests
         Assert.Contains("admitted you: you can start topics and reply here.", (await Send(grace.Client, HttpMethod.Get, "/")).Body);
         Assert.Equal(HttpStatusCode.Created, (await StartIn(grace, General, "Glad to be here")).Status);
         var halDoor = await Send(hal.Client, HttpMethod.Get, "/", json: true);
-        Assert.Equal(Capabilities.Declined, halDoor.Json.GetProperty("gate").GetString());
+        Assert.Equal(Capabilities.Declined.Word, halDoor.Json.GetProperty("gate").GetString());
         Assert.Contains("Your application was declined", (await Send(hal.Client, HttpMethod.Get, "/")).Body);
         var halStarted = await StartIn(hal, General, "Still here");
-        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.Declined), (halStarted.Status, halStarted.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.Declined.Word), (halStarted.Status, halStarted.Gate));
 
         // The declined application stays listed, and a later admission reverses it.
         var after = await Send(mo.Client, HttpMethod.Get, path, json: true);
@@ -234,7 +234,7 @@ public sealed class AdmissionTests
 
         // A member sees no applications, in the rail or the page, and is refused.
         var refusedPage = await Send(ada.Client, HttpMethod.Get, path, json: true);
-        var gate = Capabilities.NoRoleGrants(Bit.ManageStanding);
+        var gate = Capabilities.NoRoleGrants(Bit.ManageStanding).Word;
         Assert.Equal((HttpStatusCode.Forbidden, gate), (refusedPage.Status, refusedPage.Json.GetProperty("gate").GetString()));
         Assert.Empty(refusedPage.Json.GetProperty("applications").EnumerateArray());
         Assert.DoesNotContain("ivy4admission", (await Send(ada.Client, HttpMethod.Get, path)).Body);
@@ -245,7 +245,7 @@ public sealed class AdmissionTests
         Assert.Equal(Standing.Applied, (await Participant.Get(Ivy, Cancellation))!.Standing);
         using var visitor = Agent(tangentSpace);
         var visiting = await Send(visitor, HttpMethod.Get, path, json: true);
-        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn), (visiting.Status, visiting.Json.GetProperty("gate").GetString()));
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (visiting.Status, visiting.Json.GetProperty("gate").GetString()));
         Assert.Equal(events, await Event.Count.Exact(Cancellation));
     }
 
@@ -254,13 +254,12 @@ public sealed class AdmissionTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         var start = new DateTimeOffset(2026, 10, 1, 9, 0, 0, TimeSpan.Zero);
         var count = Applications.PageSize + 2;
         for (var i = 0; i < count; i++)
         {
             var applicant = Participant.Arrive($"did:plc:applicant{i:D2}", $"applicant{i:D2}.example", Admission.Apply, start.AddMinutes(i));
-            Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new Store<Participant>(applicant), Cancellation));
+            Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(applicant).Send(Cancellation));
         }
 
         using var mo = await SignedIn(tangentSpace, Mo);

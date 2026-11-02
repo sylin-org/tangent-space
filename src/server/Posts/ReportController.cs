@@ -1,10 +1,10 @@
+using Koan.Data.Core.Commands;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
 using Tangent.Participants;
 using Tangent.Render;
 using Tangent.Tangents;
-using Tangent.Writer;
 
 namespace Tangent.Posts;
 
@@ -16,7 +16,7 @@ namespace Tangent.Posts;
 /// (<see cref="ReportPage"/>), with a TID minted into it, or, where <c>received</c> names a report the reader made of this
 /// Post, that it was received. Both resolve the address as the Topic page does (<see cref="PostWrites.Locate"/>) before
 /// anything else is judged, so a Post the reader may not view and one no row has answer alike.</summary>
-public sealed class ReportController(KoanWebBaseUrl baseUrl, WriteLoop writer) : ControllerBase
+public sealed class ReportController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
     /// <summary>The segment under a Post's address where it is reported.</summary>
     public const string Segment = "report";
@@ -32,7 +32,7 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl, WriteLoop writer) :
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var (found, unseen) = await PostWrites.Locate(personId, tangent, topic, post, ct);
+        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, topic, post, ct);
         if (found is null) return unseen!;
         var theirs = personId is not null && Tid.IsValid(received) && found.Rows.Space.ModeratorsTangentId is { } moderators
                      && await Post.Get(received!, ct) is { } report && await ReportPost.IsReport(report, moderators, personId, found.Post!.Id, ct);
@@ -47,66 +47,42 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl, WriteLoop writer) :
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
-        var (found, unseen) = await PostWrites.Locate(personId, tangent, topic, post, ct);
+        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, topic, post, ct);
         if (found is null) return unseen!;
         if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
 
         var mayReport = found.Rows.Participant is not null && !found.Post!.Removed;
-        var outcome = await writer.Send(new ReportPost(
+        var outcome = await new ReportPost(
             fields.GetValueOrDefault(PostWrites.IdField) ?? "",
             found.Post!.Id,
-            await PostWrites.Body(fields, mayReport, ct),
-            personId ?? ""), ct);
+            await PostWrites.Body(fields, mayReport),
+            personId ?? "").Send();
         switch (outcome)
         {
             case Outcome<Post>.Done { Result: var report }:
                 if (PostWrites.WantsJson(Request)) return Ok(await Page(found, personId, received: true, ct));
                 Response.Headers.Location = Address(found) + "/" + Segment + "?" + ReceivedParameter + "=" + Uri.EscapeDataString(report.Id);
                 return StatusCode(StatusCodes.Status303SeeOther);
-            case Outcome<Post>.Refused { Reason: ReportPost.NoPost }:
-                return PostWrites.Absent();
-            case Outcome<Post>.Refused { Reason: var reason }:
+            case Outcome<Post>.Refused { Reason: { Kind: not ReasonKind.Absent } reason }:
                 return await Refused(found, personId, fields, reason, ct);
-            case Outcome<Post>.Failed { Cause: var cause }:
-                throw new InvalidOperationException($"Reporting {post} failed.", cause);
             default:
-                throw new InvalidOperationException($"The writer answered {outcome} for reporting {post}.");
+                return PostWrites.Answer(HttpContext, outcome);
         }
     }
 
     /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the form again with the
-    /// reason where it belongs, and a new Id where the sent one is not available.</summary>
-    private async Task<IActionResult> Refused(PostWrites.Located found, string? personId, IReadOnlyDictionary<string, string> fields, string reason,
+    /// reason where it belongs, and a new Id where the sent one is another's.</summary>
+    private async Task<IActionResult> Refused(PostWrites.Located found, string? personId, IReadOnlyDictionary<string, string> fields, Reason reason,
         CancellationToken ct)
     {
-        var about = reason switch
-        {
-            ReportPost.NeedsReason => PostWrites.About.Body,
-            ReportPost.NoModerators or ReportPost.InModerators => PostWrites.About.Sent,
-            _ => PostWrites.Concerning(reason)
-        };
+        var unsent = reason == ReportPost.NoModerators;
         if (PostWrites.WantsJson(Request))
-        {
-            return reason switch
-            {
-                ReportPost.NoModerators => new Problem(StatusCodes.Status503ServiceUnavailable, "Not sent", reason).ToResult(),
-                ReportPost.NeedsReason or ReportPost.InModerators => new Problem(StatusCodes.Status400BadRequest, "Not sent", reason).ToResult(),
-                _ => PostWrites.Refused(reason)
-            };
-        }
+            return unsent ? new Problem(StatusCodes.Status503ServiceUnavailable, "Not sent", reason.Text).ToResult() : PostWrites.Refused(HttpContext, reason);
 
-        var status = reason switch
-        {
-            ReportPost.NoModerators => StatusCodes.Status503ServiceUnavailable,
-            ReportPost.NeedsReason or ReportPost.InModerators => StatusCodes.Status400BadRequest,
-            _ => PostWrites.Status(reason)
-        };
-        return await Again(found, personId, fields, status, keepId: reason != Post.IdTaken, page => about switch
-        {
-            PostWrites.About.Body => page with { BodyFailure = reason },
-            PostWrites.About.Gate => page with { Gate = reason, Report = null },
-            _ => page with { Failure = reason }
-        }, ct);
+        return await Again(found, personId, fields, unsent ? StatusCodes.Status503ServiceUnavailable : PostWrites.Status(reason), keepId: reason.Kind != ReasonKind.Conflict,
+            page => reason == ReportPost.NeedsReason || PostWrites.Concerning(reason) == PostWrites.About.Body ? page with { BodyFailure = reason.Text }
+                : reason.Kind == ReasonKind.Gated ? page with { Gate = reason.Word, Report = null }
+                : page with { Failure = reason.Text }, ct);
     }
 
     /// <summary>The form again, read afresh, keeping the reason that was sent, and the Id when it is a TID and
@@ -114,7 +90,7 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl, WriteLoop writer) :
     private async Task<IActionResult> Again(PostWrites.Located sent, string? personId, IReadOnlyDictionary<string, string> fields, int status,
         bool keepId, Func<ReportPage, ReportPage> refusal, CancellationToken ct)
     {
-        var (found, unseen) = await PostWrites.Locate(personId, sent.Tangent.Id, sent.Root!.Slug ?? sent.Root.Id, sent.Post!.Id, ct);
+        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, sent.Tangent.Id, sent.Root!.Slug ?? sent.Root.Id, sent.Post!.Id, ct);
         if (found is null) return unseen!;
         var page = await Page(found, personId, received: false, ct) with { Body = fields.GetValueOrDefault(PostWrites.BodyField) };
         if (keepId && fields.GetValueOrDefault(PostWrites.IdField) is { } id && Tid.IsValid(id)) page = page with { Report = page.Report?.With(PostWrites.IdField, id) };
@@ -135,7 +111,7 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl, WriteLoop writer) :
         var address = Address(found);
         var back = baseUrl.PathBase + "/t/" + found.Tangent.Id + "/" + (root.Slug ?? root.Id) + "/" + reported.Id + "/" + Segment;
         var reader = found.Rows.Participant;
-        var gate = received ? null : reader is null ? Capabilities.SignIn : reported.Removed ? Capabilities.Removed : null;
+        var gate = received ? null : reader is null ? Capabilities.SignIn.Word : reported.Removed ? Capabilities.Removed.Word : null;
         var inModerators = !received && reported.TangentId == found.Rows.Space.ModeratorsTangentId;
 
         var people = await TakeOnATangentController.People(reported, ct);

@@ -1,15 +1,15 @@
 using System.Security.Cryptography;
+using Koan.Core.Hosting.App;
 using Koan.Data.Abstractions;
 using Koan.Data.Abstractions.Filtering;
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Koan.Data.Core.Sorting;
 using Koan.Identity.Roles;
-using Koan.Core.Hosting.App;
 using Microsoft.AspNetCore.DataProtection;
 using Tangent.Access;
 using Tangent.Events;
 using Tangent.Space;
-using Tangent.Writer;
 
 namespace Tangent.Participants;
 
@@ -21,7 +21,7 @@ namespace Tangent.Participants;
 /// stand in Koan's one order (<see cref="Role.Position"/>) and the operator above every role, and a participant changes
 /// the standing or roles only of someone whose highest role stands below theirs (<see cref="RoleBag.Highest"/>), never
 /// their own, never the operator's; they give and take only the roles they manage (<see cref="Manages"/>).
-/// <see cref="Offered"/> asks the same rule for what a page offers, so a page offers only what the writer would
+/// <see cref="Offered"/> asks the same rule for what a page offers, so a page offers only what the command would
 /// do.</summary>
 public static class People
 {
@@ -50,17 +50,17 @@ public static class People
     public const int GivenRead = 100;
 
     /// <summary>The answer to a change of someone who never arrived.</summary>
-    public const string NoOne = "No one by that id has arrived here.";
+    public static readonly Reason NoOne = Reason.Absent("No one by that id has arrived here.");
 
-    public const string Themselves = "No one changes their own standing or roles.";
+    public static readonly Reason Themselves = Reason.Gated("No one changes their own standing or roles.");
 
-    public const string Operator = "The operator answers for this place: no one times them out, bans them or changes their roles.";
+    public static readonly Reason Operator = Reason.Gated("The operator answers for this place: no one times them out, bans them or changes their roles.");
 
-    public const string NotBelow = "You change the standing and roles only of someone whose highest role is below yours.";
+    public static readonly Reason NotBelow = Reason.Gated("You change the standing and roles only of someone whose highest role is below yours.");
 
-    public const string NotHeld = "No one gives or takes a role whose permissions they do not hold.";
+    public static readonly Reason NotHeld = Reason.Gated("No one gives or takes a role whose permissions they do not hold.");
 
-    public const string NotManaged = "You give and take only the roles below your own highest role.";
+    public static readonly Reason NotManaged = Reason.Gated("You give and take only the roles below your own highest role.");
 
     public const string NotARole = "Give or take a role this place has; the member role is admission’s.";
 
@@ -94,7 +94,7 @@ public static class People
     /// the first of: the verb's gate in the place; the target is the reader; an applicant, decided among the
     /// applications; the operator, whom no one changes; a target whose highest role does not stand below the reader's,
     /// the operator standing above every role. The target's standing is read as it stands at <paramref name="now"/>.</summary>
-    public static string? Refusal(Capabilities actor, string actorId, Participant target, RoleBag targetBag, TangentSpace space, Bit verb,
+    public static Reason? Refusal(Capabilities actor, string actorId, Participant target, RoleBag targetBag, TangentSpace space, Bit verb,
         DateTimeOffset now)
     {
         if (actor.Gate(verb) is { } gate) return gate;
@@ -117,7 +117,7 @@ public static class People
     /// <summary>Null where <paramref name="actor"/> holds every permission <paramref name="role"/> grants, in the place,
     /// so they may give or take it; <see cref="NotHeld"/> otherwise. A bit of authorship, which holds only on one's own
     /// Post, counts as held where nothing but authorship withholds it in the place.</summary>
-    public static string? Holding(Capabilities actor, Role role) => Holds(actor, Bits.InTokens(role.Permissions)) ? null : NotHeld;
+    public static Reason? Holding(Capabilities actor, Role role) => Holds(actor, Bits.InTokens(role.Permissions)) ? null : NotHeld;
 
     /// <summary>Whether <paramref name="actor"/> holds each of <paramref name="bits"/> in the place, a bit of authorship
     /// counting as held where nothing but authorship withholds it.</summary>
@@ -170,7 +170,7 @@ public static class People
     /// <summary>What a change of standing or role judges by, read inside the command: the place's row, what the actor
     /// holds in it, the participant changed and Koan's bag for them; and why the change is refused, null where it is
     /// not.</summary>
-    public sealed record Judged(TangentSpace? Space, Capabilities? Actor, Participant? Target, RoleBag? Bag, string? Refusal);
+    public sealed record Judged(TangentSpace? Space, Capabilities? Actor, Participant? Target, RoleBag? Bag, Reason? Refusal);
 
     /// <summary>Judges a change of <paramref name="participantId"/>'s standing (<see cref="Bit.ManageStanding"/>) or roles
     /// (<see cref="Bit.ManageRoles"/>) by <paramref name="actorId"/>: the place exists for the actor, who holds
@@ -193,8 +193,8 @@ public static class People
     /// <paramref name="change"/> changes the participant's standing at <paramref name="at"/>, or now, it appends one
     /// <see cref="EventKind.StandingChanged"/> with the actor, the participant as its target, the standing it left them
     /// with and the one they held before, so their door tells them; a change that changes nothing writes nothing, and a
-    /// <see cref="Writer.Refusal"/> the participant throws refuses it.</summary>
-    public static async Task<Outcome<Participant>> ChangeStanding(Sequences sequences, string actorId, string participantId,
+    /// refusal the participant throws refuses it.</summary>
+    public static async Task<Outcome<Participant>> ChangeStanding(string actorId, string participantId,
         Func<Participant, DateTimeOffset, bool> change, DateTimeOffset? at, CancellationToken ct)
     {
         var now = at ?? DateTimeOffset.UtcNow;
@@ -204,8 +204,8 @@ public static class People
         var before = target.StandingAt(now);
         if (!change(target, now)) return new Outcome<Participant>.Done(target);
         await target.Save(ct);
-        await Event.Next(sequences, EventKind.StandingChanged, now, actorId: actorId, targetId: target.Id, standing: target.Standing,
-            before: before).Save(ct);
+        await Event.Append(EventKind.StandingChanged, now, ct, actorId: actorId, targetId: target.Id, standing: target.Standing,
+            before: before);
         return new Outcome<Participant>.Done(target);
     }
 

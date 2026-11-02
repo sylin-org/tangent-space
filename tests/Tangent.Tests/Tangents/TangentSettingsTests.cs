@@ -1,12 +1,12 @@
 using System.Net;
 using System.Text.Json;
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
 using Tangent.Events;
 using Tangent.Posts;
 using Tangent.Space;
-using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -46,7 +46,7 @@ public sealed class TangentSettingsTests
         Assert.False((await Send(ada.Client, HttpMethod.Get, "/t/workshop", json: true)).Json.TryGetProperty("settings", out _));
         Assert.DoesNotContain("tangent-settings", (await Send(ada.Client, HttpMethod.Get, "/t/workshop")).Body);
 
-        var gate = Capabilities.NoRoleGrants(Bit.ManageTangent);
+        var gate = Capabilities.NoRoleGrants(Bit.ManageTangent).Word;
         var offered = await Send(ada.Client, HttpMethod.Get, "/t/workshop/settings");
         Assert.Contains($"data-gate=\"{gate}\"", offered.Body);
         Assert.DoesNotContain("type=\"submit\"", offered.Body);
@@ -120,7 +120,7 @@ public sealed class TangentSettingsTests
         var logged = (await Event.All(Cancellation)).OrderBy(e => e.Seq).Last();
         Assert.Equal((EventKind.TangentChanged, "workshop", Audience.Private), (logged.Kind, logged.TangentId, logged.Audience));
         var absent = await Send(ada.Client, HttpMethod.Get, "/t/workshop", json: true);
-        Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent), (absent.Status, absent.Gate));
+        Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent.Text), (absent.Status, absent.Gate));
         Assert.Equal(HttpStatusCode.OK, (await Send(leo.Client, HttpMethod.Get, "/t/workshop", json: true)).Status);
 
         Assert.Equal(HttpStatusCode.SeeOther, (await Form(leo, "/t/workshop/settings", "/t/workshop/settings", Workshop(audience: "public"))).Status);
@@ -160,8 +160,8 @@ public sealed class TangentSettingsTests
     public async Task The_moderators_tangent_is_renamed_and_described_but_its_audience_and_place_are_never_changed()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        Assert.Equal(ModeratorsTangent.Slug, Assert.IsType<Outcome<Tangent>.Done>(await writer.Send(new CreateModeratorsTangent(), Cancellation)).Result.Id);
+        await Place(tangentSpace);
+        Assert.Equal(ModeratorsTangent.Slug, Assert.IsType<Outcome<Tangent>.Done>(await new CreateModeratorsTangent().Send(Cancellation)).Result.Id);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         using var leo = await SignedIn(tangentSpace, Leo);
         using var mo = await SignedIn(tangentSpace, Mo);
@@ -214,11 +214,11 @@ public sealed class TangentSettingsTests
         Assert.Contains("ManageTangent", Strings(settings.GetProperty("can")));
         Assert.False(settings.TryGetProperty("gate", out _));
         var member = (await Send(ada.Client, HttpMethod.Get, "/t/workshop/settings", json: true)).Json;
-        Assert.Equal(Capabilities.NoRoleGrants(Bit.ManageTangent), member.GetProperty("gate").GetString());
+        Assert.Equal(Capabilities.NoRoleGrants(Bit.ManageTangent).Word, member.GetProperty("gate").GetString());
         Assert.Equal(["View", "Post", "Topic"], Strings(member.GetProperty("can")));
         Assert.False(member.TryGetProperty("change", out _));
         var studio = await Send(ada.Client, HttpMethod.Get, "/t/studio/settings", json: true);
-        Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent), (studio.Status, studio.Gate));
+        Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent.Text), (studio.Status, studio.Gate));
 
         var described = await Json(leo, "/t/workshop/settings", "/t/workshop/settings", new { description = "Only this." });
 
@@ -227,7 +227,7 @@ public sealed class TangentSettingsTests
             described.Json.GetProperty("description").GetString(), described.Json.GetProperty("audience").GetString()));
         Assert.Contains("ManageTangent", Strings(described.Json.GetProperty("can")));
         var refused = await Json(ada, "/t/workshop", "/t/workshop/settings", new { description = "Mine." });
-        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageTangent)), (refused.Status, refused.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageTangent).Word), (refused.Status, refused.Gate));
     }
 
     [Fact]
@@ -258,7 +258,7 @@ public sealed class TangentSettingsTests
         Assert.True(administrator.GetProperty("movable").GetBoolean());
         Assert.Equal(("studio", "Articles"), (administrator.GetProperty("before").GetString(), administrator.GetProperty("after").GetString()));
         var moved = await Json(bea, "/t/workshop", "/t/workshop/settings", new { move = "earlier" });
-        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageSpace)), (moved.Status, moved.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageSpace).Word), (moved.Status, moved.Gate));
         Assert.Equal(["studio", "workshop", "articles"], await DoorOrder(leo));
     }
 
@@ -280,30 +280,7 @@ public sealed class TangentSettingsTests
         Assert.Equal(Audience.Private, await Overwrites.AudienceOf("workshop", Cancellation));
         var logged = Assert.Single(await Event.All(Cancellation), e => e.Seq > before);
         Assert.Equal((EventKind.TangentChanged, "workshop", Bea, Audience.Private), (logged.Kind, logged.TangentId, logged.ActorId, logged.Audience));
-        Assert.Equal(Audience.Private, (await Tangent.Get("workshop", Cancellation))!.LoggedAudience);
         Assert.Equal(HttpStatusCode.NotFound, (await Send(bea.Client, HttpMethod.Get, "/t/workshop", json: true)).Status);
-    }
-
-    [Fact]
-    public async Task An_audience_in_place_that_the_log_never_recorded_is_recorded_by_the_next_change_whoever_sends_it()
-    {
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        await Place(tangentSpace);
-        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
-        var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
-        using var leo = await SignedIn(tangentSpace, Leo);
-        Assert.Equal(HttpStatusCode.OK, (await Json(leo, "/t/workshop/settings", "/t/workshop/settings", new { name = "The workshop" })).Status);
-        var recorded = await Event.Count.Exact(Cancellation);
-
-        // The gap a change leaves when its audience took effect in Koan and its commit did not land.
-        await Overwrites.SetAudience(roles, "workshop", Audience.Private, Cancellation);
-        var resent = await Json(leo, "/t/workshop/settings", "/t/workshop/settings", new { name = "The workshop" });
-
-        Assert.Equal((HttpStatusCode.OK, "private"), (resent.Status, resent.Json.GetProperty("audience").GetString()));
-        var logged = Assert.Single(await Event.All(Cancellation), e => e.Seq > recorded);
-        Assert.Equal((EventKind.TangentChanged, "workshop", Audience.Private), (logged.Kind, logged.TangentId, logged.Audience));
-        Assert.Equal(HttpStatusCode.OK, (await Json(leo, "/t/workshop/settings", "/t/workshop/settings", new { name = "The workshop" })).Status);
-        Assert.Equal(recorded + 1, await Event.Count.Exact(Cancellation));
     }
 
     [Fact]
@@ -332,28 +309,6 @@ public sealed class TangentSettingsTests
         foreach (var property in new[] { "slug", "description", "audience", "order", "address", "settings", "can" })
             Assert.False(closed.Json.TryGetProperty(property, out _), property);
         Assert.Equal(Audience.Private, await Overwrites.AudienceOf("workshop", Cancellation));
-    }
-
-    [Fact]
-    public async Task A_tangent_that_knows_no_logged_audience_takes_koans_quietly_and_a_change_of_nothing_writes_nothing()
-    {
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        await Place(tangentSpace);
-        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
-        using var leo = await SignedIn(tangentSpace, Leo);
-        Assert.Null((await Tangent.Get("workshop", Cancellation))!.LoggedAudience);
-        var before = await Event.Count.Exact(Cancellation);
-
-        var saved = await Form(leo, "/t/workshop/settings", "/t/workshop/settings", Workshop());
-
-        Assert.Equal(HttpStatusCode.SeeOther, saved.Status);
-        Assert.Equal(before, await Event.Count.Exact(Cancellation));
-        Assert.Null((await Tangent.Get("workshop", Cancellation))!.LoggedAudience);
-
-        Assert.Equal(HttpStatusCode.SeeOther, (await Form(leo, "/t/workshop/settings", "/t/workshop/settings", Workshop("The workshop"))).Status);
-        var logged = Assert.Single(await Event.All(Cancellation), e => e.Seq > before);
-        Assert.Equal((Leo, Audience.Public), (logged.ActorId, logged.Audience));
-        Assert.Equal(Audience.Public, (await Tangent.Get("workshop", Cancellation))!.LoggedAudience);
     }
 
     /// <summary>The slugs of the Tangents the door lists for the reader, in its order.</summary>

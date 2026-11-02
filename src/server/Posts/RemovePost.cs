@@ -1,7 +1,7 @@
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Tangent.Access;
 using Tangent.Events;
-using Tangent.Writer;
 
 namespace Tangent.Posts;
 
@@ -16,9 +16,9 @@ namespace Tangent.Posts;
 /// else is refused with the gate Capabilities names on the tombstone.</summary>
 public sealed record RemovePost(string PostId, string RemoverId, DateTimeOffset? At = null) : ICommand<Post>
 {
-    public const string NoPost = EditPost.NoPost;
+    public static readonly Reason NoPost = EditPost.NoPost;
 
-    public async Task<Outcome<Post>> Run(Sequences sequences, CancellationToken ct)
+    public async Task<Outcome<Post>> Run(CancellationToken ct)
     {
         if (await Post.Get(PostId, ct) is not { } post) return new Outcome<Post>.Refused(NoPost);
         var rows = await Capabilities.LoadRows(RemoverId, post.TangentId, ct);
@@ -37,9 +37,9 @@ public sealed record RemovePost(string PostId, string RemoverId, DateTimeOffset?
         post.Remove(RemoverId, at);
         await post.Save(ct);
         await MediaUse.Record(post, RemoverId, used, ct);
-        await Event.Next(sequences, EventKind.PostRemoved, at,
+        await Event.Append(EventKind.PostRemoved, at, ct,
             tangentId: post.TangentId, topicId: post.TopicId, postId: post.Id, actorId: RemoverId,
-            targetId: RemoverId == post.AuthorId ? null : post.AuthorId, version: post.Version).Save(ct);
+            targetId: RemoverId == post.AuthorId ? null : post.AuthorId, version: post.Version);
         return new Outcome<Post>.Done(post);
     }
 }

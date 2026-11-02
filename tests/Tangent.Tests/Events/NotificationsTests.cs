@@ -1,13 +1,13 @@
 using System.Net;
 using System.Text.Json;
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
 using Tangent.Offers;
 using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
-using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -18,6 +18,7 @@ namespace Tangent.Events;
 /// what raises it, and past its bound it reads "at least". The page lists them newest first a page at a time from a
 /// sealed cursor, never one in a Tangent the reader may not view, as a page and as JSON; an Offer among them keeps its
 /// answers while open, stays open when merely seen, is decided once from there and then says how.</summary>
+[Collection(nameof(Commands.Tries))]
 public sealed class NotificationsTests
 {
     private const string Leo = "did:plc:leo4notifications";
@@ -26,16 +27,16 @@ public sealed class NotificationsTests
     public async Task The_count_holds_only_events_that_target_the_reader_that_someone_else_did_and_that_they_may_view()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
-        var mine = await Started(writer, Ada, "Lanterns", "Who lights theirs first?");
-        await Replied(writer, mine, Bea, "I do, at six.");
-        await Started(writer, Bea, "A question for Ada", $"Over to [@ada](at://{Ada}).");
-        await Replied(writer, mine, Ada, "And mine at seven.");
-        var secret = await Started(writer, Leo, "Studio notes", "Only for us.", Studio);
-        Assert.IsType<Outcome<Event>.Done>(await writer.Send(new Logged(EventKind.Mention, Leo, Ada, secret), Cancellation));
-        Assert.IsType<Outcome<Event>.Done>(await writer.Send(new Logged(EventKind.StandingChanged, Ada, Ada), Cancellation));
-        Assert.IsType<Outcome<Event>.Done>(await writer.Send(new Logged(EventKind.Mention, Ada, Bea, mine), Cancellation));
+        var mine = await Started(Ada, "Lanterns", "Who lights theirs first?");
+        await Replied(mine, Bea, "I do, at six.");
+        await Started(Bea, "A question for Ada", $"Over to [@ada](at://{Ada}).");
+        await Replied(mine, Ada, "And mine at seven.");
+        var secret = await Started(Leo, "Studio notes", "Only for us.", Studio);
+        Assert.IsType<Outcome<Event>.Done>(await new Logged(EventKind.Mention, Leo, Ada, secret).Send(Cancellation));
+        Assert.IsType<Outcome<Event>.Done>(await new Logged(EventKind.StandingChanged, Ada, Ada).Send(Cancellation));
+        Assert.IsType<Outcome<Event>.Done>(await new Logged(EventKind.Mention, Ada, Bea, mine).Send(Cancellation));
 
         using var ada = await SignedIn(tangentSpace, Ada);
         var door = (await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json;
@@ -68,10 +69,10 @@ public sealed class NotificationsTests
     public async Task Opening_the_notifications_moves_their_checkpoint_through_what_they_showed_and_the_count_reads_past_it()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var mine = await Started(writer, Ada, "Lanterns", "Who lights theirs first?");
-        await Replied(writer, mine, Bea, "I do, at six.");
-        var newest = await Replied(writer, mine, Mo, "At dusk, always.");
+        await Place(tangentSpace);
+        var mine = await Started(Ada, "Lanterns", "Who lights theirs first?");
+        await Replied(mine, Bea, "I do, at six.");
+        var newest = await Replied(mine, Mo, "At dusk, always.");
         using var ada = await SignedIn(tangentSpace, Ada);
         await Given.BeenAtTheDoor(tangentSpace, Ada, Cancellation);
         var door = (await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json;
@@ -102,28 +103,28 @@ public sealed class NotificationsTests
         Assert.Contains($"<a class=\"masthead-unseen\" href=\"{BaseUrl}/notifications\" hidden", (await Send(ada.Client, HttpMethod.Get, "/")).Body);
 
         // A new reply counts past it, and opening them again moves it on, never back.
-        await Replied(writer, mine, Bea, "Then the harbour.");
+        await Replied(mine, Bea, "Then the harbour.");
         Assert.Equal(1, Count(await Send(ada.Client, HttpMethod.Get, "/t/" + Workshop, json: true)));
         var json = (await Send(ada.Client, HttpMethod.Get, Notifications.Path, json: true)).Json;
         Assert.Equal((through, through + 1), (json.GetProperty("from").GetInt64(), json.GetProperty("through").GetInt64()));
         Assert.Equal(new[] { true, false, false }, json.GetProperty("entries").EnumerateArray().Select(entry => entry.GetProperty("new").GetBoolean()));
         await Reached.Settled(tangentSpace, Cancellation);
         Assert.Equal(through + 1, (await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Notifications), Cancellation))!.Seq);
-        Assert.Equal(through + 1, Assert.IsType<Outcome<Checkpoint>.Done>(await writer.Send(new SeeNotifications(Ada, through), Cancellation)).Result.Seq);
+        Assert.Equal(through + 1, Assert.IsType<Outcome<Checkpoint>.Done>(await new SeeNotifications(Ada, through).Send(Cancellation)).Result.Seq);
         Assert.Equal(0, Count(await Send(ada.Client, HttpMethod.Get, "/", json: true)));
 
         // Only a notification of the reader's moves it.
         Assert.Equal(new Outcome<Checkpoint>.Refused(SeeNotifications.NoNotification),
-            await writer.Send(new SeeNotifications(Bea, through + 1), Cancellation));
+            await new SeeNotifications(Bea, through + 1).Send(Cancellation));
     }
 
     [Fact]
     public async Task A_reply_committed_after_a_page_reaches_its_stream_past_what_the_count_read_as_a_notification_for_the_reader()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var mine = await Started(writer, Ada, "Lanterns", "Who lights theirs first?");
-        await Replied(writer, mine, Bea, "I do, at six.");
+        await Place(tangentSpace);
+        var mine = await Started(Ada, "Lanterns", "Who lights theirs first?");
+        await Replied(mine, Bea, "I do, at six.");
         using var ada = await SignedIn(tangentSpace, Ada);
         var page = (await Send(ada.Client, HttpMethod.Get, TopicPath(mine), json: true)).Json;
         var unseen = page.GetProperty("who").GetProperty("notifications");
@@ -132,7 +133,7 @@ public sealed class NotificationsTests
 
         await using var stream = await Streamed.Open(ada.Client, EventsController.Path + "?since=" + counted);
         Assert.Equal("open", (await stream.Any()).Comment);
-        var reply = await Replied(writer, mine, Mo, "At dusk, always.");
+        var reply = await Replied(mine, Mo, "At dusk, always.");
         var frame = await stream.Next();
 
         // The masthead's island adds one for this row (src/client/islands/unseen.ts): past what the count read, for the
@@ -147,9 +148,9 @@ public sealed class NotificationsTests
     public async Task Past_its_bound_the_count_reads_at_least()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var theirs = await Started(writer, Bea, "Lanterns", "Who lights theirs first?");
-        Assert.IsType<Outcome<int>.Done>(await writer.Send(new Many(EventKind.Mention, Bea, Ada, theirs, Notifications.CountLimit + 5), Cancellation));
+        await Place(tangentSpace);
+        var theirs = await Started(Bea, "Lanterns", "Who lights theirs first?");
+        Assert.IsType<Outcome<int>.Done>(await new Many(EventKind.Mention, Bea, Ada, theirs, Notifications.CountLimit + 5).Send(Cancellation));
         using var ada = await SignedIn(tangentSpace, Ada);
         await Given.BeenAtTheDoor(tangentSpace, Ada, Cancellation);
 
@@ -171,10 +172,10 @@ public sealed class NotificationsTests
     public async Task The_page_lists_them_newest_first_a_page_at_a_time_from_a_sealed_cursor_and_refuses_a_forged_one()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var mine = await Started(writer, Ada, "Lanterns", "Who lights theirs first?");
+        await Place(tangentSpace);
+        var mine = await Started(Ada, "Lanterns", "Who lights theirs first?");
         var replies = new List<Post>();
-        for (var index = 0; index < Notifications.PageSize + 5; index++) replies.Add(await Replied(writer, mine, Bea, $"Reply number {index}."));
+        for (var index = 0; index < Notifications.PageSize + 5; index++) replies.Add(await Replied(mine, Bea, $"Reply number {index}."));
         using var ada = await SignedIn(tangentSpace, Ada);
 
         var first = (await Send(ada.Client, HttpMethod.Get, Notifications.Path, json: true)).Json;
@@ -207,23 +208,22 @@ public sealed class NotificationsTests
 
         // A visitor is asked to sign in.
         var visitor = await Send(Agent(tangentSpace), HttpMethod.Get, Notifications.Path, json: true);
-        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn), (visitor.Status, visitor.Gate));
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (visitor.Status, visitor.Gate));
     }
 
     [Fact]
     public async Task Each_says_what_happened_and_links_to_what_it_is_about_both_ways_and_one_in_a_tangent_the_reader_may_not_view_is_absent()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
-        var mine = await Started(writer, Ada, "Lanterns", "Who lights theirs first?");
-        var reply = await Replied(writer, mine, Bea, "I do, at six.");
-        var asked = await Started(writer, Bea, "A question for Ada", $"Over to [@ada](at://{Ada}).");
-        var taken = Assert.IsType<Outcome<Post>.Done>(await writer.Send(
-            new StartTopic(Tids.Mint(), Workshop, "Six o'clock lanterns", "", Mo, OriginId: mine.Id), Cancellation)).Result;
-        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new ChangeRole(Leo, Ada, Roles.Moderator, Give: true), Cancellation));
-        var secret = await Started(writer, Leo, "Studio notes", "Only for us.", Studio);
-        Assert.IsType<Outcome<Event>.Done>(await writer.Send(new Logged(EventKind.Mention, Leo, Ada, secret), Cancellation));
+        var mine = await Started(Ada, "Lanterns", "Who lights theirs first?");
+        var reply = await Replied(mine, Bea, "I do, at six.");
+        var asked = await Started(Bea, "A question for Ada", $"Over to [@ada](at://{Ada}).");
+        var taken = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, "Six o'clock lanterns", "", Mo, OriginId: mine.Id).Send(Cancellation)).Result;
+        Assert.IsType<Outcome<Participant>.Done>(await new ChangeRole(Leo, Ada, Roles.Moderator, Give: true).Send(Cancellation));
+        var secret = await Started(Leo, "Studio notes", "Only for us.", Studio);
+        Assert.IsType<Outcome<Event>.Done>(await new Logged(EventKind.Mention, Leo, Ada, secret).Send(Cancellation));
         // Ada is a moderator now, which the studio does not open to; Leo reads it.
         using var ada = await SignedIn(tangentSpace, Ada);
 
@@ -315,27 +315,27 @@ public sealed class NotificationsTests
     public async Task Rows_the_reader_may_not_view_move_neither_the_count_nor_where_it_reads_through_and_a_newest_page_of_them_offers_the_older_one()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
-        var mine = await Started(writer, Ada, "Lanterns", "Who lights theirs first?");
-        var visible = await Replied(writer, mine, Bea, "I do, at six.");
-        var secret = await Started(writer, Leo, "Studio notes", "Only for us.", Studio);
+        var mine = await Started(Ada, "Lanterns", "Who lights theirs first?");
+        var visible = await Replied(mine, Bea, "I do, at six.");
+        var secret = await Started(Leo, "Studio notes", "Only for us.", Studio);
         using var ada = await SignedIn(tangentSpace, Ada);
         var shownThrough = (await Created(visible)).Seq;
         Assert.Equal((1, false, shownThrough), Unseen(await Send(ada.Client, HttpMethod.Get, "/", json: true)));
 
         // Replies to Ada in the studio, which she may not view, move neither the count nor where it reads through.
-        Assert.IsType<Outcome<int>.Done>(await writer.Send(new Many(EventKind.PostCreated, Leo, Ada, secret, 3), Cancellation));
+        Assert.IsType<Outcome<int>.Done>(await new Many(EventKind.PostCreated, Leo, Ada, secret, 3).Send(Cancellation));
         Assert.Equal((1, false, shownThrough), Unseen(await Send(ada.Client, HttpMethod.Get, TopicPath(mine), json: true)));
 
         // Ninety-nine of them and one she may see fill the read: the count is that one, not a lower bound.
-        Assert.IsType<Outcome<int>.Done>(await writer.Send(new Many(EventKind.PostCreated, Leo, Ada, secret, Notifications.CountLimit - 3), Cancellation));
+        Assert.IsType<Outcome<int>.Done>(await new Many(EventKind.PostCreated, Leo, Ada, secret, Notifications.CountLimit - 3).Send(Cancellation));
         Assert.Equal((1, false, shownThrough), Unseen(await Send(ada.Client, HttpMethod.Get, "/", json: true)));
         Assert.Contains("<span class=\"masthead-unseen-count\">1</span>", WebUtility.HtmlDecode((await Send(ada.Client, HttpMethod.Get, "/")).Body));
 
         // A hundred of them after the newest she may see: the count finds none and says nothing of them, and the door
         // names nothing.
-        Assert.IsType<Outcome<int>.Done>(await writer.Send(new Many(EventKind.PostCreated, Leo, Ada, secret, 1), Cancellation));
+        Assert.IsType<Outcome<int>.Done>(await new Many(EventKind.PostCreated, Leo, Ada, secret, 1).Send(Cancellation));
         var door = (await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json;
         Assert.Equal((0, false, 0L), Unseen(door));
         Assert.False(door.GetProperty("news").TryGetProperty("notifications", out _));
@@ -365,9 +365,9 @@ public sealed class NotificationsTests
     public async Task A_delegate_reads_its_persons_notifications_and_leaves_them_unseen_and_the_persons_own_opening_sees_them()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var mine = await Started(writer, Ada, "Lanterns", "Who lights theirs first?");
-        var reply = await Replied(writer, mine, Bea, "I do, at six.");
+        await Place(tangentSpace);
+        var mine = await Started(Ada, "Lanterns", "Who lights theirs first?");
+        var reply = await Replied(mine, Bea, "I do, at six.");
         using var ada = await SignedIn(tangentSpace, Ada);
         var bearer = await Delegate(tangentSpace, ada);
         using var agent = Agent(tangentSpace);
@@ -391,18 +391,18 @@ public sealed class NotificationsTests
     public async Task The_page_answers_its_list_without_waiting_when_the_writers_queue_is_full()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var mine = await Started(writer, Ada, "Lanterns", "Who lights theirs first?");
-        var reply = await Replied(writer, mine, Bea, "I do, at six.");
+        await Place(tangentSpace);
+        var mine = await Started(Ada, "Lanterns", "Who lights theirs first?");
+        var reply = await Replied(mine, Bea, "I do, at six.");
         using var ada = await SignedIn(tangentSpace, Ada);
 
         var release = new TaskCompletionSource();
         var running = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var held = writer.Send(new Hold(release.Task, running), Cancellation);
+        var held = new Hold(release.Task, running).Send(Cancellation);
         await running.Task.WaitAsync(TimeSpan.FromSeconds(10), Cancellation);
         var queued = new List<Task<Outcome<bool>>>();
-        while (queued.Count <= WriteLoop.QueueBound && writer.TrySend(new Hold(Task.CompletedTask)) is { } sent) queued.Add(sent);
-        Assert.Equal(WriteLoop.QueueBound, queued.Count);
+        while (queued.Count < 4096 && new Hold(Task.CompletedTask).TrySend() is { } sent) queued.Add(sent);
+        Assert.InRange(queued.Count, 1, 4095);
         try
         {
             var page = await Send(ada.Client, HttpMethod.Get, Notifications.Path, json: true).WaitAsync(TimeSpan.FromSeconds(10), Cancellation);
@@ -461,24 +461,22 @@ public sealed class NotificationsTests
     }
 
     /// <summary>Appends one event of <paramref name="Kind"/> by <paramref name="ActorId"/> targeting
-    /// <paramref name="TargetId"/>, about <paramref name="Post"/> where one is named, numbered by the writer: for a proof
+    /// <paramref name="TargetId"/>, about <paramref name="Post"/> where one is named: for a proof
     /// that needs one no command writes, such as a mention in a Tangent its target may not view.</summary>
     private sealed record Logged(string Kind, string ActorId, string TargetId, Post? Post = null) : ICommand<Event>
     {
-        public async Task<Outcome<Event>> Run(Sequences sequences, CancellationToken ct)
+        public async Task<Outcome<Event>> Run(CancellationToken ct)
         {
-            var row = Event.Next(sequences, Kind, DateTimeOffset.UtcNow, tangentId: Post?.TangentId, topicId: Post?.TopicId, postId: Post?.Id,
-                actorId: ActorId, targetId: TargetId);
-            await row.Save(ct);
-            return new Outcome<Event>.Done(row);
+            return new Outcome<Event>.Done(await Event.Append(Kind, DateTimeOffset.UtcNow, ct, tangentId: Post?.TangentId, topicId: Post?.TopicId, postId: Post?.Id,
+                actorId: ActorId, targetId: TargetId));
         }
     }
 
-    /// <summary>Holds the writer until <paramref name="Until"/> completes, saying when it began through
+    /// <summary>Keeps the store until <paramref name="Until"/> completes, saying when it began through
     /// <paramref name="Running"/>; writes nothing.</summary>
     private sealed record Hold(Task Until, TaskCompletionSource? Running = null) : ICommand<bool>
     {
-        public async Task<Outcome<bool>> Run(Sequences sequences, CancellationToken ct)
+        public async Task<Outcome<bool>> Run(CancellationToken ct)
         {
             Running?.TrySetResult();
             await Until;
@@ -490,11 +488,11 @@ public sealed class NotificationsTests
     /// <paramref name="ActorId"/> targeting <paramref name="TargetId"/>, in one transaction.</summary>
     private sealed record Many(string Kind, string ActorId, string TargetId, Post Root, int Times) : ICommand<int>
     {
-        public async Task<Outcome<int>> Run(Sequences sequences, CancellationToken ct)
+        public async Task<Outcome<int>> Run(CancellationToken ct)
         {
             for (var index = 0; index < Times; index++)
-                await Event.Next(sequences, Kind, DateTimeOffset.UtcNow, tangentId: Root.TangentId, topicId: Root.Id, postId: Root.Id,
-                    actorId: ActorId, targetId: TargetId).Save(ct);
+                await Event.Append(Kind, DateTimeOffset.UtcNow, ct, tangentId: Root.TangentId, topicId: Root.Id, postId: Root.Id,
+                    actorId: ActorId, targetId: TargetId);
             return new Outcome<int>.Done(Times);
         }
     }

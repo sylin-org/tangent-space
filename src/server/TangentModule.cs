@@ -2,6 +2,7 @@ using Koan.Core;
 using Koan.Core.Modules;
 using Koan.Data.Connector.Sqlite;
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Koan.Media.Web.Routing;
 using Koan.Storage.Connector.Local;
@@ -18,7 +19,6 @@ using Tangent.Events;
 using Tangent.Lifecycle;
 using Tangent.Render;
 using Tangent.Space;
-using Tangent.Writer;
 
 namespace Tangent;
 
@@ -38,9 +38,9 @@ public sealed class TangentModule : KoanModule
                 "Tangent:DataFolder must name a folder.");
 
         // The address the place accepts lives on its row; Koan reads it before the host serves.
-        services.AddSingleton(provider => new PlaceAddress(provider.GetRequiredService<WriteLoop>(), PlaceAddress.DefaultBound));
-        services.AddSingleton<IApplicationUrlStore>(provider => provider.GetRequiredService<PlaceAddress>());
+        services.AddSingleton<IApplicationUrlStore, PlaceAddress>();
         services.AddSingleton<Offers.AddressOffers>();
+        services.AddSingleton<ICommandWatcher>(provider => provider.GetRequiredService<Offers.AddressOffers>());
 
         services.AddOptions<SqliteOptions>()
             .PostConfigure<IOptions<TangentSpaceOptions>, IHostEnvironment>((sqlite, tangent, environment) =>
@@ -55,9 +55,6 @@ public sealed class TangentModule : KoanModule
 
         // The data folder is marked in use while the Tangent Space runs, so a restore refuses it.
         services.AddHostedService<RunningMark>();
-
-        // The log's sequence: the writer continues it from the last Event stored.
-        services.AddSingleton<HighWaterMark>(Event.HighWaterMark);
 
         // The controllers of this assembly, whichever assembly hosts the composition.
         services.AddKoanControllersFrom<TangentModule>();
@@ -111,11 +108,27 @@ public sealed class TangentModule : KoanModule
 
     public override async Task Start(IServiceProvider services, CancellationToken ct)
     {
+        await TablesExist(services.GetRequiredService<IDataService>(), ct);
         await Roles.Seed(services.GetRequiredService<RoleCollection>(), ct);
         await FirstRunStart.Run(services, ct);
         await Delegates.DelegateClient.Seed(services, ct);
         await services.GetRequiredService<Offers.AddressOffers>().Start(ct);
         services.GetRequiredService<IHostApplicationLifetime>().ApplicationStarted.Register(() => ReportStarted(services));
+    }
+
+    /// <summary>Makes every table a command writes exist at boot, the audit partition's among them, since a table first
+    /// used inside a hold makes every other flow that wants it wait for that hold (DATA-0166).</summary>
+    private static async Task TablesExist(IDataService data, CancellationToken ct)
+    {
+        await data.GetRepository<TangentSpace, string>().EnsureReady(ct);
+        await data.GetRepository<Tangents.Tangent, string>().EnsureReady(ct);
+        await data.GetRepository<Posts.Post, string>().EnsureReady(ct);
+        await data.GetRepository<Posts.MediaUse, string>().EnsureReady(ct);
+        await data.GetRepository<Participants.Participant, string>().EnsureReady(ct);
+        await data.GetRepository<Event, string>().EnsureReady(ct);
+        await data.GetRepository<Checkpoint, string>().EnsureReady(ct);
+        await data.GetRepository<Offers.Offer, string>().EnsureReady(ct);
+        using (EntityContext.Partition(Posts.AuditPartition.Name)) await data.GetRepository<Posts.Post, string>().EnsureReady(ct);
     }
 
     private static void ReportStarted(IServiceProvider services)

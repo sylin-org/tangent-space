@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Koan.Data.Core.Commands;
 using Koan.Web.Hosting;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,7 +10,6 @@ using Tangent.Events;
 using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
-using Tangent.Writer;
 using Xunit;
 
 namespace Tangent.Offers;
@@ -18,6 +18,7 @@ namespace Tangent.Offers;
 /// Offer to its operator, with one <c>offer.made</c> targeted at them, and nothing else does; the operator alone reads it
 /// on the door, both ways, and uses it, which makes the origin the base URL, or declines it, which keeps it from ever
 /// being offered again; a configured URL lapses what is open.</summary>
+[Collection(nameof(Commands.Tries))]
 public sealed class OfferTests
 {
     private const string Leo = "did:plc:leo4offers";
@@ -66,7 +67,7 @@ public sealed class OfferTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(), ct: Cancellation);
         await APlaceWithNews(tangentSpace);
         var offer = Assert.IsType<Outcome<Offer>.Done>(
-            await tangentSpace.Services.GetRequiredService<WriteLoop>().Send(new MakeOffer(OnAPort), Cancellation)).Result;
+            await new MakeOffer(OnAPort).Send(Cancellation)).Result;
         using var leo = await SignedIn(tangentSpace, "leo", Leo);
 
         using (var used = await Answer(leo, OfferController.UsePath, offer.Id))
@@ -93,7 +94,7 @@ public sealed class OfferTests
                 await APlaceWithNews(kept, OnAPort);
                 var used = Offer.Make(OfferKind.Address, OnAPort, Leo, DateTimeOffset.UtcNow);
                 used.Accept(DateTimeOffset.UtcNow);
-                Assert.IsType<Outcome<Offer>.Done>(await kept.Services.GetRequiredService<WriteLoop>().Send(new Store<Offer>(used), Cancellation));
+                Assert.IsType<Outcome<Offer>.Done>(await new Store<Offer>(used).Send(Cancellation));
             }
 
             await using var restarted = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(("Tangent:DataFolder", dataFolder)), ct: Cancellation);
@@ -146,21 +147,20 @@ public sealed class OfferTests
     }
 
     [Fact]
-    public async Task A_new_origin_that_meets_a_full_writer_is_dropped_without_waiting_and_offered_at_the_next_commit()
+    public async Task A_new_origin_that_meets_full_tries_is_dropped_without_waiting_and_offered_at_the_next_commit()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(), ct: Cancellation);
         await Reached.APlace(tangentSpace, Leo, address: null, Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         var release = new TaskCompletionSource();
         var running = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var held = writer.Send(new Hold(release.Task, running), Cancellation);
-        // The writer runs the held command before the queue is filled, so no slot opens once the origin arrives.
+        var held = new Hold(release.Task, running).Send(Cancellation);
+        // The held command has the store before the tries fill, so no slot opens once the origin arrives.
         await running.Task.WaitAsync(TimeSpan.FromSeconds(10), Cancellation);
         var queued = new List<Task<Outcome<bool>>>();
-        while (queued.Count <= WriteLoop.QueueBound && writer.TrySend(new Hold(Task.CompletedTask)) is { } sent) queued.Add(sent);
-        Assert.Equal(WriteLoop.QueueBound, queued.Count);
+        while (queued.Count < 4096 && new Hold(Task.CompletedTask).TrySend() is { } sent) queued.Add(sent);
+        Assert.InRange(queued.Count, 1, 4095);
 
-        // The request that brings the origin goes on at once, and its offer is not queued behind the writer.
+        // The request that brings the origin goes on at once, and its offer does not wait behind the store.
         using (var bounded = CancellationTokenSource.CreateLinkedTokenSource(Cancellation))
         {
             bounded.CancelAfter(TimeSpan.FromSeconds(10));
@@ -175,38 +175,6 @@ public sealed class OfferTests
         // An ordinary commit, with no Offer open, retries what was dropped.
         await Given.AParticipant(tangentSpace, Ada, [Roles.Member], ct: Cancellation);
         Assert.Equal(Public, (await Eventually(async () => (await Offer.All(Cancellation)).SingleOrDefault()))?.Subject);
-    }
-
-    [Fact]
-    public async Task A_use_the_writer_finishes_after_the_store_stops_waiting_answers_that_it_is_under_way_and_the_origin_is_held_once_it_commits()
-    {
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(),
-            services => services.AddSingleton(provider => new PlaceAddress(provider.GetRequiredService<WriteLoop>(), TimeSpan.FromMilliseconds(300))),
-            Cancellation);
-        await APlaceWithNews(tangentSpace);
-        await Reached.On(tangentSpace, Public, Cancellation);
-        await Reached.Settled(tangentSpace, Cancellation);
-        var offer = Assert.Single(await Offer.All(Cancellation));
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
-        var baseUrl = tangentSpace.Services.GetRequiredService<KoanWebBaseUrl>();
-        using var leo = await SignedIn(tangentSpace, "leo", Leo);
-        var form = await leo.Token("/", Cancellation);
-
-        var release = new TaskCompletionSource();
-        var held = writer.Send(new Hold(release.Task), Cancellation);
-        using (var posted = await Answer(leo, OfferController.UsePath, offer.Id, form))
-        {
-            Assert.Equal(HttpStatusCode.Accepted, posted.StatusCode);
-            Assert.Contains($"This is taking longer than usual; the place moves to {Public} as soon as it’s done.",
-                WebUtility.HtmlDecode(await posted.Content.ReadAsStringAsync(Cancellation)));
-        }
-        Assert.Null(baseUrl.Current);
-
-        release.SetResult();
-        await held;
-        Assert.Equal(Public, await Eventually(() => Task.FromResult(baseUrl.Current)));
-        Assert.Equal(Public, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Address);
-        Assert.Equal(OfferState.Accepted, (await Offer.Get(offer.Id, Cancellation))!.State);
     }
 
     [Fact]
@@ -315,8 +283,8 @@ public sealed class OfferTests
         var form = await leo.Token("/", Cancellation);
         var baseUrl = tangentSpace.Services.GetRequiredService<KoanWebBaseUrl>();
 
-        // Koan holds the origin only once the writer has judged and kept it: refused there, nothing changes.
-        Assert.Equal(new Outcome<Offer>.Refused(Decision.NoOffer), await PlaceAddress.Use(baseUrl, new UseOffer(offer.Id, Ada, Public), Cancellation));
+        // Koan holds the origin only once the command has judged and kept it: refused there, nothing changes.
+        Assert.Equal(new Outcome<Offer>.Refused(Decision.NoOffer), await PlaceAddress.Use(baseUrl, new UseOffer(offer.Id, Ada, Public)));
         Assert.Null(baseUrl.Current);
         Assert.Null((await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Address);
         Assert.Equal(OfferState.Open, (await Offer.Get(offer.Id, Cancellation))!.State);
@@ -346,7 +314,7 @@ public sealed class OfferTests
             Assert.False(door.RootElement.TryGetProperty("offers", out _));
         }
 
-        var events = await Event.HighWaterMark.Load(Cancellation);
+        var events = await Event.Log.Highest(Cancellation);
         using (var again = await Answer(leo, OfferController.UsePath, offer.Id, form))
         {
             Assert.Equal(HttpStatusCode.SeeOther, again.StatusCode);
@@ -356,57 +324,31 @@ public sealed class OfferTests
         Assert.Equal(Public, baseUrl.Current);
         Assert.Equal(space.Version, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Version);
         Assert.Equal(accepted.DecidedAt, (await Offer.Get(offer.Id, Cancellation))!.DecidedAt);
-        Assert.Equal(events, await Event.HighWaterMark.Load(Cancellation));
+        Assert.Equal(events, await Event.Log.Highest(Cancellation));
     }
 
     [Fact]
-    public async Task A_request_that_ends_once_the_writer_has_its_use_still_leaves_the_origin_held_and_a_later_post_holds_an_address_kept_but_not_held()
+    public async Task A_use_behind_a_busy_store_finishes_whatever_becomes_of_its_request_and_leaves_the_origin_held()
     {
-        await using (var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(), ct: Cancellation))
-        {
-            await APlaceWithNews(tangentSpace);
-            await Reached.On(tangentSpace, Public, Cancellation);
-            await Reached.Settled(tangentSpace, Cancellation);
-            var offer = Assert.Single(await Offer.All(Cancellation));
-            var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
-            var baseUrl = tangentSpace.Services.GetRequiredService<KoanWebBaseUrl>();
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(), ct: Cancellation);
+        await APlaceWithNews(tangentSpace);
+        await Reached.On(tangentSpace, Public, Cancellation);
+        await Reached.Settled(tangentSpace, Cancellation);
+        var offer = Assert.Single(await Offer.All(Cancellation));
+        var baseUrl = tangentSpace.Services.GetRequiredService<KoanWebBaseUrl>();
 
-            // The writer is busy, the use is queued behind it, and the request that sent it ends.
-            var release = new TaskCompletionSource();
-            var held = writer.Send(new Hold(release.Task), Cancellation);
-            using var request = new CancellationTokenSource();
-            var used = PlaceAddress.Use(baseUrl, new UseOffer(offer.Id, Leo, Public), request.Token);
-            request.Cancel();
-            release.SetResult();
-            await held;
+        var release = new TaskCompletionSource();
+        var running = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var held = new Hold(release.Task, running).Send(Cancellation);
+        await running.Task.WaitAsync(TimeSpan.FromSeconds(10), Cancellation);
+        var used = PlaceAddress.Use(baseUrl, new UseOffer(offer.Id, Leo, Public));
+        release.SetResult();
+        await held;
 
-            Assert.IsType<Outcome<Offer>.Done>(await used);
-            Assert.Equal(Public, baseUrl.Current);
-            Assert.Equal(Public, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Address);
-            Assert.Equal(OfferState.Accepted, (await Offer.Get(offer.Id, Cancellation))!.State);
-        }
-
-        // An address the row keeps from a used offer that Koan does not hold, as when a use's hold was lost: the next post
-        // of that offer holds it.
-        await using var kept = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(), ct: Cancellation);
-        await APlaceWithNews(kept);
-        var keptWriter = kept.Services.GetRequiredService<WriteLoop>();
-        var space = (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!;
-        space.Address = Public;
-        Assert.IsType<Outcome<TangentSpace>.Done>(await keptWriter.Send(new Store<TangentSpace>(space), Cancellation));
-        var accepted = Offer.Make(OfferKind.Address, Public, Leo, DateTimeOffset.UtcNow);
-        accepted.Accept(DateTimeOffset.UtcNow);
-        Assert.IsType<Outcome<Offer>.Done>(await keptWriter.Send(new Store<Offer>(accepted), Cancellation));
-        var keptUrl = kept.Services.GetRequiredService<KoanWebBaseUrl>();
-        Assert.Null(keptUrl.Current);
-        using var leo = await SignedIn(kept, "leo", Leo);
-
-        using (var again = await Answer(leo, OfferController.UsePath, accepted.Id))
-        {
-            Assert.Equal(HttpStatusCode.SeeOther, again.StatusCode);
-            Assert.Equal(FirstRunController.Path, again.Headers.Location?.OriginalString);
-        }
-        Assert.Equal(Public, keptUrl.Current);
+        Assert.IsType<Outcome<Offer>.Done>(await used);
+        Assert.Equal(Public, baseUrl.Current);
+        Assert.Equal(Public, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Address);
+        Assert.Equal(OfferState.Accepted, (await Offer.Get(offer.Id, Cancellation))!.State);
     }
 
     [Fact]
@@ -443,7 +385,7 @@ public sealed class OfferTests
                 using (var again = await Answer(leo, OfferController.DeclinePath, offer.Id))
                     Assert.Equal(HttpStatusCode.SeeOther, again.StatusCode);
                 Assert.Equal(new Outcome<Offer>.Refused(MakeOffer.Made),
-                    await tangentSpace.Services.GetRequiredService<WriteLoop>().Send(new MakeOffer(Public), Cancellation));
+                    await new MakeOffer(Public).Send(Cancellation));
                 using (var refused = await Answer(leo, OfferController.UsePath, offer.Id))
                     Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
                 Assert.Null(tangentSpace.Services.GetRequiredService<KoanWebBaseUrl>().Current);
@@ -556,12 +498,11 @@ public sealed class OfferTests
         return null;
     }
 
-    /// <summary>A command that keeps the writer busy until <see cref="Until"/> completes, writing nothing.</summary>
-    /// <summary>Holds the writer until <paramref name="Until"/> completes, saying when it began through
+    /// <summary>Keeps the store until <paramref name="Until"/> completes, saying when it began through
     /// <paramref name="Running"/>.</summary>
     private sealed record Hold(Task Until, TaskCompletionSource? Running = null) : ICommand<bool>
     {
-        public async Task<Outcome<bool>> Run(Sequences sequences, CancellationToken ct)
+        public async Task<Outcome<bool>> Run(CancellationToken ct)
         {
             Running?.TrySetResult();
             await Until;
@@ -577,8 +518,7 @@ public sealed class OfferTests
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         await Given.AParticipant(tangentSpace, Ada, [Roles.Member], ct: Cancellation);
         await Given.ATangent(tangentSpace, "workshop", ct: Cancellation);
-        Assert.IsType<Outcome<Post>.Done>(await tangentSpace.Services.GetRequiredService<WriteLoop>().Send(
-            new StartTopic(Tids.Mint(), "workshop", "Glazes", "Which glaze holds up?", Leo), Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "workshop", "Glazes", "Which glaze holds up?", Leo).Send(Cancellation));
     }
 
     private static async Task<Browser> SignedIn(TangentSpaceFixture tangentSpace, string name, string did)

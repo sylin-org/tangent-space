@@ -1,9 +1,11 @@
+using Koan.Data.Abstractions.Annotations;
+using Koan.Data.Core.Commands;
 using Koan.Data.Core.Model;
 
-namespace Tangent.Writer;
+namespace Tangent.Commands;
 
-/// <summary>A row the writer's proofs write: who sent it, in what order they sent it, what it says, and the sequence the
-/// writer gave it. It exists only here.</summary>
+/// <summary>A row the commands' proofs write: who sent it, in what order they sent it, what it says, and the number
+/// it took. It exists only here.</summary>
 public sealed class Slip : Entity<Slip>
 {
     public string Sender { get; set; } = "";
@@ -12,6 +14,7 @@ public sealed class Slip : Entity<Slip>
 
     public string Body { get; set; } = "";
 
+    [Index(Unique = true)]
     public long Sequence { get; set; }
 
     /// <summary>A slip with these words, or a refusal when there are none.</summary>

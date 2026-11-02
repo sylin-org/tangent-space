@@ -1,11 +1,11 @@
 using System.Diagnostics;
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
 using Tangent.Posts;
 using Tangent.Space;
-using Tangent.Writer;
 using Xunit;
 
 namespace Tangent.Lifecycle;
@@ -24,14 +24,13 @@ public sealed class BackupTests(ITestOutputHelper output)
             ct: Cancellation);
         await Given.AnEstablishedTangentSpace(original, "The workshop's place", ct: Cancellation);
         // The place as first run leaves it, with its moderators' Tangent, so the restored start has nothing to create.
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await original.Services.GetRequiredService<WriteLoop>().Send(new CreateModeratorsTangent(), Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateModeratorsTangent().Send(Cancellation));
         var row = (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!;
-        var writer = original.Services.GetRequiredService<WriteLoop>();
         await Given.ATangent(original, "workshop", ct: Cancellation);
         await Given.AParticipant(original, "did:plc:ada", [Roles.Member], ct: Cancellation);
         var image = await Media.Keep(ArticleMediaTests.Jpeg(), Cancellation);
-        Assert.IsType<Outcome<MediaUse>.Done>(await writer.Send(new BringMedia(image.Id, "did:plc:ada"), Cancellation));
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), "workshop", "A picture", "![It](/media/" + image.Id + ")", "did:plc:ada"), Cancellation));
+        Assert.IsType<Outcome<MediaUse>.Done>(await new BringMedia(image.Id, "did:plc:ada").Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "workshop", "A picture", "![It](/media/" + image.Id + ")", "did:plc:ada").Send(Cancellation));
         var kept = await original.Client.GetByteArrayAsync("/media/" + image.Id, Cancellation);
         var rendered = await original.Client.GetByteArrayAsync($"/media/{image.Id}/{MediaRecipes.CardName}", Cancellation);
 
@@ -170,7 +169,7 @@ public sealed class BackupTests(ITestOutputHelper output)
         var space = await Given.AnEstablishedTangentSpace(tangentSpace, "The kept place", ct: Cancellation);
         await Given.ATangent(tangentSpace, "workshop", ct: Cancellation);
         space.Address = address;
-        Assert.IsType<Outcome<TangentSpace>.Done>(await tangentSpace.Services.GetRequiredService<WriteLoop>().Send(new Store<TangentSpace>(space), Cancellation));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(Cancellation));
         var folder = Path.Combine(tangentSpace.Folder, "archive");
         string[] named = [$"--Tangent:DataFolder={tangentSpace.DataFolder}", $"--Koan:Web:ApplicationUrl={address}"];
 

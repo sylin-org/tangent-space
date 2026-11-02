@@ -1,10 +1,10 @@
 using System.Net;
 using System.Text.Json;
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Participants;
 using Tangent.Space;
-using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -21,16 +21,15 @@ public sealed class RoleSettingsTests
     private const string Otto = "did:plc:otto4roles";
 
     /// <summary>The writes' place, with Leo an administrator and Otto its operator.</summary>
-    private static async Task<WriteLoop> Shaped(TangentSpaceFixture tangentSpace)
+    private static async Task Shaped(TangentSpaceFixture tangentSpace)
     {
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Member, Roles.Administrator], ct: Cancellation);
         await Given.AParticipant(tangentSpace, Otto, [Roles.Member, Roles.Administrator], ct: Cancellation);
         var space = (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!;
         space.OperatorId = Otto;
         space.ProprietorId = Otto;
-        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new Store<TangentSpace>(space), Cancellation));
-        return writer;
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(Cancellation));
     }
 
     /// <summary>The roles a page lists, by word, in their order.</summary>
@@ -134,7 +133,7 @@ public sealed class RoleSettingsTests
         Assert.Contains(RolesPage.Verb.Delete, Strings(Row(page, "helpers"), "can"));
 
         var refused = await Json(mo, path, RolesController.DeletePath, new { role = "keepers" });
-        Assert.Equal((HttpStatusCode.Forbidden, People.NotHeld), (refused.Status, refused.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, People.NotHeld.Text), (refused.Status, refused.Gate));
         Assert.NotNull(await roles.Get("role:keepers", Cancellation));
         Assert.Equal(HttpStatusCode.NoContent, (await Json(mo, path, RolesController.DeletePath, new { role = "helpers" })).Status);
     }
@@ -152,7 +151,7 @@ public sealed class RoleSettingsTests
 
         // A member shapes nothing: the gate, and no role listed.
         var member = await Send(ada.Client, HttpMethod.Get, path, json: true);
-        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageRoles)), (member.Status, member.Json.GetProperty("gate").GetString()));
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageRoles).Word), (member.Status, member.Json.GetProperty("gate").GetString()));
         Assert.Empty(member.Json.GetProperty("roles").EnumerateArray());
 
         // The moderator creates a role below their own, granting what they hold.
@@ -171,22 +170,22 @@ public sealed class RoleSettingsTests
         foreach (var word in new[] { "moderator", "administrator" })
         {
             var refused = await Json(mo, path, RolesController.ChangePath, new { role = word, name = "Stewards" });
-            Assert.Equal((HttpStatusCode.Forbidden, RoleSettings.NotManaged), (refused.Status, refused.Gate));
+            Assert.Equal((HttpStatusCode.Forbidden, RoleSettings.NotManaged.Text), (refused.Status, refused.Gate));
         }
 
         var raised = await Json(mo, path, RolesController.ChangePath, new { role = "helpers", move = "higher" });
-        Assert.Equal((HttpStatusCode.Forbidden, RoleSettings.NotManaged), (raised.Status, raised.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, RoleSettings.NotManaged.Text), (raised.Status, raised.Gate));
         Assert.Equal("Moderator", (await roles.Get(Roles.Moderator, Cancellation))!.Name);
         Assert.True(await PositionOf("role:helpers") < await PositionOf(Roles.Moderator));
         var notGiven = await Json(mo, PeopleController.Path, PeopleController.GivePath, new { participant = Ada, role = People.Moderator });
-        Assert.Equal((HttpStatusCode.Forbidden, People.NotManaged), (notGiven.Status, notGiven.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, People.NotManaged.Text), (notGiven.Status, notGiven.Gate));
 
         // Nothing they do not hold is granted, on a new role or one below them.
         var unheld = await Json(mo, path, path, new { name = "Keepers", permissions = "ManageSpace" });
-        Assert.Equal((HttpStatusCode.Forbidden, People.NotHeld), (unheld.Status, unheld.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, People.NotHeld.Text), (unheld.Status, unheld.Gate));
         Assert.Null(await roles.Get("role:keepers", Cancellation));
         var widened = await Json(mo, path, RolesController.ChangePath, new { role = "member", permissions = "View Post Topic EditOwn RemoveOwn ManageSpace" });
-        Assert.Equal((HttpStatusCode.Forbidden, People.NotHeld), (widened.Status, widened.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, People.NotHeld.Text), (widened.Status, widened.Gate));
 
         // Below them, theirs to give.
         Assert.Equal(HttpStatusCode.OK, (await Json(mo, PeopleController.Path, PeopleController.GivePath, new { participant = Ada, role = "helpers" })).Status);

@@ -1,7 +1,7 @@
 using System.Net;
+using Koan.Data.Core.Commands;
 using Tangent.Events;
 using Tangent.Participants;
-using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -53,10 +53,10 @@ public sealed class TypedMentionTests
     public async Task The_same_reply_or_edit_sent_again_is_the_post_it_wrote_whoever_its_handles_name_by_then()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         using var ada = await SignedIn(tangentSpace, Ada);
         using var bea = await SignedIn(tangentSpace, Bea);
-        var root = await Started(writer, Ada, "Lanterns", "How do you hang yours?");
+        var root = await Started(Ada, "Lanterns", "How do you hang yours?");
         var page = TopicPath(root);
 
         // A handle no one holds stays text; its holder arrives; the same reply sent again is the Post it wrote.
@@ -74,7 +74,7 @@ public sealed class TypedMentionTests
         var edit = PostPath(root, root) + "/edit";
         var edited = new Dictionary<string, string> { ["body"] = "How do you hang yours, @bea4writes.example?", ["version"] = "1" };
         Assert.Equal(HttpStatusCode.SeeOther, (await Form(ada, edit, edit, new Dictionary<string, string>(edited))).Status);
-        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new RecordHandle(Mo, "bea4writes.example"), Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new RecordHandle(Mo, "bea4writes.example").Send(Cancellation));
         var before = await Counted();
 
         var replyAgain = await Json(ada, page, page, asJson);
@@ -98,10 +98,10 @@ public sealed class TypedMentionTests
     public async Task A_body_sent_within_its_limit_is_kept_with_its_typed_mentions_written_in_past_it()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         using var ada = await SignedIn(tangentSpace, Ada);
         using var bea = await SignedIn(tangentSpace, Bea);
-        var root = await Started(writer, Mo, "Long notes", "Write it all down.");
+        var root = await Started(Mo, "Long notes", "Write it all down.");
         const string opening = "@bea4writes.example kept the notes:\n";
         var lines = string.Concat(Enumerable.Repeat(new string('w', 99) + "\n", (65_520 - opening.Length) / 100));
         var sent = opening + lines + new string('w', 65_520 - opening.Length - lines.Length);
@@ -122,8 +122,8 @@ public sealed class TypedMentionTests
     public async Task A_reply_that_types_a_participants_handle_mentions_them_by_form_and_by_an_agents_json()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var root = await Started(writer, Mo, "Spare parts", "Who has a spare knob for the old radio?");
+        await Place(tangentSpace);
+        var root = await Started(Mo, "Spare parts", "Who has a spare knob for the old radio?");
         using var ada = await SignedIn(tangentSpace, Ada);
         using var bea = await SignedIn(tangentSpace, Bea);
         using var mo = await SignedIn(tangentSpace, Mo);
@@ -201,15 +201,15 @@ public sealed class TypedMentionTests
     public async Task A_typed_mention_keeps_the_participant_whose_handle_changes_and_reads_under_the_new_one()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         using var ada = await SignedIn(tangentSpace, Ada);
         using var bea = await SignedIn(tangentSpace, Bea);
-        var root = await Started(writer, Ada, "A lantern question", "Which wick?");
+        var root = await Started(Ada, "A lantern question", "Which wick?");
         var replyId = Tids.Mint();
         Assert.Equal(HttpStatusCode.SeeOther, (await Form(ada, TopicPath(root), TopicPath(root),
             new Dictionary<string, string> { ["id"] = replyId, ["body"] = "What do you think, @bea4writes.example?" })).Status);
 
-        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new RecordHandle(Bea, "bea.renamed.example"), Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new RecordHandle(Bea, "bea.renamed.example").Send(Cancellation));
 
         using var visitor = Agent(tangentSpace);
         var html = (await Send(visitor, HttpMethod.Get, TopicPath(root))).Body;
@@ -228,10 +228,10 @@ public sealed class TypedMentionTests
     public async Task An_edit_that_adds_a_typed_mention_notifies_once()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         using var ada = await SignedIn(tangentSpace, Ada);
         using var bea = await SignedIn(tangentSpace, Bea);
-        var root = await Started(writer, Ada, "Lanterns", "How do you hang yours?");
+        var root = await Started(Ada, "Lanterns", "How do you hang yours?");
         var edit = PostPath(root, root) + "/edit";
 
         var added = await Form(ada, edit, edit, new Dictionary<string, string> { ["body"] = "How do you hang yours, @bea4writes.example?", ["version"] = "1" });

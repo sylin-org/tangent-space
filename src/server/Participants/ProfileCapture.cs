@@ -1,10 +1,10 @@
+using Koan.Data.Core.Commands;
 using Koan.Jobs;
-using Tangent.Writer;
 
 namespace Tangent.Participants;
 
 /// <summary>The profile job's work: skip a profile captured within its lifetime; otherwise read the public profile
-/// once and hand it to the writer. A read that fails leaves the cache as it was, and the next sign-in after its
+/// once and send it as a command. A read that fails leaves the cache as it was, and the next sign-in after its
 /// lifetime submits the job again.</summary>
 public static class ProfileCapture
 {
@@ -45,18 +45,13 @@ public static class ProfileCapture
             return;
         }
 
-        var outcome = await context.Services.GetRequiredService<WriteLoop>().Send(new CaptureProfile(answer, now), ct);
-        switch (outcome)
+        switch (await new CaptureProfile(answer, now).Send(ct))
         {
-            case Outcome<Participant>.Done:
-                return;
             case Outcome<Participant>.Refused refused:
                 context.Logger.LogWarning("Profile of {Participant} not cached: {Reason}", participant.Id, refused.Reason);
                 return;
             case Outcome<Participant>.Failed failed:
-                throw new InvalidOperationException($"The writer could not cache the profile of {participant.Id}.", failed.Cause);
-            default:
-                throw new InvalidOperationException($"The writer answered {outcome} for the profile of {participant.Id}.");
+                throw new InvalidOperationException($"The profile of {participant.Id} could not be cached.", failed.Cause);
         }
     }
 }

@@ -7,7 +7,7 @@ How the tree is built: in packages, by roles that each have a model and an effor
 | Role | Does | Model | Effort | Runs as |
 | --- | --- | --- | --- | --- |
 | **Lead** | Product and architecture decisions, ADRs, briefs for every package, reading results, Koan design, the conversation with Leo | Claude Opus 5.5 | high; xhigh only while deciding a spine question or Koan semantics | the main session |
-| **Builder, first of its kind** | A package that establishes a pattern the tree has not got yet: the writer, the HTML projection, the evaluator, the door, the first Connection package, anything in Koan | Claude Opus 5.5 | high; xhigh for a spine package or Koan semantics | a session of its own, in a worktree |
+| **Builder, first of its kind** | A package that establishes a pattern the tree has not got yet: the HTML projection, the evaluator, the door, the first Connection package, anything in Koan | Claude Opus 5.5 | high; xhigh for a spine package or Koan semantics | a session of its own, in a worktree |
 | **Builder, repeat** | A package that repeats an established pattern: a second settings screen, a second Connection package, feeds, a phone layout | Claude Opus 5.5 | high, set explicitly (its own default is medium) | a session of its own, in a worktree |
 | **Explorer** | Finds and reads: inventories, Koan source lookups, "where is X handled", research with the web | Claude Sonnet 5.5 | medium | the project's `Explore` agent (`.claude/agents/explore.md`), which pins Sonnet at medium; the built-in Explore would run on the session's own model |
 | **Mechanic** | Bulk, checkable edits from an exact instruction: a rename sweep, language-check fixes, fixture data, test scaffolds from a spec | Claude Haiku 5.5 | low, medium when the instruction has judgment in it | a subagent |
@@ -106,7 +106,7 @@ Parallel once 1.1 lands: 1.2 and 1.3 together; then 1.4 and 1.6 together; then 1
 | Package | After | Role |
 | --- | --- | --- |
 | 2.1 The topic window: a Topic as one resource, bounded, cursors are sequence numbers, anchor first; plain bodies until 2.3 | 1.6 | first of its kind |
-| 2.2 The write verbs over HTTP: start a Topic, reply, edit, remove through the writer; TID ids as idempotency keys; pre-edit snapshots in the audit partition; visible tombstones | 1.8 | first of its kind, xhigh |
+| 2.2 The write verbs over HTTP: start a Topic, reply, edit, remove by command; TID ids as idempotency keys; pre-edit snapshots in the audit partition; visible tombstones | 1.8 | first of its kind, xhigh |
 | 2.3 Markdown: sanitized HTML, mentions as identity-bearing links resolved at render, `mention` events written with the Post | 2.2 | repeat |
 | 2.4 The composer island: drafts by scope, an uncertain submit reconciled by `GET` of the minted Id, never auto-posts | 2.1, 2.2 | first of its kind |
 | 2.5 Checkpoints and the watch flag: reading a Topic moves its checkpoint; watch on a Tangent or a Topic | 2.1 | repeat |

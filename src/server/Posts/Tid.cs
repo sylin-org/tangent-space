@@ -1,7 +1,7 @@
 namespace Tangent.Posts;
 
 /// <summary>A Post's Id as the client mints it: an atproto TID, thirteen characters of the sortable base32 alphabet
-/// encoding a 63-bit value. Commands accept only this shape and the writer mints none; a form the server renders
+/// encoding a 63-bit value. Commands accept only this shape and mint none; a form the server renders
 /// carries one minted for it (<see cref="Mint"/>), so a browser without script sends an Id like any other client.</summary>
 public static class Tid
 {

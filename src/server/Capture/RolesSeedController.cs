@@ -1,4 +1,5 @@
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Koan.Data.Core.Model;
 using Koan.Identity.Roles;
 using Microsoft.AspNetCore.Mvc;
@@ -7,16 +8,15 @@ using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
 using Tangent.Tangents;
-using Tangent.Writer;
 
 namespace Tangent.Capture;
 
-/// <summary>The rows the roles, access and private-place captures show, written through the writer when the capture
+/// <summary>The rows the roles, access and private-place captures show, sent as commands when the capture
 /// asks, in a place its operator set up, by that operator: two roles of the place's own, the night shift, which moderates
 /// and decides standing, and patrons, which grants nothing of its own; a public discussions Tangent and a private studio
 /// whose member role reads and posts there, members-only, where patrons read alone; or the place made private. Compiled
 /// only into the capture host, like <see cref="CaptureSeedController"/>; fixed names.</summary>
-public sealed class RolesSeedController(WriteLoop writer, RoleCollection roles) : ControllerBase
+public sealed class RolesSeedController(RoleCollection roles) : ControllerBase
 {
     [HttpPost("/capture/seed/roles")]
     public async Task<IActionResult> RolesScreen(CancellationToken ct)
@@ -53,16 +53,16 @@ public sealed class RolesSeedController(WriteLoop writer, RoleCollection roles) 
         foreach (var role in held) await roles.Add(role, id, ct);
     }
 
-    private async Task<T> Write<T>(ICommand<T> command, CancellationToken ct) => await writer.Send(command, ct) switch
+    private async Task<T> Write<T>(ICommand<T> command, CancellationToken ct) => await command.Send() switch
     {
         Outcome<T>.Done done => done.Result,
         var other => throw new InvalidOperationException($"The roles seed's {command.GetType().Name} answered {other}.")
     };
 
-    /// <summary>Saves one row as the seed built it, through the writer.</summary>
+    /// <summary>Saves one row as the seed built it, as a command.</summary>
     private sealed record Keep<TEntity>(TEntity Row) : ICommand<TEntity> where TEntity : Entity<TEntity>
     {
-        public async Task<Outcome<TEntity>> Run(Sequences sequences, CancellationToken ct)
+        public async Task<Outcome<TEntity>> Run(CancellationToken ct)
         {
             await Row.Save(ct);
             return new Outcome<TEntity>.Done(Row);

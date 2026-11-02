@@ -1,8 +1,8 @@
 using System.Globalization;
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Tangent.Access;
 using Tangent.Events;
-using Tangent.Writer;
 
 namespace Tangent.Posts;
 
@@ -16,7 +16,7 @@ namespace Tangent.Posts;
 /// where someone else edited it, so they are told, with one
 /// <see cref="EventKind.Mention"/> per participant the new body mentions and the old did not
 /// (<see cref="Mentions.Notify"/>); the body is judged where the command is built (<see cref="PostBody"/>), never in
-/// the writer. Safe to repeat: when the Post already says what the command says, at any version, or this edit made it
+/// its hold. Safe to repeat: when the Post already says what the command says, at any version, or this edit made it
 /// what it is and is sent again — from the version before, with the same words sent, whoever their typed handles name
 /// now (<see cref="Post.MadeBy"/>) — it answers with the Post and writes nothing. An article's edit may name its
 /// <see cref="CoverId"/>: an image the editor may see, or is refused with <see cref="Post.NoCover"/>; empty, it takes the
@@ -30,13 +30,13 @@ public sealed record EditPost(
     DateTimeOffset? At = null,
     string? CoverId = null) : ICommand<Post>
 {
-    public const string NoPost = "No Post has this Id.";
+    public static readonly Reason NoPost = Reason.Absent("No Post has this Id.");
 
     /// <summary>The conflict's reason: the version the Post is at now.</summary>
-    public static string Stale(long current) =>
-        "The Post is at version " + current.ToString(CultureInfo.InvariantCulture) + " now, not the version this edit was made from.";
+    public static Reason Stale(long current) => Reason.Conflict(
+        "The Post is at version " + current.ToString(CultureInfo.InvariantCulture) + " now, not the version this edit was made from.");
 
-    public async Task<Outcome<Post>> Run(Sequences sequences, CancellationToken ct)
+    public async Task<Outcome<Post>> Run(CancellationToken ct)
     {
         if (await Post.Get(PostId, ct) is not { } post) return new Outcome<Post>.Refused(NoPost);
         var capabilities = await Capabilities.Load(EditorId, post.TangentId, post, ct);
@@ -45,7 +45,7 @@ public sealed record EditPost(
             return new Outcome<Post>.Refused(capabilities.Gate(Bit.EditOwn)!);
 
         if (post.Unchanged(Body.Text, Title, CoverId) || post.MadeBy(Version, Body, Title, CoverId)) return new Outcome<Post>.Done(post);
-        if (post.Version != Version) return new Outcome<Post>.Conflict(Stale(post.Version));
+        if (post.Version != Version) return new Outcome<Post>.Refused(Stale(post.Version));
 
         if (CoverId is { Length: > 0 } && CoverId != post.CoverId && !await MediaUse.Reaches(EditorId, CoverId, ct)) return new Outcome<Post>.Refused(Post.NoCover);
         var at = At ?? DateTimeOffset.UtcNow;
@@ -56,10 +56,10 @@ public sealed record EditPost(
         if (CoverId is not null) post.Cover(CoverId);
         await post.Save(ct);
         await MediaUse.Record(post, EditorId, used, ct);
-        await Event.Next(sequences, EventKind.PostEdited, at,
+        await Event.Append(EventKind.PostEdited, at, ct,
             tangentId: post.TangentId, topicId: post.TopicId, postId: post.Id, actorId: EditorId,
-            targetId: EditorId == post.AuthorId ? null : post.AuthorId, version: post.Version).Save(ct);
-        await Mentions.Notify(sequences, post, EditorId, before, at, ct);
+            targetId: EditorId == post.AuthorId ? null : post.AuthorId, version: post.Version);
+        await Mentions.Notify(post, EditorId, before, at, ct);
         return new Outcome<Post>.Done(post);
     }
 }

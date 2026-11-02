@@ -1,4 +1,5 @@
 using Koan.Core.Hosting.App;
+using Koan.Data.Core.Commands;
 using Koan.Identity.Access;
 using Koan.Identity.Roles;
 using Tangent.Participants;
@@ -18,30 +19,37 @@ namespace Tangent.Access;
 /// few small rows; nothing stores it.</summary>
 public sealed class Capabilities
 {
-    public const string SignIn = "sign-in";
-    public const string Apply = "apply";
+    public static readonly Reason SignIn = Reason.Gated("sign-in", "Sign in to write here.", next: SignInController.Path);
+    public static readonly Reason Apply = Reason.Gated("apply", "Your application is waiting: you can write here once someone admits you.");
 
     /// <summary>The participant's application was declined: they read what a visitor reads, and nothing more.</summary>
-    public const string Declined = "declined";
-    public const string TimedOut = "timed-out";
+    public static readonly Reason Declined = Reason.Gated("declined", "Your application was declined, so you read here and don’t write.");
+    public static readonly Reason TimedOut = Reason.Gated("timed-out", "You’re timed out: you can read and report here, and post again once it ends.");
 
     /// <summary>The resource does not exist for this reader: banned, or without <see cref="Bit.View"/> where they
-    /// stand. Every verb carries this one reason, and a command answers what it answers for a missing resource.</summary>
-    public const string Absent = "absent";
-    public const string Locked = "locked";
-    public const string Removed = "removed";
+    /// stand. Every verb carries this one reason, and a command answers what it answers for a missing resource. Its text
+    /// is the word <c>gate</c> carries on the wire; what it says is <see cref="Reason.Said"/>.</summary>
+    public static readonly Reason Absent = Reason.Absent("absent");
+    public static readonly Reason Locked = Reason.Gated("locked", "This topic is locked, so no one replies in it.");
+    public static readonly Reason Removed = Reason.Gated("removed", "This post is removed, so nothing changes it now.");
 
     /// <summary>The reason <see cref="Bit.EditOwn"/> and <see cref="Bit.RemoveOwn"/> are missing on a Post that is
     /// not the participant's own, or where no Post is in question.</summary>
-    public const string NotYours = "not yours";
+    public static readonly Reason NotYours = Reason.Gated("not yours", "Only its author, or a moderator, can change this post.");
+
+    /// <summary>What a gate says that a role or an overwrite decided.</summary>
+    private const string NotOpen = "This isn’t open to you here.";
+
+    private static readonly IReadOnlyDictionary<string, string> Sentences =
+        new[] { SignIn, Apply, Declined, TimedOut, Locked, Removed, NotYours }.ToDictionary(gate => gate.Word!, gate => gate.Text, StringComparer.Ordinal);
 
     /// <summary>The resource resolution names where no Tangent is in question: the place, which has no overwrites. The
     /// bag alone decides there.</summary>
     private const string Place = "place";
 
-    private readonly Dictionary<Bit, string> _missing;
+    private readonly Dictionary<Bit, Reason> _missing;
 
-    private Capabilities(Bit held, bool exists, Dictionary<Bit, string> missing, IReadOnlyList<string> roleIds, RoleBag bag)
+    private Capabilities(Bit held, bool exists, Dictionary<Bit, Reason> missing, IReadOnlyList<string> roleIds, RoleBag bag)
     {
         Held = held;
         Exists = exists;
@@ -74,17 +82,20 @@ public sealed class Capabilities
     /// <see cref="Apply"/>, <see cref="Declined"/>, <see cref="TimedOut"/>, <see cref="Absent"/>, <see cref="Locked"/> or <see cref="Removed"/>
     /// where standing, audience or state decided, or the deciding overwrite or the absence of a role where the bag and
     /// the overwrites decided.</summary>
-    public string? Gate(Bit verb)
+    public Reason? Gate(Bit verb)
     {
         if (!Bits.Each.Contains(verb)) throw new ArgumentException("A gate is asked for one bit.", nameof(verb));
         return _missing.GetValueOrDefault(verb);
     }
 
     /// <summary>The reason an overwrite's deny decides a verb.</summary>
-    public static string Denied(string subject, Bit verb) => $"{subject} denies {verb}";
+    public static Reason Denied(string subject, Bit verb) => Reason.Gated($"{subject} denies {verb}", NotOpen);
 
     /// <summary>The reason the bag decides a verb: no role of the participant's grants it.</summary>
-    public static string NoRoleGrants(Bit verb) => $"no role grants {verb}";
+    public static Reason NoRoleGrants(Bit verb) => Reason.Gated($"no role grants {verb}", NotOpen);
+
+    /// <summary>The one sentence a person reads for a gate's word, where a page carries the word.</summary>
+    public static string Sentence(string gate) => Sentences.GetValueOrDefault(gate, NotOpen);
 
     /// <summary>One pure function over its inputs. <paramref name="participant"/> is null for a visitor.
     /// <paramref name="tokens"/> are Koan's bag for the participant (<see cref="RoleBag.Tokens"/>), the anonymous bag for
@@ -111,7 +122,7 @@ public sealed class Capabilities
     private static Capabilities For(Participant? participant, TangentSpace space, Resolved resolved, DateTimeOffset now,
         Post? post, Post? root)
     {
-        var missing = new Dictionary<Bit, string>();
+        var missing = new Dictionary<Bit, Reason>();
         var held = Bits.All;
         var viewIfPublic = space.Audience == Audience.Public ? Bit.View : Bit.None;
 
@@ -156,7 +167,7 @@ public sealed class Capabilities
 
         return new Capabilities(held, true, missing, resolved.RoleIds, resolved.Bag);
 
-        void Drop(Bit bits, string reason)
+        void Drop(Bit bits, Reason reason)
         {
             foreach (var bit in Bits.Each)
             {
@@ -171,7 +182,7 @@ public sealed class Capabilities
 
     /// <summary>What the bag and the overwrites leave for one reader on one resource: the bits granted, the reason for
     /// each bit withheld, the roles in the bag, and the bag.</summary>
-    internal sealed record Resolved(Bit Granted, IReadOnlyList<(Bit Bit, string Reason)> Withheld, IReadOnlyList<string> RoleIds, RoleBag Bag);
+    internal sealed record Resolved(Bit Granted, IReadOnlyList<(Bit Bit, Reason Why)> Withheld, IReadOnlyList<string> RoleIds, RoleBag Bag);
 
     /// <summary>Koan's resolution in Discord's order (<see cref="RoleBag.On"/>) over the bag, with everyone's
     /// <see cref="Bit.View"/> on a public place in its base, and the overwrites on the resource of
@@ -187,7 +198,7 @@ public sealed class Capabilities
         var here = bag.On(ResourceOf(tangentId) ?? Place, overwrites, now);
         var granted = here.IsAdministrator ? Bits.All : Bits.InTokens(here.Permissions);
         var withheld = Bits.Each.Where(bit => !granted.HasFlag(bit))
-            .Select(bit => (bit, Reason(here.Explain(Bits.Token(bit)), bit))).ToList();
+            .Select(bit => (bit, Deciding(here.Explain(Bits.Token(bit)), bit))).ToList();
         IReadOnlyList<string> roleIds = participant is null
             ? []
             : bag.Roles.Where(role => role is not (RoleTokens.Everyone or RoleTokens.Authenticated)).ToList();
@@ -195,7 +206,7 @@ public sealed class Capabilities
     }
 
     /// <summary>Koan's deciding fact for a missing bit, in Tangent's words.</summary>
-    private static string Reason(AccessDecision decision, Bit verb) =>
+    private static Reason Deciding(AccessDecision decision, Bit verb) =>
         decision.ContributingFacts is [{ Kind: AccessFactKind.Deny, Subject: { } subject }] ? Denied(subject, verb) : NoRoleGrants(verb);
 
     /// <summary>What a command asks before it answers anything else, so that a reader without <see cref="Bit.View"/> is

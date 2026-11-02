@@ -4,13 +4,13 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Koan.Data.Core.Commands;
 using Koan.Identity;
 using Microsoft.Extensions.DependencyInjection;
+using Person = Koan.Identity.Identity;
 using Tangent.Events;
 using Tangent.Space;
-using Tangent.Writer;
 using Xunit;
-using Person = Koan.Identity.Identity;
 
 namespace Tangent.Participants;
 

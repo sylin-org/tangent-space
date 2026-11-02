@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -14,7 +15,6 @@ using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
 using Tangent.Tangents;
-using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -32,7 +32,7 @@ public sealed partial class ArchiveTests
     public async Task Every_address_a_visitor_reads_live_answers_from_the_folder_across_a_place_larger_than_one_read_page()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Someone(tangentSpace, Ida, IdaHandle);
         using var visitor = Agent(tangentSpace);
 
@@ -41,14 +41,14 @@ public sealed partial class ArchiveTests
         foreach (var number in Enumerable.Range(1, TangentsController.PageSize))
             await Given.ATangent(tangentSpace, "more-" + number, ct: Cancellation);
         foreach (var number in Enumerable.Range(1, Math.Max(TopicList.PageSize, RecentPosts.PageSize)))
-            await Started(writer, Ida, "Topic number " + number, "Words of topic " + number);
-        var long_ = await Started(writer, Ida, "A long one", $"It goes on, says [@ida](at://{Ida}).");
+            await Started(Ida, "Topic number " + number, "Words of topic " + number);
+        var long_ = await Started(Ida, "A long one", $"It goes on, says [@ida](at://{Ida}).");
         var replies = new List<Post>();
         foreach (var number in Enumerable.Range(1, Export.WindowSize + 1))
-            replies.Add(await Replied(writer, long_, Ida, "Reply number " + number));
-        var gone = await Replied(writer, long_, Ida, "Words nobody keeps.");
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new RemovePost(gone.Id, Ida), Cancellation));
-        await Started(writer, Ida, "A piece", "An article's words.", Articles);
+            replies.Add(await Replied(long_, Ida, "Reply number " + number));
+        var gone = await Replied(long_, Ida, "Words nobody keeps.");
+        Assert.IsType<Outcome<Post>.Done>(await new RemovePost(gone.Id, Ida).Send(Cancellation));
+        await Started(Ida, "A piece", "An article's words.", Articles);
 
         var folder = Path.Combine(tangentSpace.Folder, "archive");
         Assert.Equal(BaseUrl, await Archive.Write(folder, tangentSpace.Services, Cancellation));
@@ -110,17 +110,17 @@ public sealed partial class ArchiveTests
     {
         const string members = "the-members";
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Someone(tangentSpace, Ida, IdaHandle);
         await Someone(tangentSpace, "did:plc:asking4archive", "asking.example", Standing.Applied);
         await Given.ATangent(tangentSpace, members, Audience.Private, ct: Cancellation);
         await Overwrites.SetAccess(tangentSpace.Services.GetRequiredService<RoleCollection>(), members, Roles.Member, RoleAccess.Post, Cancellation);
-        await Started(writer, Ida, "For the members", "Words the members read", members);
+        await Started(Ida, "For the members", "Words the members read", members);
         await Given.AParticipant(tangentSpace, "did:plc:leo4archive", [Roles.Administrator], ct: Cancellation);
-        await Started(writer, "did:plc:leo4archive", "In the studio", "Words only the studio reads", Studio);
-        var open = await Started(writer, Ida, "In the open", "Words anyone reads");
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), members, "Taken in", "", Ida, OriginId: open.Id), Cancellation));
-        await Started(writer, Ida, "A piece", "An article's words.", Articles);
+        await Started("did:plc:leo4archive", "In the studio", "Words only the studio reads", Studio);
+        var open = await Started(Ida, "In the open", "Words anyone reads");
+        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), members, "Taken in", "", Ida, OriginId: open.Id).Send(Cancellation));
+        await Started(Ida, "A piece", "An article's words.", Articles);
         using var visitor = Agent(tangentSpace);
 
         var folder = Path.Combine(tangentSpace.Folder, "archive");
@@ -172,9 +172,9 @@ public sealed partial class ArchiveTests
     public async Task A_retired_server_serves_the_pages_at_their_addresses_and_refuses_every_write()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Someone(tangentSpace, Ida, IdaHandle);
-        var root = await Started(writer, Ida, "Still here", "Words that stay.");
+        var root = await Started(Ida, "Still here", "Words that stay.");
         var folder = Path.Combine(tangentSpace.Folder, "archive");
         await Archive.Write(folder, tangentSpace.Services, Cancellation);
         await tangentSpace.StopAsync(Cancellation);
@@ -220,7 +220,7 @@ public sealed partial class ArchiveTests
     {
         const string Leo = "did:plc:leo4archive";
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Someone(tangentSpace, Ida, IdaHandle);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         using var leo = await SignedIn(tangentSpace, Leo);
@@ -229,8 +229,8 @@ public sealed partial class ArchiveTests
         var inline = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(61)));
         var hidden = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(62), Studio, "/t/" + Studio + "/new"));
         var unused = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(63)));
-        await Started(writer, Leo, "Plans", "![The plan](/media/" + hidden + ")", Studio);
-        var article = Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), Articles, "Lanterns", "![Lit](/media/" + inline + ")", Leo, CoverId: cover), Cancellation)).Result;
+        await Started(Leo, "Plans", "![The plan](/media/" + hidden + ")", Studio);
+        var article = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Articles, "Lanterns", "![Lit](/media/" + inline + ")", Leo, CoverId: cover).Send(Cancellation)).Result;
         var live = new Dictionary<string, byte[]>();
         foreach (var id in new[] { cover, inline }) live[id] = await visitor.GetByteArrayAsync("/media/" + id, Cancellation);
 
@@ -269,16 +269,16 @@ public sealed partial class ArchiveTests
     {
         const string Leo = "did:plc:leo4archive";
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         using var leo = await SignedIn(tangentSpace, Leo);
         using var visitor = Agent(tangentSpace);
         var logo = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(60)));
         var icon = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(61)));
         var gone = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(62)));
-        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new ChangeTangentSpace(Leo, Footer: $"<img src=\"/media/{gone}\" alt=\"\">"), Cancellation));
-        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new ChangeTangentSpace(Leo,
-            Masthead: $"<img src=\"/media/{logo}\" alt=\"\">", Head: $"<link rel=\"icon\" href=\"/media/{icon}\">", Footer: ""), Cancellation));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new ChangeTangentSpace(Leo, Footer: $"<img src=\"/media/{gone}\" alt=\"\">").Send(Cancellation));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new ChangeTangentSpace(Leo,
+            Masthead: $"<img src=\"/media/{logo}\" alt=\"\">", Head: $"<link rel=\"icon\" href=\"/media/{icon}\">", Footer: "").Send(Cancellation));
         var bytes = await visitor.GetByteArrayAsync("/media/" + logo, Cancellation);
 
         var folder = Path.Combine(tangentSpace.Folder, "archive");
@@ -315,7 +315,7 @@ public sealed partial class ArchiveTests
     private static async Task Someone(TangentSpaceFixture tangentSpace, string id, string handle, Standing standing = Standing.Admitted)
     {
         var participant = new Participant { Id = id, Handle = handle, Standing = standing };
-        Assert.IsType<Outcome<Participant>.Done>(await tangentSpace.Services.GetRequiredService<WriteLoop>().Send(new Store<Participant>(participant), Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(participant).Send(Cancellation));
         if (standing == Standing.Admitted) await tangentSpace.Services.GetRequiredService<RoleCollection>().Add(Roles.Member, id, Cancellation);
     }
 

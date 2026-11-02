@@ -2,9 +2,9 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Koan.Data.Core.Commands;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Participants;
-using Tangent.Writer;
 using Xunit;
 
 namespace Tangent.Space;
@@ -110,7 +110,7 @@ public sealed partial class DiscoveryTests
         Assert.Contains("Signing in here makes you a participant at once.", joining);
 
         space.Admission = Admission.Apply;
-        Assert.IsType<Outcome<TangentSpace>.Done>(await tangentSpace.Services.GetRequiredService<WriteLoop>().Send(new Store<TangentSpace>(space), Cancellation));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(Cancellation));
         var applying = await Body(tangentSpace, "/llms.txt");
 
         Assert.Contains("Signing in here applies to take part: until someone admits you, you read what a visitor reads and write nothing", applying);
@@ -141,7 +141,7 @@ public sealed partial class DiscoveryTests
         }
 
         space.Name = "Field notes, renamed";
-        Assert.IsType<Outcome<TangentSpace>.Done>(await tangentSpace.Services.GetRequiredService<WriteLoop>().Send(new Store<TangentSpace>(space), Cancellation));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(Cancellation));
 
         using var stale = new HttpRequestMessage(HttpMethod.Get, "/tangent.json");
         stale.Headers.IfNoneMatch.Add(tag);
@@ -231,20 +231,19 @@ public sealed partial class DiscoveryTests
     private static async Task<string> Body(TangentSpaceFixture tangentSpace, string path)
         => await tangentSpace.Client.GetStringAsync(path, Cancellation);
 
-    /// <summary>Establishes the place through the writer with Leo as its operator and its proprietor, then stores the
+    /// <summary>Establishes the place by command with Leo as its operator and its proprietor, then stores the
     /// audience and another proprietor where one is named.</summary>
     private static async Task<TangentSpace> Establish(TangentSpaceFixture tangentSpace, string name, string operatorDid,
         Audience audience = Audience.Public, string? proprietorDid = null)
     {
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
-        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new Store<Participant>(new Participant { Id = Ada, Handle = "ada.example" }), Cancellation));
-        var outcome = await writer.Send(new Establish(operatorDid, "leo.example", name), Cancellation);
+        Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(new Participant { Id = Ada, Handle = "ada.example" }).Send(Cancellation));
+        var outcome = await new Establish(operatorDid, "leo.example", name).Send(Cancellation);
         var space = Assert.IsType<Outcome<TangentSpace>.Done>(outcome).Result;
         if (audience == Audience.Private || proprietorDid is not null)
         {
             space.Audience = audience;
             space.ProprietorId = proprietorDid ?? space.ProprietorId;
-            Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new Store<TangentSpace>(space), Cancellation));
+            Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(Cancellation));
         }
 
         return space;

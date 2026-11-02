@@ -1,8 +1,9 @@
+using Koan.Data.Core.Commands;
+using Koan.Web.Controllers;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
 using Tangent.Render;
-using Tangent.Writer;
 
 namespace Tangent.Posts;
 
@@ -11,7 +12,7 @@ namespace Tangent.Posts;
 /// base64 in one JSON object, keeps it (<see cref="Media.Keep"/>) and answers with its Id, its address, and the reference
 /// a body names it by (<see cref="WrittenMedia"/>). The address resolves as every write's does, before anything is judged
 /// of the request (<see cref="PostWrites.Locate"/>).</summary>
-public sealed class NewMediaController(KoanWebBaseUrl baseUrl, WriteLoop writer) : ControllerBase
+public sealed class NewMediaController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
     /// <summary>The segment under a Tangent's address where an image comes in.</summary>
     public const string Segment = "media";
@@ -35,10 +36,10 @@ public sealed class NewMediaController(KoanWebBaseUrl baseUrl, WriteLoop writer)
         try
         {
             if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
-            var (found, unseen) = await PostWrites.Locate(personId, tangent, null, null, ct);
+            var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, null, null, ct);
             if (found is null) return unseen!;
             var here = found.Capabilities;
-            if (personId is null || (!here.Holds(Bit.Topic) && !here.Holds(Bit.Post))) return PostWrites.Gated(here.Gate(Bit.Topic) ?? Capabilities.SignIn);
+            if (personId is null || (!here.Holds(Bit.Topic) && !here.Holds(Bit.Post))) return PostWrites.Refused(HttpContext, here.Gate(Bit.Topic) ?? Capabilities.SignIn);
             sent = await Sent(ct);
         }
         catch (BadHttpRequestException)
@@ -57,12 +58,13 @@ public sealed class NewMediaController(KoanWebBaseUrl baseUrl, WriteLoop writer)
             return NotKept(refusal.Message);
         }
 
-        var outcome = await writer.Send(new BringMedia(media.Id, personId), ct);
-        if (outcome is not Outcome<MediaUse>.Done) throw new InvalidOperationException($"The writer answered {outcome} for keeping {media.Id}.");
-        var reference = Media.Reference(media.Id);
-        var address = baseUrl.Resolve(HttpContext) + reference;
-        Response.Headers.Location = address;
-        return new ObjectResult(new WrittenMedia(media.Id, address, reference)) { StatusCode = StatusCodes.Status201Created, ContentTypes = { "application/json" } };
+        return this.Answer(await new BringMedia(media.Id, personId).Send(), _ =>
+        {
+            var reference = Media.Reference(media.Id);
+            var address = baseUrl.Resolve(HttpContext) + reference;
+            Response.Headers.Location = address;
+            return new ObjectResult(new WrittenMedia(media.Id, address, reference)) { StatusCode = StatusCodes.Status201Created, ContentTypes = { "application/json" } };
+        });
     }
 
     private async Task<byte[]?> Sent(CancellationToken ct)

@@ -38,7 +38,7 @@ To retire the place without breaking its links, `stop` it and run `pwsh scripts/
 | --- | --- |
 | [Brief](docs/BRIEF.md) | The product, on one page |
 | [Language](docs/LANGUAGE.md) | The words, each with one meaning |
-| [Architecture](docs/ARCHITECTURE.md) | The shape: one writer, one log, one renderer, what Koan carries |
+| [Architecture](docs/ARCHITECTURE.md) | The shape: commands, one log, one renderer, what Koan carries |
 | [ADR 0014](docs/adr/0014-tangent-beside-your-site.md) | The anchor decision and what earlier records still bind |
 | [ADR 0015](docs/adr/0015-the-spine.md) | The spine |
 | [Journeys](docs/JOURNEYS.md) | What a person or an agent meets, step by step, as it stands |

@@ -1,11 +1,11 @@
 using System.Net;
 using System.Text.Json;
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
 using Tangent.Events;
 using Tangent.Tangents;
-using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -25,10 +25,10 @@ public sealed class TakeOnATangentTests
     public async Task Taking_a_reply_into_another_tangent_starts_a_topic_there_with_the_origin_and_the_same_tid_twice_is_one_topic()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.ATangent(tangentSpace, Garden, ct: Cancellation);
-        var topic = await Started(writer, Ada, "Lanterns at dusk", "Who lights theirs first?");
-        var reply = await Replied(writer, topic, Bea, "I do, at six.");
+        var topic = await Started(Ada, "Lanterns at dusk", "Who lights theirs first?");
+        var reply = await Replied(topic, Bea, "I do, at six.");
         using var ada = await SignedIn(tangentSpace, Ada);
         var form = PostPath(topic, reply) + "/tangent";
 
@@ -58,11 +58,11 @@ public sealed class TakeOnATangentTests
     public async Task The_new_topic_links_to_its_origin_and_the_origin_lists_the_topics_taken_from_it_newest_first_with_at_least_past_the_bound()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.ATangent(tangentSpace, Garden, ct: Cancellation);
-        var topic = await Started(writer, Ada, "Lanterns at dusk", "Who lights theirs first?");
-        var reply = await Replied(writer, topic, Bea, "I do, at six.");
-        var first = await Taken(writer, Ada, reply, Garden, "Six o’clock lanterns", at: Start);
+        var topic = await Started(Ada, "Lanterns at dusk", "Who lights theirs first?");
+        var reply = await Replied(topic, Bea, "I do, at six.");
+        var first = await Taken(Ada, reply, Garden, "Six o’clock lanterns", at: Start);
         using var bea = await SignedIn(tangentSpace, Bea);
 
         var newTopic = await Send(bea.Client, HttpMethod.Get, TopicPath(first));
@@ -80,7 +80,7 @@ public sealed class TakeOnATangentTests
         // The root offers the verb, as every Post does to a reader who may start a Topic somewhere.
         Assert.Contains("href=\"" + AddressOf(topic, topic) + "/tangent\"", origin.Body);
 
-        for (var more = 1; more <= Origins.TakenLimit; more++) await Taken(writer, Bea, reply, Garden, "Lanterns " + more, at: Start.AddMinutes(more));
+        for (var more = 1; more <= Origins.TakenLimit; more++) await Taken(Bea, reply, Garden, "Lanterns " + more, at: Start.AddMinutes(more));
         var bounded = Taken((await Send(bea.Client, HttpMethod.Get, PostPath(topic, reply), json: true)).Json, reply.Id);
         var boundedPage = await Send(bea.Client, HttpMethod.Get, PostPath(topic, reply));
 
@@ -93,13 +93,13 @@ public sealed class TakeOnATangentTests
     public async Task A_reader_who_may_not_view_the_origin_sees_a_post_they_cannot_see_and_one_who_may_not_view_the_new_topic_does_not_see_it()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Root, [Roles.Administrator], ct: Cancellation);
         await Given.AParticipant(tangentSpace, Keeper, [Roles.Administrator], ct: Cancellation);
-        var hidden = await Started(writer, Keeper, "Quiet planning", "The studio’s private words.", Studio);
-        var fromHidden = await Taken(writer, Root, hidden, Workshop, "Out in the open");
-        var open = await Started(writer, Ada, "Lanterns at dusk", "Who lights theirs first?");
-        var intoHidden = await Taken(writer, Root, open, Studio, "Behind the door");
+        var hidden = await Started(Keeper, "Quiet planning", "The studio’s private words.", Studio);
+        var fromHidden = await Taken(Root, hidden, Workshop, "Out in the open");
+        var open = await Started(Ada, "Lanterns at dusk", "Who lights theirs first?");
+        var intoHidden = await Taken(Root, open, Studio, "Behind the door");
         using var ada = await SignedIn(tangentSpace, Ada);
 
         var page = await Send(ada.Client, HttpMethod.Get, TopicPath(fromHidden));
@@ -137,13 +137,13 @@ public sealed class TakeOnATangentTests
     public async Task The_form_is_absent_for_an_origin_the_reader_may_not_view_lists_only_tangents_where_they_start_topics_and_refuses_another_with_the_gate()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.ATangent(tangentSpace, Notice, ct: Cancellation);
         await tangentSpace.Services.GetRequiredService<RoleCollection>().Overwrite(Overwrites.Resource(Notice), OverwriteSubjectKind.Role,
             RoleTokens.Everyone, [Bits.Token(Bit.View)], [Bits.Token(Bit.Topic)], ct: Cancellation);
         await Given.AParticipant(tangentSpace, Root, [Roles.Administrator], ct: Cancellation);
-        var hidden = await Started(writer, Root, "Quiet planning", "The studio’s private words.", Studio);
-        var topic = await Started(writer, Bea, "Lanterns at dusk", "Who lights theirs first?");
+        var hidden = await Started(Root, "Quiet planning", "The studio’s private words.", Studio);
+        var topic = await Started(Bea, "Lanterns at dusk", "Who lights theirs first?");
         using var ada = await SignedIn(tangentSpace, Ada);
         var hiddenForm = PostPath(hidden, hidden) + "/tangent";
         var nowhere = "/t/studio/no-such-topic/" + Tids.Mint() + "/tangent";
@@ -164,9 +164,9 @@ public sealed class TakeOnATangentTests
         Assert.DoesNotContain("Quiet planning", absent.Body + absentPost.Body);
         Assert.Equal(HttpStatusCode.OK, listed.Status);
         Assert.Equal([Articles, Workshop], listed.Json.GetProperty("tangents").EnumerateArray().Select(choice => choice.GetProperty("slug").GetString()!).Order());
-        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.Denied(RoleTokens.Everyone, Bit.Topic)), (refused.Status, refused.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.Denied(RoleTokens.Everyone, Bit.Topic).Word), (refused.Status, refused.Gate));
         Assert.Equal(HttpStatusCode.Forbidden, refusedForm.Status);
-        Assert.Contains(PostWrites.Sentence(Capabilities.Denied(RoleTokens.Everyone, Bit.Topic)), WebUtility.HtmlDecode(refusedForm.Body));
+        Assert.Contains(Capabilities.Denied(RoleTokens.Everyone, Bit.Topic).Text, WebUtility.HtmlDecode(refusedForm.Body));
         Assert.Equal((HttpStatusCode.BadRequest, HttpStatusCode.BadRequest), (intoAbsent.Status, intoNothing.Status));
         Assert.Equal(intoNothing.Body, intoAbsent.Body);
         Assert.Equal(counted, await Counted());
@@ -176,13 +176,13 @@ public sealed class TakeOnATangentTests
     public async Task A_removed_origin_shows_as_a_tombstone_link_and_a_removed_new_root_keeps_its_origin()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.ATangent(tangentSpace, Garden, ct: Cancellation);
-        var topic = await Started(writer, Ada, "Lanterns at dusk", "Who lights theirs first?");
-        var reply = await Replied(writer, topic, Bea, "I do, at six.");
-        var taken = await Taken(writer, Ada, reply, Garden, "Six o’clock lanterns", "Bea starts early.");
+        var topic = await Started(Ada, "Lanterns at dusk", "Who lights theirs first?");
+        var reply = await Replied(topic, Bea, "I do, at six.");
+        var taken = await Taken(Ada, reply, Garden, "Six o’clock lanterns", "Bea starts early.");
         using var ada = await SignedIn(tangentSpace, Ada);
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new RemovePost(reply.Id, Bea), Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new RemovePost(reply.Id, Bea).Send(Cancellation));
 
         var tombstone = await Send(ada.Client, HttpMethod.Get, TopicPath(taken));
         var tombstoneJson = await Send(ada.Client, HttpMethod.Get, TopicPath(taken), json: true);
@@ -194,7 +194,7 @@ public sealed class TakeOnATangentTests
         Assert.Equal((false, true, AddressOf(topic, reply)),
             (origin.GetProperty("absent").GetBoolean(), origin.GetProperty("removed").GetBoolean(), origin.GetProperty("address").GetString()));
 
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new RemovePost(taken.Id, Ada), Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new RemovePost(taken.Id, Ada).Send(Cancellation));
         var removedRoot = await Send(ada.Client, HttpMethod.Get, TopicPath(taken));
 
         Assert.Equal(reply.Id, (await Post.Get(taken.Id, Cancellation))?.OriginId);
@@ -206,17 +206,17 @@ public sealed class TakeOnATangentTests
     public async Task Only_a_root_taken_on_a_tangent_starts_or_is_edited_without_a_body_of_its_own()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var topic = await Started(writer, Ada, "Lanterns at dusk", "Who lights theirs first?");
+        await Place(tangentSpace);
+        var topic = await Started(Ada, "Lanterns at dusk", "Who lights theirs first?");
         using var ada = await SignedIn(tangentSpace, Ada);
         const string form = "/t/" + Workshop + "/new";
 
-        var bare = await writer.Send(new StartTopic(Tids.Mint(), Workshop, "Nothing to say", "", Ada), Cancellation);
+        var bare = await new StartTopic(Tids.Mint(), Workshop, "Nothing to say", "", Ada).Send(Cancellation);
         var bareJson = await Json(ada, form, form, new { id = Tids.Mint(), title = "Nothing to say", body = "" });
-        var bareReply = await writer.Send(new Reply(Tids.Mint(), topic.Id, "", Ada), Cancellation);
-        var taken = await Taken(writer, Ada, topic, Workshop, "Lanterns elsewhere");
-        var retitled = await writer.Send(new EditPost(taken.Id, taken.Version, "", "Lanterns, elsewhere", Ada), Cancellation);
-        var emptied = await writer.Send(new EditPost(topic.Id, topic.Version, "", "Lanterns at dawn", Ada), Cancellation);
+        var bareReply = await new Reply(Tids.Mint(), topic.Id, "", Ada).Send(Cancellation);
+        var taken = await Taken(Ada, topic, Workshop, "Lanterns elsewhere");
+        var retitled = await new EditPost(taken.Id, taken.Version, "", "Lanterns, elsewhere", Ada).Send(Cancellation);
+        var emptied = await new EditPost(topic.Id, topic.Version, "", "Lanterns at dawn", Ada).Send(Cancellation);
 
         Assert.Equal(Post.NeedsBody, Assert.IsType<Outcome<Post>.Refused>(bare).Reason);
         Assert.Equal(HttpStatusCode.BadRequest, bareJson.Status);
@@ -233,16 +233,16 @@ public sealed class TakeOnATangentTests
     public async Task A_topic_taken_from_a_readers_post_is_a_group_of_its_own_on_their_door_and_never_a_reply()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.ATangent(tangentSpace, Garden, ct: Cancellation);
-        var topic = await Started(writer, Ada, "Lanterns at dusk", "Who lights theirs first?");
-        var reply = await Replied(writer, topic, Bea, "I do, at six.");
-        var answer = Assert.IsType<Outcome<Post>.Done>(await writer.Send(new Reply(Tids.Mint(), topic.Id, "Six is early.", Ada, reply.Id), Cancellation)).Result;
+        var topic = await Started(Ada, "Lanterns at dusk", "Who lights theirs first?");
+        var reply = await Replied(topic, Bea, "I do, at six.");
+        var answer = Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), topic.Id, "Six is early.", Ada, reply.Id).Send(Cancellation)).Result;
         using var bea = await SignedIn(tangentSpace, Bea);
         await Given.BeenAtTheDoor(tangentSpace, Bea, Cancellation);
         var before = (await Send(bea.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news");
 
-        var taken = await Taken(writer, Ada, reply, Garden, "Six o’clock lanterns");
+        var taken = await Taken(Ada, reply, Garden, "Six o’clock lanterns");
         var door = await Send(bea.Client, HttpMethod.Get, "/", json: true);
         var page = await Send(bea.Client, HttpMethod.Get, "/");
 
@@ -262,11 +262,11 @@ public sealed class TakeOnATangentTests
     public async Task At_least_is_said_when_topics_the_reader_may_not_view_fill_the_read()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Root, [Roles.Administrator], ct: Cancellation);
-        var topic = await Started(writer, Ada, "Lanterns at dusk", "Who lights theirs first?");
-        for (var open = 1; open <= 6; open++) await Taken(writer, Bea, topic, Workshop, "Open " + open, at: Start.AddMinutes(open));
-        for (var hidden = 1; hidden <= 7; hidden++) await Taken(writer, Root, topic, Studio, "Hidden " + hidden, at: Start.AddHours(1).AddMinutes(hidden));
+        var topic = await Started(Ada, "Lanterns at dusk", "Who lights theirs first?");
+        for (var open = 1; open <= 6; open++) await Taken(Bea, topic, Workshop, "Open " + open, at: Start.AddMinutes(open));
+        for (var hidden = 1; hidden <= 7; hidden++) await Taken(Root, topic, Studio, "Hidden " + hidden, at: Start.AddHours(1).AddMinutes(hidden));
         using var ada = await SignedIn(tangentSpace, Ada);
 
         var json = await Send(ada.Client, HttpMethod.Get, TopicPath(topic), json: true);
@@ -281,12 +281,11 @@ public sealed class TakeOnATangentTests
 
     private static readonly DateTimeOffset Start = new(2026, 10, 1, 9, 0, 0, TimeSpan.Zero);
 
-    /// <summary>A Topic taken on a tangent from <paramref name="origin"/> into <paramref name="tangent"/>, through the
-    /// writer.</summary>
-    private static async Task<Post> Taken(WriteLoop writer, string author, Post origin, string tangent, string title, string body = "",
+    /// <summary>A Topic taken on a tangent from <paramref name="origin"/> into <paramref name="tangent"/>, by
+    /// command.</summary>
+    private static async Task<Post> Taken(string author, Post origin, string tangent, string title, string body = "",
         DateTimeOffset? at = null)
-        => Assert.IsType<Outcome<Post>.Done>(await writer.Send(
-            new StartTopic(Tids.Mint(), tangent, title, body, author, At: at, OriginId: origin.Id), Cancellation)).Result;
+        => Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), tangent, title, body, author, At: at, OriginId: origin.Id).Send(Cancellation)).Result;
 
     /// <summary>The Topics taken from the Post with this Id, as a Topic page's JSON holds them.</summary>
     private static JsonElement Taken(JsonElement page, string postId)

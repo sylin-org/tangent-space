@@ -2,12 +2,12 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Koan.Data.Abstractions;
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Tangents;
-using Tangent.Writer;
 using Xunit;
 
 namespace Tangent.Access;
@@ -57,12 +57,12 @@ public sealed class OverwriteTests
         await Write(roles, "four", OverwriteSubjectKind.Person, "leo", deny: everything);
 
         Assert.True((await Capabilities.Load("ada", "one", null, Cancellation)).Holds(Bit.Topic));
-        Assert.Equal("everyone denies Topic", (await Capabilities.Load("eve", "one", null, Cancellation)).Gate(Bit.Topic));
+        Assert.Equal("everyone denies Topic", (await Capabilities.Load("eve", "one", null, Cancellation)).Gate(Bit.Topic)?.Word);
 
         Assert.True((await Capabilities.Load("ada", "two", null, Cancellation)).Holds(Bit.Post));
-        Assert.Equal("role:member denies Post", (await Capabilities.Load("bo", "two", null, Cancellation)).Gate(Bit.Post));
+        Assert.Equal("role:member denies Post", (await Capabilities.Load("bo", "two", null, Cancellation)).Gate(Bit.Post)?.Word);
 
-        Assert.Equal("ada denies Moderate", (await Capabilities.Load("ada", "three", null, Cancellation)).Gate(Bit.Moderate));
+        Assert.Equal("ada denies Moderate", (await Capabilities.Load("ada", "three", null, Cancellation)).Gate(Bit.Moderate)?.Word);
         Assert.True((await Capabilities.Load("bo", "three", null, Cancellation)).Holds(Bit.Moderate));
 
         var own = Post.Root(Tids.Mint(), "four", "Mine", "mine", PostKind.Topic, "Words.", "leo", DateTimeOffset.UtcNow);
@@ -70,14 +70,13 @@ public sealed class OverwriteTests
         Assert.Equal(Bits.All, administrator.Held);
         Assert.Equal(Bits.Names(Bits.All), administrator.Can);
         var member = await Capabilities.Load("ada", "four", null, Cancellation);
-        Assert.Equal((false, Capabilities.Absent), (member.Exists, member.Gate(Bit.View)));
+        Assert.Equal((false, Capabilities.Absent.Text), (member.Exists, member.Gate(Bit.View)?.Text));
     }
 
     [Fact]
     public async Task The_gate_for_a_denied_verb_names_the_deciding_overwrite_to_a_command_and_on_the_page()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
         await Given.AnEstablishedTangentSpace(tangentSpace, ct: Cancellation);
         await Given.ATangent(tangentSpace, "workshop", ct: Cancellation);
@@ -86,15 +85,14 @@ public sealed class OverwriteTests
         await Given.AParticipant(tangentSpace, Reader, [Roles.Member], ct: Cancellation);
         await Write(roles, "workshop", OverwriteSubjectKind.Role, Roles.Member, deny: Bit.Topic);
         await Write(roles, "workshop", OverwriteSubjectKind.Person, Reader, deny: Bit.Post);
-        var topic = Assert.IsType<Outcome<Post>.Done>(await writer.Send(
-            new StartTopic(Tids.Mint(), "workshop", "Open to replies", "Words.", "leo"), Cancellation)).Result;
+        var topic = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "workshop", "Open to replies", "Words.", "leo").Send(Cancellation)).Result;
 
-        var started = await writer.Send(new StartTopic(Tids.Mint(), "workshop", "Not here", "Words.", "bo"), Cancellation);
-        var replied = await writer.Send(new Reply(Tids.Mint(), topic.Id, "Not me.", Reader), Cancellation);
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new Reply(Tids.Mint(), topic.Id, "Me, yes.", "bo"), Cancellation));
+        var started = await new StartTopic(Tids.Mint(), "workshop", "Not here", "Words.", "bo").Send(Cancellation);
+        var replied = await new Reply(Tids.Mint(), topic.Id, "Not me.", Reader).Send(Cancellation);
+        Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), topic.Id, "Me, yes.", "bo").Send(Cancellation));
 
-        Assert.Equal("role:member denies Topic", Assert.IsType<Outcome<Post>.Refused>(started).Reason);
-        Assert.Equal("did:plc:reader denies Post", Assert.IsType<Outcome<Post>.Refused>(replied).Reason);
+        Assert.Equal("role:member denies Topic", Assert.IsType<Outcome<Post>.Refused>(started).Reason.Word);
+        Assert.Equal("did:plc:reader denies Post", Assert.IsType<Outcome<Post>.Refused>(replied).Reason.Word);
 
         using var browser = new Browser(tangentSpace);
         (await browser.SignIn("reader", Reader, Cancellation)).Dispose();

@@ -1,6 +1,6 @@
 using Koan.Data.Abstractions;
 using Koan.Data.Core;
-using Tangent.Writer;
+using Koan.Data.Core.Commands;
 
 namespace Tangent.Offers;
 
@@ -8,7 +8,7 @@ namespace Tangent.Offers;
 /// configured, which wins over any address an Offer could give. Answers how many lapsed.</summary>
 public sealed record LapseOffers(DateTimeOffset? At = null) : ICommand<int>
 {
-    public async Task<Outcome<int>> Run(Sequences sequences, CancellationToken ct)
+    public async Task<Outcome<int>> Run(CancellationToken ct)
     {
         var open = await Offer.Query(offer => offer.State == OfferState.Open, new QueryDefinition { Page = 1, PageSize = Offer.OpenLimit }, ct);
         var at = At ?? DateTimeOffset.UtcNow;

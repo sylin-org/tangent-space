@@ -1,19 +1,20 @@
+using Koan.Core.Hosting.App;
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
+using Koan.Identity.Roles;
+using Tangent.Access;
 using Tangent.Events;
 using Tangent.Participants;
-using Tangent.Writer;
 
 namespace Tangent.Space;
 
 /// <summary>First run: writes the one <see cref="TangentSpace"/> row with its name, and whoever sends it as both its
-/// proprietor and its operator, and appends <see cref="EventKind.SpaceChanged"/>. One whose first sign-in left
-/// no participant arrives here, with <see cref="EventKind.StandingChanged"/>, taking their handle from any other
-/// participant who still keeps it. The moderators' Tangent is created with
-/// the row and recorded on it (<see cref="ModeratorsTangent"/>), and so is the first Tangent, public, where the place is
-/// talked in from its first minute (<see cref="FirstTangent"/>), each in this transaction with its access written before
-/// the transaction opens. A place that already has its row refuses with <see cref="AlreadyEstablished"/> and nothing is
-/// written. Who may send it is the sender's question; membership of the administrator role is Koan's write, made by the
-/// sender once this commits.</summary>
+/// proprietor and its operator, in the administrator role, and appends <see cref="EventKind.SpaceChanged"/>. One whose
+/// first sign-in left no participant arrives here, with <see cref="EventKind.StandingChanged"/>, taking their handle from
+/// any other participant who still keeps it. The moderators' Tangent is created with the row and recorded on it
+/// (<see cref="ModeratorsTangent"/>), and so is the first Tangent, public, where the place is talked in from its first
+/// minute (<see cref="FirstTangent"/>). A place that already has its row refuses with <see cref="AlreadyEstablished"/> and
+/// nothing is written. Who may send it is the sender's question.</summary>
 public sealed record Establish(
     string OperatorId,
     string OperatorHandle,
@@ -22,20 +23,7 @@ public sealed record Establish(
 {
     public const string AlreadyEstablished = "This Tangent Space is already set up.";
 
-    /// <summary>Writes the moderators' Tangent's access and the first Tangent's audience, outside the transaction, only
-    /// where <see cref="Run"/> goes on to establish the place: it has no row yet and the name is a place's. A command
-    /// refused after this leaves the access on resources no Tangent has, which answer as missing Tangents, and the next
-    /// first run writes it anew.</summary>
-    public async Task Prepare(CancellationToken ct)
-    {
-        if (await TangentSpace.Get(TangentSpace.SingleRow, ct) is not null) return;
-        try { TangentSpace.Establish(Name, OperatorId, OperatorId, ModeratorsTangent.Slug); }
-        catch (Refusal) { return; }
-        if (await ModeratorsTangent.FreeSlug(ct) is { } slug) await ModeratorsTangent.WriteAccess(slug, ct);
-        if (await FirstTangent.FreeSlug(ct) is { } first) await FirstTangent.WriteAudience(first, ct);
-    }
-
-    public async Task<Outcome<TangentSpace>> Run(Sequences sequences, CancellationToken ct)
+    public async Task<Outcome<TangentSpace>> Run(CancellationToken ct)
     {
         if (await TangentSpace.Get(TangentSpace.SingleRow, ct) is not null)
             return new Outcome<TangentSpace>.Refused(AlreadyEstablished);
@@ -48,14 +36,16 @@ public sealed record Establish(
         {
             var arrived = await Participant.Arrive(OperatorId, OperatorHandle, space.Admission).Save(ct);
             await Handles.Release(OperatorHandle, OperatorId, ct);
-            await Event.Next(sequences, EventKind.StandingChanged, at, actorId: OperatorId, targetId: OperatorId,
-                standing: arrived.Standing).Save(ct);
+            await MemberRole.Join(arrived, ct);
+            await Event.Append(EventKind.StandingChanged, at, ct, actorId: OperatorId, targetId: OperatorId,
+                standing: arrived.Standing);
         }
 
-        if (first is not null) await FirstTangent.Create(sequences, first, OperatorId, at, ct);
-        await ModeratorsTangent.Create(sequences, moderators, OperatorId, at, ct);
+        if (first is not null) await FirstTangent.Create(first, OperatorId, at, ct);
+        await ModeratorsTangent.Create(moderators, OperatorId, at, ct);
         await space.Save(ct);
-        await Event.Next(sequences, EventKind.SpaceChanged, at, actorId: OperatorId).Save(ct);
+        await AppHost.GetRequiredService<RoleCollection>(nameof(Establish)).Add(Roles.Administrator, OperatorId, ct);
+        await Event.Append(EventKind.SpaceChanged, at, ct, actorId: OperatorId);
         return new Outcome<TangentSpace>.Done(space);
     }
 }

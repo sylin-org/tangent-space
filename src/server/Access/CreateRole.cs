@@ -1,6 +1,6 @@
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Tangent.Participants;
-using Tangent.Writer;
 
 namespace Tangent.Access;
 
@@ -9,14 +9,10 @@ namespace Tangent.Access;
 /// directly above the member role, below every other, so it outranks no one until it is moved. The place exists for the
 /// actor, who holds <see cref="Bit.ManageRoles"/> (<see cref="RoleSettings.Actor"/>); the name is a role's
 /// (<see cref="RoleSettings.NameRule"/>); the actor holds every permission it grants (<see cref="People.NotHeld"/>) and
-/// manages a role in that place (<see cref="RoleCollection.Manages"/>). Koan's role write is not part of a transaction,
-/// so <see cref="Prepare"/> judges and writes it before the transaction opens, and <see cref="Run"/> answers with the
-/// role; the log records nothing.</summary>
+/// manages a role in that place (<see cref="RoleCollection.Manages"/>). The log records nothing.</summary>
 public sealed record CreateRole(string ActorId, string Name, Bit Permissions) : ICommand<Role>
 {
-    private Role? _created;
-
-    public async Task Prepare(CancellationToken ct)
+    public async Task<Outcome<Role>> Run(CancellationToken ct)
     {
         var (space, actor) = await RoleSettings.Actor(ActorId, ct);
         if (RoleSettings.Named(Name) is not { } name) throw new Refusal(RoleSettings.NameRule);
@@ -25,11 +21,8 @@ public sealed record CreateRole(string ActorId, string Name, Bit Permissions) : 
         var key = await FreeKey(roles, name, ct) ?? throw new Refusal(RoleSettings.NoWord);
         var position = ((await roles.Get(Roles.Member, ct))?.Position ?? 0) + 1;
         if (ActorId != space.OperatorId && !await roles.Manages(actor.Bag, key, position, ct)) throw new Refusal(RoleSettings.NotManaged);
-        _created = await roles.Define(key, name, Bits.Tokens(Permissions), position: position, ct: ct);
+        return new Outcome<Role>.Done(await roles.Define(key, name, Bits.Tokens(Permissions), position: position, ct: ct));
     }
-
-    public Task<Outcome<Role>> Run(Sequences sequences, CancellationToken ct)
-        => Task.FromResult<Outcome<Role>>(new Outcome<Role>.Done(_created ?? throw new InvalidOperationException("A role is created in its command's Prepare.")));
 
     /// <summary>The first key no role holds among the word <paramref name="name"/> gives and that word with a numbered
     /// suffix, up to <see cref="RoleSettings.SuffixBound"/>; null where each is held.</summary>

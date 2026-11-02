@@ -1,4 +1,4 @@
-using Tangent.Writer;
+using Koan.Data.Core.Commands;
 
 namespace Tangent.Participants;
 
@@ -8,6 +8,6 @@ namespace Tangent.Participants;
 /// <see cref="Applications.Decide"/>'s.</summary>
 public sealed record Decline(string ActorId, string ParticipantId, DateTimeOffset? At = null) : ICommand<Participant>
 {
-    public Task<Outcome<Participant>> Run(Sequences sequences, CancellationToken ct)
-        => Applications.Decide(sequences, ActorId, ParticipantId, (participant, now) => participant.Decline(now), At, ct);
+    public Task<Outcome<Participant>> Run(CancellationToken ct)
+        => Applications.Decide(ActorId, ParticipantId, (participant, now) => participant.Decline(now), At, ct);
 }

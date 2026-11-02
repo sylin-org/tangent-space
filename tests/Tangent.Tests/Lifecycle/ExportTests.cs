@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
@@ -9,7 +10,6 @@ using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
 using Tangent.Tangents;
-using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -26,13 +26,13 @@ public sealed partial class ExportTests
     public async Task A_tangents_export_opens_as_linked_html_with_its_data_and_answers_as_it_is_written()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         using var leo = await SignedIn(tangentSpace, Leo);
-        var root = await Started(writer, Ada, "How do you sharpen a card scraper",
+        var root = await Started(Ada, "How do you sharpen a card scraper",
             $"Burnish it, says [@bea](at://{Bea}), then see [the notes](/about) and ![the bench](/media/bench.png).");
-        var reply = await Replied(writer, root, Bea, "A little oil on the *burnisher*.");
-        var taken = await Taken(writer, reply, Articles, "On oil");
+        var reply = await Replied(root, Bea, "A little oil on the *burnisher*.");
+        var taken = await Taken(reply, Articles, "On oil");
 
         using var answer = await leo.Client.GetAsync(Path + "/" + Workshop + ".zip", HttpCompletionOption.ResponseHeadersRead, Cancellation);
 
@@ -80,7 +80,7 @@ public sealed partial class ExportTests
     public async Task The_whole_place_is_walked_across_every_read_page_and_each_link_lands_within_it()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         using var leo = await SignedIn(tangentSpace, Leo);
 
@@ -89,13 +89,13 @@ public sealed partial class ExportTests
         foreach (var number in Enumerable.Range(1, TangentsController.PageSize))
             await Given.ATangent(tangentSpace, "more-" + number, ct: Cancellation);
         foreach (var number in Enumerable.Range(1, TopicList.PageSize))
-            await Started(writer, Ada, "Topic number " + number, "Words of topic " + number);
-        var long_ = await Started(writer, Ada, "A long one", "It goes on.");
+            await Started(Ada, "Topic number " + number, "Words of topic " + number);
+        var long_ = await Started(Ada, "A long one", "It goes on.");
         var replies = new List<Post>();
         foreach (var number in Enumerable.Range(1, Export.WindowSize + 1))
-            replies.Add(await Replied(writer, long_, Bea, "Reply number " + number));
-        var answering = Assert.IsType<Outcome<Post>.Done>(await writer.Send(new Reply(Tids.Mint(), long_.Id, "Back to the first", Ada, replies[0].Id), Cancellation)).Result;
-        var taken = await Taken(writer, replies[^1], Articles, "From the end of a long one");
+            replies.Add(await Replied(long_, Bea, "Reply number " + number));
+        var answering = Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), long_.Id, "Back to the first", Ada, replies[0].Id).Send(Cancellation)).Result;
+        var taken = await Taken(replies[^1], Articles, "From the end of a long one");
 
         var zip = await Downloaded(leo, Path + ".zip");
 
@@ -145,7 +145,7 @@ public sealed partial class ExportTests
         const string keeper = "role:keeper";
         const string Keeping = "did:plc:keeper4export";
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
         await roles.Define(keeper, "Keeper", Bits.Tokens(Bit.ManageSpace), ct: Cancellation);
         await Given.ATangent(tangentSpace, members, Audience.Private, ct: Cancellation);
@@ -154,10 +154,10 @@ public sealed partial class ExportTests
         await Given.AParticipant(tangentSpace, Keeping, [Roles.Member, keeper], ct: Cancellation);
         using var leo = await SignedIn(tangentSpace, Leo);
         using var keeping = await SignedIn(tangentSpace, Keeping);
-        await Started(writer, Ada, "For the members", "Words the members read", members);
-        var open = await Started(writer, Ada, "In the open", "Words anyone reads");
-        var secret = await Started(writer, Leo, "In the studio", "Words only the studio reads", Studio);
-        await Taken(writer, open, Studio, "Taken into the studio");
+        await Started(Ada, "For the members", "Words the members read", members);
+        var open = await Started(Ada, "In the open", "Words anyone reads");
+        var secret = await Started(Leo, "In the studio", "Words only the studio reads", Studio);
+        await Taken(open, Studio, "Taken into the studio");
 
         var zip = await Downloaded(keeping, Path + ".zip");
 
@@ -203,7 +203,7 @@ public sealed partial class ExportTests
             Assert.Equal(HttpStatusCode.Forbidden, answer.Status);
             Assert.Equal("application/problem+json", answer.MediaType);
             var asked = await Send(visitor, HttpMethod.Get, zip, json: true);
-            Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn), (asked.Status, asked.Gate));
+            Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (asked.Status, asked.Gate));
         }
 
         var visiting = await Send(visitor, HttpMethod.Get, Path);
@@ -223,15 +223,15 @@ public sealed partial class ExportTests
     public async Task A_removed_post_stays_a_tombstone_with_nothing_of_its_words_anywhere()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         using var leo = await SignedIn(tangentSpace, Leo);
-        var root = await Started(writer, Ada, "A topic that stands", "Words that stand.");
-        var kept = await Replied(writer, root, Bea, "A reply that stands.");
-        var gone = await Replied(writer, root, Bea, "Words nobody keeps.");
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new RemovePost(gone.Id, Mo), Cancellation));
-        var edited = await Started(writer, Ada, "A topic removed whole", "Words of a removed root.");
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new RemovePost(edited.Id, Ada), Cancellation));
+        var root = await Started(Ada, "A topic that stands", "Words that stand.");
+        var kept = await Replied(root, Bea, "A reply that stands.");
+        var gone = await Replied(root, Bea, "Words nobody keeps.");
+        Assert.IsType<Outcome<Post>.Done>(await new RemovePost(gone.Id, Mo).Send(Cancellation));
+        var edited = await Started(Ada, "A topic removed whole", "Words of a removed root.");
+        Assert.IsType<Outcome<Post>.Done>(await new RemovePost(edited.Id, Ada).Send(Cancellation));
 
         var zip = await Downloaded(leo, Path + ".zip");
 
@@ -259,11 +259,11 @@ public sealed partial class ExportTests
         var settings = Settings();
         settings["Koan:Web:ApplicationUrl"] = "https://tangent.example/notes";
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(settings, ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         using var leo = new Browser(tangentSpace);
         (await leo.SignIn("leo", Leo, Cancellation, handle: "leo.example", under: "/notes")).Dispose();
-        await Started(writer, Ada, "Beside a path", "See [the notes](/notes/about).");
+        await Started(Ada, "Beside a path", "See [the notes](/notes/about).");
 
         var zip = await Downloaded(leo, "/notes" + Path + ".zip");
 
@@ -277,7 +277,7 @@ public sealed partial class ExportTests
         const string keeper = "role:keeper";
         const string Keeping = "did:plc:keeper4export";
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
         await roles.Define(keeper, "Keeper", Bits.Tokens(Bit.ManageSpace), ct: Cancellation);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
@@ -288,12 +288,12 @@ public sealed partial class ExportTests
         var cover = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(ada, ArticleMediaTests.Jpeg(60)));
         var inline = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(ada, ArticleMediaTests.Jpeg(61)));
         var hidden = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(62), Studio, "/t/" + Studio + "/new"));
-        await Started(writer, Leo, "Plans", "![The plan](/media/" + hidden + ")", Studio);
-        var article = Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), Articles, "Lanterns",
-            "![Lit](/media/" + inline + ")\n\nAnd ![Lit again](/media/" + inline + ")\n\n![Not mine](/media/" + hidden + ")", Ada, CoverId: cover), Cancellation)).Result;
+        await Started(Leo, "Plans", "![The plan](/media/" + hidden + ")", Studio);
+        var article = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Articles, "Lanterns",
+            "![Lit](/media/" + inline + ")\n\nAnd ![Lit again](/media/" + inline + ")\n\n![Not mine](/media/" + hidden + ")", Ada, CoverId: cover).Send(Cancellation)).Result;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
         space!.Slots.ArticleHeader = "<p>From the long reads.</p>";
-        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new Store<TangentSpace>(space), Cancellation));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(Cancellation));
 
         using var answer = await keeping.Client.GetAsync(Path + ".zip", Cancellation);
         Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
@@ -341,7 +341,7 @@ public sealed partial class ExportTests
         const string keeper = "role:keeper";
         const string Keeping = "did:plc:keeper4export";
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
         await roles.Define(keeper, "Keeper", Bits.Tokens(Bit.ManageSpace), ct: Cancellation);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
@@ -349,7 +349,7 @@ public sealed partial class ExportTests
         using var leo = await SignedIn(tangentSpace, Leo);
         using var keeping = await SignedIn(tangentSpace, Keeping);
         var logo = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(60)));
-        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new ChangeTangentSpace(Leo, Masthead: $"<img src=\"/media/{logo}\" alt=\"\">"), Cancellation));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new ChangeTangentSpace(Leo, Masthead: $"<img src=\"/media/{logo}\" alt=\"\">").Send(Cancellation));
 
         var zip = await Downloaded(keeping, Path + ".zip");
 
@@ -358,9 +358,8 @@ public sealed partial class ExportTests
         AssertOpensAlone(zip);
     }
 
-    private static async Task<Post> Taken(WriteLoop writer, Post origin, string tangent, string title)
-        => Assert.IsType<Outcome<Post>.Done>(await writer.Send(
-            new StartTopic(Tids.Mint(), tangent, title, "", Leo, OriginId: origin.Id), Cancellation)).Result;
+    private static async Task<Post> Taken(Post origin, string tangent, string title)
+        => Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), tangent, title, "", Leo, OriginId: origin.Id).Send(Cancellation)).Result;
 
     /// <summary>The zip at <paramref name="path"/>, every file read as text but the fonts.</summary>
     private static async Task<Dictionary<string, string>> Downloaded(Browser browser, string path)

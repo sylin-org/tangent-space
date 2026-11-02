@@ -86,7 +86,7 @@ public sealed class AppearanceTests
         await Given.AParticipant(tangentSpace, mod, [Roles.Member, Roles.Moderator], ct: Cancellation);
         using var mo = await SignedIn(tangentSpace, mod);
         using var visitor = Agent(tangentSpace);
-        var gate = Capabilities.NoRoleGrants(Bit.ManageSpace);
+        var gate = Capabilities.NoRoleGrants(Bit.ManageSpace).Word;
         var before = await Event.Count.Exact(Cancellation);
 
         // A member reads the choices, disabled, under the gate, and has nothing to send.
@@ -107,7 +107,7 @@ public sealed class AppearanceTests
         Assert.Equal((HttpStatusCode.Forbidden, gate), Refused(await Json(mo, "/t/" + Workshop, Path, new { accent = "jade" })));
 
         var posted = await Send(visitor, HttpMethod.Post, Path, JsonBody(new { accent = "jade" }), json: true);
-        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn), (posted.Status, posted.Gate));
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (posted.Status, posted.Gate));
 
         Assert.Equal(Space.Accent.Gold, await Held());
         Assert.Equal(before, await Event.Count.Exact(Cancellation));

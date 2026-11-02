@@ -1,9 +1,9 @@
+using Koan.Data.Core.Commands;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
 using Tangent.Render;
 using Tangent.Space;
-using Tangent.Writer;
 
 namespace Tangent.Posts;
 
@@ -16,7 +16,7 @@ namespace Tangent.Posts;
 /// <see cref="StaleEdit"/>. Each resolves the address as the Topic page does (<see cref="PostWrites.Locate"/>) before
 /// anything else is judged: the place's gate for every address alike, then the missing resource's answer for a Post the
 /// reader may not see or that is not a Post of that Topic.</summary>
-public sealed class EditPostController(KoanWebBaseUrl baseUrl, WriteLoop writer) : ControllerBase
+public sealed class EditPostController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
     public const string Route = "/t/{tangent}/{topic}/{post}";
 
@@ -29,7 +29,7 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl, WriteLoop writer)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var (found, unseen) = await PostWrites.Locate(personId, tangent, topic, post, ct);
+        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, topic, post, ct);
         if (found is null) return unseen!;
         return Ok(await Page(found.Root!, found.Post!, found.Capabilities, personId, ct));
     }
@@ -41,7 +41,7 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl, WriteLoop writer)
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
-        var (found, unseen) = await PostWrites.Locate(personId, tangent, topic, post, ct);
+        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, topic, post, ct);
         if (found is null) return unseen!;
         var (root, row) = (found.Root!, found.Post!);
         if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
@@ -50,22 +50,18 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl, WriteLoop writer)
         var title = PostWrites.Title(fields);
         if (PostWrites.Version(fields) is not { } version) return await Refused(root, row, personId, fields, PostWrites.VersionRule, ct);
         var may = found.Capabilities;
-        var outcome = await writer.Send(new EditPost(row.Id, version, await PostWrites.Body(fields, may.Holds(Bit.EditOwn) || may.Holds(Bit.Moderate), ct), title,
-            personId ?? "", CoverId: fields.GetValueOrDefault(PostWrites.CoverField)), ct);
+        var outcome = await new EditPost(row.Id, version, await PostWrites.Body(fields, may.Holds(Bit.EditOwn) || may.Holds(Bit.Moderate)), title,
+            personId ?? "", CoverId: fields.GetValueOrDefault(PostWrites.CoverField)).Send();
         switch (outcome)
         {
             case Outcome<Post>.Done { Result: var edited }:
                 return await PostWrites.Written(HttpContext, edited, root, Address(root, edited), personId, created: false, ct);
-            case Outcome<Post>.Refused { Reason: EditPost.NoPost }:
-                return PostWrites.Absent();
-            case Outcome<Post>.Refused { Reason: var reason }:
+            case Outcome<Post>.Refused { Reason: { Kind: ReasonKind.Conflict } stale }:
+                return await Stale(root, row.Id, personId, body, title, stale.Text, ct);
+            case Outcome<Post>.Refused { Reason: { Kind: not ReasonKind.Absent } reason }:
                 return await Refused(root, row, personId, fields, reason, ct);
-            case Outcome<Post>.Conflict { Reason: var reason }:
-                return await Stale(root, row.Id, personId, body, title, reason, ct);
-            case Outcome<Post>.Failed { Cause: var cause }:
-                throw new InvalidOperationException($"Editing {row.Id} failed.", cause);
             default:
-                throw new InvalidOperationException($"The writer answered {outcome} for editing {row.Id}.");
+                return PostWrites.Answer(HttpContext, outcome);
         }
     }
 
@@ -76,37 +72,29 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl, WriteLoop writer)
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
-        var (found, unseen) = await PostWrites.Locate(personId, tangent, topic, post, ct);
+        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, topic, post, ct);
         if (found is null) return unseen!;
         var (root, row) = (found.Root!, found.Post!);
 
-        var outcome = await writer.Send(new RemovePost(row.Id, personId ?? ""), ct);
+        var outcome = await new RemovePost(row.Id, personId ?? "").Send();
         switch (outcome)
         {
             case Outcome<Post>.Done { Result: var removed }:
                 return await PostWrites.Written(HttpContext, removed, root, Address(root, removed), personId, created: false, ct);
-            case Outcome<Post>.Refused { Reason: RemovePost.NoPost }:
-                return PostWrites.Absent();
-            case Outcome<Post>.Refused { Reason: var reason }:
-                if (PostWrites.WantsJson(Request)) return PostWrites.Refused(reason);
-                return await Again(root, row.Id, personId, PostWrites.Status(reason), page => page with
-                {
-                    Failure = PostWrites.Concerning(reason) == PostWrites.About.Gate ? PostWrites.Sentence(reason) : reason,
-                    FailureGate = PostWrites.Concerning(reason) == PostWrites.About.Gate ? reason : null
-                }, ct);
-            case Outcome<Post>.Failed { Cause: var cause }:
-                throw new InvalidOperationException($"Removing {row.Id} failed.", cause);
+            case Outcome<Post>.Refused { Reason: { Kind: not ReasonKind.Absent } reason }:
+                if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
+                return await Again(root, row.Id, personId, PostWrites.Status(reason), page => page with { Failure = reason.Text, FailureGate = reason.Word }, ct);
             default:
-                throw new InvalidOperationException($"The writer answered {outcome} for removing {row.Id}.");
+                return PostWrites.Answer(HttpContext, outcome);
         }
     }
 
     /// <summary>A refusal of an edit: for a JSON request, the problem its reason answers as; for a form, the form again
     /// with the words that were sent and the reason where it belongs.</summary>
-    private async Task<IActionResult> Refused(Post root, Post row, string? personId, IReadOnlyDictionary<string, string> fields, string reason,
+    private async Task<IActionResult> Refused(Post root, Post row, string? personId, IReadOnlyDictionary<string, string> fields, Reason reason,
         CancellationToken ct)
     {
-        if (PostWrites.WantsJson(Request)) return PostWrites.Refused(reason);
+        if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
         return await Again(root, row.Id, personId, PostWrites.Status(reason), page =>
         {
             var sent = page with
@@ -117,10 +105,10 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl, WriteLoop writer)
             };
             return PostWrites.Concerning(reason) switch
             {
-                PostWrites.About.Title => sent with { TitleFailure = reason },
-                PostWrites.About.Body => sent with { BodyFailure = reason },
-                PostWrites.About.Sent => sent with { Failure = reason },
-                _ => sent with { Failure = PostWrites.Sentence(reason), FailureGate = reason }
+                PostWrites.About.Title => sent with { TitleFailure = reason.Text },
+                PostWrites.About.Body => sent with { BodyFailure = reason.Text },
+                PostWrites.About.Sent => sent with { Failure = reason.Text },
+                _ => sent with { Failure = reason.Text, FailureGate = reason.Word }
             };
         }, ct);
     }
@@ -190,8 +178,8 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl, WriteLoop writer)
             editable ? PostWrites.EditForm(address + "/" + EditSegment, row.Version, row.ParentId is null, bodyOptional, token!, row.CoverId, article) : null,
             removable ? PostWrites.RemoveForm(address + "/" + RemoveSegment, token!) : null,
             capabilities.Can,
-            editable ? null : capabilities.Gate(Bit.EditOwn),
-            removable ? null : capabilities.Gate(Bit.RemoveOwn),
+            editable ? null : capabilities.Gate(Bit.EditOwn)?.Word,
+            removable ? null : capabilities.Gate(Bit.RemoveOwn)?.Word,
             personId is null ? baseAddress + Participants.SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,
             space.Name,
             baseAddress + "/",

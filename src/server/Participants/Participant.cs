@@ -1,15 +1,15 @@
 using Koan.Data.Abstractions.Annotations;
+using Koan.Data.Core.Commands;
 using Koan.Data.Core.Model;
 using Koan.Jobs;
 using Tangent.Space;
-using Tangent.Writer;
 
 namespace Tangent.Participants;
 
 /// <summary>Tangent's facet on the Koan person: keyed by the person's id, with the handle the place shows, the profile
 /// cached from the public profile, the participant's kind with where it came from, and their standing in the place. A
 /// person and an agent are the same row. Signing in through atproto makes the person's id their DID, so the id is the DID the profile is read
-/// for. The profile job runs on this row: one bounded read of the public profile, handed to the writer.</summary>
+/// for. The profile job runs on this row: one bounded read of the public profile, sent as a command.</summary>
 [JobIdempotent(nameof(Id))]
 public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
 {
@@ -47,13 +47,13 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
     public long? WaitingSeq { get; set; }
 
     /// <summary>The refusal a decision meets for a participant whose standing is not an application's.</summary>
-    public const string NotAnApplication = "Only an application waiting or declined is decided.";
+    public static readonly Reason NotAnApplication = Reason.Conflict("Only an application waiting or declined is decided.");
 
     /// <summary>The refusal a timeout, a ban, a lift or a change of roles meets for an applicant, waiting or declined.</summary>
-    public const string NotAdmitted = "An applicant is admitted or declined among the applications before anything else changes their standing or roles.";
+    public static readonly Reason NotAdmitted = Reason.Conflict("An applicant is admitted or declined among the applications before anything else changes their standing or roles.");
 
     /// <summary>The refusal a timeout meets for a banned participant.</summary>
-    public const string BannedFirst = "They are banned: lift the ban before timing them out.";
+    public static readonly Reason BannedFirst = Reason.Conflict("They are banned: lift the ban before timing them out.");
 
     /// <summary>The refusal a timeout meets whose end is not after its start.</summary>
     public const string TimeoutEnds = "A timeout ends after it begins.";
@@ -194,7 +194,7 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
         };
     }
 
-    /// <summary>The profile job: Koan runs it after a submission, outside the writer.</summary>
+    /// <summary>The profile job: Koan runs it after a submission, outside any command.</summary>
     public static Task Execute(Participant participant, JobContext context, CancellationToken ct)
         => ProfileCapture.Run(participant, context, ct);
 }

@@ -9,8 +9,8 @@ namespace Tangent.Posts;
 /// <summary>Snapshots in Koan's audit partition, <see cref="KoanWebConstants.Sets.Audit"/>, taken by a command: the
 /// entity as it stood at one version, copied whole through Koan's entity serializer and keyed
 /// <c>{id}#v{version}</c>, the key Koan's entity audit gives a snapshot. The copy is saved through
-/// <c>Data.Upsert(model, partition)</c>, which inside the writer's transaction is tracked like every other save of the
-/// command, so a snapshot commits in the one native transaction with the change it records, or not at all. One
+/// <c>Data.Upsert(model, partition)</c>, which joins the command's hold like every other save, so a snapshot commits in
+/// the one native transaction with the change it records, or not at all. One
 /// version is snapshotted once: the command that snapshots it raises the version or ends the entity's changes.</summary>
 public static class AuditPartition
 {

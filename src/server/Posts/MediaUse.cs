@@ -2,11 +2,11 @@ using Koan.Data.Abstractions;
 using Koan.Data.Abstractions.Annotations;
 using Koan.Data.Abstractions.Filtering;
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Koan.Data.Core.Model;
 using Koan.Data.Core.Sorting;
 using Tangent.Access;
 using Tangent.Space;
-using Tangent.Writer;
 
 namespace Tangent.Posts;
 
@@ -110,7 +110,7 @@ public sealed class MediaUse : Entity<MediaUse>
 /// repeat.</summary>
 public sealed record BringMedia(string MediaId, string PersonId) : ICommand<MediaUse>
 {
-    public async Task<Outcome<MediaUse>> Run(Sequences sequences, CancellationToken ct)
+    public async Task<Outcome<MediaUse>> Run(CancellationToken ct)
     {
         if (await MediaUse.Get(MediaUse.Key(MediaId, PersonId), ct) is { } existing) return new Outcome<MediaUse>.Done(existing);
         var use = MediaUse.Brought(MediaId, PersonId);

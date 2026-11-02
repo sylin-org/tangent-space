@@ -25,9 +25,9 @@ public sealed class StreamTests
     public async Task A_reply_committed_after_a_stream_opened_reaches_it_with_its_sequence_as_id_and_a_reconnect_with_last_event_id_resumes_without_a_gap_or_a_repeat()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         using var ada = await SignedIn(tangentSpace, Ada);
-        var root = await Started(writer, Bea, "Lanterns at dusk", "Who lights theirs first?");
+        var root = await Started(Bea, "Lanterns at dusk", "Who lights theirs first?");
 
         Streamed.Frame first;
         await using (var stream = await Streamed.Open(ada.Client, EventsController.Path))
@@ -36,7 +36,7 @@ public sealed class StreamTests
             Assert.Equal(EventsController.StreamType, stream.Response.Content.Headers.ContentType?.MediaType);
             Assert.Equal("open", (await stream.Any()).Comment);
 
-            var reply = await Replied(writer, root, Bea, "I do, at six.");
+            var reply = await Replied(root, Bea, "I do, at six.");
             first = await stream.Next();
 
             var created = await Created(reply);
@@ -47,14 +47,14 @@ public sealed class StreamTests
                     first.Json.GetProperty("tangent").GetString(), first.Json.GetProperty("actor").GetString()));
         }
 
-        var second = await Replied(writer, root, Bea, "Then the harbour.");
-        var third = await Replied(writer, root, Bea, "Then the hill.");
+        var second = await Replied(root, Bea, "Then the harbour.");
+        var third = await Replied(root, Bea, "Then the hill.");
 
         // The header wins over the query, as a browser's reconnect sends both.
         await using var resumed = await Streamed.Open(ada.Client, EventsController.Path + "?since=0", lastEventId: first.Id);
         Assert.Equal("open", (await resumed.Any()).Comment);
         var frames = new List<Streamed.Frame> { await resumed.Next(), await resumed.Next() };
-        var fourth = await Replied(writer, root, Bea, "And last, the lighthouse.");
+        var fourth = await Replied(root, Bea, "And last, the lighthouse.");
         frames.Add(await resumed.Next());
 
         Assert.Equal(new string?[] { second.Id, third.Id, fourth.Id }, frames.Select(frame => frame.Json.GetProperty("post").GetString()));
@@ -67,14 +67,14 @@ public sealed class StreamTests
     public async Task An_event_in_a_tangent_the_reader_may_not_view_never_reaches_their_stream_or_poll_and_one_they_lose_view_of_stops_reaching_them_within_the_refresh()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         using var ada = await SignedIn(tangentSpace, Ada);
         await using var stream = await Streamed.Open(ada.Client, EventsController.Path);
         Assert.Equal("open", (await stream.Any()).Comment);
 
-        var hidden = await Started(writer, Leo, "Studio notes", "Only for us.", Studio);
-        var open = await Started(writer, Bea, "An open question", "Anyone?");
+        var hidden = await Started(Leo, "Studio notes", "Only for us.", Studio);
+        var open = await Started(Bea, "An open question", "Anyone?");
 
         Assert.Equal(open.Id, (await stream.Next()).Json.GetProperty("post").GetString());
         var before = (await Created(hidden)).Seq - 1;
@@ -89,8 +89,8 @@ public sealed class StreamTests
         // it next reads what Ada holds, at most a refresh later.
         await Overwrites.SetAudience(tangentSpace.Services.GetRequiredService<RoleCollection>(), Workshop, Audience.Private, Cancellation);
         await Task.Delay(Readable.Refresh + TimeSpan.FromMilliseconds(500), Cancellation);
-        var closed = await Started(writer, Leo, "Behind the door", "Administrators only now.");
-        var article = await Started(writer, Leo, "A public piece", "Still for everyone.", Articles);
+        var closed = await Started(Leo, "Behind the door", "Administrators only now.");
+        var article = await Started(Leo, "A public piece", "Still for everyone.", Articles);
 
         Assert.Equal(article.Id, (await stream.Next()).Json.GetProperty("post").GetString());
         var after = (await Send(ada.Client, HttpMethod.Get, EventsController.Path + "?since=" + ((await Created(closed)).Seq - 1), json: true)).Json;
@@ -101,15 +101,15 @@ public sealed class StreamTests
     public async Task The_poll_answers_the_streams_rows_a_bounded_page_at_a_time_with_where_to_ask_next_and_the_door_says_where_to_ask_again()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         using var ada = await SignedIn(tangentSpace, Ada);
         var head = (await Send(ada.Client, HttpMethod.Get, EventsController.Path, json: true)).Json;
         Assert.Empty(head.GetProperty("events").EnumerateArray());
         var since = head.GetProperty("through").GetInt64();
         Assert.Equal(BaseUrl + "/events?since=" + since, head.GetProperty("next").GetString());
 
-        var root = await Started(writer, Bea, "Counting lanterns", "One.");
-        for (var count = 2; count <= EventsController.PageSize + 6; count++) await Replied(writer, root, Bea, count + ".");
+        var root = await Started(Bea, "Counting lanterns", "One.");
+        for (var count = 2; count <= EventsController.PageSize + 6; count++) await Replied(root, Bea, count + ".");
 
         var first = (await Send(ada.Client, HttpMethod.Get, EventsController.Path + "?since=" + since, json: true)).Json;
         var rows = first.GetProperty("events").EnumerateArray().ToList();
@@ -142,7 +142,7 @@ public sealed class StreamTests
     public async Task A_slow_stream_is_closed_at_its_queue_bound_a_reader_resumes_by_since_and_a_readers_streams_are_capped()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         using var ada = await SignedIn(tangentSpace, Ada);
         var streams = tangentSpace.Services.GetRequiredService<EventStream>();
 
@@ -158,8 +158,8 @@ public sealed class StreamTests
         Assert.Equal(EventStream.QueueBound, queued);
         Assert.True(slow.Queue.Completion.IsCompleted);
 
-        var root = await Started(writer, Bea, "Where were we", "Here.");
-        var reply = await Replied(writer, root, Bea, "And here.");
+        var root = await Started(Bea, "Where were we", "Here.");
+        var reply = await Replied(root, Bea, "And here.");
         await using (var resumed = await Streamed.Open(ada.Client, EventsController.Path + "?since=" + (await Created(root)).Seq))
             Assert.Equal(reply.Id, (await resumed.Next()).Json.GetProperty("post").GetString());
 
@@ -217,7 +217,7 @@ public sealed class StreamTests
     public async Task A_stream_whose_reader_may_not_view_the_rows_arriving_still_sends_its_heartbeat_on_time()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         using var ada = await SignedIn(tangentSpace, Ada);
         await using var stream = await Streamed.Open(ada.Client, EventsController.Path);
@@ -233,7 +233,7 @@ public sealed class StreamTests
             {
                 while (!stop.IsCancellationRequested)
                 {
-                    await Started(writer, Leo, "Studio note " + ++written, "Only for us.", Studio);
+                    await Started(Leo, "Studio note " + ++written, "Only for us.", Studio);
                     await Task.Delay(TimeSpan.FromSeconds(3), stop.Token);
                 }
             }
@@ -255,17 +255,17 @@ public sealed class StreamTests
     public async Task Positions_move_only_to_rows_the_reader_may_see_or_past_a_whole_scan_of_hidden_ones_and_catching_up_ends_at_its_bound_to_be_resumed()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         var visitor = Agent(tangentSpace);
 
-        var first = await Started(writer, Bea, "Lanterns at dusk", "Who lights theirs first?");
+        var first = await Started(Bea, "Lanterns at dusk", "Who lights theirs first?");
         var start = (await Send(visitor, HttpMethod.Get, EventsController.Path, json: true)).Json;
         var at = start.GetProperty("through").GetInt64();
         Assert.Equal((await Created(first)).Seq, at);
 
         // Rows the visitor may not see arrive between two polls: the position stays where it was.
-        for (var count = 1; count <= 3; count++) await Started(writer, Leo, "Studio note " + count, "Only for us.", Studio);
+        for (var count = 1; count <= 3; count++) await Started(Leo, "Studio note " + count, "Only for us.", Studio);
         foreach (var path in new[] { EventsController.Path + "?since=" + at, EventsController.Path })
         {
             var poll = (await Send(visitor, HttpMethod.Get, path, json: true)).Json;
@@ -274,7 +274,7 @@ public sealed class StreamTests
         }
 
         // A whole scan of them: the poll moves to the scan's end, so it never stalls, and says more may follow.
-        for (var count = 4; count <= EventsController.ScanLimit + 3; count++) await Started(writer, Leo, "Studio note " + count, "Only for us.", Studio);
+        for (var count = 4; count <= EventsController.ScanLimit + 3; count++) await Started(Leo, "Studio note " + count, "Only for us.", Studio);
         var past = (await Event.All(Cancellation)).Where(e => e.Seq > at).OrderBy(e => e.Seq).ToList();
         var scanEnd = past[EventsController.ScanLimit - 1].Seq;
         var full = (await Send(visitor, HttpMethod.Get, EventsController.Path + "?since=" + at, json: true)).Json;
@@ -299,7 +299,7 @@ public sealed class StreamTests
 
         await using var resumed = await Streamed.Open(visitor, EventsController.Path, lastEventId: resume);
         Assert.Equal("open", (await resumed.Any()).Comment);
-        var open = await Started(writer, Bea, "An open question", "Anyone?");
+        var open = await Started(Bea, "An open question", "Anyone?");
         Assert.Equal(open.Id, (await resumed.Next()).Json.GetProperty("post").GetString());
     }
 

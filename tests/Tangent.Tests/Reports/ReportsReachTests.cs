@@ -1,11 +1,11 @@
 using System.Net;
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
 using Tangent.Events;
 using Tangent.Participants;
 using Tangent.Space;
-using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -25,17 +25,17 @@ public sealed class ReportsReachTests
     public async Task A_moderators_bell_and_notifications_show_a_new_report_while_a_members_the_reporters_and_the_authors_do_not()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Reporting(tangentSpace);
+        await Reporting(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
-        var topic = await Started(writer, Bea, "Lanterns at dusk", "Who lights theirs first?");
-        var reply = await Replied(writer, topic, Bea, "Whoever is slowest, obviously.");
+        var topic = await Started(Bea, "Lanterns at dusk", "Who lights theirs first?");
+        var reply = await Replied(topic, Bea, "Whoever is slowest, obviously.");
         using var mo = await SignedIn(tangentSpace, Mo);
         using var leo = await SignedIn(tangentSpace, Leo);
         using var ada = await SignedIn(tangentSpace, Ada);
         using var bea = await SignedIn(tangentSpace, Bea);
         var before = (await Event.All(Cancellation)).Max(e => e.Seq);
 
-        var report = await Reported(writer, Ada, reply, "This mocks someone in the workshop.");
+        var report = await Reported(Ada, reply, "This mocks someone in the workshop.");
 
         // One event, however many may view the moderators' Tangent, and it targets no one.
         var created = Assert.Single(await Event.All(Cancellation), e => e.Seq > before);
@@ -78,14 +78,14 @@ public sealed class ReportsReachTests
     public async Task Someone_made_a_moderator_after_the_report_arrived_learns_of_it()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Reporting(tangentSpace);
+        await Reporting(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
-        var topic = await Started(writer, Leo, "Kiln schedule", "Firing on Thursday.");
+        var topic = await Started(Leo, "Kiln schedule", "Firing on Thursday.");
         using var ada = await SignedIn(tangentSpace, Ada);
-        await Reported(writer, Bea, topic, "Off topic for the workshop.");
+        await Reported(Bea, topic, "Off topic for the workshop.");
         Assert.Equal(0, Count(await Send(ada.Client, HttpMethod.Get, "/", json: true)));
 
-        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new ChangeRole(Leo, Ada, Roles.Moderator, Give: true), Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new ChangeRole(Leo, Ada, Roles.Moderator, Give: true).Send(Cancellation));
 
         Assert.Equal(2, Count(await Send(ada.Client, HttpMethod.Get, "/", json: true)));
         var entries = (await Send(ada.Client, HttpMethod.Get, Notifications.Path, json: true)).Json.GetProperty("entries").EnumerateArray().ToList();
@@ -97,9 +97,9 @@ public sealed class ReportsReachTests
     public async Task Opening_the_notifications_sees_a_report_and_a_new_one_counts_past_it()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Reporting(tangentSpace);
-        var topic = await Started(writer, Bea, "Lanterns at dusk", "Who lights theirs first?");
-        var report = await Reported(writer, Ada, topic, "Unkind.");
+        await Reporting(tangentSpace);
+        var topic = await Started(Bea, "Lanterns at dusk", "Who lights theirs first?");
+        var report = await Reported(Ada, topic, "Unkind.");
         var created = Assert.Single(await Event.Query(e => e.PostId == report.Id, Cancellation));
         using var mo = await SignedIn(tangentSpace, Mo);
         Assert.Equal(1, Count(await Send(mo.Client, HttpMethod.Get, "/", json: true)));
@@ -114,29 +114,29 @@ public sealed class ReportsReachTests
         Assert.Equal(0, Count(await Send(mo.Client, HttpMethod.Get, "/", json: true)));
         Assert.False(Assert.Single((await Send(mo.Client, HttpMethod.Get, Notifications.Path, json: true)).Json.GetProperty("entries").EnumerateArray())
             .GetProperty("new").GetBoolean());
-        var reply = await Replied(writer, topic, Bea, "Whoever is slowest, obviously.");
-        await Reported(writer, Ada, reply, "Unkind again.");
+        var reply = await Replied(topic, Bea, "Whoever is slowest, obviously.");
+        await Reported(Ada, reply, "Unkind again.");
         Assert.Equal(1, Count(await Send(mo.Client, HttpMethod.Get, "/", json: true)));
 
         // Only whoever may view the moderators' Tangent sees a report: a member's mark of it is refused.
         Assert.Equal(new Outcome<Checkpoint>.Refused(SeeNotifications.NoNotification),
-            await writer.Send(new SeeNotifications(Bea, created.Seq), Cancellation));
+            await new SeeNotifications(Bea, created.Seq).Send(Cancellation));
     }
 
     [Fact]
     public async Task Nothing_of_a_report_reaches_a_non_moderator_through_the_count_its_through_the_poll_or_the_stream()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Reporting(tangentSpace);
-        var topic = await Started(writer, Ada, "Lanterns at dusk", "Who lights theirs first?");
-        var reply = await Replied(writer, topic, Bea, "Whoever is slowest, obviously.");
+        await Reporting(tangentSpace);
+        var topic = await Started(Ada, "Lanterns at dusk", "Who lights theirs first?");
+        var reply = await Replied(topic, Bea, "Whoever is slowest, obviously.");
         using var ada = await SignedIn(tangentSpace, Ada);
         using var bea = await SignedIn(tangentSpace, Bea);
         var before = (await Event.All(Cancellation)).Max(e => e.Seq);
         var positions = new Dictionary<string, (long Through, long Poll)>();
         foreach (var (id, reader) in new[] { (Ada, ada), (Bea, bea) }) positions[id] = Positions(await Send(reader.Client, HttpMethod.Get, "/", json: true));
 
-        await Reported(writer, Ada, reply, "This mocks someone in the workshop.");
+        await Reported(Ada, reply, "This mocks someone in the workshop.");
 
         // The reporter and the reported author: the same count, the count's through and the door's poll as before it.
         foreach (var (id, reader) in new[] { (Ada, ada), (Bea, bea) })
@@ -152,7 +152,7 @@ public sealed class ReportsReachTests
         // Ada's stream from before the report sends the next row that reaches her, and nothing of the report.
         await using var stream = await Streamed.Open(ada.Client, $"{EventsController.Path}?{EventsController.Since}={before}");
         Assert.Equal("open", (await stream.Any()).Comment);
-        var next = await Replied(writer, topic, Bea, "And last, the lighthouse.");
+        var next = await Replied(topic, Bea, "And last, the lighthouse.");
         var frame = await stream.Next();
         Assert.Equal(next.Id, frame.Json.GetProperty("post").GetString());
         Assert.False(frame.Json.TryGetProperty("report", out _));
@@ -162,15 +162,15 @@ public sealed class ReportsReachTests
     public async Task A_report_older_than_a_full_read_of_rows_the_moderator_may_not_view_is_never_skipped()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Reporting(tangentSpace);
+        await Reporting(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
-        var lanterns = await Started(writer, Bea, "Lanterns at dusk", "Who lights theirs first?");
-        await Reported(writer, Ada, lanterns, "Unkind.");
-        var mine = await Started(writer, Mo, "Kiln schedule", "Firing on Thursday.");
-        await Replied(writer, mine, Bea, "I bring the glazes.");
+        var lanterns = await Started(Bea, "Lanterns at dusk", "Who lights theirs first?");
+        await Reported(Ada, lanterns, "Unkind.");
+        var mine = await Started(Mo, "Kiln schedule", "Firing on Thursday.");
+        await Replied(mine, Bea, "I bring the glazes.");
         // A whole read of rows that target the moderator in the studio, which he may not view, newer than both.
-        var secret = await Started(writer, Leo, "Studio notes", "Only for us.", Studio);
-        Assert.IsType<Outcome<int>.Done>(await writer.Send(new Many(Leo, Mo, secret, Notifications.ScanLimit), Cancellation));
+        var secret = await Started(Leo, "Studio notes", "Only for us.", Studio);
+        Assert.IsType<Outcome<int>.Done>(await new Many(Leo, Mo, secret, Notifications.ScanLimit).Send(Cancellation));
         using var mo = await SignedIn(tangentSpace, Mo);
 
         var shown = new List<string>();
@@ -192,11 +192,11 @@ public sealed class ReportsReachTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(),
             services: services => services.AddKeyedSingleton<TimeProvider>(Readable.Clock, new Jumping()), ct: Cancellation);
-        var writer = await Reporting(tangentSpace);
-        var mine = await Started(writer, Mo, "Kiln schedule", "Firing on Thursday.");
-        var reply = await Replied(writer, mine, Bea, "I bring the glazes.");
-        var lanterns = await Started(writer, Bea, "Lanterns at dusk", "Who lights theirs first?");
-        var report = await Reported(writer, Ada, lanterns, "Unkind.");
+        await Reporting(tangentSpace);
+        var mine = await Started(Mo, "Kiln schedule", "Firing on Thursday.");
+        var reply = await Replied(mine, Bea, "I bring the glazes.");
+        var lanterns = await Started(Bea, "Lanterns at dusk", "Who lights theirs first?");
+        var report = await Reported(Ada, lanterns, "Unkind.");
         var created = Assert.Single(await Event.Query(e => e.PostId == report.Id, Cancellation));
         using var mo = await SignedIn(tangentSpace, Mo);
 
@@ -212,15 +212,14 @@ public sealed class ReportsReachTests
     }
 
     /// <summary>The place every proof of the write verbs starts from, with the moderators' Tangent a start creates for it.</summary>
-    private static async Task<WriteLoop> Reporting(TangentSpaceFixture tangentSpace)
+    private static async Task Reporting(TangentSpaceFixture tangentSpace)
     {
-        var writer = await Place(tangentSpace);
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(new CreateModeratorsTangent(), Cancellation));
-        return writer;
+        await Place(tangentSpace);
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateModeratorsTangent().Send(Cancellation));
     }
 
-    private static async Task<Post> Reported(WriteLoop writer, string reporter, Post post, string reason)
-        => Assert.IsType<Outcome<Post>.Done>(await writer.Send(new ReportPost(Tids.Mint(), post.Id, PostBody.Of(reason), reporter), Cancellation)).Result;
+    private static async Task<Post> Reported(string reporter, Post post, string reason)
+        => Assert.IsType<Outcome<Post>.Done>(await new ReportPost(Tids.Mint(), post.Id, PostBody.Of(reason), reporter).Send(Cancellation)).Result;
 
     /// <summary>How many notifications the reader has not seen, as a page's JSON says.</summary>
     private static int Count(Answered page) => page.Json.GetProperty("who").GetProperty("notifications").GetProperty("count").GetInt32();
@@ -243,11 +242,11 @@ public sealed class ReportsReachTests
     /// <paramref name="TargetId"/>, in one transaction.</summary>
     private sealed record Many(string ActorId, string TargetId, Post Root, int Times) : ICommand<int>
     {
-        public async Task<Outcome<int>> Run(Sequences sequences, CancellationToken ct)
+        public async Task<Outcome<int>> Run(CancellationToken ct)
         {
             for (var index = 0; index < Times; index++)
-                await Event.Next(sequences, EventKind.PostCreated, DateTimeOffset.UtcNow, tangentId: Root.TangentId, topicId: Root.Id, postId: Root.Id,
-                    actorId: ActorId, targetId: TargetId).Save(ct);
+                await Event.Append(EventKind.PostCreated, DateTimeOffset.UtcNow, ct, tangentId: Root.TangentId, topicId: Root.Id, postId: Root.Id,
+                    actorId: ActorId, targetId: TargetId);
             return new Outcome<int>.Done(Times);
         }
     }

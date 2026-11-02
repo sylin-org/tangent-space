@@ -25,7 +25,7 @@ public sealed class BringYourAgentController(KoanWebBaseUrl baseUrl) : Controlle
             return Redirect(address + SignInController.Path + "?return=" + Uri.EscapeDataString(baseUrl.PathBase + Path));
 
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return DoorController.Gated(place.Gate(Bit.View) ?? Capabilities.Absent);
+        if (!place.Exists) return DoorController.Gated(HttpContext, place.Gate(Bit.View) ?? Capabilities.Absent);
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
         return Ok(new BringYourAgent(space.Name, address + "/", address, LlmsText.Address(address), address + ConsentController.Path,
             await PostWrites.Reader(personId, place, address, baseUrl.PathBase + Path, ct)));

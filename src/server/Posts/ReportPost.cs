@@ -1,9 +1,9 @@
 using Koan.Data.Abstractions;
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Tangent.Access;
 using Tangent.Events;
 using Tangent.Space;
-using Tangent.Writer;
 
 namespace Tangent.Posts;
 
@@ -27,7 +27,7 @@ namespace Tangent.Posts;
 /// Id from the same reporter about the same Post answers with the Post it wrote, whatever reason is sent and whatever
 /// the moderators have done with it since, so a resend says nothing of the report's state; any other Post holding it is
 /// refused with <see cref="Post.IdTaken"/>, which says nothing of that Post. The reason is judged where the command is built
-/// (<see cref="PostBody"/>), never in the writer.</summary>
+/// (<see cref="PostBody"/>), never in its hold.</summary>
 public sealed record ReportPost(
     string Id,
     string PostId,
@@ -35,7 +35,7 @@ public sealed record ReportPost(
     string ReporterId,
     DateTimeOffset? At = null) : ICommand<Post>
 {
-    public const string NoPost = "No Post has this Id.";
+    public static readonly Reason NoPost = Koan.Data.Core.Commands.Reason.Absent("No Post has this Id.");
 
     public const string NeedsReason = "Say in a sentence or two why you are reporting this post.";
 
@@ -51,7 +51,7 @@ public sealed record ReportPost(
     /// <summary>The most characters of the reason a title carries where it names no Topic.</summary>
     public const int ReasonWords = 60;
 
-    public async Task<Outcome<Post>> Run(Sequences sequences, CancellationToken ct)
+    public async Task<Outcome<Post>> Run(CancellationToken ct)
     {
         if (await Post.Get(PostId, ct) is not { } reported) return new Outcome<Post>.Refused(NoPost);
         var topic = reported.ParentId is null ? reported : await Post.Get(reported.TopicId, ct);
@@ -92,11 +92,11 @@ public sealed record ReportPost(
             await into.Save(ct);
         }
 
-        await Event.Next(sequences, EventKind.PostCreated, at,
+        await Event.Append(EventKind.PostCreated, at, ct,
             tangentId: written.TangentId, topicId: written.TopicId, postId: written.Id, actorId: ReporterId, version: written.Version,
-            report: true).Save(ct);
+            report: true);
         await MediaUse.Record(written, ReporterId, [], ct);
-        await Mentions.Notify(sequences, written, ReporterId, [], at, ct);
+        await Mentions.Notify(written, ReporterId, [], at, ct);
         return new Outcome<Post>.Done(written);
     }
 

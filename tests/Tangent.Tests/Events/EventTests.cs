@@ -1,7 +1,7 @@
+using Koan.Data.Core.Commands;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
 using Tangent.Posts;
-using Tangent.Writer;
 using Xunit;
 
 namespace Tangent.Events;
@@ -16,27 +16,25 @@ public sealed class EventTests
     {
         await using var first = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         var topicId = Tids.Mint();
-        var writer = first.Services.GetRequiredService<WriteLoop>();
         await Given.ATangent(first, "the-workshop", ct: Cancellation);
         await Given.AParticipant(first, "leo", [Roles.Member], ct: Cancellation);
         await Given.AParticipant(first, "ada", [Roles.Member], ct: Cancellation);
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(topicId, "the-workshop", "Before", "First.", "leo"), Cancellation));
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new Reply(Tids.Mint(), topicId, "Second.", "ada"), Cancellation));
-        Assert.Equal(2, await Event.HighWaterMark.Load(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(topicId, "the-workshop", "Before", "First.", "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), topicId, "Second.", "ada").Send(Cancellation));
+        Assert.Equal(2, await Event.Log.Highest(Cancellation));
         await first.StopAsync(Cancellation);
 
         // The second fixture's folder is deleted before the first's, which holds the data folder they share.
         await using var second = await TangentSpaceFixture.StartAsync(new Dictionary<string, string?> { ["Tangent:DataFolder"] = first.DataFolder }, ct: Cancellation);
         var announced = new List<Committed>();
-        var continued = second.Services.GetRequiredService<WriteLoop>();
-        continued.Committed += announced.Add;
-        var after = await continued.Send(new Reply(Tids.Mint(), topicId, "Third.", "leo"), Cancellation);
+        second.Commits.Landed += announced.Add;
+        var after = await new Reply(Tids.Mint(), topicId, "Third.", "leo").Send(Cancellation);
 
         Assert.Equal(first.DataFolder, second.DataFolder);
         Assert.Equal(2L, Assert.IsType<Outcome<Post>.Done>(after).Result.Sequence);
         Assert.Equal(3L, Assert.Single(announced).Sequences[Event.Log]);
         Assert.Equal(3, await Event.Count.Exact(Cancellation));
-        Assert.Equal(3, await Event.HighWaterMark.Load(Cancellation));
+        Assert.Equal(3, await Event.Log.Highest(Cancellation));
         Assert.NotNull(await Event.Get(Event.Key(3), Cancellation));
     }
 }

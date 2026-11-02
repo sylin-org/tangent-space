@@ -1,10 +1,10 @@
+using Koan.Data.Core.Commands;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Offers;
 using Tangent.Space;
-using Tangent.Writer;
 
 namespace Tangent.Capture;
 
@@ -13,7 +13,7 @@ namespace Tangent.Capture;
 /// place, with no URL configured and no address yet, offers it to its operator. For <c>offer-used</c> the operator
 /// then uses it, and for <c>offer-declined</c> declines it, as their answers do. Compiled only into the capture host,
 /// like <see cref="CaptureSeedController"/>.</summary>
-public sealed class OfferSeedController(KoanWebBaseUrl baseUrl, WriteLoop writer, IServer server) : ControllerBase
+public sealed class OfferSeedController(KoanWebBaseUrl baseUrl, IServer server) : ControllerBase
 {
     /// <summary>The public origin the capture's place is reached at; <c>src/client/capture/server.ts</c> names it too.</summary>
     public const string Origin = "https://tangent.example.org";
@@ -31,7 +31,7 @@ public sealed class OfferSeedController(KoanWebBaseUrl baseUrl, WriteLoop writer
     public async Task<IActionResult> Used(CancellationToken ct)
     {
         var offer = await Offered(ct);
-        var outcome = await PlaceAddress.Use(baseUrl, new UseOffer(offer.Id, offer.DeciderId, offer.Subject), ct);
+        var outcome = await PlaceAddress.Use(baseUrl, new UseOffer(offer.Id, offer.DeciderId, offer.Subject));
         if (outcome is not Outcome<Offer>.Done) throw new InvalidOperationException($"The capture's offer was not used: {outcome}.");
         return NoContent();
     }
@@ -40,7 +40,7 @@ public sealed class OfferSeedController(KoanWebBaseUrl baseUrl, WriteLoop writer
     public async Task<IActionResult> Declined(CancellationToken ct)
     {
         var offer = await Offered(ct);
-        var outcome = await writer.Send(new DeclineOffer(offer.Id, offer.DeciderId), ct);
+        var outcome = await new DeclineOffer(offer.Id, offer.DeciderId).Send();
         if (outcome is not Outcome<Offer>.Done) throw new InvalidOperationException($"The capture's offer was not declined: {outcome}.");
         return NoContent();
     }

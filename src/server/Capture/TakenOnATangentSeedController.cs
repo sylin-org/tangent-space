@@ -1,4 +1,5 @@
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Koan.Data.Core.Model;
 using Koan.Identity.Roles;
 using Microsoft.AspNetCore.Mvc;
@@ -7,17 +8,16 @@ using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
 using Tangent.Tangents;
-using Tangent.Writer;
 
 namespace Tangent.Capture;
 
-/// <summary>The rows take this on a tangent's captures show, written through the writer when the capture asks: a
+/// <summary>The rows take this on a tangent's captures show, sent as commands when the capture asks: a
 /// discussions Tangent where Leo's reply in "Where should the glue notes live?" was taken on a tangent into the workshop
 /// as "Adhesives we trust"; and an off-the-record Tangent only administrators read, whose Post was taken into the
 /// workshop as "The kiln budget", so the capture persona, a member, reads that it came from a Post she cannot see.
 /// Compiled only into the capture host, like <see cref="CaptureSeedController"/>; fixed names, words, times and TIDs, so
 /// the origin is at /t/discussions/where-should-the-glue-notes-live/3mwfyixhb2224.</summary>
-public sealed class TakenOnATangentSeedController(WriteLoop writer, RoleCollection roles) : ControllerBase
+public sealed class TakenOnATangentSeedController(RoleCollection roles) : ControllerBase
 {
     private const string Persona = "did:plc:capture4persona";
     private const string Leo = "did:plc:capture4leo";
@@ -61,7 +61,7 @@ public sealed class TakenOnATangentSeedController(WriteLoop writer, RoleCollecti
         await roles.Add(role, id, ct);
     }
 
-    private async Task<T> Write<T>(ICommand<T> command, CancellationToken ct) => await writer.Send(command, ct) switch
+    private async Task<T> Write<T>(ICommand<T> command, CancellationToken ct) => await command.Send() switch
     {
         Outcome<T>.Done done => done.Result,
         var other => throw new InvalidOperationException($"The take-this-on-a-tangent seed's {command.GetType().Name} answered {other}.")
@@ -84,10 +84,10 @@ public sealed class TakenOnATangentSeedController(WriteLoop writer, RoleCollecti
         return new string(characters);
     }
 
-    /// <summary>Saves one row as the seed built it, through the writer.</summary>
+    /// <summary>Saves one row as the seed built it, as a command.</summary>
     private sealed record Keep<TEntity>(TEntity Row) : ICommand<TEntity> where TEntity : Entity<TEntity>
     {
-        public async Task<Outcome<TEntity>> Run(Sequences sequences, CancellationToken ct)
+        public async Task<Outcome<TEntity>> Run(CancellationToken ct)
         {
             await Row.Save(ct);
             return new Outcome<TEntity>.Done(Row);

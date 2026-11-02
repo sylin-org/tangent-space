@@ -1,12 +1,12 @@
 using System.Diagnostics;
 using System.Net;
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
 using Tangent.Tangents;
-using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -32,7 +32,6 @@ public sealed class PlaceSizeTests(ITestOutputHelper output)
     {
         const int count = 1100;
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         await Given.AnEstablishedTangentSpace(tangentSpace, ct: Cancellation);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         await Given.AParticipant(tangentSpace, Ada, [Roles.Member], ct: Cancellation);
@@ -41,8 +40,7 @@ public sealed class PlaceSizeTests(ITestOutputHelper output)
         for (var index = 1; index <= count; index++)
         {
             var audience = index == count ? Audience.Private : Audience.Public;
-            Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(
-                new CreateTangent(Slug(index), "Tangent " + index, "", PostKind.Topic, index, audience, Leo), Cancellation));
+            Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent(Slug(index), "Tangent " + index, "", PostKind.Topic, index, audience, Leo).Send(Cancellation));
         }
 
         output.WriteLine($"{count} Tangents created in {clock.Elapsed}");
@@ -53,7 +51,7 @@ public sealed class PlaceSizeTests(ITestOutputHelper output)
         Assert.True(administrator.Exists);
         Assert.True(administrator.Holds(Bit.View | Bit.Post | Bit.Topic | Bit.ManageTangent));
         var member = await Capabilities.Load(Ada, last, null, Cancellation);
-        Assert.Equal((false, Capabilities.Absent), (member.Exists, member.Gate(Bit.View)));
+        Assert.Equal((false, Capabilities.Absent.Text), (member.Exists, member.Gate(Bit.View)?.Text));
         Assert.False((await Capabilities.Load(null, last, null, Cancellation)).Exists);
 
         var beside = Slug(count - 1);
@@ -61,10 +59,10 @@ public sealed class PlaceSizeTests(ITestOutputHelper output)
         Assert.True(open.Exists);
         Assert.True(open.Holds(Bit.View | Bit.Post | Bit.Topic));
         var visitor = await Capabilities.Load(null, beside, null, Cancellation);
-        Assert.Equal((true, Capabilities.SignIn), (visitor.Exists, visitor.Gate(Bit.Post)));
+        Assert.Equal((true, Capabilities.SignIn.Word), (visitor.Exists, visitor.Gate(Bit.Post)?.Word));
 
         // A move of the last Tangent reads past the first thousand and changes the places of two.
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(new ChangeTangent(last, Leo, Move: Move.Earlier), Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new ChangeTangent(last, Leo, Move: Move.Earlier).Send(Cancellation));
         Assert.Equal((count - 1, count), ((await Tangents.Tangent.Get(last, Cancellation))!.Order, (await Tangents.Tangent.Get(beside, Cancellation))!.Order));
         Assert.Equal(1, (await Tangents.Tangent.Get(Slug(1), Cancellation))!.Order);
     }
@@ -84,7 +82,7 @@ public sealed class PlaceSizeTests(ITestOutputHelper output)
         output.WriteLine($"{others} members joined in {clock.Elapsed}");
 
         var ada = await Given.AParticipant(tangentSpace, Ada, [], ct: Cancellation);
-        Assert.True(await MemberRole.Join(roles, ada, Cancellation));
+        Assert.True(await MemberRole.Join(ada, Cancellation));
 
         Assert.Equal(others + 1, await RoleMember.Count.Exact(Cancellation));
         var capabilities = await Capabilities.Load(Ada, "workshop", null, Cancellation);
@@ -97,18 +95,17 @@ public sealed class PlaceSizeTests(ITestOutputHelper output)
     {
         const int count = 150;
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         await Given.AnEstablishedTangentSpace(tangentSpace, ct: Cancellation);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         // Every Tangent at order one, as Tangents created at once can stand: the slug orders them.
         for (var index = 1; index <= count; index++) await Given.ATangent(tangentSpace, Slug(index), ct: Cancellation);
         var expected = Enumerable.Range(1, count).Select(Slug).ToList();
 
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(new ChangeTangent(Slug(20), Leo, Move: Move.Earlier), Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new ChangeTangent(Slug(20), Leo, Move: Move.Earlier).Send(Cancellation));
         (expected[18], expected[19]) = (expected[19], expected[18]);
         Assert.Equal(expected, await InOrder());
 
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(new ChangeTangent(Slug(120), Leo, Move: Move.Later), Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new ChangeTangent(Slug(120), Leo, Move: Move.Later).Send(Cancellation));
         (expected[119], expected[120]) = (expected[120], expected[119]);
         Assert.Equal(expected, await InOrder());
 
@@ -123,14 +120,13 @@ public sealed class PlaceSizeTests(ITestOutputHelper output)
     public async Task The_door_and_the_list_of_tangents_reach_those_the_reader_may_view_past_sixty_others()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         await Given.AnEstablishedTangentSpace(tangentSpace, ct: Cancellation);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         await Given.AParticipant(tangentSpace, Ada, [Roles.Member], ct: Cancellation);
         // Orders dense from one: sixty Tangents Ada may not view, then sixty she may.
         for (var index = 1; index <= 120; index++)
-            Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(new CreateTangent(Slug(index), "Tangent " + index, "", PostKind.Topic,
-                index, index <= 60 ? Audience.Private : Audience.Public, Leo), Cancellation));
+            Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent(Slug(index), "Tangent " + index, "", PostKind.Topic,
+                index, index <= 60 ? Audience.Private : Audience.Public, Leo).Send(Cancellation));
         using var ada = await SignedIn(tangentSpace, Ada);
 
         var door = await Send(ada.Client, HttpMethod.Get, "/", json: true);
@@ -166,9 +162,8 @@ public sealed class PlaceSizeTests(ITestOutputHelper output)
     public async Task A_moderator_reaches_the_moderators_tangent_from_the_door_past_sixty_tangents()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         await Given.AnEstablishedTangentSpace(tangentSpace, ct: Cancellation);
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(new CreateModeratorsTangent(), Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateModeratorsTangent().Send(Cancellation));
         await Given.AParticipant(tangentSpace, Mo, [Roles.Moderator], ct: Cancellation);
         await Given.AParticipant(tangentSpace, Ada, [Roles.Member], ct: Cancellation);
         for (var index = 1; index <= 60; index++) await Given.ATangent(tangentSpace, Slug(index), ct: Cancellation);

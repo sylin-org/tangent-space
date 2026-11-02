@@ -1,11 +1,10 @@
-using Koan.Identity.Roles;
+using Koan.Data.Core.Commands;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
 using Tangent.Posts;
 using Tangent.Render;
 using Tangent.Space;
-using Tangent.Writer;
 
 namespace Tangent.Participants;
 
@@ -14,13 +13,11 @@ namespace Tangent.Participants;
 /// resource both ways (<see cref="ApplicationsPage"/>), continued from the cursor in <c>after</c>; a reader who may not
 /// decide reads the gate, with no applicant, answered <c>401</c> to sign in and <c>403</c> otherwise. Its two
 /// <c>POST</c>s take the applicant's id in <c>participant</c>, as a form or a JSON object: <c>admit</c> sends
-/// <see cref="Admit"/> and, once it commits, joins the applicant to the member role (<see cref="MemberRole"/>), which their
-/// next sign-in repairs should this write not happen; <c>decline</c> sends <see cref="Decline"/>. A form is sent back to
+/// <see cref="Admit"/>; <c>decline</c> sends <see cref="Decline"/>. A form is sent back to
 /// the applications; a JSON request reads the decision (<see cref="DecidedApplication"/>); a refusal reads the page again
 /// with the reason above the list, or a problem. A reader for whom the place does not exist receives what an address with
 /// nothing there receives.</summary>
-public sealed class ApplicationsController(KoanWebBaseUrl baseUrl, WriteLoop writer, RoleCollection roles,
-    ILogger<ApplicationsController> logger) : ControllerBase
+public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
     public const string Path = "/settings/applications";
 
@@ -44,7 +41,7 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl, WriteLoop wri
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(place.Gate(Bit.View));
+        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
 
         Applications.Cursor? cursor = null;
         if (after is not null && (cursor = Applications.Cursor.Parse(after)) is null)
@@ -69,41 +66,22 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl, WriteLoop wri
         var personId = PostWrites.PersonId(User);
         if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(place.Gate(Bit.View));
+        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
         if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
 
         var applicantId = fields.GetValueOrDefault(ParticipantField) ?? "";
         ICommand<Participant> command = admitting
             ? new Participants.Admit(personId ?? "", applicantId)
             : new Participants.Decline(personId ?? "", applicantId);
-        var outcome = await writer.Send(command, ct);
+        var outcome = await command.Send();
         switch (outcome)
         {
             case Outcome<Participant>.Done { Result: var applicant }:
-                if (admitting) await JoinMemberRole(applicant, ct);
                 return await Decided(applicant, personId, ct);
-            case Outcome<Participant>.Refused { Reason: Applications.NoPlace }:
-                return PostWrites.Absent();
             case Outcome<Participant>.Refused { Reason: var reason }:
                 return await Refused(personId, reason, ct);
-            case Outcome<Participant>.Failed { Cause: var cause }:
-                throw new InvalidOperationException($"Deciding the application of {applicantId} failed.", cause);
             default:
-                throw new InvalidOperationException($"The writer answered {outcome} for deciding the application of {applicantId}.");
-        }
-    }
-
-    /// <summary>The member role for an applicant just admitted, after the commit; one this write misses is joined at their
-    /// next sign-in.</summary>
-    private async Task JoinMemberRole(Participant applicant, CancellationToken ct)
-    {
-        try
-        {
-            await MemberRole.Join(roles, applicant, ct);
-        }
-        catch (Exception failure) when (failure is not OperationCanceledException)
-        {
-            logger.LogWarning(failure, "{Person} was admitted and could not join the member role; their next sign-in joins them", applicant.Id);
+                return PostWrites.Answer(HttpContext, outcome);
         }
     }
 
@@ -129,23 +107,15 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl, WriteLoop wri
 
     /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the page again, read afresh,
     /// with the reason above the list.</summary>
-    private async Task<IActionResult> Refused(string? personId, string reason, CancellationToken ct)
+    private async Task<IActionResult> Refused(string? personId, Reason reason, CancellationToken ct)
     {
-        var status = reason switch
-        {
-            Applications.NoApplicant => StatusCodes.Status404NotFound,
-            Participant.NotAnApplication => StatusCodes.Status409Conflict,
-            _ => PostWrites.Status(reason)
-        };
-        var gated = status is StatusCodes.Status401Unauthorized or StatusCodes.Status403Forbidden;
-        if (PostWrites.WantsJson(Request))
-            return gated ? PostWrites.Gated(reason) : new Problem(status, "Not decided", reason).ToResult();
+        if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
 
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(place.Gate(Bit.View));
+        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
         var page = await Page(place, personId, null, ct);
-        if (!gated) page = page with { Failure = reason };
-        return new ObjectResult(page) { StatusCode = status };
+        if (reason.Kind != ReasonKind.Gated) page = page with { Failure = reason.Text };
+        return new ObjectResult(page) { StatusCode = PostWrites.Status(reason) };
     }
 
     private async Task<ApplicationsPage> Page(Capabilities place, string? personId, Applications.Cursor? cursor, CancellationToken ct)
@@ -153,7 +123,7 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl, WriteLoop wri
         var baseAddress = BaseAddress();
         var here = baseUrl.PathBase + Path;
         var applications = baseAddress + Path;
-        var gate = place.Gate(Bit.ManageStanding);
+        var gate = place.Gate(Bit.ManageStanding)?.Word;
         var read = gate is null ? await Applications.Read(cursor, ct) : new Applications.Page([], null);
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
         var token = gate is null ? FormToken.For(HttpContext) : null;

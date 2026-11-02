@@ -4,7 +4,7 @@ using Koan.Data.Core;
 namespace Tangent.Participants;
 
 /// <summary>One handle, one participant: an atproto handle names one account at a time, and a sign-in that verifies a
-/// handle is the latest word on who holds it. The command that records a verified handle, inside the writer, takes it
+/// handle is the latest word on who holds it. The command that records a verified handle takes it
 /// from any other participant row that still keeps it; that row shows its DID and answers at its DID's profile address
 /// until its own next sign-in verifies a handle again.</summary>
 public static class Handles

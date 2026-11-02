@@ -1,3 +1,4 @@
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.DataProtection;
@@ -6,7 +7,6 @@ using Tangent.Access;
 using Tangent.Posts;
 using Tangent.Render;
 using Tangent.Space;
-using Tangent.Writer;
 
 namespace Tangent.Participants;
 
@@ -23,8 +23,7 @@ namespace Tangent.Participants;
 /// forms are — and a JSON request reads the participant as this page now lists them; a refusal reads the page again with
 /// the reason above the list, or a problem. A reader for whom the place does not exist receives what an address with
 /// nothing there receives.</summary>
-public sealed class PeopleController(KoanWebBaseUrl baseUrl, WriteLoop writer, RoleCollection roles, IDataProtectionProvider protection,
-    ILogger<PeopleController> logger) : ControllerBase
+public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection roles, IDataProtectionProvider protection) : ControllerBase
 {
     public const string Path = "/settings/people";
 
@@ -64,7 +63,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, WriteLoop writer, R
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(place.Gate(Bit.View));
+        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
 
         People.Cursor? cursor = null;
         if (after is not null && (cursor = People.Cursor.Open(after, protection)) is null)
@@ -103,47 +102,28 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, WriteLoop writer, R
         People.NotARole, ct);
 
     /// <summary>One change: the form's token, the place, the fields; the command <paramref name="command"/> builds from
-    /// them, or <paramref name="unsent"/> where what was sent names none; then the writer's outcome.</summary>
+    /// them, or <paramref name="unsent"/> where what was sent names none; then the command's outcome.</summary>
     private async Task<IActionResult> Change(Func<IReadOnlyDictionary<string, string>, string, string, ICommand<Participant>?> command,
-        string unsent, CancellationToken ct)
+        Reason unsent, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(place.Gate(Bit.View));
+        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
         if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
 
         var participantId = fields.GetValueOrDefault(ParticipantField) ?? "";
         if (command(fields, personId ?? "", participantId) is not { } sent) return await Refused(personId, unsent, ct);
-        var outcome = await writer.Send(sent, ct);
+        var outcome = await sent.Send();
         switch (outcome)
         {
             case Outcome<Participant>.Done { Result: var participant }:
-                if (sent is Lift) await JoinMemberRole(participant, ct);
                 return await Changed(participant, personId, fields, ct);
-            case Outcome<Participant>.Refused { Reason: Applications.NoPlace }:
-                return PostWrites.Absent();
             case Outcome<Participant>.Refused { Reason: var reason }:
                 return await Refused(personId, reason, ct);
-            case Outcome<Participant>.Failed { Cause: var cause }:
-                throw new InvalidOperationException($"Changing {participantId} failed.", cause);
             default:
-                throw new InvalidOperationException($"The writer answered {outcome} for changing {participantId}.");
-        }
-    }
-
-    /// <summary>The member role for a participant just lifted, after the commit, where they lack it; one this write misses
-    /// is joined at their next sign-in.</summary>
-    private async Task JoinMemberRole(Participant participant, CancellationToken ct)
-    {
-        try
-        {
-            await MemberRole.Join(roles, participant, ct);
-        }
-        catch (Exception failure) when (failure is not OperationCanceledException)
-        {
-            logger.LogWarning(failure, "{Person} was lifted and could not join the member role; their next sign-in joins them", participant.Id);
+                return PostWrites.Answer(HttpContext, outcome);
         }
     }
 
@@ -166,39 +146,16 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, WriteLoop writer, R
 
     /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the page again, read afresh,
     /// with the reason above the list.</summary>
-    private async Task<IActionResult> Refused(string? personId, string reason, CancellationToken ct)
+    private async Task<IActionResult> Refused(string? personId, Reason reason, CancellationToken ct)
     {
-        var status = Status(reason);
-        var gate = !Rule(reason) && status is StatusCodes.Status401Unauthorized or StatusCodes.Status403Forbidden;
-        if (PostWrites.WantsJson(Request))
-        {
-            if (gate) return PostWrites.Gated(reason);
-            return Rule(reason)
-                ? new Problem(status, "Not yours to change", reason, reason).ToResult()
-                : new Problem(status, "Not changed", reason).ToResult();
-        }
+        if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
 
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(place.Gate(Bit.View));
+        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
         var page = await Page(place, personId, null, null, ct);
-        if (page.Gate is null) page = page with { Failure = gate ? PostWrites.Sentence(reason) : reason };
-        return new ObjectResult(page) { StatusCode = status };
+        if (page.Gate is null) page = page with { Failure = reason.Text };
+        return new ObjectResult(page) { StatusCode = PostWrites.Status(reason) };
     }
-
-    /// <summary>The status a refusal answers with: <c>404</c> for someone who never arrived, <c>409</c> for a change their
-    /// standing does not take, <c>400</c> for what was sent, <c>403</c> for the rule of who changes whom, and a gate's own
-    /// otherwise.</summary>
-    private static int Status(string reason) => reason switch
-    {
-        People.NoOne => StatusCodes.Status404NotFound,
-        Participant.NotAdmitted or Participant.BannedFirst => StatusCodes.Status409Conflict,
-        People.NotADuration or People.NotARole or Participant.TimeoutEnds => StatusCodes.Status400BadRequest,
-        _ when Rule(reason) => StatusCodes.Status403Forbidden,
-        _ => PostWrites.Status(reason)
-    };
-
-    /// <summary>Whether a refusal is the rule of who changes whose standing and roles, rather than a missing verb.</summary>
-    private static bool Rule(string reason) => reason is People.Themselves or People.Operator or People.NotBelow or People.NotHeld or People.NotManaged;
 
     private async Task<PeoplePage> Page(Capabilities place, string? personId, string? start, People.Cursor? cursor, CancellationToken ct)
     {
@@ -206,7 +163,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, WriteLoop writer, R
         var narrowed = start is null ? "" : HandleQuery + "=" + Uri.EscapeDataString(start);
         var here = baseUrl.PathBase + Path + Query(narrowed, cursor is null ? "" : After + "=" + Uri.EscapeDataString(cursor.Seal(protection)));
         var people = baseAddress + Path;
-        var gate = ReadGate(place);
+        var gate = ReadGate(place)?.Word;
         var read = gate is null ? await People.Read(start, cursor, ct) : new People.Page([], null);
         var lister = await Lister.Load(roles, place, personId, baseAddress, ct);
         var listed = new List<PeoplePage.Listed>(read.Participants.Count);
@@ -232,7 +189,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, WriteLoop writer, R
     /// <summary>Why the reader of <paramref name="place"/> may not read the people: null where they hold
     /// <see cref="Bit.ManageStanding"/> or <see cref="Bit.ManageRoles"/>, the gate of <see cref="Bit.ManageStanding"/>
     /// otherwise.</summary>
-    public static string? ReadGate(Capabilities place)
+    public static Reason? ReadGate(Capabilities place)
         => place.Holds(Bit.ManageStanding) || place.Holds(Bit.ManageRoles) ? null : place.Gate(Bit.ManageStanding);
 
     /// <summary>The forms of the changes the reader of <paramref name="place"/> may make, under

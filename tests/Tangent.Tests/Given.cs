@@ -1,10 +1,10 @@
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
 using Tangent.Tangents;
-using Tangent.Writer;
 using Xunit;
 
 namespace Tangent;
@@ -20,36 +20,36 @@ public static class Given
     public static async Task<TangentSpace> AnEstablishedTangentSpace(TangentSpaceFixture tangentSpace, string name = "Tangent Space",
         Audience audience = Audience.Public, Admission admission = Admission.Join, CancellationToken ct = default)
     {
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         var space = new TangentSpace { Name = name, Audience = audience, Admission = admission };
-        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new Store<TangentSpace>(space), ct));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(ct));
         return space;
     }
 
     public static async Task<Tangents.Tangent> ATangent(TangentSpaceFixture tangentSpace, string slug,
         Audience audience = Audience.Public, CancellationToken ct = default)
     {
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         var tangent = Tangents.Tangent.Create(slug, slug, "", PostKind.Topic, 1);
         await Overwrites.SetAudience(tangentSpace.Services.GetRequiredService<RoleCollection>(), slug, audience, ct);
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(new Store<Tangents.Tangent>(tangent), ct));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new Store<Tangents.Tangent>(tangent).Send(ct));
         return tangent;
     }
 
     public static async Task<Participant> AParticipant(TangentSpaceFixture tangentSpace, string id, IReadOnlyList<string> roles,
         Standing standing = Standing.Admitted, CancellationToken ct = default)
     {
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         var participant = new Participant { Id = id, Handle = id + ".example", Standing = standing };
-        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new Store<Participant>(participant), ct));
+        Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(participant).Send(ct));
         var collection = tangentSpace.Services.GetRequiredService<RoleCollection>();
         foreach (var role in roles) await collection.Add(role, id, ct);
         return participant;
     }
 
     /// <summary>A participant who was at the door before anything the log holds, so everything in it is new to them and
-    /// their door is not their first.</summary>
+    /// their door is not their first. A first door their sign-in opened tries its checkpoint beside its answer, so that has
+    /// landed first and cannot overtake this one.</summary>
     public static async Task BeenAtTheDoor(TangentSpaceFixture tangentSpace, string id, CancellationToken ct = default)
-        => Assert.IsType<Outcome<Events.Checkpoint>.Done>(await tangentSpace.Services.GetRequiredService<WriteLoop>()
-            .Send(new Store<Events.Checkpoint>(Events.Checkpoint.At(id, Events.Scope.Place, 0)), ct));
+    {
+        Assert.True(await tangentSpace.Settled(ct));
+        Assert.IsType<Outcome<Events.Checkpoint>.Done>(await new Store<Events.Checkpoint>(Events.Checkpoint.At(id, Events.Scope.Place, 0)).Send(ct));
+    }
 }

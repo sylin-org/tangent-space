@@ -34,7 +34,7 @@ public sealed class ExportController(KoanWebBaseUrl baseUrl, IDataProtectionProv
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(place.Gate(Bit.View));
+        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
 
         ViewableTangents.Cursor? cursor = null;
         if (after is not null && (cursor = ViewableTangents.Cursor.Open(after, protection)) is null)
@@ -45,7 +45,7 @@ public sealed class ExportController(KoanWebBaseUrl baseUrl, IDataProtectionProv
         var address = baseAddress + Path;
         var here = baseUrl.PathBase + Path;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
-        var gate = place.Gate(Bit.ManageSpace);
+        var gate = place.Gate(Bit.ManageSpace)?.Word;
         var page = gate is null ? await ViewableTangents.Read(personId, ViewableTangents.Views, cursor, TangentsController.PageSize, ct) : null;
         var resource = new ExportSettingsPage(
             TangentSpaceSettingsController.Sections(place, baseAddress, TangentSpaceSettingsController.ExportSection),
@@ -76,8 +76,8 @@ public sealed class ExportController(KoanWebBaseUrl baseUrl, IDataProtectionProv
     {
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(place.Gate(Bit.View));
-        if (place.Gate(Bit.ManageSpace) is { } gate) return PostWrites.Gated(gate);
+        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
+        if (place.Gate(Bit.ManageSpace) is { } gate) return PostWrites.Refused(HttpContext, gate);
 
         Tangents.Tangent? only = null;
         if (slug is not null)

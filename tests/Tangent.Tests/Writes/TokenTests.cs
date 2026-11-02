@@ -13,8 +13,8 @@ public sealed class TokenTests
     public async Task A_session_post_without_its_form_token_is_refused_and_writes_nothing_and_a_delegates_bearer_post_without_one_writes_as_the_person()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var root = await Started(writer, Ada, "Lanterns", "How do you hang yours?");
+        await Place(tangentSpace);
+        var root = await Started(Ada, "Lanterns", "How do you hang yours?");
         using var ada = await SignedIn(tangentSpace, Ada);
         var before = await Counted();
         const string form = "/t/" + Workshop + "/new";

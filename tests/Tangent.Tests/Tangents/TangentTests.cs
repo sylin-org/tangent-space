@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
@@ -8,7 +9,6 @@ using Tangent.Events;
 using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
-using Tangent.Writer;
 using Xunit;
 
 namespace Tangent.Tangents;
@@ -33,13 +33,12 @@ public sealed class TangentTests(ITestOutputHelper output)
     public async Task A_tangent_created_by_command_exists_with_its_slug_as_key_and_appends_tangent_changed_carrying_its_audience()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         await Given.AParticipant(tangentSpace, "leo", [Roles.Administrator], ct: Cancellation);
         var announced = new List<Committed>();
-        writer.Committed += announced.Add;
+        tangentSpace.Commits.Landed += announced.Add;
         var at = new DateTimeOffset(2026, 10, 29, 12, 0, 0, TimeSpan.Zero);
 
-        var outcome = await writer.Send(new CreateTangent("the-workshop", "The workshop", "Where things get made", PostKind.Topic, 2, Audience.Private, "leo", at), Cancellation);
+        var outcome = await new CreateTangent("the-workshop", "The workshop", "Where things get made", PostKind.Topic, 2, Audience.Private, "leo", at).Send(Cancellation);
 
         var tangent = Assert.IsType<Outcome<Tangent>.Done>(outcome).Result;
         Assert.Equal("the-workshop", tangent.Id);
@@ -64,15 +63,14 @@ public sealed class TangentTests(ITestOutputHelper output)
     public async Task The_same_slug_with_the_same_fields_answers_with_the_existing_tangent_and_different_fields_are_a_conflict()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         await Given.AParticipant(tangentSpace, "leo", [Roles.Administrator], ct: Cancellation);
 
-        var first = Assert.IsType<Outcome<Tangent>.Done>(await writer.Send(new CreateTangent("articles", "Articles", "", PostKind.Article, 1, Audience.Public, "leo"), Cancellation)).Result;
-        var again = await writer.Send(new CreateTangent("articles", "Articles", "", PostKind.Article, 1, Audience.Public, "leo"), Cancellation);
-        var differs = await writer.Send(new CreateTangent("articles", "Articles", "", PostKind.Article, 1, Audience.Private, "leo"), Cancellation);
+        var first = Assert.IsType<Outcome<Tangent>.Done>(await new CreateTangent("articles", "Articles", "", PostKind.Article, 1, Audience.Public, "leo").Send(Cancellation)).Result;
+        var again = await new CreateTangent("articles", "Articles", "", PostKind.Article, 1, Audience.Public, "leo").Send(Cancellation);
+        var differs = await new CreateTangent("articles", "Articles", "", PostKind.Article, 1, Audience.Private, "leo").Send(Cancellation);
 
         Assert.Equal(first.Id, Assert.IsType<Outcome<Tangent>.Done>(again).Result.Id);
-        Assert.Contains("'articles'", Assert.IsType<Outcome<Tangent>.Conflict>(differs).Reason);
+        Assert.Contains("'articles'", Assert.IsType<Outcome<Tangent>.Refused>(differs).Reason.Text);
         Assert.Equal(1, await Event.Count.Exact(Cancellation));
         Assert.Equal(1, await Tangent.Count.Exact(Cancellation));
     }
@@ -81,10 +79,9 @@ public sealed class TangentTests(ITestOutputHelper output)
     public async Task A_slug_that_is_not_a_slug_is_refused_and_nothing_is_written()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         await Given.AParticipant(tangentSpace, "leo", [Roles.Administrator], ct: Cancellation);
 
-        var refused = await writer.Send(new CreateTangent("The Workshop", "The workshop", "", PostKind.Topic, 1, Audience.Public, "leo"), Cancellation);
+        var refused = await new CreateTangent("The Workshop", "The workshop", "", PostKind.Topic, 1, Audience.Public, "leo").Send(Cancellation);
 
         Assert.Equal(Tangent.NeedsSlug, Assert.IsType<Outcome<Tangent>.Refused>(refused).Reason);
         Assert.Equal(0, await Tangent.Count.Exact(Cancellation));
@@ -97,10 +94,9 @@ public sealed class TangentTests(ITestOutputHelper output)
     /// that does not name it, both as a visitor and as a member the audience excludes. A page reads the Tangent's row
     /// before its overwrites, so a reader who finds the row reads a deny that was written before it.</summary>
     [Fact]
-    public async Task A_private_tangent_created_through_the_writer_is_absent_to_a_visitor_and_a_non_member_at_every_instant_of_its_creation()
+    public async Task A_private_tangent_created_by_command_is_absent_to_a_visitor_and_a_non_member_at_every_instant_of_its_creation()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         await Given.AnEstablishedTangentSpace(tangentSpace, ct: Cancellation);
         await Given.AParticipant(tangentSpace, "leo", [Roles.Administrator], ct: Cancellation);
         await Given.AParticipant(tangentSpace, Reader, [Roles.Member], ct: Cancellation);
@@ -127,15 +123,10 @@ public sealed class TangentTests(ITestOutputHelper output)
             while (!stop.IsCancellationRequested) await Read("all along");
         }, Cancellation);
 
-        (Audience? Audience, Tangent? Row) between = default;
-        var created = await writer.Send(new Between<Tangent>(
+        var created = await new BeforeItsCommit<Tangent>(
             new CreateTangent("studio", "The studio", "Behind the door.", PostKind.Topic, 2, Audience.Private, "leo"),
-            async ct =>
-            {
-                between = (await Overwrites.AudienceOf("studio", ct), await Tangent.Get("studio", ct));
-                await Read("between");
-            }), Cancellation);
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), "studio", "Behind the door", "Not for everyone.", "leo"), Cancellation));
+            () => Read("between")).Send(Cancellation);
+        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "studio", "Behind the door", "Not for everyone.", "leo").Send(Cancellation));
         await Read("after");
         await stop.CancelAsync();
         await asking;
@@ -143,14 +134,13 @@ public sealed class TangentTests(ITestOutputHelper output)
         var alongside = answers.Count(answer => answer.When == "all along");
         output.WriteLine($"Answers: {answers.Count}, of which {alongside} from the reader asking all along.");
         Assert.IsType<Outcome<Tangent>.Done>(created);
-        Assert.Equal<(Audience?, Tangent?)>((Audience.Private, null), between);
         Assert.Equal(6, answers.Count(answer => answer.When == "between"));
         Assert.Equal(6, answers.Count(answer => answer.When == "after"));
         Assert.All(answers.Where(answer => answer.Path != "/"), answer =>
         {
             Assert.Equal(HttpStatusCode.NotFound, answer.Status);
             using var problem = JsonDocument.Parse(answer.Body);
-            Assert.Equal(Capabilities.Absent, problem.RootElement.GetProperty("gate").GetString());
+            Assert.Equal(Capabilities.Absent.Text, problem.RootElement.GetProperty("gate").GetString());
         });
         Assert.All(answers.Where(answer => answer.Path == "/"), answer =>
         {
@@ -159,58 +149,31 @@ public sealed class TangentTests(ITestOutputHelper output)
         });
     }
 
-    /// <summary>A create whose audience is not what Koan's rows state when its transaction runs is refused and leaves no
-    /// Tangent: here the actor gains ManageSpace between the step that would have written the audience and the
-    /// transaction, with no audience on the slug and then with an orphan of the other audience. A create that writes its
-    /// own audience replaces an orphan of the other one, and the Tangent is what it asked for.</summary>
+    /// <summary>A create writes its own audience over any orphan of the other one, and the Tangent is what it asked for.</summary>
     [Fact]
-    public async Task A_create_whose_audience_is_not_in_place_is_refused_and_an_orphan_audience_is_replaced_by_the_one_asked_for()
+    public async Task A_create_replaces_an_orphan_audience_with_the_one_asked_for()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
         await Given.AnEstablishedTangentSpace(tangentSpace, ct: Cancellation);
         await Given.AParticipant(tangentSpace, "leo", [Roles.Administrator], ct: Cancellation);
-        await Given.AParticipant(tangentSpace, "ada", [Roles.Member], ct: Cancellation);
-        await Given.AParticipant(tangentSpace, "bo", [Roles.Member], ct: Cancellation);
-        await Overwrites.SetAudience(roles, "corner", Audience.Public, Cancellation);
         await Overwrites.SetAudience(roles, "den", Audience.Public, Cancellation);
 
-        var unwritten = await writer.Send(new Between<Tangent>(
-            new CreateTangent("studio", "The studio", "", PostKind.Topic, 2, Audience.Private, "ada"),
-            ct => roles.Add(Roles.Administrator, "ada", ct)), Cancellation);
-        var orphaned = await writer.Send(new Between<Tangent>(
-            new CreateTangent("corner", "The corner", "", PostKind.Topic, 3, Audience.Private, "bo"),
-            ct => roles.Add(Roles.Administrator, "bo", ct)), Cancellation);
-        var replaced = await writer.Send(new CreateTangent("den", "The den", "", PostKind.Topic, 4, Audience.Private, "leo"), Cancellation);
+        var replaced = await new CreateTangent("den", "The den", "", PostKind.Topic, 4, Audience.Private, "leo").Send(Cancellation);
 
-        Assert.Equal(CreateTangent.NoAudience, Assert.IsType<Outcome<Tangent>.Refused>(unwritten).Reason);
-        Assert.Equal(CreateTangent.NoAudience, Assert.IsType<Outcome<Tangent>.Refused>(orphaned).Reason);
         Assert.Equal("den", Assert.IsType<Outcome<Tangent>.Done>(replaced).Result.Id);
-        Assert.Equal(["den"], (await Tangent.All(Cancellation)).Select(tangent => tangent.Id).ToList());
-        Assert.Equal(1, await Event.Count.Exact(Cancellation));
-        Assert.Equal((null, Audience.Public, Audience.Private), (await Overwrites.AudienceOf("studio", Cancellation),
-            await Overwrites.AudienceOf("corner", Cancellation), await Overwrites.AudienceOf("den", Cancellation)));
-        foreach (var slug in new[] { "studio", "corner", "den" })
-        {
-            using var request = new HttpRequestMessage(HttpMethod.Get, "/t/" + slug);
-            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            using var response = await tangentSpace.Client.SendAsync(request, Cancellation);
-            using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Cancellation));
-            Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent), (response.StatusCode, problem.RootElement.GetProperty("gate").GetString()));
-        }
+        Assert.Equal(Audience.Private, await Overwrites.AudienceOf("den", Cancellation));
     }
 
     [Fact]
     public async Task A_create_refused_for_its_fields_writes_no_audience()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
         await Given.AParticipant(tangentSpace, "leo", [Roles.Administrator], ct: Cancellation);
 
-        var blank = await writer.Send(new CreateTangent("s1", " ", "", PostKind.Topic, 1, Audience.Private, "leo"), Cancellation);
-        var long_ = await writer.Send(new CreateTangent("s2", "Two", new string('d', 1001), PostKind.Topic, 2, Audience.Private, "leo"), Cancellation);
+        var blank = await new CreateTangent("s1", " ", "", PostKind.Topic, 1, Audience.Private, "leo").Send(Cancellation);
+        var long_ = await new CreateTangent("s2", "Two", new string('d', 1001), PostKind.Topic, 2, Audience.Private, "leo").Send(Cancellation);
 
         Assert.Equal(Tangent.NeedsName, Assert.IsType<Outcome<Tangent>.Refused>(blank).Reason);
         Assert.Equal(Tangent.DescriptionTooLong, Assert.IsType<Outcome<Tangent>.Refused>(long_).Reason);
@@ -218,16 +181,14 @@ public sealed class TangentTests(ITestOutputHelper output)
         Assert.Empty((await roles.Overwrites(Overwrites.Resource("s2"), ct: Cancellation)).Items);
     }
 
-    /// <summary>Runs <paramref name="Command"/>, with <paramref name="Probe"/> between its step outside the transaction
-    /// and the transaction itself: the instant after what it writes first and before its commit.</summary>
-    private sealed record Between<T>(ICommand<T> Command, Func<CancellationToken, Task> Probe) : ICommand<T>
+    /// <summary>Runs <paramref name="Command"/>, then <paramref name="Probe"/> in the instant before its commit.</summary>
+    private sealed record BeforeItsCommit<T>(ICommand<T> Command, Func<Task> Probe) : ICommand<T>
     {
-        public async Task Prepare(CancellationToken ct)
+        public async Task<Outcome<T>> Run(CancellationToken ct)
         {
-            await Command.Prepare(ct);
-            await Probe(ct);
+            var outcome = await Command.Run(ct);
+            await Probe();
+            return outcome;
         }
-
-        public Task<Outcome<T>> Run(Sequences sequences, CancellationToken ct) => Command.Run(sequences, ct);
     }
 }

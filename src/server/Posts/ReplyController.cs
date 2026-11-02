@@ -1,8 +1,8 @@
+using Koan.Data.Core.Commands;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
 using Tangent.Render;
-using Tangent.Writer;
 
 namespace Tangent.Posts;
 
@@ -12,7 +12,7 @@ namespace Tangent.Posts;
 /// (<see cref="PostWrites.Locate"/>) before anything is judged of what was sent, so a Topic the sender may not see and
 /// one no slug names answer alike. A form is sent on to the reply's address, a JSON request reads the Post
 /// (<c>201</c>); a refusal is a problem with the gate, and the same id with other words is a conflict.</summary>
-public sealed class ReplyController(KoanWebBaseUrl baseUrl, WriteLoop writer) : ControllerBase
+public sealed class ReplyController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
     [HttpPost("/t/{tangent}/{topic}")]
     [RequestSizeLimit(PostWrites.RequestLimit)]
@@ -21,27 +21,20 @@ public sealed class ReplyController(KoanWebBaseUrl baseUrl, WriteLoop writer) : 
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
-        var (found, unseen) = await PostWrites.Locate(personId, tangent, topic, null, ct);
+        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, topic, null, ct);
         if (found is null) return unseen!;
         var root = found.Root!;
         if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
 
-        var outcome = await writer.Send(new Reply(
+        var outcome = await new Reply(
             fields.GetValueOrDefault(PostWrites.IdField) ?? "",
             root.Id,
-            await PostWrites.Body(fields, found.Rows.For(root).Holds(Bit.Post), ct),
+            await PostWrites.Body(fields, found.Rows.For(root).Holds(Bit.Post)),
             personId ?? "",
-            fields.GetValueOrDefault(PostWrites.ParentField) is { Length: > 0 } parent ? parent : null), ct);
-        return outcome switch
-        {
-            Outcome<Post>.Done { Result: var reply } => await PostWrites.Written(HttpContext, reply, root,
-                PostWrites.Address(BaseAddress(), root.TangentId, root.Slug ?? root.Id, reply.Id), personId, created: true, ct),
-            Outcome<Post>.Refused { Reason: Reply.NoTopic } => PostWrites.Absent(),
-            Outcome<Post>.Refused { Reason: var reason } => PostWrites.Refused(reason),
-            Outcome<Post>.Conflict { Reason: var reason } => PostWrites.Conflicting(reason),
-            Outcome<Post>.Failed { Cause: var cause } => throw new InvalidOperationException($"Replying in {tangent}/{topic} failed.", cause),
-            _ => throw new InvalidOperationException($"The writer answered {outcome} for a reply in {tangent}/{topic}.")
-        };
+            fields.GetValueOrDefault(PostWrites.ParentField) is { Length: > 0 } parent ? parent : null).Send();
+        return outcome is Outcome<Post>.Done { Result: var reply }
+            ? await PostWrites.Written(HttpContext, reply, root, PostWrites.Address(BaseAddress(), root.TangentId, root.Slug ?? root.Id, reply.Id), personId, created: true, ct)
+            : PostWrites.Answer(HttpContext, outcome);
     }
 
     private string BaseAddress() => baseUrl.Resolve(HttpContext);

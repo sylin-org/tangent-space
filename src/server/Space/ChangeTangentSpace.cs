@@ -1,8 +1,8 @@
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Tangent.Access;
 using Tangent.Events;
 using Tangent.Posts;
-using Tangent.Writer;
 
 namespace Tangent.Space;
 
@@ -26,9 +26,9 @@ public sealed record ChangeTangentSpace(
     DateTimeOffset? At = null) : ICommand<TangentSpace>
 {
     /// <summary>The answer to an actor for whom the place does not exist.</summary>
-    public const string NoPlace = "No Tangent Space is here.";
+    public static readonly Reason NoPlace = Reason.Absent("No Tangent Space is here.");
 
-    public async Task<Outcome<TangentSpace>> Run(Sequences sequences, CancellationToken ct)
+    public async Task<Outcome<TangentSpace>> Run(CancellationToken ct)
     {
         if (await TangentSpace.Get(TangentSpace.SingleRow, ct) is not { } space) return new Outcome<TangentSpace>.Refused(NoPlace);
         var capabilities = await Capabilities.Load(ActorId, null, null, ct);
@@ -41,7 +41,7 @@ public sealed record ChangeTangentSpace(
             return new Outcome<TangentSpace>.Done(space);
         await space.Save(ct);
         await MediaUse.Record(before, space.Slots, ActorId, ct);
-        await Event.Next(sequences, EventKind.SpaceChanged, At ?? DateTimeOffset.UtcNow, actorId: ActorId).Save(ct);
+        await Event.Append(EventKind.SpaceChanged, At ?? DateTimeOffset.UtcNow, ct, actorId: ActorId);
         return new Outcome<TangentSpace>.Done(space);
     }
 }

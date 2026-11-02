@@ -1,8 +1,8 @@
 using Koan.Data.Abstractions;
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Tangent.Events;
 using Tangent.Space;
-using Tangent.Writer;
 
 namespace Tangent.Offers;
 
@@ -22,7 +22,7 @@ public sealed record MakeOffer(string Origin, DateTimeOffset? At = null) : IComm
 
     public const string OneOpen = "An offer of an address is already open.";
 
-    public async Task<Outcome<Offer>> Run(Sequences sequences, CancellationToken ct)
+    public async Task<Outcome<Offer>> Run(CancellationToken ct)
     {
         if (await TangentSpace.Get(TangentSpace.SingleRow, ct) is not { OperatorId: { } operatorId } space)
             return new Outcome<Offer>.Refused(NoPlace);
@@ -36,7 +36,7 @@ public sealed record MakeOffer(string Origin, DateTimeOffset? At = null) : IComm
         var at = At ?? DateTimeOffset.UtcNow;
         var made = Offer.Make(OfferKind.Address, Origin, operatorId, at);
         await made.Save(ct);
-        await Event.Next(sequences, EventKind.OfferMade, at, targetId: operatorId, offerId: made.Id).Save(ct);
+        await Event.Append(EventKind.OfferMade, at, ct, targetId: operatorId, offerId: made.Id);
         return new Outcome<Offer>.Done(made);
     }
 }

@@ -61,9 +61,9 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
         var inTangent = await Tangents.Tangent.Get(tangent, ct);
         var rows = await Capabilities.LoadRows(personId, inTangent?.Id, ct);
         var place = rows.For(null);
-        if (!place.Exists) return Gated(place.Gate(Bit.View) ?? Capabilities.Absent);
-        if (inTangent is not { } tangentRow) return Gated(Capabilities.Absent);
-        if (!Slug.IsValid(topic)) return Gated(Capabilities.Absent);
+        if (!place.Exists) return DoorController.Gated(HttpContext, place.Gate(Bit.View) ?? Capabilities.Absent);
+        if (inTangent is not { } tangentRow) return DoorController.Gated(HttpContext, Capabilities.Absent);
+        if (!Slug.IsValid(topic)) return DoorController.Gated(HttpContext, Capabilities.Absent);
         if (await TopicWindow.Topic(tangentRow.Id, topic, ct) is not { } root)
         {
             // A segment no Topic's slug names, in a TID's shape, is the TID of a Topic's root: it answers a redirect to
@@ -71,13 +71,13 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
             // A slug is read first, so a slug that looks like a TID names its own Topic.
             if (postId is null && Tid.IsValid(topic) && await Post.Get(topic, ct) is { ParentId: null } started && started.TangentId == tangentRow.Id)
                 return Redirect(BaseAddress() + "/t/" + Uri.EscapeDataString(tangentRow.Id) + "/" + Uri.EscapeDataString(started.Slug ?? started.Id));
-            return Gated(Capabilities.Absent);
+            return DoorController.Gated(HttpContext, Capabilities.Absent);
         }
 
         Post? anchor = null;
         if (postId is not null)
         {
-            if (!Tid.IsValid(postId) || await Post.Get(postId, ct) is not { } found || found.TopicId != root.Id) return Gated(Capabilities.Absent);
+            if (!Tid.IsValid(postId) || await Post.Get(postId, ct) is not { } found || found.TopicId != root.Id) return DoorController.Gated(HttpContext, Capabilities.Absent);
             anchor = found;
         }
 
@@ -130,7 +130,7 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
             root.Pinned,
             root.ReplyCount,
             topicCan.Can,
-            topicCan.Gate(Bit.Post),
+            topicCan.Gate(Bit.Post)?.Word,
             token is not null && topicCan.Gate(Bit.Post) is null ? PostWrites.ReplyForm(address, Answered(anchor, reader), token) : null,
             token is not null && continues && shownThrough > seenSeq ? CheckpointController.SeenForm(address, shownThrough, token) : null,
             token is null ? null : CheckpointController.WatchingOf(address, seen?.Watch ?? false, token),
@@ -207,21 +207,6 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
 
     private static IActionResult NotAWindow(string detail)
         => new Problem(StatusCodes.Status400BadRequest, "Not a window of this Topic", detail).ToResult();
-
-    /// <summary>What a reader without <see cref="Bit.View"/> receives: a missing resource's answer where the Tangent
-    /// is absent to them, the same for every address under <c>/t/</c> whether anything is there or not; otherwise the
-    /// one step that stands between them and reading.</summary>
-    private static IActionResult Gated(string gate) => gate switch
-    {
-        Capabilities.Absent => new Problem(StatusCodes.Status404NotFound, "Not found", "Nothing answers at this address.", gate).ToResult(),
-        Capabilities.SignIn => new Problem(StatusCodes.Status401Unauthorized, "Sign in to read",
-            "This Tangent Space is read by its participants.", gate).ToResult(),
-        Capabilities.Apply => new Problem(StatusCodes.Status403Forbidden, "Waiting to be admitted",
-            "Your application is waiting: you can read here once someone admits you.", gate).ToResult(),
-        Capabilities.Declined => new Problem(StatusCodes.Status403Forbidden, "Not admitted",
-            "Your application was declined, so this Tangent Space is not open to you.", gate).ToResult(),
-        _ => new Problem(StatusCodes.Status403Forbidden, "Not readable", "This Tangent is not open to you.", gate).ToResult()
-    };
 
     public static TangentPage.Author Person(IReadOnlyDictionary<string, TangentPage.Author> people, string id)
         => people.TryGetValue(id, out var person) ? person : new TangentPage.Author(id, id, id, "person", null);

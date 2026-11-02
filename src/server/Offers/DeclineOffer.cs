@@ -1,5 +1,5 @@
 using Koan.Data.Core;
-using Tangent.Writer;
+using Koan.Data.Core.Commands;
 
 namespace Tangent.Offers;
 
@@ -7,7 +7,7 @@ namespace Tangent.Offers;
 /// the moment it runs: the poster is still the place's operator (<see cref="Decision"/>) and the Offer is open.</summary>
 public sealed record DeclineOffer(string OfferId, string PosterId, DateTimeOffset? At = null) : ICommand<Offer>
 {
-    public async Task<Outcome<Offer>> Run(Sequences sequences, CancellationToken ct)
+    public async Task<Outcome<Offer>> Run(CancellationToken ct)
     {
         var (offer, _) = await Decision.Load(OfferId, PosterId, ct);
         if (offer is null) return new Outcome<Offer>.Refused(Decision.NoOffer);

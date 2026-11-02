@@ -1,9 +1,8 @@
 using Koan.Core.Hosting.App;
-using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Tangent.Access;
 using Tangent.Events;
-using Tangent.Writer;
 
 namespace Tangent.Participants;
 
@@ -12,58 +11,27 @@ namespace Tangent.Participants;
 /// <see cref="Bit.ManageRoles"/>; the role is one given here, or the command is refused with
 /// <see cref="People.NotARole"/>; the actor manages it (<see cref="People.Manages"/>), or is refused with
 /// <see cref="People.NotManaged"/>; the actor holds every permission it grants, or is refused with
-/// <see cref="People.NotHeld"/>. Koan's role write is not part of a transaction, so <see cref="Prepare"/> judges the change
-/// and makes it before the transaction opens, and <see cref="Run"/>, in the same turn of the loop, keeps that judgement and
-/// appends one <see cref="EventKind.RoleChanged"/> with the actor, the participant as its target, the role and whether it
-/// was given, so their door tells them; a role already as asked writes nothing.</summary>
+/// <see cref="People.NotHeld"/>. The change appends one <see cref="EventKind.RoleChanged"/> with the actor, the
+/// participant as its target, the role and whether it was given, so their door tells them; a role already as asked writes
+/// nothing.</summary>
 public sealed record ChangeRole(string ActorId, string ParticipantId, string Role, bool Give, DateTimeOffset? At = null) : ICommand<Participant>
 {
-    /// <summary>Whether <see cref="Prepare"/> judged the change allowed; <see cref="Run"/> keeps that judgement, since
-    /// the change it made can move the participant to where the actor stands.</summary>
-    private bool _judged;
-
-    /// <summary>Whether <see cref="Prepare"/> gave or took the role, which <see cref="Run"/> records.</summary>
-    private bool _changed;
-
-    public async Task Prepare(CancellationToken ct)
+    public async Task<Outcome<Participant>> Run(CancellationToken ct)
     {
-        if (await Judge(ct) is not { Refusal: null, Bag: { } bag }) return;
-        _judged = true;
-        if (bag.InRole(Role) == Give) return;
+        var now = At ?? DateTimeOffset.UtcNow;
+        var judged = await People.Judge(ActorId, ParticipantId, Bit.ManageRoles, now, ct);
+        if (judged.Refusal is { } refusal) return new Outcome<Participant>.Refused(refusal);
+        if (!Roles.Given(Role)) return new Outcome<Participant>.Refused(People.NotARole);
         var roles = AppHost.GetRequiredService<RoleCollection>(nameof(ChangeRole));
-        if (Give) await roles.Add(Role, ParticipantId, ct);
-        else await roles.Remove(Role, ParticipantId, ct);
-        _changed = true;
-    }
+        if (await roles.Get(Role, ct) is not { } role) return new Outcome<Participant>.Refused(People.NotARole);
+        if (!People.Manages(judged.Actor!, ActorId, judged.Space!, role)) return new Outcome<Participant>.Refused(People.NotManaged);
+        if (People.Holding(judged.Actor!, role) is { } notHeld) return new Outcome<Participant>.Refused(notHeld);
 
-    public async Task<Outcome<Participant>> Run(Sequences sequences, CancellationToken ct)
-    {
-        if (!_judged)
-        {
-            var judged = await Judge(ct);
-            return judged.Refusal is { } refusal ? new Outcome<Participant>.Refused(refusal) : new Outcome<Participant>.Done(judged.Target!);
-        }
-
-        if (await Participant.Get(ParticipantId, ct) is not { } target) return new Outcome<Participant>.Refused(People.NoOne);
-        if (_changed)
-        {
-            await Event.Next(sequences, EventKind.RoleChanged, At ?? DateTimeOffset.UtcNow, actorId: ActorId, targetId: target.Id,
-                role: Role, given: Give).Save(ct);
-        }
-
+        var target = judged.Target!;
+        if (judged.Bag!.InRole(Role) == Give) return new Outcome<Participant>.Done(target);
+        if (Give) await roles.Add(Role, target.Id, ct);
+        else await roles.Remove(Role, target.Id, ct);
+        await Event.Append(EventKind.RoleChanged, now, ct, actorId: ActorId, targetId: target.Id, role: Role, given: Give);
         return new Outcome<Participant>.Done(target);
-    }
-
-    /// <summary>The judgement of <see cref="People.Judge"/>, then whether the role is one given here, whether the actor
-    /// manages it and whether they hold what it grants.</summary>
-    private async Task<People.Judged> Judge(CancellationToken ct)
-    {
-        var judged = await People.Judge(ActorId, ParticipantId, Bit.ManageRoles, At ?? DateTimeOffset.UtcNow, ct);
-        if (judged.Refusal is not null) return judged;
-        if (!Roles.Given(Role)) return judged with { Refusal = People.NotARole };
-        var role = await AppHost.GetRequiredService<RoleCollection>(nameof(ChangeRole)).Get(Role, ct);
-        if (role is null) return judged with { Refusal = People.NotARole };
-        if (!People.Manages(judged.Actor!, ActorId, judged.Space!, role)) return judged with { Refusal = People.NotManaged };
-        return People.Holding(judged.Actor!, role) is { } refusal ? judged with { Refusal = refusal } : judged;
     }
 }

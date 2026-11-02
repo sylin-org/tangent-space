@@ -1,10 +1,10 @@
+using Koan.Data.Core.Commands;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
 using Tangent.Render;
 using Tangent.Space;
 using Tangent.Tangents;
-using Tangent.Writer;
 
 namespace Tangent.Posts;
 
@@ -15,7 +15,7 @@ namespace Tangent.Posts;
 /// reason inline, or a problem with the gate; the same id with other words is a conflict. Both resolve the address as
 /// the Topic page does (<see cref="PostWrites.Locate"/>) before anything else is judged, so a Tangent the reader may not
 /// view and one no row has answer alike.</summary>
-public sealed class NewTopicController(KoanWebBaseUrl baseUrl, WriteLoop writer) : ControllerBase
+public sealed class NewTopicController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
     public const string Route = "/t/{tangent}/" + TangentPageController.NewTopicSegment;
 
@@ -24,7 +24,7 @@ public sealed class NewTopicController(KoanWebBaseUrl baseUrl, WriteLoop writer)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var (found, unseen) = await PostWrites.Locate(personId, tangent, null, null, ct);
+        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, null, null, ct);
         if (found is null) return unseen!;
         return Ok(await Page(found, personId, ct));
     }
@@ -36,54 +36,50 @@ public sealed class NewTopicController(KoanWebBaseUrl baseUrl, WriteLoop writer)
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
-        var (found, unseen) = await PostWrites.Locate(personId, tangent, null, null, ct);
+        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, null, null, ct);
         if (found is null) return unseen!;
         if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
 
         var kind = PostWrites.Kind(fields, out var kindValid);
         if (!kindValid) return await Refused(tangent, personId, fields, PostWrites.KindRule, ct);
-        var outcome = await writer.Send(new StartTopic(
+        var outcome = await new StartTopic(
             fields.GetValueOrDefault(PostWrites.IdField) ?? "",
             found.Tangent.Id,
             PostWrites.Title(fields) ?? "",
-            await PostWrites.Body(fields, found.Capabilities.Holds(Bit.Topic), ct),
+            await PostWrites.Body(fields, found.Capabilities.Holds(Bit.Topic)),
             personId ?? "",
             kind,
-            CoverId: fields.GetValueOrDefault(PostWrites.CoverField) is { Length: > 0 } cover ? cover : null), ct);
+            CoverId: fields.GetValueOrDefault(PostWrites.CoverField) is { Length: > 0 } cover ? cover : null).Send();
         switch (outcome)
         {
             case Outcome<Post>.Done { Result: var root }:
                 return await PostWrites.Written(HttpContext, root, root, PostWrites.Address(BaseAddress(), root.TangentId, root.Slug ?? root.Id, root.Id),
                     personId, created: true, ct);
-            case Outcome<Post>.Refused { Reason: StartTopic.NoTangent }:
-                return PostWrites.Absent();
-            case Outcome<Post>.Refused { Reason: var reason }:
+            case Outcome<Post>.Refused { Reason: { Kind: not (ReasonKind.Absent or ReasonKind.Conflict) } reason }:
                 return await Refused(tangent, personId, fields, reason, ct);
-            case Outcome<Post>.Conflict { Reason: var reason }:
-                if (PostWrites.WantsJson(Request)) return PostWrites.Conflicting(reason);
+            case Outcome<Post>.Refused { Reason: { Kind: ReasonKind.Conflict } reason }:
+                if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
                 return await Again(tangent, personId, fields, StatusCodes.Status409Conflict, keepId: false, page => page with
                 {
                     Failure = "This form was already sent with other words, so nothing was posted. Send it again to post these words as well."
                 }, ct);
-            case Outcome<Post>.Failed { Cause: var cause }:
-                throw new InvalidOperationException($"Starting a topic in {tangent} failed.", cause);
             default:
-                throw new InvalidOperationException($"The writer answered {outcome} for starting a topic in {tangent}.");
+                return PostWrites.Answer(HttpContext, outcome);
         }
     }
 
     /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the form again with the
-    /// reason where it belongs, and a new Id where the sent one is not available.</summary>
-    private async Task<IActionResult> Refused(string tangent, string? personId, IReadOnlyDictionary<string, string> fields, string reason,
+    /// reason where it belongs.</summary>
+    private async Task<IActionResult> Refused(string tangent, string? personId, IReadOnlyDictionary<string, string> fields, Reason reason,
         CancellationToken ct)
     {
-        if (PostWrites.WantsJson(Request)) return PostWrites.Refused(reason);
-        return await Again(tangent, personId, fields, PostWrites.Status(reason), keepId: reason != Post.IdTaken, page => PostWrites.Concerning(reason) switch
+        if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
+        return await Again(tangent, personId, fields, PostWrites.Status(reason), keepId: true, page => PostWrites.Concerning(reason) switch
         {
-            PostWrites.About.Title => page with { TitleFailure = reason },
-            PostWrites.About.Body => page with { BodyFailure = reason },
-            PostWrites.About.Sent => page with { Failure = reason },
-            _ => page with { Gate = reason, Start = null }
+            PostWrites.About.Title => page with { TitleFailure = reason.Text },
+            PostWrites.About.Body => page with { BodyFailure = reason.Text },
+            PostWrites.About.Sent => page with { Failure = reason.Text },
+            _ => page with { Gate = reason.Word, Start = null }
         }, ct);
     }
 
@@ -92,7 +88,7 @@ public sealed class NewTopicController(KoanWebBaseUrl baseUrl, WriteLoop writer)
     private async Task<IActionResult> Again(string tangent, string? personId, IReadOnlyDictionary<string, string> fields, int status, bool keepId,
         Func<NewTopicPage, NewTopicPage> refusal, CancellationToken ct)
     {
-        var (found, unseen) = await PostWrites.Locate(personId, tangent, null, null, ct);
+        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, null, null, ct);
         if (found is null) return unseen!;
         var page = await Page(found, personId, ct) with
         {
@@ -112,7 +108,7 @@ public sealed class NewTopicController(KoanWebBaseUrl baseUrl, WriteLoop writer)
         var address = PostWrites.TangentAddress(baseAddress, row.Id);
         var here = baseUrl.PathBase + "/t/" + row.Id + "/" + TangentPageController.NewTopicSegment;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
-        var gate = capabilities.Gate(Bit.Topic);
+        var gate = capabilities.Gate(Bit.Topic)?.Word;
         return new NewTopicPage(
             row.Id,
             row.Name,

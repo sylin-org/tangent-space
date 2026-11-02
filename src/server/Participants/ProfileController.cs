@@ -4,6 +4,7 @@ using Koan.Identity.Roles;
 using Koan.Web.Auth.Infrastructure;
 using Koan.Web.Auth.Server.Options;
 using Koan.Web.Hosting;
+using KoanPerson = Koan.Identity.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Tangent.Access;
@@ -12,7 +13,6 @@ using Tangent.Posts;
 using Tangent.Render;
 using Tangent.Space;
 using Tangent.Tangents;
-using KoanPerson = Koan.Identity.Identity;
 
 namespace Tangent.Participants;
 
@@ -49,7 +49,7 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
         var personId = PostWrites.PersonId(User);
         var rows = await Capabilities.LoadRows(personId, null, ct);
         var place = rows.For(null);
-        if (!place.Exists) return DoorController.Gated(place.Gate(Bit.View) ?? Capabilities.Absent);
+        if (!place.Exists) return DoorController.Gated(HttpContext, place.Gate(Bit.View) ?? Capabilities.Absent);
         if (await Holder(handle, ct) is not { } subject) return PostWrites.Absent();
 
         RecentPosts.Cursor? cursor = null;
@@ -120,7 +120,7 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
             person?.CreatedAt,
             address,
             place.Can,
-            place.Gate(Bit.Post),
+            place.Gate(Bit.Post)?.Word,
             page.Posts.Select(post => Written(post, roots, tangents, people, baseAddress)).ToList(),
             page.Next is { } next ? address + "?" + Before + "=" + Uri.EscapeDataString(next.ToString()) : null,
             cursor is not null,
@@ -146,8 +146,7 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
             return new Problem(StatusCodes.Status403Forbidden, "Only the person revokes",
                 "A request made with a bearer token can’t revoke an agent; the person signs in and revokes it on their profile.").ToResult();
         if (PostWrites.PersonId(User) is not { } personId)
-            return new Problem(StatusCodes.Status401Unauthorized, "Sign in first", "Revoking an agent needs the person who approved it, signed in.",
-                Capabilities.SignIn).ToResult();
+            return PostWrites.Refused(HttpContext, Capabilities.SignIn, "Revoking an agent needs the person who approved it, signed in.");
         if (!await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         if (await Holder(handle, ct) is not { } subject || subject.Id != personId) return PostWrites.Absent();
 
@@ -158,7 +157,7 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
     }
 
     /// <summary>The participant the address names: by Id where it is a DID; otherwise the one participant whose row keeps
-    /// the handle, as written or in lower case, as atproto writes handles. A handle has one holder: the writer records a
+    /// the handle, as written or in lower case, as atproto writes handles. A handle has one holder: the command records a
     /// verified handle and takes it from any other row in one command (<see cref="Handles.Release"/>), so one keyed read of
     /// one row answers.</summary>
     private static async Task<Participant?> Holder(string handle, CancellationToken ct)

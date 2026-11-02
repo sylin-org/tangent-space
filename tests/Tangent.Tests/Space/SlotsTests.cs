@@ -2,13 +2,13 @@ using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.RegularExpressions;
+using F = Tangent.Space.TangentSpaceSettingsController;
 using Tangent.Access;
 using Tangent.Events;
 using Tangent.Lifecycle;
 using Tangent.Participants;
 using Xunit;
 using static Tangent.Posts.Writing;
-using F = Tangent.Space.TangentSpaceSettingsController;
 
 namespace Tangent.Space;
 
@@ -56,12 +56,12 @@ public sealed class SlotsTests
     public async Task Whoever_holds_manage_space_writes_the_slots_as_a_form_or_as_json_and_every_page_for_every_reader_carries_them()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         using var leo = await SignedIn(tangentSpace, Leo);
         using var visitor = Agent(tangentSpace);
-        var topic = await Started(writer, Ada, "A plain topic", "Its words.");
-        var article = await Started(writer, Ada, "A long read", "Its words.", Articles);
+        var topic = await Started(Ada, "A plain topic", "Its words.");
+        var article = await Started(Ada, "A long read", "Its words.", Articles);
         var held = await Tagged(visitor, "/t/" + Workshop, null);
         var before = await Event.Count.Exact(Cancellation);
 
@@ -250,7 +250,7 @@ public sealed class SlotsTests
         await Place(tangentSpace);
         using var ada = await SignedIn(tangentSpace, Ada);
         using var visitor = Agent(tangentSpace);
-        var gate = Capabilities.NoRoleGrants(Bit.ManageSpace);
+        var gate = Capabilities.NoRoleGrants(Bit.ManageSpace).Word;
         var before = await Event.Count.Exact(Cancellation);
 
         var form = await Form(ada, "/t/" + Workshop, Path, All());
@@ -260,7 +260,7 @@ public sealed class SlotsTests
         var json = await Json(ada, "/t/" + Workshop, Path, new { footer = Footer });
         Assert.Equal((HttpStatusCode.Forbidden, gate), (json.Status, json.Gate));
         var posted = await Send(visitor, HttpMethod.Post, Path, JsonBody(new { footer = Footer }), json: true);
-        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn), (posted.Status, posted.Gate));
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (posted.Status, posted.Gate));
 
         Assert.Equal(new Slots(), await Held());
         Assert.Equal(before, await Event.Count.Exact(Cancellation));
@@ -270,11 +270,11 @@ public sealed class SlotsTests
     public async Task An_empty_slot_adds_nothing_to_a_page()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         using var leo = await SignedIn(tangentSpace, Leo);
         using var visitor = Agent(tangentSpace);
-        var article = await Started(writer, Ada, "A long read", "Its words.", Articles);
+        var article = await Started(Ada, "A long read", "Its words.", Articles);
         var door = Unpositioned((await Send(visitor, HttpMethod.Get, "/")).Body);
         var topic = Unpositioned((await Send(visitor, HttpMethod.Get, TopicPath(article))).Body);
         Assert.DoesNotContain("class=\"slot", door);
@@ -297,11 +297,11 @@ public sealed class SlotsTests
     public async Task An_export_and_an_archive_carry_the_slots_as_the_site_does()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         using var leo = await SignedIn(tangentSpace, Leo);
-        var article = await Started(writer, Ada, "A long read", "Its words.", Articles);
-        var topic = await Started(writer, Ada, "A plain topic", "Its words.");
+        var article = await Started(Ada, "A long read", "Its words.", Articles);
+        var topic = await Started(Ada, "A plain topic", "Its words.");
         Assert.Equal(HttpStatusCode.SeeOther, (await Form(leo, Path, Path, All())).Status);
 
         // A page standing alone names the place for what starts at its root, and is otherwise what the site says.

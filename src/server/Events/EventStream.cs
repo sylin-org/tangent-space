@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
-using Tangent.Writer;
+using Koan.Data.Core.Commands;
 
 namespace Tangent.Events;
 
@@ -9,9 +9,9 @@ namespace Tangent.Events;
 /// <see cref="Publish"/> queues an appended row of the log for every open stream at once and never waits: a stream
 /// whose queue already holds <see cref="QueueBound"/> rows is a slow reader, and it is closed — its queue completed and
 /// its request aborted — to resume from the last sequence it received. Who may see a row is each stream's to decide.
-/// <see cref="Head"/> is the log's last committed sequence: loaded once from the log, then raised by every commit of the
-/// writer as it lands, so a stream that begins at it begins after every row already committed.</summary>
-public sealed class EventStream
+/// <see cref="Head"/> is the log's last committed sequence: read once from the log, then raised by every command that
+/// commits a row of it, as it lands, so a stream that begins at it begins after every row already committed.</summary>
+public sealed class EventStream : ICommandWatcher
 {
     /// <summary>The most rows a stream's queue holds before the stream is closed as a slow reader.</summary>
     public const int QueueBound = 256;
@@ -28,12 +28,9 @@ public sealed class EventStream
     private int _inAll;
     private long _head = -1;
 
-    public EventStream(WriteLoop writer)
+    public void Committed(object command, IReadOnlyDictionary<Sequence, long> sequences)
     {
-        writer.Committed += committed =>
-        {
-            if (committed.Sequences.TryGetValue(Event.Log, out var through)) Raise(through);
-        };
+        if (sequences.TryGetValue(Event.Log, out var through)) Raise(through);
     }
 
     /// <summary>The log's last committed sequence, read from the log the first time it is asked.</summary>
@@ -41,7 +38,7 @@ public sealed class EventStream
     {
         var head = Volatile.Read(ref _head);
         if (head >= 0) return head;
-        Raise(await Event.HighWaterMark.Load(ct));
+        Raise(await Event.Log.Highest(ct));
         return Volatile.Read(ref _head);
     }
 

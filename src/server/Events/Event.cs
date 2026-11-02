@@ -1,22 +1,19 @@
 using System.Globalization;
 using Koan.Data.Abstractions.Annotations;
+using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Koan.Data.Core.Model;
 using Tangent.Space;
-using Tangent.Writer;
 
 namespace Tangent.Events;
 
-/// <summary>One row of the log: something happened, with a sequence number. Only the writer appends, inside the
-/// command that made the change; <see cref="Seq"/> comes from the log's high-water mark and the Id is that number,
-/// zero-padded so it sorts as it counts.</summary>
+/// <summary>One row of the log: something happened, with a sequence number. Only a command appends, inside its own
+/// hold; <see cref="Seq"/> comes from <see cref="Log"/> and the Id is that number, zero-padded so it sorts as it
+/// counts.</summary>
 public sealed class Event : Entity<Event>
 {
-    /// <summary>The name of the log's high-water mark.</summary>
-    public const string Log = "log";
-
-    /// <summary>The log's mark: the highest sequence stored, read by one bounded query, or zero.</summary>
-    public static readonly HighWaterMark HighWaterMark = new(Log, async ct =>
-        (await FirstPage(1, sort => sort.OrderByDescending(e => e.Seq), ct)).FirstOrDefault()?.Seq ?? 0);
+    /// <summary>The log's numbers: the highest stored, and inside a command's hold the next.</summary>
+    public static readonly Sequence Log = Sequence.Of<Event>(e => e.Seq);
 
     public static string Key(long seq) => seq.ToString("D19", CultureInfo.InvariantCulture);
 
@@ -75,15 +72,15 @@ public sealed class Event : Entity<Event>
     [Index(Name = "ix_event_reports", Order = 0)]
     public bool? Report { get; set; }
 
-    /// <summary>The next row of the log, numbered from the mark the writer holds for the running command.</summary>
-    public static Event Next(Sequences sequences, string kind, DateTimeOffset at,
+    /// <summary>Appends the next row of the log, inside the running command.</summary>
+    public static async Task<Event> Append(string kind, DateTimeOffset at, CancellationToken ct,
         string? tangentId = null, string? topicId = null, string? postId = null, string? actorId = null,
         string? targetId = null, long? version = null, Audience? audience = null, string? offerId = null,
         Participants.Standing? standing = null, Participants.Standing? before = null, string? role = null, bool? given = null,
         bool? report = null)
     {
-        var seq = sequences.Next(Log);
-        return new Event
+        var seq = await Log.Next(ct);
+        return await new Event
         {
             Id = Key(seq),
             Seq = seq,
@@ -102,6 +99,6 @@ public sealed class Event : Entity<Event>
             Role = role,
             Given = given,
             Report = report
-        };
+        }.Save(ct);
     }
 }

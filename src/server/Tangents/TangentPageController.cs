@@ -40,8 +40,8 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
         // A missing Tangent's overwrites are not read, so an address no Tangent has takes no place in Koan's cache.
         var found = await Tangent.Get(tangent, ct);
         var capabilities = await Capabilities.Load(personId, found?.Id, null, ct);
-        if (!capabilities.Exists) return Gated(capabilities.Gate(Bit.View) ?? Capabilities.Absent);
-        if (found is not { } row) return Gated(Capabilities.Absent);
+        if (!capabilities.Exists) return DoorController.Gated(HttpContext, capabilities.Gate(Bit.View) ?? Capabilities.Absent);
+        if (found is not { } row) return DoorController.Gated(HttpContext, Capabilities.Absent);
 
         TopicList.Cursor? cursor = null;
         if (after is not null && (cursor = TopicList.Cursor.Parse(after)) is null)
@@ -94,21 +94,6 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
             creates ? baseAddress + NewTangentController.Route : null,
             audience == Audience.Public ? Feeds.TangentLinks(baseAddress, row.Id, row.Name, space.Name) : null));
     }
-
-    /// <summary>What a reader without <see cref="Bit.View"/> receives: a missing resource's answer where the Tangent
-    /// is absent to them, the same for every address under <c>/t/</c> whether a Tangent is there or not; otherwise
-    /// the one step that stands between them and reading.</summary>
-    private static IActionResult Gated(string gate) => gate switch
-    {
-        Capabilities.Absent => new Problem(StatusCodes.Status404NotFound, "Not found", "Nothing answers at this address.", gate).ToResult(),
-        Capabilities.SignIn => new Problem(StatusCodes.Status401Unauthorized, "Sign in to read",
-            "This Tangent Space is read by its participants.", gate).ToResult(),
-        Capabilities.Apply => new Problem(StatusCodes.Status403Forbidden, "Waiting to be admitted",
-            "Your application is waiting: you can read here once someone admits you.", gate).ToResult(),
-        Capabilities.Declined => new Problem(StatusCodes.Status403Forbidden, "Not admitted",
-            "Your application was declined, so this Tangent Space is not open to you.", gate).ToResult(),
-        _ => new Problem(StatusCodes.Status403Forbidden, "Not readable", "This Tangent is not open to you.", gate).ToResult()
-    };
 
     public static TangentPage.Topic Topic(Post root, string tangentAddress, IReadOnlyDictionary<string, TangentPage.Author> people,
         IReadOnlyDictionary<string, Post> latest, IReadOnlyDictionary<string, long> seen, bool signedIn)
