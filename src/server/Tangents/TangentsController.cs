@@ -24,7 +24,8 @@ public sealed class TangentsController(KoanWebBaseUrl baseUrl, IDataProtectionPr
     /// <summary>The most Tangents one page lists.</summary>
     public const int PageSize = 50;
 
-    [AcceptVerbs("GET", "HEAD", Route = Route)]
+    [HttpGet(Route)]
+    [HttpHead(Route)]
     [Tool(Name = "read_tangents")]
     [Description("List the Tangents you may read, a page at a time.")]
     public async Task<IActionResult> Get([FromQuery(Name = After), Description(Holds.After)] string? after, CancellationToken ct)

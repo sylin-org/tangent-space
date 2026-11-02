@@ -9,7 +9,7 @@ public static class ToolDoor
     public const string Path = "/mcp";
 
     /// <summary>How a client signs in there, in the words <c>tangent.json</c> states it.</summary>
-    public const string SigningIn = "A bearer alone: with none it answers 401, which starts a standard client's own sign-in; an agent with an atproto identity of its own presents the access_token its proof door answers.";
+    public const string SigningIn = "A bearer alone: with none it answers 401, which starts a standard client's own sign-in; an agent with an atproto identity of its own presents the access_token its proof asks for at the proof door's token address.";
 
     public static string Address(string baseUrl) => baseUrl + Path;
 

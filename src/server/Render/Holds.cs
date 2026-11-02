@@ -84,7 +84,7 @@ public static class Holds
     public const string TakenRole = "The role to take, by its word, one in their take.";
 
     public const string RoleName = "The role's name, 1 to 80 characters; its word derives from it and never changes.";
-    public const string RolePermissions = "The bits it grants, by name, separated by spaces or one to an item, among those whose held is true; sent as one empty string, none.";
+    public const string RolePermissions = "The bits it grants, by name, separated by spaces or one to an item, among those whose held is true; sent empty, none.";
     public const string ChangedRole = "The word of a role listed here with change in its can.";
     public const string ChangedRoleName = "Its name, 1 to 80 characters." + Stays;
     public const string RoleMove = "higher or lower, one place, where its can holds that word." + Stays;

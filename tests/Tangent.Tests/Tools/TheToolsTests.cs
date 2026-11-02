@@ -86,6 +86,7 @@ public sealed class TheToolsTests
         [Action<FirstRunController>(nameof(FirstRunController.Get))] = "first run",
         [Action<ProofController>(nameof(ProofController.Statement))] = "the proof door",
         [Action<ProofController>(nameof(ProofController.Exchange))] = "the proof door",
+        [Action<ProofController>(nameof(ProofController.Token))] = "the proof door",
         [Action<ProfileController>(nameof(ProfileController.Revoke))] = "revoking a delegate is the person's alone",
         [Action<FeedsController>(nameof(FeedsController.TangentAtom))] = "a feed",
         [Action<FeedsController>(nameof(FeedsController.TangentJson))] = "a feed",

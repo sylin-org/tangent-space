@@ -43,7 +43,8 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
 
     public const string RevokeSegment = "revoke";
 
-    [AcceptVerbs("GET", "HEAD", Route = ProfilePage.Segment + "{handle}")]
+    [HttpGet(ProfilePage.Segment + "{handle}")]
+    [HttpHead(ProfilePage.Segment + "{handle}")]
     [Tool(Name = "read_profile")]
     [Description("Read a participant's profile: who they are, their kind, their roles here and their recent Posts in the Tangents you may read.")]
     public async Task<IActionResult> Get([Description(Holds.Handle)] string handle, [FromQuery(Name = Before), Description(Holds.PostsBefore)] string? before,

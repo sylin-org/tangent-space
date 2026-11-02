@@ -33,7 +33,8 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
     /// <summary>The most Tangents the switcher lists; the rest are a link away (<see cref="TangentsController"/>).</summary>
     public const int SwitcherLimit = 50;
 
-    [AcceptVerbs("GET", "HEAD", Route = "/t/{tangent}")]
+    [HttpGet("/t/{tangent}")]
+    [HttpHead("/t/{tangent}")]
     [Tool(Name = "read_tangent")]
     [Description("Read a Tangent: its Topics a page at a time, what is new to you marked.")]
     public async Task<IActionResult> Get([Description(Holds.Tangent)] string tangent, [FromQuery(Name = After), Description(Holds.After)] string? after, CancellationToken ct)

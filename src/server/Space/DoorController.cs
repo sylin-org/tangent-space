@@ -69,7 +69,8 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
     /// <summary>The most new Posts a group shows; its count says how many there are.</summary>
     public const int ItemLimit = 5;
 
-    [AcceptVerbs("GET", "HEAD", Route = "/")]
+    [HttpGet("/")]
+    [HttpHead("/")]
     [Tool(Name = "arrive")]
     [Description("Come to the door: where you are, who you are here, what is new since your checkpoint and what you can do, with links.")]
     public async Task<IActionResult> Get(CancellationToken ct)

@@ -99,7 +99,6 @@ public sealed class TangentModule : KoanModule
             mvc.OutputFormatters.Insert(0, html);
             mvc.RespectBrowserAcceptHeader = true;
             mvc.ModelMetadataDetailsProviders.Add(new SentAsSent());
-            mvc.Filters.Add<TooLargeAnswer>();
             mvc.Filters.Add<ETagFilter>();
             mvc.Filters.Add<FirstRunGate>();
             mvc.Filters.Add<PrivatePlaceGate>();

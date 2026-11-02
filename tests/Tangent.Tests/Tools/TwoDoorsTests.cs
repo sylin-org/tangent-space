@@ -245,7 +245,7 @@ public sealed class TwoDoorsTests
     }
 
     [Fact]
-    public async Task A_roles_permissions_come_one_to_an_item_or_in_one_value_and_one_empty_string_grants_none()
+    public async Task A_roles_permissions_come_one_to_an_item_or_in_one_value_and_left_out_stay_and_an_empty_list_grants_none()
     {
         await using var tangentSpace = await Starting();
         using var doors = await Open(tangentSpace);
@@ -262,10 +262,13 @@ public sealed class TwoDoorsTests
         Assert.Equal(["View", "Post"], await Granted(await tools.Call("create_role", new { name = "Keepers", permissions = new[] { "View", "Post" } })));
         Assert.Equal(["View", "Topic"], await Granted(await tools.Call("change_role", new { role = "keepers", permissions = new[] { "View Topic" } })));
 
-        // Left out they stay, as Koan's binder also reads a JSON array with nothing in it; one empty string grants none.
+        // Left out they stay; an empty list grants none, on either door.
         Assert.Equal(["View", "Topic"], await Granted(await tools.Call("change_role", new { role = "keepers", name = "The keepers" })));
-        Assert.Equal(["View", "Topic"], await Granted(await tools.Call("change_role", new { role = "keepers", permissions = Array.Empty<string>() })));
-        Assert.Empty(await Granted(await tools.Call("change_role", new { role = "keepers", permissions = new[] { "" } })));
+        Assert.Empty(await Granted(await tools.Call("change_role", new { role = "keepers", permissions = Array.Empty<string>() })));
+        var bearer = await Delegate(tangentSpace, leo);
+        Assert.Equal(HttpStatusCode.OK, (await doors.Posted(RolesController.ChangePath, new { role = "keepers", permissions = "View" }, bearer)).Status);
+        var emptied = await doors.Posted(RolesController.ChangePath, new { role = "keepers", permissions = Array.Empty<string>() }, bearer);
+        Assert.Equal(0, emptied.Json.GetProperty("permissions").GetArrayLength());
     }
 
     [Fact]

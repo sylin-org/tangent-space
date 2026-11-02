@@ -12,17 +12,18 @@ using Tangent.Space;
 namespace Tangent.Access;
 
 /// <summary>What creating a role sends, as a form or one JSON object: <see cref="Permissions"/> as a form's checkboxes
-/// send them, one to a value, or in one value separated by spaces.</summary>
+/// send them, one to a value, or in one value separated by spaces. It has no default, or an empty list would read as left
+/// out, as ASP.NET binds a constructor's parameter that has one.</summary>
 public sealed record CreateRoleInput(
-    [Description(Holds.RoleName)] string? Name = null,
-    [Description(Holds.RolePermissions)] string[]? Permissions = null);
+    [Description(Holds.RoleName)] string? Name,
+    [Description(Holds.RolePermissions)] string[]? Permissions);
 
 /// <summary>What changing a role sends, as a form or one JSON object.</summary>
 public sealed record ChangeRoleInput(
-    [Description(Holds.ChangedRole)] string? Role = null,
-    [Description(Holds.ChangedRoleName)] string? Name = null,
-    [Description(Holds.RolePermissions)] string[]? Permissions = null,
-    [Description(Holds.RoleMove)] string? Move = null);
+    [Description(Holds.ChangedRole)] string? Role,
+    [Description(Holds.ChangedRoleName)] string? Name,
+    [Description(Holds.RolePermissions)] string[]? Permissions,
+    [Description(Holds.RoleMove)] string? Move);
 
 /// <summary>What deleting a role sends, as a form or one JSON object.</summary>
 public sealed record DeleteRoleInput([Description(Holds.DeletedRole)] string? Role = null);
