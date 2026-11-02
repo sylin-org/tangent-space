@@ -1,7 +1,7 @@
 using System.Net;
+using Koan.Data.Core.Commands;
 using Tangent.Access;
 using Tangent.Participants;
-using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -17,9 +17,9 @@ public sealed class FormTests
     public async Task An_agent_with_a_bearer_follows_a_topics_reply_form_exactly_and_the_reply_lands_as_its_persons_answering_the_post_the_address_named()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var root = await Started(writer, Bea, "Lanterns", "How do you hang yours?");
-        var hook = await Replied(writer, root, Mo, "From a hook.");
+        await Place(tangentSpace);
+        var root = await Started(Bea, "Lanterns", "How do you hang yours?");
+        var hook = await Replied(root, Mo, "From a hook.");
         using var ada = await SignedIn(tangentSpace, Ada);
         var bearer = await Delegate(tangentSpace, ada);
         using var agent = Agent(tangentSpace);
@@ -82,17 +82,17 @@ public sealed class FormTests
     public async Task A_reader_who_may_not_reply_or_start_a_topic_finds_no_form_for_it_as_the_page_offers_none()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var root = await Started(writer, Ada, "Lanterns", "How do you hang yours?");
+        await Place(tangentSpace);
+        var root = await Started(Ada, "Lanterns", "How do you hang yours?");
         using var visitor = Agent(tangentSpace);
         using var bea = await SignedIn(tangentSpace, Bea);
         var bearer = await Delegate(tangentSpace, bea);
-        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new TimeOut(Mo, Bea, DateTimeOffset.UtcNow.AddHours(1)), Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new TimeOut(Mo, Bea, DateTimeOffset.UtcNow.AddHours(1)).Send(Cancellation));
 
         var asVisitor = await Send(visitor, HttpMethod.Get, TopicPath(root), json: true);
         var asTimedOut = await Send(visitor, HttpMethod.Get, TopicPath(root), json: true, bearer: bearer);
-        Assert.Equal((Capabilities.SignIn, false), (asVisitor.Json.GetProperty("gate").GetString(), asVisitor.Json.TryGetProperty("reply", out _)));
-        Assert.Equal((Capabilities.TimedOut, false), (asTimedOut.Json.GetProperty("gate").GetString(), asTimedOut.Json.TryGetProperty("reply", out _)));
+        Assert.Equal((Capabilities.SignIn.Word, false), (asVisitor.Json.GetProperty("gate").GetString(), asVisitor.Json.TryGetProperty("reply", out _)));
+        Assert.Equal((Capabilities.TimedOut.Word, false), (asTimedOut.Json.GetProperty("gate").GetString(), asTimedOut.Json.TryGetProperty("reply", out _)));
         Assert.DoesNotContain("class=\"reply-form\"", (await Send(bea.Client, HttpMethod.Get, TopicPath(root))).Body);
 
         var newTopic = "/t/" + Workshop + "/new";

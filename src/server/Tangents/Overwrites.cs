@@ -18,8 +18,7 @@ public enum RoleAccess
 /// <summary>A Tangent's overwrites: Koan's <see cref="PermissionOverwrite"/> rows on the resource <see cref="Resource"/>
 /// names, written through <see cref="RoleCollection"/>, read for evaluation from its cache and one row at a time by key
 /// (<see cref="Of"/>). A Tangent's audience is nothing more than <see cref="Bit.View"/> in its <c>everyone</c> overwrite,
-/// and a role's access there (<see cref="RoleAccess"/>) its own overwrite. Koan commits an overwrite at once and refuses
-/// one inside the writer's transaction, so every write here happens outside it.</summary>
+/// and a role's access there (<see cref="RoleAccess"/>) its own overwrite. Every write here runs inside a command.</summary>
 public static class Overwrites
 {
     /// <summary>What a Tangent's overwrites are written on: this, followed by its slug.</summary>

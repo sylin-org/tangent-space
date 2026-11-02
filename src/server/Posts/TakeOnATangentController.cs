@@ -1,3 +1,4 @@
+using Koan.Data.Core.Commands;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
@@ -5,7 +6,6 @@ using Tangent.Access;
 using Tangent.Participants;
 using Tangent.Render;
 using Tangent.Tangents;
-using Tangent.Writer;
 
 namespace Tangent.Posts;
 
@@ -18,7 +18,7 @@ namespace Tangent.Posts;
 /// (<see cref="PostWrites.Locate"/>) before anything else is judged, so a Post the reader may not view and one no row
 /// has answer alike. A Tangent chosen that no row has, or that is absent to the reader, is refused in one sentence
 /// that says neither.</summary>
-public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop writer, IDataProtectionProvider protection) : ControllerBase
+public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, IDataProtectionProvider protection) : ControllerBase
 {
     /// <summary>The segment under a Post's address where it is taken on a tangent.</summary>
     public const string Segment = "tangent";
@@ -51,7 +51,7 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop w
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var (found, unseen) = await PostWrites.Locate(personId, tangent, topic, post, ct);
+        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, topic, post, ct);
         if (found is null) return unseen!;
         ViewableTangents.Cursor? cursor = null;
         if (after is not null && (cursor = ViewableTangents.Cursor.Open(after, protection)) is null)
@@ -67,7 +67,7 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop w
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
-        var (found, unseen) = await PostWrites.Locate(personId, tangent, topic, post, ct);
+        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, topic, post, ct);
         if (found is null) return unseen!;
         if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
 
@@ -76,54 +76,50 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop w
         if ((Slug.IsValid(chosen) ? await Tangents.Tangent.Get(chosen, ct) : null) is not { } into)
             return await Refused(found, personId, fields, StartTopic.NoTangent, ct);
         var mayStart = (await Capabilities.Load(personId, into.Id, null, ct)).Holds(Bit.Topic);
-        var outcome = await writer.Send(new StartTopic(
+        var outcome = await new StartTopic(
             fields.GetValueOrDefault(PostWrites.IdField) ?? "",
             into.Id,
             fields.GetValueOrDefault(PostWrites.TitleField) ?? "",
-            await PostWrites.Body(fields, mayStart, ct),
+            await PostWrites.Body(fields, mayStart),
             personId ?? "",
-            OriginId: found.Post!.Id), ct);
+            OriginId: found.Post!.Id).Send();
         switch (outcome)
         {
             case Outcome<Post>.Done { Result: var root }:
                 return await PostWrites.Written(HttpContext, root, root, PostWrites.Address(BaseAddress(), root.TangentId, root.Slug ?? root.Id, root.Id),
                     personId, created: true, ct);
-            case Outcome<Post>.Refused { Reason: StartTopic.NoOrigin }:
-                return PostWrites.Absent();
-            case Outcome<Post>.Refused { Reason: var reason }:
+            case Outcome<Post>.Refused { Reason: var reason } when reason != StartTopic.NoOrigin && reason.Kind != ReasonKind.Conflict:
                 return await Refused(found, personId, fields, reason, ct);
-            case Outcome<Post>.Conflict { Reason: var reason }:
-                if (PostWrites.WantsJson(Request)) return PostWrites.Conflicting(reason);
+            case Outcome<Post>.Refused { Reason: { Kind: ReasonKind.Conflict } reason }:
+                if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
                 return await Again(found, personId, fields, StatusCodes.Status409Conflict, keepId: false, page => page with
                 {
                     Failure = "This form was already sent with other words, so nothing was posted. Send it again to post these words as well."
                 }, ct);
-            case Outcome<Post>.Failed { Cause: var cause }:
-                throw new InvalidOperationException($"Taking {post} on a tangent failed.", cause);
             default:
-                throw new InvalidOperationException($"The writer answered {outcome} for taking {post} on a tangent.");
+                return PostWrites.Answer(HttpContext, outcome);
         }
     }
 
     /// <summary>A refusal: for a JSON request, the problem its reason answers as — a Tangent chosen that the reader may
     /// not start a Topic in, said without saying whether it exists; for a form, the form again with the reason where it
-    /// belongs, and a new Id where the sent one is not available.</summary>
-    private async Task<IActionResult> Refused(PostWrites.Located found, string? personId, IReadOnlyDictionary<string, string> fields, string reason,
+    /// belongs.</summary>
+    private async Task<IActionResult> Refused(PostWrites.Located found, string? personId, IReadOnlyDictionary<string, string> fields, Reason reason,
         CancellationToken ct)
     {
         if (reason == StartTopic.NoTangent)
         {
-            if (PostWrites.WantsJson(Request)) return new Problem(StatusCodes.Status400BadRequest, "Not written", reason).ToResult();
+            if (PostWrites.WantsJson(Request)) return new Problem(StatusCodes.Status400BadRequest, "Not written", reason.Text).ToResult();
             return await Again(found, personId, fields, StatusCodes.Status400BadRequest, keepId: true, page => page with { ChoiceFailure = ChooseListed }, ct);
         }
 
-        if (PostWrites.WantsJson(Request)) return PostWrites.Refused(reason);
-        return await Again(found, personId, fields, PostWrites.Status(reason), keepId: reason != Post.IdTaken, page => PostWrites.Concerning(reason) switch
+        if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
+        return await Again(found, personId, fields, PostWrites.Status(reason), keepId: true, page => PostWrites.Concerning(reason) switch
         {
-            PostWrites.About.Title => page with { TitleFailure = reason },
-            PostWrites.About.Body => page with { BodyFailure = reason },
-            PostWrites.About.Sent => page with { Failure = reason },
-            _ => page.Gate is null ? page with { ChoiceFailure = PostWrites.Sentence(reason) } : page
+            PostWrites.About.Title => page with { TitleFailure = reason.Text },
+            PostWrites.About.Body => page with { BodyFailure = reason.Text },
+            PostWrites.About.Sent => page with { Failure = reason.Text },
+            _ => page.Gate is null ? page with { ChoiceFailure = reason.Text } : page
         }, ct);
     }
 
@@ -132,7 +128,7 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop w
     private async Task<IActionResult> Again(PostWrites.Located sent, string? personId, IReadOnlyDictionary<string, string> fields, int status,
         bool keepId, Func<TakeOnATangentPage, TakeOnATangentPage> refusal, CancellationToken ct)
     {
-        var (found, unseen) = await PostWrites.Locate(personId, sent.Tangent.Id, sent.Root!.Slug ?? sent.Root.Id, sent.Post!.Id, ct);
+        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, sent.Tangent.Id, sent.Root!.Slug ?? sent.Root.Id, sent.Post!.Id, ct);
         if (found is null) return unseen!;
         var page = await Page(found, personId, fields.GetValueOrDefault(TangentField), null, ct) with
         {
@@ -171,8 +167,8 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, WriteLoop w
         var choice = choices.FirstOrDefault(listed => listed.Slug == chosen)
                      ?? choices.FirstOrDefault(listed => listed.Slug == found.Tangent.Id)
                      ?? choices.FirstOrDefault();
-        var gate = origin.Removed ? Capabilities.Removed
-            : choices.Count == 0 ? here.Gate(Bit.Topic) ?? Capabilities.NoRoleGrants(Bit.Topic)
+        var gate = origin.Removed ? Capabilities.Removed.Word
+            : choices.Count == 0 ? (here.Gate(Bit.Topic) ?? Capabilities.NoRoleGrants(Bit.Topic)).Word
             : null;
 
         var people = await People(origin, ct);

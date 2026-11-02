@@ -1,6 +1,6 @@
+using Koan.Data.Core.Commands;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Posts;
-using Tangent.Writer;
 using Xunit;
 
 namespace Tangent.Events;
@@ -14,16 +14,15 @@ public sealed class CheckpointTests
     public async Task A_checkpoint_round_trips_through_its_participant_and_each_kind_of_scope_with_its_sequence_and_watch_flag()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         var participantId = Guid.CreateVersion7().ToString("n");
         var topicId = Tids.Mint();
         var place = Scope.Place;
         var tangent = Scope.Tangent("the-workshop");
         var topic = Scope.Topic(topicId);
 
-        Assert.IsType<Outcome<Checkpoint>.Done>(await writer.Send(new Store<Checkpoint>(Checkpoint.At(participantId, place, 7)), Cancellation));
-        Assert.IsType<Outcome<Checkpoint>.Done>(await writer.Send(new Store<Checkpoint>(Checkpoint.At(participantId, tangent, 42, watch: true)), Cancellation));
-        Assert.IsType<Outcome<Checkpoint>.Done>(await writer.Send(new Store<Checkpoint>(Checkpoint.At(participantId, topic, 9)), Cancellation));
+        Assert.IsType<Outcome<Checkpoint>.Done>(await new Store<Checkpoint>(Checkpoint.At(participantId, place, 7)).Send(Cancellation));
+        Assert.IsType<Outcome<Checkpoint>.Done>(await new Store<Checkpoint>(Checkpoint.At(participantId, tangent, 42, watch: true)).Send(Cancellation));
+        Assert.IsType<Outcome<Checkpoint>.Done>(await new Store<Checkpoint>(Checkpoint.At(participantId, topic, 9)).Send(Cancellation));
 
         Assert.Equal(3, await Checkpoint.Count.Exact(Cancellation));
         var atPlace = await Checkpoint.Get(Checkpoint.Key(participantId, Scope.Place), Cancellation);

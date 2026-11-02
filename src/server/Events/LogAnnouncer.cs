@@ -1,20 +1,20 @@
 using System.Threading.Channels;
 using Koan.Core.BackgroundServices;
 using Koan.Data.Abstractions;
+using Koan.Data.Core.Commands;
 using Koan.Data.Core.Model;
 using Koan.Data.Core.Sorting;
-using Tangent.Writer;
 
 namespace Tangent.Events;
 
-/// <summary>Carries the writer's commits to the event stream through Koan Communication. A
-/// <see cref="WriteLoop.Committed"/> handler notes the log's last sequence a commit took and returns at once; this
-/// worker then reads the rows past the last one it announced, in sequence order and bounded pages, and raises
-/// <see cref="Appended"/> on them, which Koan delivers to <see cref="StreamDelivery"/> in the same order. A page it could
-/// not raise is logged and passed over: an open stream finds the rows it lacks in the log by their sequence, which has no
-/// gap. Koan discovers it as a background service and starts and stops it with the host.</summary>
-public sealed class LogAnnouncer(ILogger<LogAnnouncer> logger, IConfiguration configuration, WriteLoop writer)
-    : KoanBackgroundServiceBase(logger, configuration)
+/// <summary>Carries the log's commits to the event stream through Koan Communication. Told of a commit, it notes the
+/// log's last sequence that commit took and returns at once; its worker then reads the rows past the last one it
+/// announced, in sequence order and bounded pages, and raises <see cref="Appended"/> on them, which Koan delivers to
+/// <see cref="StreamDelivery"/> in the same order. A page it could not raise is logged and passed over: an open stream
+/// finds the rows it lacks in the log by their sequence, which has no gap. Koan discovers it as a background service and
+/// starts and stops it with the host.</summary>
+public sealed class LogAnnouncer(ILogger<LogAnnouncer> logger, IConfiguration configuration)
+    : KoanBackgroundServiceBase(logger, configuration), ICommandWatcher
 {
     /// <summary>The most rows one read takes and one raise carries.</summary>
     public const int PageSize = 100;
@@ -25,13 +25,10 @@ public sealed class LogAnnouncer(ILogger<LogAnnouncer> logger, IConfiguration co
 
     public override async Task ExecuteCore(CancellationToken ct)
     {
-        // Rows already in the log when it starts are not announced; a commit that lands while it subscribes is, from the
-        // log's mark read once the subscription holds.
-        var announced = await Event.HighWaterMark.Load(ct);
-        writer.Committed += Noted;
+        // Rows already in the log when it starts are not announced; a commit noted before this read is among them.
+        var announced = await Event.Log.Highest(ct);
         try
         {
-            announced = await Announce(announced, await Event.HighWaterMark.Load(ct), ct);
             while (await _committed.Reader.WaitToReadAsync(ct))
             {
                 while (_committed.Reader.TryRead(out var through)) announced = await Announce(announced, through, ct);
@@ -40,15 +37,11 @@ public sealed class LogAnnouncer(ILogger<LogAnnouncer> logger, IConfiguration co
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
         }
-        finally
-        {
-            writer.Committed -= Noted;
-        }
     }
 
-    private void Noted(Committed committed)
+    public void Committed(object command, IReadOnlyDictionary<Sequence, long> sequences)
     {
-        if (committed.Sequences.TryGetValue(Event.Log, out var through)) _committed.Writer.TryWrite(through);
+        if (sequences.TryGetValue(Event.Log, out var through)) _committed.Writer.TryWrite(through);
     }
 
     /// <summary>Raises <see cref="Appended"/> on every row past <paramref name="announced"/> through

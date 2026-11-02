@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Koan.Data.Core.Commands;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
@@ -9,7 +10,6 @@ using Tangent.Events;
 using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Tangents;
-using Tangent.Writer;
 using Xunit;
 
 namespace Tangent.Space;
@@ -38,13 +38,13 @@ public sealed class DoorTests(ITestOutputHelper output)
     public async Task A_reply_to_another_participants_post_targets_its_author_and_a_reply_to_ones_own_post_targets_no_one()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var topic = await Started(writer, Workshop, "A question", "ada");
+        await Place(tangentSpace);
+        var topic = await Started(Workshop, "A question", "ada");
 
-        var toAda = await Replied(writer, topic, "leo");
-        var adaToHerself = await Replied(writer, topic, "ada");
-        var toLeo = await Replied(writer, topic, "ada", parent: toAda.Id);
-        var leoToHimself = await Replied(writer, topic, "leo", parent: toAda.Id);
+        var toAda = await Replied(topic, "leo");
+        var adaToHerself = await Replied(topic, "ada");
+        var toLeo = await Replied(topic, "ada", parent: toAda.Id);
+        var leoToHimself = await Replied(topic, "leo", parent: toAda.Id);
 
         var targets = (await Event.All(Cancellation)).Where(e => e.Kind == EventKind.PostCreated)
             .ToDictionary(e => e.PostId!, e => e.TargetId);
@@ -57,17 +57,16 @@ public sealed class DoorTests(ITestOutputHelper output)
     public async Task Signed_in_with_a_checkpoint_behind_the_door_groups_replies_mentions_new_per_tangent_and_new_articles_without_the_readers_own_and_names_what_it_read_through()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var mine = await Started(writer, Workshop, "My question", Reader);
-        var before = await Replied(writer, mine, "ada");
-        var since = await Mark(writer, Reader);
+        await Place(tangentSpace);
+        var mine = await Started(Workshop, "My question", Reader);
+        var before = await Replied(mine, "ada");
+        var since = await Mark(Reader);
 
-        var reply = await Replied(writer, mine, "ada");
-        var other = Assert.IsType<Outcome<Post>.Done>(await writer.Send(
-            new StartTopic(Tids.Mint(), Workshop, "Ada asks", $"A question for [@reader](at://{Reader}).", "ada"), Cancellation)).Result;
-        var article = await Started(writer, Articles, "On lanterns", "leo", PostKind.Article);
-        var own = await Replied(writer, other, Reader, body: "My own words in reply.");
-        var through = await Event.HighWaterMark.Load(Cancellation);
+        var reply = await Replied(mine, "ada");
+        var other = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, "Ada asks", $"A question for [@reader](at://{Reader}).", "ada").Send(Cancellation)).Result;
+        var article = await Started(Articles, "On lanterns", "leo", PostKind.Article);
+        var own = await Replied(other, Reader, body: "My own words in reply.");
+        var through = await Event.Log.Highest(Cancellation);
 
         using var browser = await SignedIn(tangentSpace);
         using (var json = await Json(browser.Client, "/"))
@@ -113,11 +112,11 @@ public sealed class DoorTests(ITestOutputHelper output)
     public async Task A_newcomers_first_door_welcomes_them_with_nothing_counted_as_new_and_their_second_reads_past_it()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var topic = await Started(writer, Workshop, "What should we build?", "ada");
-        await Replied(writer, topic, "leo");
-        await Started(writer, Articles, "On lanterns", "leo", PostKind.Article);
-        var through = await Event.HighWaterMark.Load(Cancellation);
+        await Place(tangentSpace);
+        var topic = await Started(Workshop, "What should we build?", "ada");
+        await Replied(topic, "leo");
+        await Started(Articles, "On lanterns", "leo", PostKind.Article);
+        var through = await Event.Log.Highest(Cancellation);
 
         // Signing in at a page of the place leaves the door unopened.
         using var browser = new Browser(tangentSpace);
@@ -141,7 +140,7 @@ public sealed class DoorTests(ITestOutputHelper output)
         Assert.Contains("Nothing new since you were here.", second);
         Assert.DoesNotContain("Welcome to", second);
 
-        await Replied(writer, topic, "ada");
+        await Replied(topic, "ada");
         var third = WebUtility.HtmlDecode(await Html(browser.Client, "/"));
         Assert.Contains("Since you were here: 1 new post in The workshop.", third);
         Assert.Contains("Mark all seen", third);
@@ -152,9 +151,9 @@ public sealed class DoorTests(ITestOutputHelper output)
     public async Task A_first_door_as_json_says_it_is_first_with_nothing_new_and_a_head_leaves_it_first()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var topic = await Started(writer, Workshop, "What should we build?", "ada");
-        await Replied(writer, topic, "leo");
+        await Place(tangentSpace);
+        var topic = await Started(Workshop, "What should we build?", "ada");
+        await Replied(topic, "leo");
         using var browser = new Browser(tangentSpace);
         (await browser.SignIn("reader", Reader, Cancellation, handle: "reader.example", comeBack: "/t")).Dispose();
 
@@ -184,11 +183,11 @@ public sealed class DoorTests(ITestOutputHelper output)
     public async Task A_first_door_keeps_what_concerns_the_reader_under_the_welcome_with_no_catching_up_and_shows_it_once()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         using var browser = new Browser(tangentSpace);
         (await browser.SignIn("reader", Reader, Cancellation, handle: "reader.example", comeBack: "/t")).Dispose();
-        var mine = await Started(writer, Workshop, "My question", Reader);
-        var reply = await Replied(writer, mine, "ada");
+        var mine = await Started(Workshop, "My question", Reader);
+        var reply = await Replied(mine, "ada");
 
         var first = WebUtility.HtmlDecode(await Html(browser.Client, "/"));
         Assert.Contains("Welcome to Lantern Works", first);
@@ -206,18 +205,16 @@ public sealed class DoorTests(ITestOutputHelper output)
     public async Task An_event_in_a_tangent_the_reader_may_not_view_is_in_no_group_and_a_topic_checkpoint_past_an_event_hides_it()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(
-            new CreateTangent("studio", "The studio", "", PostKind.Topic, 3, Audience.Private, "leo"), Cancellation));
-        var mine = await Started(writer, Workshop, "My question", Reader);
-        await Mark(writer, Reader);
+        await Place(tangentSpace);
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent("studio", "The studio", "", PostKind.Topic, 3, Audience.Private, "leo").Send(Cancellation));
+        var mine = await Started(Workshop, "My question", Reader);
+        await Mark(Reader);
 
-        var first = await Replied(writer, mine, "ada");
-        var second = await Replied(writer, mine, "ada");
-        var secret = await Started(writer, "studio", "A private matter", "leo");
-        Assert.IsType<Outcome<Event>.Done>(await writer.Send(new Mentioned("studio", secret.Id, secret.Id, "leo", Reader), Cancellation));
-        Assert.IsType<Outcome<Checkpoint>.Done>(await writer.Send(
-            new Store<Checkpoint>(Checkpoint.At(Reader, Scope.Topic(mine.Id), first.Sequence)), Cancellation));
+        var first = await Replied(mine, "ada");
+        var second = await Replied(mine, "ada");
+        var secret = await Started("studio", "A private matter", "leo");
+        Assert.IsType<Outcome<Event>.Done>(await new Mentioned("studio", secret.Id, secret.Id, "leo", Reader).Send(Cancellation));
+        Assert.IsType<Outcome<Checkpoint>.Done>(await new Store<Checkpoint>(Checkpoint.At(Reader, Scope.Topic(mine.Id), first.Sequence)).Send(Cancellation));
 
         using var browser = await SignedIn(tangentSpace);
         using var json = await Json(browser.Client, "/");
@@ -241,9 +238,9 @@ public sealed class DoorTests(ITestOutputHelper output)
     public async Task More_events_than_the_window_yield_at_least_counts_and_no_total_and_the_window_reads_are_index_ranges_with_a_limit()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var topic = await Started(writer, Workshop, "A long conversation", "ada");
-        for (var index = 0; index < LogWindow.Size + 5; index++) await Replied(writer, topic, index % 2 == 0 ? "ada" : "leo");
+        await Place(tangentSpace);
+        var topic = await Started(Workshop, "A long conversation", "ada");
+        for (var index = 0; index < LogWindow.Size + 5; index++) await Replied(topic, index % 2 == 0 ? "ada" : "leo");
 
         using var browser = await SignedIn(tangentSpace);
         await Given.BeenAtTheDoor(tangentSpace, Reader, Cancellation);
@@ -276,9 +273,9 @@ public sealed class DoorTests(ITestOutputHelper output)
     public async Task Marking_the_door_seen_moves_the_place_checkpoint_to_what_it_read_through_never_backwards_and_the_door_is_quiet_with_a_new_etag_until_something_happens()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var mine = await Started(writer, Workshop, "My question", Reader);
-        await Replied(writer, mine, "ada");
+        await Place(tangentSpace);
+        var mine = await Started(Workshop, "My question", Reader);
+        await Replied(mine, "ada");
         using var browser = await SignedIn(tangentSpace);
         await Given.BeenAtTheDoor(tangentSpace, Reader, Cancellation);
 
@@ -291,7 +288,7 @@ public sealed class DoorTests(ITestOutputHelper output)
         var again = await Read(browser.Client, busy);
         Assert.Equal(HttpStatusCode.OK, again.Status);
         Assert.NotEqual(busy, again.ETag);
-        Assert.Equal(await Event.HighWaterMark.Load(Cancellation), through);
+        Assert.Equal(await Event.Log.Highest(Cancellation), through);
 
         using (var refused = await browser.Client.PostAsync("/", Form(new() { [DoorController.Through] = through.ToString(CultureInfo.InvariantCulture) }), Cancellation))
             Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
@@ -322,7 +319,7 @@ public sealed class DoorTests(ITestOutputHelper output)
             Assert.Equal(HttpStatusCode.SeeOther, backwards.StatusCode);
         Assert.Equal(through, (await Checkpoint.Get(Checkpoint.Key(Reader, Scope.Place), Cancellation))!.Seq);
 
-        var later = await Replied(writer, mine, "ada");
+        var later = await Replied(mine, "ada");
         using (var json = await Json(browser.Client, "/"))
             Assert.Equal([later.Id], PostIds(json.RootElement.GetProperty("news").GetProperty("replies")));
     }
@@ -331,10 +328,10 @@ public sealed class DoorTests(ITestOutputHelper output)
     public async Task A_visitor_on_a_public_place_reads_the_front_page_and_on_a_private_one_the_sign_in_gate()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var topic = await Started(writer, Workshop, "What should we build?", "ada");
-        await Replied(writer, topic, "leo");
-        var article = await Started(writer, Articles, "On lanterns", "leo", PostKind.Article);
+        await Place(tangentSpace);
+        var topic = await Started(Workshop, "What should we build?", "ada");
+        await Replied(topic, "leo");
+        var article = await Started(Articles, "On lanterns", "leo", PostKind.Article);
 
         using (var json = await Json(tangentSpace.Client, "/"))
         {
@@ -365,14 +362,14 @@ public sealed class DoorTests(ITestOutputHelper output)
 
         var space = (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!;
         space.Audience = Audience.Private;
-        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new Store<TangentSpace>(space), Cancellation));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(Cancellation));
 
         using (var request = new HttpRequestMessage(HttpMethod.Get, "/"))
         {
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             using var gated = await tangentSpace.Client.SendAsync(request, Cancellation);
             using var problem = JsonDocument.Parse(await gated.Content.ReadAsStringAsync(Cancellation));
-            Assert.Equal((HttpStatusCode.Unauthorized, "application/problem+json", Capabilities.SignIn),
+            Assert.Equal((HttpStatusCode.Unauthorized, "application/problem+json", Capabilities.SignIn.Word),
                 (gated.StatusCode, gated.Content.Headers.ContentType?.MediaType, problem.RootElement.GetProperty("gate").GetString()));
         }
 
@@ -391,16 +388,15 @@ public sealed class DoorTests(ITestOutputHelper output)
     public async Task An_event_in_a_tangent_the_reader_may_not_view_moves_neither_what_the_door_read_through_nor_its_body_nor_its_etag()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(
-            new CreateTangent("studio", "The studio", "", PostKind.Topic, 3, Audience.Private, "leo"), Cancellation));
-        var since = await Mark(writer, Reader);
+        await Place(tangentSpace);
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent("studio", "The studio", "", PostKind.Topic, 3, Audience.Private, "leo").Send(Cancellation));
+        var since = await Mark(Reader);
         using var browser = await SignedIn(tangentSpace);
 
         var before = await Read(browser.Client, null);
         Assert.Equal(since, before.Through);
-        await Started(writer, "studio", "A private matter", "leo");
-        Assert.True(await Event.HighWaterMark.Load(Cancellation) > since);
+        await Started("studio", "A private matter", "leo");
+        Assert.True(await Event.Log.Highest(Cancellation) > since);
 
         var after = await Read(browser.Client, null);
         Assert.Equal((since, before.Body, before.ETag), (after.Through, after.Body, after.ETag));
@@ -411,11 +407,10 @@ public sealed class DoorTests(ITestOutputHelper output)
     public async Task At_exactly_the_tangent_limit_the_door_lists_every_tangent_and_claims_no_more_and_one_more_it_may_view_makes_it_at_least()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         for (var index = 2; index < DoorController.TangentLimit; index++) await Given.ATangent(tangentSpace, "tangent-" + index, ct: Cancellation);
         // A Tangent the reader may not view, last by order: the one row past the limit, which claims nothing.
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(
-            new CreateTangent("hidden", "Hidden", "", PostKind.Topic, 99, Audience.Private, "leo"), Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent("hidden", "Hidden", "", PostKind.Topic, 99, Audience.Private, "leo").Send(Cancellation));
 
         using (var json = await Json(tangentSpace.Client, "/"))
         {
@@ -437,35 +432,30 @@ public sealed class DoorTests(ITestOutputHelper output)
 
     /// <summary>The place every proof starts from: established as Lantern Works, Leo's place, with Leo an
     /// administrator, Ada and the reader members, a public discussions Tangent and a public articles Tangent.</summary>
-    private static async Task<WriteLoop> Place(TangentSpaceFixture tangentSpace)
+    private static async Task Place(TangentSpaceFixture tangentSpace)
     {
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         var space = await Given.AnEstablishedTangentSpace(tangentSpace, "Lantern Works", ct: Cancellation);
         await Given.AParticipant(tangentSpace, "leo", [Roles.Administrator], ct: Cancellation);
         await Given.AParticipant(tangentSpace, "ada", [Roles.Member], ct: Cancellation);
         await Given.AParticipant(tangentSpace, Reader, [Roles.Member], ct: Cancellation);
         space.ProprietorId = "leo";
         space.OperatorId = "leo";
-        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new Store<TangentSpace>(space), Cancellation));
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(
-            new CreateTangent(Workshop, "The workshop", "Where things get made.", PostKind.Topic, 2, Audience.Public, "leo"), Cancellation));
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(
-            new CreateTangent(Articles, "Articles", "", PostKind.Article, 1, Audience.Public, "leo"), Cancellation));
-        return writer;
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent(Workshop, "The workshop", "Where things get made.", PostKind.Topic, 2, Audience.Public, "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent(Articles, "Articles", "", PostKind.Article, 1, Audience.Public, "leo").Send(Cancellation));
     }
 
-    private static async Task<Post> Started(WriteLoop writer, string tangent, string title, string author, PostKind kind = PostKind.Topic)
-        => Assert.IsType<Outcome<Post>.Done>(await writer.Send(
-            new StartTopic(Tids.Mint(), tangent, title, "The opening words of " + title + ".", author, kind), Cancellation)).Result;
+    private static async Task<Post> Started(string tangent, string title, string author, PostKind kind = PostKind.Topic)
+        => Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), tangent, title, "The opening words of " + title + ".", author, kind).Send(Cancellation)).Result;
 
-    private static async Task<Post> Replied(WriteLoop writer, Post topic, string author, string? parent = null, string body = "A reply.")
-        => Assert.IsType<Outcome<Post>.Done>(await writer.Send(new Reply(Tids.Mint(), topic.Id, body, author, parent), Cancellation)).Result;
+    private static async Task<Post> Replied(Post topic, string author, string? parent = null, string body = "A reply.")
+        => Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), topic.Id, body, author, parent).Send(Cancellation)).Result;
 
     /// <summary>Puts the participant's place checkpoint at the log's last sequence and answers with it.</summary>
-    private static async Task<long> Mark(WriteLoop writer, string participantId)
+    private static async Task<long> Mark(string participantId)
     {
-        var last = await Event.HighWaterMark.Load(Cancellation);
-        Assert.IsType<Outcome<Checkpoint>.Done>(await writer.Send(new Store<Checkpoint>(Checkpoint.At(participantId, Scope.Place, last)), Cancellation));
+        var last = await Event.Log.Highest(Cancellation);
+        Assert.IsType<Outcome<Checkpoint>.Done>(await new Store<Checkpoint>(Checkpoint.At(participantId, Scope.Place, last)).Send(Cancellation));
         return last;
     }
 

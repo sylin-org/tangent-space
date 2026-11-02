@@ -3,11 +3,11 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Koan.Data.Abstractions;
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Tangent.Access;
 using Tangent.Events;
 using Tangent.Participants;
 using Tangent.Tangents;
-using Tangent.Writer;
 
 namespace Tangent.Posts;
 
@@ -95,7 +95,7 @@ public static partial class Mentions
     /// empty for a new Post — did not, targeted at them: not the actor, not a DID that is no participant's, and not a
     /// participant for whom the Post's Tangent is absent. One keyed read of the participants, then capability's rows for
     /// each; nothing parses.</summary>
-    public static async Task Notify(Sequences sequences, Post post, string actorId, IReadOnlyList<string> before, DateTimeOffset at,
+    public static async Task Notify(Post post, string actorId, IReadOnlyList<string> before, DateTimeOffset at,
         CancellationToken ct)
     {
         var earlier = before.ToHashSet(StringComparer.Ordinal);
@@ -105,8 +105,8 @@ public static partial class Mentions
         foreach (var id in added.Where(participants.Contains))
         {
             if (!(await Capabilities.Load(id, post.TangentId, null, ct)).Exists) continue;
-            await Event.Next(sequences, EventKind.Mention, at,
-                tangentId: post.TangentId, topicId: post.TopicId, postId: post.Id, actorId: actorId, targetId: id, version: post.Version).Save(ct);
+            await Event.Append(EventKind.Mention, at, ct,
+                tangentId: post.TangentId, topicId: post.TopicId, postId: post.Id, actorId: actorId, targetId: id, version: post.Version);
         }
     }
 

@@ -1,8 +1,8 @@
 using Koan.Core.Hosting.App;
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Tangent.Participants;
 using Tangent.Space;
-using Tangent.Writer;
 
 namespace Tangent.Access;
 
@@ -23,9 +23,9 @@ public static class RoleSettings
     public const string PermissionsRule = "A role’s permissions are named as its can names them: View, Post, Topic, EditOwn, RemoveOwn, Moderate, "
         + "ManageTangent, ManageRoles, ManageStanding, ManageSpace and Administrator.";
 
-    public const string NoRole = "No role here has that word.";
+    public static readonly Reason NoRole = Reason.Absent("No role here has that word.");
 
-    public const string NotManaged = "You change only the roles below your own highest role.";
+    public static readonly Reason NotManaged = Reason.Gated("You change only the roles below your own highest role.");
 
     public const string EveryoneStays = "Everyone stays as it is: every reader holds it, and a place’s audience says what they read.";
 

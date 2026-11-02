@@ -1,13 +1,13 @@
 using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
 using Tangent.Events;
 using Tangent.Space;
 using Tangent.Tangents;
-using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -27,8 +27,7 @@ public sealed partial class ReportTests
     {
         await using (var established = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation))
         {
-            var writer = established.Services.GetRequiredService<WriteLoop>();
-            Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new Establish(Leo, "leo.example", "Field notes"), Cancellation));
+            Assert.IsType<Outcome<TangentSpace>.Done>(await new Establish(Leo, "leo.example", "Field notes").Send(Cancellation));
             await Given.AParticipant(established, Ada, [Roles.Member], ct: Cancellation);
             await Given.AParticipant(established, Mo, [Roles.Moderator], ct: Cancellation);
 
@@ -47,7 +46,7 @@ public sealed partial class ReportTests
         // A place established without one: the next start creates it once, and the start after that changes nothing.
         await using var first = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         var operatorRow = new TangentSpace { Name = "Field notes", OperatorId = Leo, ProprietorId = Leo };
-        Assert.IsType<Outcome<TangentSpace>.Done>(await first.Services.GetRequiredService<WriteLoop>().Send(new Store<TangentSpace>(operatorRow), Cancellation));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(operatorRow).Send(Cancellation));
         await first.StopAsync(Cancellation);
 
         await using var second = await TangentSpaceFixture.StartAsync(Over(first), ct: Cancellation);
@@ -72,9 +71,9 @@ public sealed partial class ReportTests
     public async Task A_member_reports_a_reply_and_a_topic_starts_in_the_moderators_tangent_with_the_origin_and_the_reason_which_the_member_never_sees()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Reporting(tangentSpace);
-        var topic = await Started(writer, Bea, "Lanterns at dusk", "Who lights theirs first?");
-        var reply = await Replied(writer, topic, Bea, "Whoever is slowest, obviously.");
+        await Reporting(tangentSpace);
+        var topic = await Started(Bea, "Lanterns at dusk", "Who lights theirs first?");
+        var reply = await Replied(topic, Bea, "Whoever is slowest, obviously.");
         using var ada = await SignedIn(tangentSpace, Ada);
 
         var page = await Send(ada.Client, HttpMethod.Get, TopicPath(topic));
@@ -113,11 +112,11 @@ public sealed partial class ReportTests
     public async Task The_reported_author_and_the_reporter_read_nothing_of_the_report_and_a_moderator_reads_it_as_news_linked_to_its_origin()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Reporting(tangentSpace);
-        var topic = await Started(writer, Bea, "Lanterns at dusk", "Who lights theirs first?");
-        var reply = await Replied(writer, topic, Bea, "Whoever is slowest, obviously.");
+        await Reporting(tangentSpace);
+        var topic = await Started(Bea, "Lanterns at dusk", "Who lights theirs first?");
+        var reply = await Replied(topic, Bea, "Whoever is slowest, obviously.");
         var since = (await Event.All(Cancellation)).Max(e => e.Seq);
-        var report = await Reported(writer, Ada, reply, "This mocks someone in the workshop.");
+        var report = await Reported(Ada, reply, "This mocks someone in the workshop.");
         using var bea = await SignedIn(tangentSpace, Bea);
         using var ada = await SignedIn(tangentSpace, Ada);
         using var mo = await SignedIn(tangentSpace, Mo);
@@ -168,16 +167,15 @@ public sealed partial class ReportTests
     public async Task Reports_in_the_moderators_tangent_never_crowd_out_the_topics_a_reader_may_view_or_make_a_page_say_at_least()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Reporting(tangentSpace);
-        var topic = await Started(writer, Bea, "Lanterns at dusk", "Who lights theirs first?");
-        var reply = await Replied(writer, topic, Bea, "Whoever is slowest, obviously.");
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(
-            new StartTopic(Tids.Mint(), Workshop, "Slow lanterns", "", Ada, OriginId: reply.Id), Cancellation));
+        await Reporting(tangentSpace);
+        var topic = await Started(Bea, "Lanterns at dusk", "Who lights theirs first?");
+        var reply = await Replied(topic, Bea, "Whoever is slowest, obviously.");
+        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, "Slow lanterns", "", Ada, OriginId: reply.Id).Send(Cancellation));
         for (var reporter = 0; reporter < Origins.TakenRead; reporter++)
         {
             var id = $"did:plc:reporter{reporter}4reports";
             await Given.AParticipant(tangentSpace, id, [Roles.Member], ct: Cancellation);
-            await Reported(writer, id, reply, "Unkind.");
+            await Reported(id, reply, "Unkind.");
         }
 
         using var bea = await SignedIn(tangentSpace, Bea);
@@ -196,11 +194,11 @@ public sealed partial class ReportTests
     public async Task A_visitor_is_refused_with_sign_in_a_post_the_reporter_may_not_view_is_absent_and_the_same_tid_twice_is_one_report()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Reporting(tangentSpace);
-        var topic = await Started(writer, Bea, "Lanterns at dusk", "Who lights theirs first?");
-        var reply = await Replied(writer, topic, Bea, "Whoever is slowest, obviously.");
+        await Reporting(tangentSpace);
+        var topic = await Started(Bea, "Lanterns at dusk", "Who lights theirs first?");
+        var reply = await Replied(topic, Bea, "Whoever is slowest, obviously.");
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
-        var studio = await Started(writer, Leo, "Quiet planning", "The studio’s private words.", Studio);
+        var studio = await Started(Leo, "Quiet planning", "The studio’s private words.", Studio);
         using var visitor = Agent(tangentSpace);
         using var ada = await SignedIn(tangentSpace, Ada);
         var action = PostPath(topic, reply) + "/report";
@@ -210,7 +208,7 @@ public sealed partial class ReportTests
         var absent = await Json(ada, TopicPath(topic), PostPath(studio, studio) + "/report", new { id = Tids.Mint(), body = "Unkind." });
         var visitorForm = await Send(visitor, HttpMethod.Get, action);
 
-        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn), (refused.Status, refused.Gate));
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (refused.Status, refused.Gate));
         Assert.Equal(HttpStatusCode.NotFound, absent.Status);
         Assert.Contains("data-gate=\"sign-in\"", visitorForm.Body);
         Assert.DoesNotContain("name=\"id\"", visitorForm.Body);
@@ -243,13 +241,13 @@ public sealed partial class ReportTests
     public async Task Reporting_the_same_post_again_while_the_report_stands_replies_in_its_topic_and_after_its_removal_starts_another()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Reporting(tangentSpace);
-        var topic = await Started(writer, Bea, "Lanterns at dusk", "Who lights theirs first?");
-        var reply = await Replied(writer, topic, Bea, "Whoever is slowest, obviously.");
+        await Reporting(tangentSpace);
+        var topic = await Started(Bea, "Lanterns at dusk", "Who lights theirs first?");
+        var reply = await Replied(topic, Bea, "Whoever is slowest, obviously.");
 
-        var first = await Reported(writer, Ada, reply, "This mocks someone in the workshop.");
-        var second = await Reported(writer, Ada, reply, "They edited it, and it is worse now.");
-        var elsewhere = await Reported(writer, Mo, reply, "Agreed, unkind.");
+        var first = await Reported(Ada, reply, "This mocks someone in the workshop.");
+        var second = await Reported(Ada, reply, "They edited it, and it is worse now.");
+        var elsewhere = await Reported(Mo, reply, "Agreed, unkind.");
 
         Assert.Equal((first.Id, first.Id, Ada), (second.TopicId, second.ParentId, second.AuthorId));
         Assert.Equal(1, (await Post.Get(first.Id, Cancellation))?.ReplyCount);
@@ -257,8 +255,8 @@ public sealed partial class ReportTests
         var created = Assert.Single(await Event.Query(e => e.Kind == EventKind.PostCreated && e.PostId == second.Id, Cancellation));
         Assert.Null(created.TargetId);
 
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new RemovePost(first.Id, Mo), Cancellation));
-        var third = await Reported(writer, Ada, reply, "Still there.");
+        Assert.IsType<Outcome<Post>.Done>(await new RemovePost(first.Id, Mo).Send(Cancellation));
+        var third = await Reported(Ada, reply, "Still there.");
 
         Assert.Null(third.ParentId);
         Assert.NotEqual(first.Id, third.TopicId);
@@ -269,11 +267,11 @@ public sealed partial class ReportTests
     public async Task A_report_of_a_post_the_moderators_may_not_view_carries_nothing_of_its_topic_and_shows_its_origin_as_unseen()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Reporting(tangentSpace);
+        await Reporting(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         await Given.AParticipant(tangentSpace, Keeper, [Roles.Administrator], ct: Cancellation);
-        var secret = await Started(writer, Leo, "Secret acquisition plans", "We buy the kiln shop next spring.", Studio);
-        var report = await Reported(writer, Keeper, secret, "This names a seller who asked to stay out of it.");
+        var secret = await Started(Leo, "Secret acquisition plans", "We buy the kiln shop next spring.", Studio);
+        var report = await Reported(Keeper, secret, "This names a seller who asked to stay out of it.");
         using var mo = await SignedIn(tangentSpace, Mo);
 
         var moderators = await Send(mo.Client, HttpMethod.Get, "/t/" + Moderators);
@@ -293,23 +291,23 @@ public sealed partial class ReportTests
         Assert.Contains("This names a seller", topic.Body);
         Assert.Contains("Taken on a tangent from a post you can’t see", WebUtility.HtmlDecode(Between(topic.Body, "topic-taken-from")));
         // Where the moderators may view the reported Tangent, the title names the reported Topic.
-        var open = await Started(writer, Bea, "Lanterns at dusk", "Who lights theirs first?");
-        Assert.Equal("Report: Lanterns at dusk", (await Reported(writer, Ada, open, "Unkind.")).Title);
+        var open = await Started(Bea, "Lanterns at dusk", "Who lights theirs first?");
+        Assert.Equal("Report: Lanterns at dusk", (await Reported(Ada, open, "Unkind.")).Title);
     }
 
     [Fact]
     public async Task A_resend_after_the_moderators_removed_the_report_answers_received_and_says_nothing_of_what_they_did()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Reporting(tangentSpace);
-        var topic = await Started(writer, Bea, "Lanterns at dusk", "Who lights theirs first?");
-        var reply = await Replied(writer, topic, Bea, "Whoever is slowest, obviously.");
+        await Reporting(tangentSpace);
+        var topic = await Started(Bea, "Lanterns at dusk", "Who lights theirs first?");
+        var reply = await Replied(topic, Bea, "Whoever is slowest, obviously.");
         using var ada = await SignedIn(tangentSpace, Ada);
         var action = PostPath(topic, reply) + "/report";
         var minted = Tids.Mint();
         var fields = new Dictionary<string, string> { ["id"] = minted, ["body"] = "This mocks someone in the workshop." };
         var first = await Form(ada, action, action, new Dictionary<string, string>(fields));
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new RemovePost(minted, Mo), Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new RemovePost(minted, Mo).Send(Cancellation));
         var counted = await Counted();
 
         var again = await Form(ada, action, action, new Dictionary<string, string>(fields));
@@ -333,17 +331,17 @@ public sealed partial class ReportTests
     public async Task Report_is_offered_on_someone_elses_post_and_never_on_ones_own_or_inside_the_moderators_tangent()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Reporting(tangentSpace);
-        var topic = await Started(writer, Bea, "Lanterns at dusk", "Who lights theirs first?");
-        var own = await Replied(writer, topic, Ada, "At six, by the gate.");
-        var report = await Reported(writer, Ada, topic, "Unkind.");
+        await Reporting(tangentSpace);
+        var topic = await Started(Bea, "Lanterns at dusk", "Who lights theirs first?");
+        var own = await Replied(topic, Ada, "At six, by the gate.");
+        var report = await Reported(Ada, topic, "Unkind.");
         using var ada = await SignedIn(tangentSpace, Ada);
         using var mo = await SignedIn(tangentSpace, Mo);
 
         var page = await Send(ada.Client, HttpMethod.Get, TopicPath(topic));
         var json = await Send(ada.Client, HttpMethod.Get, TopicPath(topic), json: true);
         var moderators = await Send(mo.Client, HttpMethod.Get, TopicPath(report), json: true);
-        var nested = await writer.Send(new ReportPost(Tids.Mint(), report.Id, PostBody.Of("Report the report."), Mo), Cancellation);
+        var nested = await new ReportPost(Tids.Mint(), report.Id, PostBody.Of("Report the report."), Mo).Send(Cancellation);
 
         Assert.Contains("action=\"" + AddressOf(topic, topic) + "/report\"", page.Body);
         Assert.DoesNotContain("action=\"" + AddressOf(topic, own) + "/report\"", page.Body);
@@ -364,15 +362,14 @@ public sealed partial class ReportTests
     }
 
     /// <summary>The place every proof of the write verbs starts from, with the moderators' Tangent a start creates for it.</summary>
-    private static async Task<WriteLoop> Reporting(TangentSpaceFixture tangentSpace)
+    private static async Task Reporting(TangentSpaceFixture tangentSpace)
     {
-        var writer = await Place(tangentSpace);
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(new CreateModeratorsTangent(), Cancellation));
-        return writer;
+        await Place(tangentSpace);
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateModeratorsTangent().Send(Cancellation));
     }
 
-    private static async Task<Post> Reported(WriteLoop writer, string reporter, Post post, string reason)
-        => Assert.IsType<Outcome<Post>.Done>(await writer.Send(new ReportPost(Tids.Mint(), post.Id, PostBody.Of(reason), reporter), Cancellation)).Result;
+    private static async Task<Post> Reported(string reporter, Post post, string reason)
+        => Assert.IsType<Outcome<Post>.Done>(await new ReportPost(Tids.Mint(), post.Id, PostBody.Of(reason), reporter).Send(Cancellation)).Result;
 
     /// <summary>The settings of a start over the data folder <paramref name="first"/> holds.</summary>
     private static Dictionary<string, string?> Over(TangentSpaceFixture first)
@@ -382,9 +379,9 @@ public sealed partial class ReportTests
         return settings;
     }
 
-    /// <summary>Answers once the writer has run every command the start queued, since it runs them in arrival order.</summary>
+    /// <summary>Answers once every command sent so far has had its turn, since turns go in arrival order.</summary>
     private static async Task Drained(TangentSpaceFixture tangentSpace)
-        => Assert.IsType<Outcome<bool>.Done>(await tangentSpace.Services.GetRequiredService<WriteLoop>().Send(new Nothing(), Cancellation));
+        => Assert.IsType<Outcome<bool>.Done>(await new Nothing().Send(Cancellation));
 
     /// <summary>The moderators' Tangent as first run or a start leaves it: its row, private, and the moderator role's
     /// overwrite allowing what moderators do there.</summary>
@@ -438,6 +435,6 @@ public sealed partial class ReportTests
     /// <summary>A command that writes nothing, so its outcome says every command queued before it has run.</summary>
     private sealed record Nothing : ICommand<bool>
     {
-        public Task<Outcome<bool>> Run(Sequences sequences, CancellationToken ct) => Task.FromResult<Outcome<bool>>(new Outcome<bool>.Done(true));
+        public Task<Outcome<bool>> Run(CancellationToken ct) => Task.FromResult<Outcome<bool>>(new Outcome<bool>.Done(true));
     }
 }

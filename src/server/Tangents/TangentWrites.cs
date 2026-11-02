@@ -1,3 +1,4 @@
+using Koan.Data.Core.Commands;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
 using Tangent.Posts;
@@ -74,7 +75,7 @@ public static class TangentWrites
 
     /// <summary>Null where the reader may change a Tangent's settings — they hold <see cref="Bit.ManageTangent"/> on it,
     /// or <see cref="Bit.ManageSpace"/> — otherwise the gate of <see cref="Bit.ManageTangent"/>.</summary>
-    public static string? ManageGate(Capabilities capabilities)
+    public static Reason? ManageGate(Capabilities capabilities)
         => capabilities.Holds(Bit.ManageTangent) || capabilities.Holds(Bit.ManageSpace) ? null : capabilities.Gate(Bit.ManageTangent);
 
     public static bool MayManage(Capabilities capabilities) => ManageGate(capabilities) is null;
@@ -95,25 +96,15 @@ public static class TangentWrites
         return null;
     }
 
-    public static About Concerning(string reason) => reason switch
+    public static About Concerning(Reason reason) => reason.Kind == ReasonKind.Gated ? About.Gate : reason.Text switch
     {
         Tangent.NeedsName or Tangent.NameTooLong => About.Name,
         Tangent.DescriptionTooLong => About.Description,
-        Tangent.NeedsSlug or Tangent.SlugReserved or KindRule or AudienceRule or MoveRule or ChangeTangent.Fixed or ChangeTangent.NoAudience
-            or CreateTangent.NoAudience or NewTangentController.NoSlug => About.Sent,
-        _ => About.Gate
+        _ => About.Sent
     };
 
-    /// <summary>The problem a refusal answers a JSON request with: a gate's, or <c>400</c> for what was sent.</summary>
-    public static IActionResult Refused(string reason) => Concerning(reason) == About.Gate
-        ? PostWrites.Gated(reason)
-        : new Problem(StatusCodes.Status400BadRequest, "Not written", reason).ToResult();
-
-    /// <summary>The status a refused form answers with: a gate's, or <c>400</c> for what was sent.</summary>
-    public static int Status(string reason) => Concerning(reason) == About.Gate ? PostWrites.Status(reason) : StatusCodes.Status400BadRequest;
-
     /// <summary>A write that committed: a form is sent on to <paramref name="next"/>; a JSON request reads the Tangent as
-    /// it now stands with the writer's <c>can</c> on it, created (<c>201</c>) or changed (<c>200</c>), with its address
+    /// it now stands with the sender's <c>can</c> on it, created (<c>201</c>) or changed (<c>200</c>), with its address
     /// as its <c>Location</c>.</summary>
     public static async Task<IActionResult> Written(HttpContext http, Tangent tangent, string baseAddress, string? personId, bool created,
         string next, CancellationToken ct)
@@ -140,8 +131,8 @@ public static class TangentWrites
 }
 
 /// <summary>A Tangent as a write leaves it, for an agent: its slug, name, description, default kind and audience, its
-/// <see cref="Order"/> for a writer who holds <c>ManageSpace</c> and so arranges the place's list, its page, its settings,
-/// and what the writer <see cref="Can"/> do there.</summary>
+/// <see cref="Order"/> for a sender who holds <c>ManageSpace</c> and so arranges the place's list, its page, its settings,
+/// and what the sender <see cref="Can"/> do there.</summary>
 public sealed record WrittenTangent(
     string Slug,
     string Name,

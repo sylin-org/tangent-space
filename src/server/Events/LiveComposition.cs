@@ -1,3 +1,4 @@
+using Koan.Data.Core.Commands;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -13,6 +14,8 @@ public static class LiveComposition
     {
         services.TryAddKeyedSingleton(Readable.Clock, TimeProvider.System);
         services.AddSingleton<EventStream>();
+        services.AddSingleton<ICommandWatcher>(provider => provider.GetRequiredService<EventStream>());
+        services.AddSingleton<ICommandWatcher>(provider => provider.GetRequiredService<LogAnnouncer>());
         services.AddScoped<PagePosition>();
         services.AddOptions<MvcOptions>().Configure(mvc => mvc.Filters.Add<PagePosition.Taken>());
     }

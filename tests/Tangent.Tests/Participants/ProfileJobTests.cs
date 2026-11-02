@@ -1,13 +1,13 @@
 using System.Diagnostics;
 using System.Net;
+using Koan.Data.Core.Commands;
 using Koan.Jobs;
 using Microsoft.Extensions.DependencyInjection;
-using Tangent.Writer;
 using Xunit;
 
 namespace Tangent.Participants;
 
-/// <summary>The profile job: one bounded public read, cached on the participant through the writer, at most once a
+/// <summary>The profile job: one bounded public read, cached on the participant through the at most once a
 /// day.</summary>
 public sealed class ProfileJobTests
 {
@@ -25,7 +25,7 @@ public sealed class ProfileJobTests
             ["Tangent:Profile:BaseAddress"] = stub.Answering.AbsoluteUri
         }, ct: Cancellation);
         var committed = new List<Committed>();
-        tangentSpace.Services.GetRequiredService<WriteLoop>().Committed += commit => { lock (committed) committed.Add(commit); };
+        tangentSpace.Commits.Landed += commit => { lock (committed) committed.Add(commit); };
         using var browser = new Browser(tangentSpace);
         const string did = "did:plc:ada4example";
 
@@ -65,7 +65,7 @@ public sealed class ProfileJobTests
         var stale = DateTimeOffset.UtcNow - Profile.Lifetime - TimeSpan.FromMinutes(1);
         var stored = new Participant { Id = did, Handle = "old.example", Profile = new Profile { CapturedAt = stale } };
         Assert.IsType<Outcome<Participant>.Done>(
-            await tangentSpace.Services.GetRequiredService<WriteLoop>().Send(new Store<Participant>(stored), Cancellation));
+            await new Store<Participant>(stored).Send(Cancellation));
         using var browser = new Browser(tangentSpace);
 
         using var signedIn = await browser.SignIn("stale", did, Cancellation, handle: "new.example");
@@ -85,12 +85,11 @@ public sealed class ProfileJobTests
         await using var stub = await ProfileStub.StartAsync(Cancellation);
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(
             new Dictionary<string, string?> { ["Tangent:Profile:BaseAddress"] = stub.AgentLabelled.AbsoluteUri }, ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         var committed = new List<Committed>();
-        writer.Committed += commit => { lock (committed) committed.Add(commit); };
+        tangentSpace.Commits.Landed += commit => { lock (committed) committed.Add(commit); };
         const string did = "did:plc:lumen4example";
         var stored = new Participant { Id = did, Handle = "lumen.example", Kind = ParticipantKind.Person, KindSource = source };
-        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new Store<Participant>(stored), Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(stored).Send(Cancellation));
 
         var job = await stored.Job.Submit(ct: Cancellation);
         Assert.True((await job.Completion(Bound, Cancellation)).Succeeded);
@@ -118,7 +117,7 @@ public sealed class ProfileJobTests
         const string did = "did:plc:bounded4example";
         var stored = new Participant { Id = did, Handle = "before.example", Profile = new Profile { DisplayName = "Before" } };
         Assert.IsType<Outcome<Participant>.Done>(
-            await tangentSpace.Services.GetRequiredService<WriteLoop>().Send(new Store<Participant>(stored), Cancellation));
+            await new Store<Participant>(stored).Send(Cancellation));
 
         var reading = Stopwatch.StartNew();
         var failure = await Assert.ThrowsAsync<ProfileReadFailed>(() =>

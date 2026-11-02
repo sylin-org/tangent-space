@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using System.Xml.Linq;
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
@@ -8,7 +9,6 @@ using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
 using Tangent.Tangents;
-using Tangent.Writer;
 using Xunit;
 
 namespace Tangent.Render;
@@ -38,9 +38,9 @@ public sealed class FeedTests
     public async Task Both_formats_parse_as_valid_and_carry_the_topic_with_its_body_rendered_safe_and_absolute()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, "did:plc:ines", [Roles.Member], ct: Cancellation);
-        await Started(writer, "A first & \u0001plain question",
+        await Started("A first & \u0001plain question",
             "The *words*\u0001 with <script>alert(1)</script>, [@ines](at://did:plc:ines), [a page](/about), [here](#there), ![a sketch](/media/sketch.png) and `href=\"/kept\"`.", Start);
 
         using var atomAnswer = await tangentSpace.Client.GetAsync($"/t/{Workshop}/feed.atom", Cancellation);
@@ -99,10 +99,10 @@ public sealed class FeedTests
     public async Task A_feed_holds_a_bounded_window_of_the_newest_topics_and_neither_their_replies_nor_their_activity_move_it()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         var all = new List<Post>();
-        for (var index = 0; index < Feed.Limit + 3; index++) all.Add(await Started(writer, "Topic " + index, "Words.", Start.AddMinutes(index)));
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new Reply(Tids.Mint(), all[0].Id, "A reply.", "ada", At: Start.AddDays(1)), Cancellation));
+        for (var index = 0; index < Feed.Limit + 3; index++) all.Add(await Started("Topic " + index, "Words.", Start.AddMinutes(index)));
+        Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), all[0].Id, "A reply.", "ada", At: Start.AddDays(1)).Send(Cancellation));
 
         var entries = (await Atomic(tangentSpace.Client, $"/t/{Workshop}/feed.atom")).Elements(Atom + "entry").ToList();
         Assert.Equal(Enumerable.Range(0, Feed.Limit).Select(offset => "Topic " + (Feed.Limit + 2 - offset)), entries.Select(entry => entry.Element(Atom + "title")!.Value));
@@ -126,14 +126,13 @@ public sealed class FeedTests
     public async Task A_members_only_tangent_has_no_feed_for_a_visitor_or_its_own_members_and_its_articles_stay_out_of_the_places()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
         await Overwrites.SetAudience(roles, Back, Audience.Private, Cancellation);
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(new Store<Tangents.Tangent>(Tangents.Tangent.Create(Back, "The back room", "", PostKind.Topic, 2)), Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new Store<Tangents.Tangent>(Tangents.Tangent.Create(Back, "The back room", "", PostKind.Topic, 2)).Send(Cancellation));
         await Overwrites.SetAccess(roles, Back, Roles.Member, RoleAccess.Post, Cancellation);
-        var inside = Assert.IsType<Outcome<Post>.Done>(await writer.Send(
-            new StartTopic(Tids.Mint(), Back, "Said in the back", "Secret words.", "ada", PostKind.Article, Start), Cancellation)).Result;
-        await Started(writer, "Said in the open", "Open words.", Start.AddMinutes(1), PostKind.Article);
+        var inside = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Back, "Said in the back", "Secret words.", "ada", PostKind.Article, Start).Send(Cancellation)).Result;
+        await Started("Said in the open", "Open words.", Start.AddMinutes(1), PostKind.Article);
 
         using var member = new Browser(tangentSpace);
         (await member.SignIn("reader", Reader, Cancellation)).Dispose();
@@ -185,13 +184,13 @@ public sealed class FeedTests
     public async Task A_removed_topic_is_gone_from_its_tangents_feed_and_the_places_articles()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var staying = await Started(writer, "Staying", "These stay.", Start, PostKind.Article);
-        var leaving = await Started(writer, "Leaving", "These go.", Start.AddMinutes(1), PostKind.Article);
+        await Place(tangentSpace);
+        var staying = await Started("Staying", "These stay.", Start, PostKind.Article);
+        var leaving = await Started("Leaving", "These go.", Start.AddMinutes(1), PostKind.Article);
         Assert.Contains("These go.", await tangentSpace.Client.GetStringAsync($"/t/{Workshop}/feed.atom", Cancellation));
         Assert.Contains("These go.", await tangentSpace.Client.GetStringAsync("/articles.json", Cancellation));
 
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new RemovePost(leaving.Id, "leo", Start.AddMinutes(2)), Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new RemovePost(leaving.Id, "leo", Start.AddMinutes(2)).Send(Cancellation));
 
         foreach (var path in new[] { $"/t/{Workshop}/feed.atom", $"/t/{Workshop}/feed.json", "/articles.atom", "/articles.json" })
         {
@@ -206,8 +205,8 @@ public sealed class FeedTests
     public async Task An_unchanged_feed_answers_304_to_the_tag_it_gave_and_a_change_answers_anew_saying_when_and_who_edited()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var topic = await Started(writer, "A question", "The first words.", Start);
+        await Place(tangentSpace);
+        var topic = await Started("A question", "The first words.", Start);
 
         foreach (var path in new[] { $"/t/{Workshop}/feed.atom", $"/t/{Workshop}/feed.json", "/articles.atom", "/articles.json" })
         {
@@ -223,7 +222,7 @@ public sealed class FeedTests
 
         using var held = await tangentSpace.Client.GetAsync($"/t/{Workshop}/feed.atom", Cancellation);
         var edited = Start.AddHours(1);
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new EditPost(topic.Id, topic.Version, "The second words.", null, "leo", edited), Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new EditPost(topic.Id, topic.Version, "The second words.", null, "leo", edited).Send(Cancellation));
 
         using var changed = new HttpRequestMessage(HttpMethod.Get, $"/t/{Workshop}/feed.atom");
         changed.Headers.IfNoneMatch.Add(held.Headers.ETag!);
@@ -242,8 +241,8 @@ public sealed class FeedTests
     public async Task The_articles_feed_is_a_valid_empty_feed_with_no_articles_and_carries_only_articles_once_there_are()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        await Started(writer, "A discussion", "Not an article.", Start);
+        await Place(tangentSpace);
+        await Started("A discussion", "Not an article.", Start);
 
         var empty = await Atomic(tangentSpace.Client, "/articles.atom");
         Assert.Equal("Articles · Tangent Space", empty.Element(Atom + "title")?.Value);
@@ -252,7 +251,7 @@ public sealed class FeedTests
         using (var json = JsonDocument.Parse(await tangentSpace.Client.GetStringAsync("/articles.json", Cancellation)))
             Assert.Equal(0, json.RootElement.GetProperty("items").GetArrayLength());
 
-        await Started(writer, "A published piece", "An article.", Start.AddMinutes(1), PostKind.Article);
+        await Started("A published piece", "An article.", Start.AddMinutes(1), PostKind.Article);
 
         var articles = await Atomic(tangentSpace.Client, "/articles.atom");
         Assert.Equal("A published piece", Assert.Single(articles.Elements(Atom + "entry")).Element(Atom + "title")?.Value);
@@ -263,8 +262,8 @@ public sealed class FeedTests
     public async Task Pages_advertise_their_feeds_and_discovery_names_them()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var topic = await Started(writer, "A question", "Words.", Start);
+        await Place(tangentSpace);
+        var topic = await Started("A question", "Words.", Start);
 
         var door = WebUtility.HtmlDecode(await Html(tangentSpace.Client, "/"));
         Assert.Contains($"<link rel=\"alternate\" type=\"application/atom+xml\" title=\"Articles · Tangent Space (Atom)\" href=\"{BaseUrl}/articles.atom\"", door);
@@ -288,19 +287,16 @@ public sealed class FeedTests
         Assert.Contains($"{BaseUrl}/t/{{tangent}}/feed.atom", llms);
     }
 
-    private static async Task<WriteLoop> Place(TangentSpaceFixture tangentSpace)
+    private static async Task Place(TangentSpaceFixture tangentSpace)
     {
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         await Given.AnEstablishedTangentSpace(tangentSpace, ct: Cancellation);
         await Given.AParticipant(tangentSpace, "leo", [Roles.Administrator], ct: Cancellation);
         await Given.AParticipant(tangentSpace, "ada", [Roles.Member], ct: Cancellation);
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(
-            new CreateTangent(Workshop, "The workshop", "Where things get made.", PostKind.Topic, 1, Audience.Public, "leo"), Cancellation));
-        return writer;
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent(Workshop, "The workshop", "Where things get made.", PostKind.Topic, 1, Audience.Public, "leo").Send(Cancellation));
     }
 
-    private static async Task<Post> Started(WriteLoop writer, string title, string body, DateTimeOffset at, PostKind? kind = null)
-        => Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), Workshop, title, body, "ada", kind, at), Cancellation)).Result;
+    private static async Task<Post> Started(string title, string body, DateTimeOffset at, PostKind? kind = null)
+        => Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, title, body, "ada", kind, at).Send(Cancellation)).Result;
 
     private static async Task<XElement> Atomic(HttpClient client, string path)
         => XDocument.Parse(await client.GetStringAsync(path, Cancellation)).Root!;

@@ -1,8 +1,8 @@
 using System.Net;
 using System.Text.Json;
+using Koan.Data.Core.Commands;
 using Tangent.Access;
 using Tangent.Space;
-using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -18,12 +18,10 @@ public sealed class SearchTests
 
     private static string Path(string words, int page = 1) => "/search?q=" + Uri.EscapeDataString(words) + (page > 1 ? "&page=" + page : "");
 
-    private static async Task<(TangentSpaceFixture Space, WriteLoop Writer)> Open()
+    private static async Task Furnish(TangentSpaceFixture tangentSpace)
     {
-        var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
-        return (tangentSpace, writer);
     }
 
     private static List<string?> Addresses(JsonElement page)
@@ -32,10 +30,11 @@ public sealed class SearchTests
     [Fact]
     public async Task A_word_of_a_title_and_a_word_of_a_body_find_their_post_as_a_page_and_as_json_each_a_line_linked_to_the_post()
     {
-        var (tangentSpace, writer) = await Open();
+        var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Furnish(tangentSpace);
         await using var space = tangentSpace;
-        var root = await Started(writer, Ada, "Copper lanterns", "How the glass is cut.");
-        var reply = await Replied(writer, root, Bea, "Annealing **matters** most, as [@ada](at://" + Ada + ") says.");
+        var root = await Started(Ada, "Copper lanterns", "How the glass is cut.");
+        var reply = await Replied(root, Bea, "Annealing **matters** most, as [@ada](at://" + Ada + ") says.");
 
         var byTitle = (await Send(tangentSpace.Client, HttpMethod.Get, Path("lanterns"), json: true)).Json;
         Assert.Equal([BaseUrl + TopicPath(root)], Addresses(byTitle));
@@ -62,9 +61,10 @@ public sealed class SearchTests
     [Fact]
     public async Task The_word_the_text_ends_in_finds_its_post_by_its_start_and_only_that_word()
     {
-        var (tangentSpace, writer) = await Open();
+        var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Furnish(tangentSpace);
         await using var space = tangentSpace;
-        var root = await Started(writer, Ada, "Copper lanterns", "How the glass is cut.");
+        var root = await Started(Ada, "Copper lanterns", "How the glass is cut.");
 
         Assert.Equal([BaseUrl + TopicPath(root)], Addresses((await Send(tangentSpace.Client, HttpMethod.Get, Path("lant"), json: true)).Json));
         Assert.Empty(Addresses((await Send(tangentSpace.Client, HttpMethod.Get, Path("lant porcelain"), json: true)).Json));
@@ -73,11 +73,12 @@ public sealed class SearchTests
     [Fact]
     public async Task A_page_ends_where_the_next_begins_and_names_the_pages_either_side_and_the_last_names_no_next()
     {
-        var (tangentSpace, writer) = await Open();
+        var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Furnish(tangentSpace);
         await using var space = tangentSpace;
         var posts = new List<string>();
         for (var number = 0; number < SearchController.PageSize + 1; number++)
-            posts.Add(BaseUrl + TopicPath(await Started(writer, Ada, "Lantern " + number, "A lantern.")));
+            posts.Add(BaseUrl + TopicPath(await Started(Ada, "Lantern " + number, "A lantern.")));
 
         var first = (await Send(tangentSpace.Client, HttpMethod.Get, Path("lantern"), json: true)).Json;
         Assert.Equal(SearchController.PageSize, first.GetProperty("hits").GetArrayLength());
@@ -94,9 +95,10 @@ public sealed class SearchTests
     [Fact]
     public async Task A_full_page_with_nothing_after_it_names_no_next_page()
     {
-        var (tangentSpace, writer) = await Open();
+        var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Furnish(tangentSpace);
         await using var space = tangentSpace;
-        for (var number = 0; number < SearchController.PageSize; number++) await Started(writer, Ada, "Lantern " + number, "A lantern.");
+        for (var number = 0; number < SearchController.PageSize; number++) await Started(Ada, "Lantern " + number, "A lantern.");
 
         var first = (await Send(tangentSpace.Client, HttpMethod.Get, Path("lantern"), json: true)).Json;
 
@@ -107,12 +109,13 @@ public sealed class SearchTests
     [Fact]
     public async Task A_post_in_a_private_tangent_is_never_found_by_a_reader_who_may_not_view_it_and_says_nothing_of_itself()
     {
-        var (tangentSpace, writer) = await Open();
+        var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Furnish(tangentSpace);
         await using var space = tangentSpace;
-        var open = await Started(writer, Ada, "An open lantern", "It lights the way.");
+        var open = await Started(Ada, "An open lantern", "It lights the way.");
         // More secrets than a page holds, each outranking the open Post, so a page judged after it was read would be empty.
         for (var number = 0; number < SearchController.PageSize + 2; number++)
-            await Started(writer, Leo, "Lantern lantern " + number, "Lantern lantern, the secret passphrase.", Studio);
+            await Started(Leo, "Lantern lantern " + number, "Lantern lantern, the secret passphrase.", Studio);
 
         foreach (var client in new[] { tangentSpace.Client, (await SignedIn(tangentSpace, Bea)).Client })
         {
@@ -139,10 +142,11 @@ public sealed class SearchTests
     [Fact]
     public async Task A_removed_post_is_not_found_even_by_the_title_it_keeps()
     {
-        var (tangentSpace, writer) = await Open();
+        var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Furnish(tangentSpace);
         await using var space = tangentSpace;
-        var root = await Started(writer, Ada, "Copper lanterns", "How the glass is cut.");
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new RemovePost(root.Id, Ada, null), Cancellation));
+        var root = await Started(Ada, "Copper lanterns", "How the glass is cut.");
+        Assert.IsType<Outcome<Post>.Done>(await new RemovePost(root.Id, Ada, null).Send(Cancellation));
 
         Assert.Empty(Addresses((await Send(tangentSpace.Client, HttpMethod.Get, Path("lanterns"), json: true)).Json));
     }
@@ -156,15 +160,16 @@ public sealed class SearchTests
         var html = await Send(Agent(tangentSpace), HttpMethod.Get, Path("lantern"));
         Assert.Equal(HttpStatusCode.Unauthorized, html.Status);
         Assert.DoesNotContain("masthead-search", html.Body);
-        Assert.Equal(Capabilities.SignIn, (await Send(Agent(tangentSpace), HttpMethod.Get, Path("lantern"), json: true)).Gate);
+        Assert.Equal(Capabilities.SignIn.Word, (await Send(Agent(tangentSpace), HttpMethod.Get, Path("lantern"), json: true)).Gate);
     }
 
     [Fact]
     public async Task A_banned_participant_finds_nothing_here_to_search()
     {
-        var (tangentSpace, writer) = await Open();
+        var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Furnish(tangentSpace);
         await using var space = tangentSpace;
-        await Started(writer, Ada, "Copper lanterns", "How the glass is cut.");
+        await Started(Ada, "Copper lanterns", "How the glass is cut.");
         const string gone = "did:plc:gone4search";
         await Given.AParticipant(tangentSpace, gone, [], Participants.Standing.Banned, Cancellation);
         using var banned = await SignedIn(tangentSpace, gone);
@@ -178,7 +183,8 @@ public sealed class SearchTests
     [Fact]
     public async Task Words_or_a_page_that_cannot_be_searched_say_why_and_no_words_ask_for_some()
     {
-        var (tangentSpace, _) = await Open();
+        var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Furnish(tangentSpace);
         await using var space = tangentSpace;
 
         var punctuation = await Send(tangentSpace.Client, HttpMethod.Get, Path("--"));
@@ -200,9 +206,10 @@ public sealed class SearchTests
     [Fact]
     public async Task A_snippet_is_words_and_never_markup_whatever_a_body_holds()
     {
-        var (tangentSpace, writer) = await Open();
+        var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Furnish(tangentSpace);
         await using var space = tangentSpace;
-        await Started(writer, Ada, "Tricks", "A lantern <script>alert(1)</script> &amp; <img src=x onerror=alert(2)> here.");
+        await Started(Ada, "Tricks", "A lantern <script>alert(1)</script> &amp; <img src=x onerror=alert(2)> here.");
 
         var page = await Send(tangentSpace.Client, HttpMethod.Get, Path("lantern"));
 
@@ -213,7 +220,8 @@ public sealed class SearchTests
     [Fact]
     public async Task The_masthead_holds_a_box_that_is_a_plain_form_to_the_search_and_keeps_the_words_there()
     {
-        var (tangentSpace, writer) = await Open();
+        var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Furnish(tangentSpace);
         await using var space = tangentSpace;
 
         var door = await Send(tangentSpace.Client, HttpMethod.Get, "/");
@@ -226,7 +234,8 @@ public sealed class SearchTests
     [Fact]
     public async Task A_search_is_never_stored()
     {
-        var (tangentSpace, _) = await Open();
+        var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Furnish(tangentSpace);
         await using var space = tangentSpace;
 
         using var response = await tangentSpace.Client.GetAsync(Path("lantern"), Cancellation);

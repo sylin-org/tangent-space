@@ -1,10 +1,10 @@
+using Koan.Data.Core.Commands;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
 using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Render;
-using Tangent.Writer;
 
 namespace Tangent.Space;
 
@@ -19,7 +19,7 @@ namespace Tangent.Space;
 /// again with the reason inline, or a problem with the gate. A person who may not change these but may use another
 /// section opens that one instead. A reader for whom the place does not exist receives what an
 /// address with nothing there receives.</summary>
-public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, WriteLoop writer) : ControllerBase
+public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
     public const string Path = "/settings";
 
@@ -139,7 +139,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(place.Gate(Bit.View));
+        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
         return Elsewhere(place) ?? Ok(await Page(place, personId, ct));
     }
 
@@ -151,7 +151,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
         var personId = PostWrites.PersonId(User);
         if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(place.Gate(Bit.View));
+        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
         if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
 
         Audience? audience = null;
@@ -161,20 +161,16 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
             audience = Enum.Parse<Audience>(sent, ignoreCase: true);
         }
 
-        var outcome = await writer.Send(new ChangeTangentSpace(personId ?? "", fields.GetValueOrDefault(NameField),
-            fields.GetValueOrDefault(DescriptionField), Audience: audience), ct);
+        var outcome = await new ChangeTangentSpace(personId ?? "", fields.GetValueOrDefault(NameField),
+            fields.GetValueOrDefault(DescriptionField), Audience: audience).Send();
         switch (outcome)
         {
             case Outcome<TangentSpace>.Done { Result: var space }:
                 return await Written(space, personId, BaseAddress() + "/", ct);
-            case Outcome<TangentSpace>.Refused { Reason: ChangeTangentSpace.NoPlace }:
-                return PostWrites.Absent();
-            case Outcome<TangentSpace>.Refused { Reason: var reason }:
+            case Outcome<TangentSpace>.Refused { Reason: { Kind: not ReasonKind.Absent } reason }:
                 return await Refused(personId, fields, reason, ct);
-            case Outcome<TangentSpace>.Failed { Cause: var cause }:
-                throw new InvalidOperationException("Changing the Tangent Space's settings failed.", cause);
             default:
-                throw new InvalidOperationException($"The writer answered {outcome} for changing the Tangent Space's settings.");
+                return PostWrites.Answer(HttpContext, outcome);
         }
     }
 
@@ -184,7 +180,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(place.Gate(Bit.View));
+        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
         return Elsewhere(place) ?? Ok(await AdmissionPage(place, personId, ct));
     }
 
@@ -196,7 +192,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
         var personId = PostWrites.PersonId(User);
         if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(place.Gate(Bit.View));
+        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
         if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
 
         Admission? admission = null;
@@ -207,36 +203,30 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
             admission = Enum.Parse<Admission>(sent, ignoreCase: true);
         }
 
-        var outcome = await writer.Send(new ChangeTangentSpace(personId ?? "", Admission: admission), ct);
+        var outcome = await new ChangeTangentSpace(personId ?? "", Admission: admission).Send();
         switch (outcome)
         {
             case Outcome<TangentSpace>.Done { Result: var space }:
                 return await Written(space, personId, BaseAddress() + AdmissionPath, ct);
-            case Outcome<TangentSpace>.Refused { Reason: ChangeTangentSpace.NoPlace }:
-                return PostWrites.Absent();
-            case Outcome<TangentSpace>.Refused { Reason: var reason }:
+            case Outcome<TangentSpace>.Refused { Reason: { Kind: not ReasonKind.Absent } reason }:
                 return await AdmissionRefused(personId, sent, reason, ct);
-            case Outcome<TangentSpace>.Failed { Cause: var cause }:
-                throw new InvalidOperationException("Changing the Tangent Space's admission failed.", cause);
             default:
-                throw new InvalidOperationException($"The writer answered {outcome} for changing the Tangent Space's admission.");
+                return PostWrites.Answer(HttpContext, outcome);
         }
     }
 
     /// <summary>A refused admission: for a JSON request, the problem its reason answers as; for a form, the form again,
     /// read afresh, with what was sent chosen where it is one of the choices, and the reason above the form.</summary>
-    private async Task<IActionResult> AdmissionRefused(string? personId, string? sent, string reason, CancellationToken ct)
+    private async Task<IActionResult> AdmissionRefused(string? personId, string? sent, Reason reason, CancellationToken ct)
     {
-        var gated = reason != TangentSpace.AdmissionRule;
-        if (PostWrites.WantsJson(Request))
-            return gated ? PostWrites.Gated(reason) : new Problem(StatusCodes.Status400BadRequest, "Not written", reason).ToResult();
+        if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
 
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(place.Gate(Bit.View));
+        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
         var page = await AdmissionPage(place, personId, ct);
         if (sent is not null && Admissions.Contains(sent, StringComparer.Ordinal)) page = page with { Admission = sent };
-        page = gated ? page with { Gate = reason, Change = null } : page with { Failure = reason };
-        return new ObjectResult(page) { StatusCode = gated ? PostWrites.Status(reason) : StatusCodes.Status400BadRequest };
+        page = reason.Kind == ReasonKind.Gated ? page with { Gate = reason.Word, Change = null } : page with { Failure = reason.Text };
+        return new ObjectResult(page) { StatusCode = PostWrites.Status(reason) };
     }
 
     private async Task<AdmissionSettingsPage> AdmissionPage(Capabilities place, string? personId, CancellationToken ct)
@@ -250,7 +240,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
             Admissions,
             place.Gate(Bit.ManageSpace) is null ? AdmissionForm(baseAddress, FormToken.For(HttpContext)) : null,
             place.Can,
-            place.Gate(Bit.ManageSpace),
+            place.Gate(Bit.ManageSpace)?.Word,
             personId is null ? baseAddress + SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,
             space.Name,
             baseAddress + "/",
@@ -263,7 +253,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(place.Gate(Bit.View));
+        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
         return Elsewhere(place) ?? Ok(await AppearancePage(place, personId, ct));
     }
 
@@ -275,7 +265,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
         var personId = PostWrites.PersonId(User);
         if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(place.Gate(Bit.View));
+        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
         if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
 
         Accent? accent = null;
@@ -285,38 +275,32 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
             accent = Enum.Parse<Accent>(sent, ignoreCase: true);
         }
 
-        var outcome = await writer.Send(new ChangeTangentSpace(personId ?? "", Accent: accent,
+        var outcome = await new ChangeTangentSpace(personId ?? "", Accent: accent,
             Head: fields.GetValueOrDefault(HeadField),
             Masthead: fields.GetValueOrDefault(MastheadField),
             DoorIntro: fields.GetValueOrDefault(DoorIntroField),
             ArticleHeader: fields.GetValueOrDefault(ArticleHeaderField),
-            Footer: fields.GetValueOrDefault(FooterField)), ct);
+            Footer: fields.GetValueOrDefault(FooterField)).Send();
         switch (outcome)
         {
             case Outcome<TangentSpace>.Done { Result: var space }:
                 return await Written(space, personId, BaseAddress() + AppearancePath, ct);
-            case Outcome<TangentSpace>.Refused { Reason: ChangeTangentSpace.NoPlace }:
-                return PostWrites.Absent();
-            case Outcome<TangentSpace>.Refused { Reason: var reason }:
+            case Outcome<TangentSpace>.Refused { Reason: { Kind: not ReasonKind.Absent } reason }:
                 return await AppearanceRefused(personId, fields, reason, ct);
-            case Outcome<TangentSpace>.Failed { Cause: var cause }:
-                throw new InvalidOperationException("Changing the Tangent Space's appearance failed.", cause);
             default:
-                throw new InvalidOperationException($"The writer answered {outcome} for changing the Tangent Space's appearance.");
+                return PostWrites.Answer(HttpContext, outcome);
         }
     }
 
     /// <summary>A refused appearance: for a JSON request, the problem its reason answers as; for a form, the form again, read
     /// afresh, with the accent sent chosen where it is one of the choices, the slots as they were sent, and the reason above
     /// the form.</summary>
-    private async Task<IActionResult> AppearanceRefused(string? personId, IReadOnlyDictionary<string, string> fields, string reason, CancellationToken ct)
+    private async Task<IActionResult> AppearanceRefused(string? personId, IReadOnlyDictionary<string, string> fields, Reason reason, CancellationToken ct)
     {
-        var gated = reason != TangentSpace.AccentRule && !Slots.IsRule(reason);
-        if (PostWrites.WantsJson(Request))
-            return gated ? PostWrites.Gated(reason) : new Problem(StatusCodes.Status400BadRequest, "Not written", reason).ToResult();
+        if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
 
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(place.Gate(Bit.View));
+        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
         var page = await AppearancePage(place, personId, ct);
         if (fields.GetValueOrDefault(AccentField) is { } sent && Appearance.Accents.Contains(sent, StringComparer.Ordinal)) page = page with { Accent = sent };
         page = page with
@@ -330,8 +314,8 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
                 Footer = fields.GetValueOrDefault(FooterField) ?? page.Slots.Footer
             }
         };
-        page = gated ? page with { Gate = reason, Change = null } : page with { Failure = reason };
-        return new ObjectResult(page) { StatusCode = gated ? PostWrites.Status(reason) : StatusCodes.Status400BadRequest };
+        page = reason.Kind == ReasonKind.Gated ? page with { Gate = reason.Word, Change = null } : page with { Failure = reason.Text };
+        return new ObjectResult(page) { StatusCode = PostWrites.Status(reason) };
     }
 
     private async Task<AppearanceSettingsPage> AppearancePage(Capabilities place, string? personId, CancellationToken ct)
@@ -346,7 +330,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
             space.Slots,
             place.Gate(Bit.ManageSpace) is null ? AppearanceForm(baseAddress, FormToken.For(HttpContext)) : null,
             place.Can,
-            place.Gate(Bit.ManageSpace),
+            place.Gate(Bit.ManageSpace)?.Word,
             personId is null ? baseAddress + SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,
             space.Name,
             baseAddress + "/",
@@ -354,7 +338,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
     }
 
     /// <summary>A change that committed: a form is sent on to <paramref name="onward"/>; a JSON request reads the place as
-    /// it now stands, with the writer's <c>can</c> in it.</summary>
+    /// it now stands, with the sender's <c>can</c> in it.</summary>
     private async Task<IActionResult> Written(TangentSpace space, string? personId, string onward, CancellationToken ct)
     {
         var door = BaseAddress() + "/";
@@ -374,14 +358,12 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
 
     /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the form again, read afresh,
     /// keeping what was sent, with the reason where it belongs.</summary>
-    private async Task<IActionResult> Refused(string? personId, IReadOnlyDictionary<string, string> fields, string reason, CancellationToken ct)
+    private async Task<IActionResult> Refused(string? personId, IReadOnlyDictionary<string, string> fields, Reason reason, CancellationToken ct)
     {
-        var gated = reason is not (TangentSpace.NameRule or TangentSpace.DescriptionRule or TangentSpace.AudienceRule);
-        if (PostWrites.WantsJson(Request))
-            return gated ? PostWrites.Gated(reason) : new Problem(StatusCodes.Status400BadRequest, "Not written", reason).ToResult();
+        if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
 
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(place.Gate(Bit.View));
+        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
         var page = await Page(place, personId, ct);
         page = page with
         {
@@ -389,14 +371,13 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
             Description = fields.GetValueOrDefault(DescriptionField) ?? page.Description,
             Audience = fields.GetValueOrDefault(AudienceField) is { } audience && Audiences.Contains(audience, StringComparer.Ordinal) ? audience : page.Audience
         };
-        page = reason switch
+        page = reason.Kind == ReasonKind.Gated ? page with { Gate = reason.Word, Change = null } : reason.Text switch
         {
-            TangentSpace.NameRule => page with { NameFailure = reason },
-            TangentSpace.DescriptionRule => page with { DescriptionFailure = reason },
-            TangentSpace.AudienceRule => page with { Failure = reason },
-            _ => page with { Gate = reason, Change = null }
+            TangentSpace.NameRule => page with { NameFailure = reason.Text },
+            TangentSpace.DescriptionRule => page with { DescriptionFailure = reason.Text },
+            _ => page with { Failure = reason.Text }
         };
-        return new ObjectResult(page) { StatusCode = gated ? PostWrites.Status(reason) : StatusCodes.Status400BadRequest };
+        return new ObjectResult(page) { StatusCode = PostWrites.Status(reason) };
     }
 
     private async Task<TangentSpaceSettingsPage> Page(Capabilities place, string? personId, CancellationToken ct)
@@ -412,7 +393,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, Write
             Audiences,
             place.Gate(Bit.ManageSpace) is null ? GeneralForm(baseAddress, FormToken.For(HttpContext)) : null,
             place.Can,
-            place.Gate(Bit.ManageSpace),
+            place.Gate(Bit.ManageSpace)?.Word,
             personId is null ? baseAddress + SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,
             space.Name,
             baseAddress + "/",

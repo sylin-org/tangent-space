@@ -2,11 +2,11 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Koan.Data.Core.Commands;
 using Koan.Web.Hosting;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Participants;
-using Tangent.Writer;
 using Xunit;
 
 namespace Tangent.Space;
@@ -100,7 +100,7 @@ public sealed class BaseUrlTests
     }
 
     [Fact]
-    public async Task An_accepted_address_is_kept_on_the_row_through_the_writer_once_and_read_back_before_the_first_request_after_a_restart()
+    public async Task An_accepted_address_is_kept_on_the_row_by_command_once_and_read_back_before_the_first_request_after_a_restart()
     {
         var dataFolder = Path.Combine(Path.GetTempPath(), "tangent-data-" + Guid.CreateVersion7().ToString("n"));
         try
@@ -109,7 +109,7 @@ public sealed class BaseUrlTests
             {
                 await Reached.APlace(first, Leo, address: null, Cancellation);
                 var committed = new ConcurrentQueue<object>();
-                first.Services.GetRequiredService<WriteLoop>().Committed += commit => committed.Enqueue(commit.Command);
+                first.Commits.Landed += commit => committed.Enqueue(commit.Command);
                 var baseUrl = first.Services.GetRequiredService<KoanWebBaseUrl>();
 
                 await baseUrl.Accept("HTTPS://Kept.Example:443/", Cancellation);

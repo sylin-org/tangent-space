@@ -1,7 +1,7 @@
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Tangent.Access;
 using Tangent.Events;
-using Tangent.Writer;
 
 namespace Tangent.Posts;
 
@@ -16,7 +16,7 @@ namespace Tangent.Posts;
 /// gate, so a replay is safe, whoever the handles it typed name by then; a Post of this Topic holding the Id with a
 /// different parent, body or author is a conflict, and a Post anywhere else holding it is refused with
 /// <see cref="Post.IdTaken"/>, which says nothing of that Post. The body is judged where the command is built
-/// (<see cref="PostBody"/>), never in the writer.</summary>
+/// (<see cref="PostBody"/>), never in its hold.</summary>
 public sealed record Reply(
     string Id,
     string TopicId,
@@ -25,10 +25,10 @@ public sealed record Reply(
     string? ParentId = null,
     DateTimeOffset? At = null) : ICommand<Post>
 {
-    public const string NoTopic = "No Topic has this Id.";
+    public static readonly Reason NoTopic = Reason.Absent("No Topic has this Id.");
     public const string NoParent = "The parent is not a Post of this Topic.";
 
-    public async Task<Outcome<Post>> Run(Sequences sequences, CancellationToken ct)
+    public async Task<Outcome<Post>> Run(CancellationToken ct)
     {
         if (await Post.Get(TopicId, ct) is not { } root) return new Outcome<Post>.Refused(NoTopic);
         var capabilities = await Capabilities.Load(AuthorId, root.TangentId, root, ct);
@@ -40,7 +40,7 @@ public sealed record Reply(
         if (existing is not null)
         {
             return existing.TopicId == root.Id
-                ? new Outcome<Post>.Conflict($"Post '{Id}' already exists with a different body.")
+                ? new Outcome<Post>.Refused(Reason.Conflict($"Post '{Id}' already exists with a different body."))
                 : new Outcome<Post>.Refused(Post.IdTaken);
         }
         var parent = ParentId is null || ParentId == root.Id ? root : await Post.Get(ParentId, ct);
@@ -51,10 +51,10 @@ public sealed record Reply(
         await reply.Save(ct);
         await root.Save(ct);
         await MediaUse.Record(reply, reply.AuthorId, [], ct);
-        await Event.Next(sequences, EventKind.PostCreated, at,
+        await Event.Append(EventKind.PostCreated, at, ct,
             tangentId: reply.TangentId, topicId: reply.TopicId, postId: reply.Id, actorId: reply.AuthorId,
-            targetId: parent.AuthorId == reply.AuthorId ? null : parent.AuthorId, version: reply.Version).Save(ct);
-        await Mentions.Notify(sequences, reply, reply.AuthorId, [], at, ct);
+            targetId: parent.AuthorId == reply.AuthorId ? null : parent.AuthorId, version: reply.Version);
+        await Mentions.Notify(reply, reply.AuthorId, [], at, ct);
         return new Outcome<Post>.Done(reply);
     }
 

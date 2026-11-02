@@ -1,13 +1,13 @@
 using System.Net;
+using Koan.Data.Core.Commands;
 using Microsoft.Extensions.DependencyInjection;
-using Tangent.Writer;
 using Xunit;
 
 namespace Tangent.Space;
 
 /// <summary>What a proof of the place's address starts from: a Tangent Space with no URL configured, which believes a
 /// proxy on loopback as it does by default, so a request says which origin it arrived on through the proxy's forwarded
-/// scheme and host; a request on an origin; and the writer settled, so whatever a request handed it has run.</summary>
+/// scheme and host; a request on an origin; and the store settled, so whatever a request tried has run.</summary>
 public static class Reached
 {
     /// <summary>No base URL configured, Koan's test connector on, and no profile job reaching the network; with
@@ -47,21 +47,21 @@ public static class Reached
         return body;
     }
 
-    /// <summary>Waits for the writer to run everything handed to it so far: one command of its own, behind them in its
-    /// queue.</summary>
+    /// <summary>Waits for everything sent so far to run: one command of its own, behind them at the store's
+    /// turn.</summary>
     public static async Task Settled(TangentSpaceFixture tangentSpace, CancellationToken ct)
-        => Assert.IsType<Outcome<bool>.Done>(await tangentSpace.Services.GetRequiredService<WriteLoop>().Send(new Settle(), ct));
+        => Assert.IsType<Outcome<bool>.Done>(await new Settle().Send(ct));
 
     /// <summary>The place's row, set up by <paramref name="operatorId"/>, with <paramref name="address"/> as its address.</summary>
     public static async Task<TangentSpace> APlace(TangentSpaceFixture tangentSpace, string operatorId, string? address, CancellationToken ct)
     {
         var space = new TangentSpace { Name = "Lantern Works", ProprietorId = operatorId, OperatorId = operatorId, Address = address };
-        Assert.IsType<Outcome<TangentSpace>.Done>(await tangentSpace.Services.GetRequiredService<WriteLoop>().Send(new Store<TangentSpace>(space), ct));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(ct));
         return space;
     }
 
     private sealed record Settle : ICommand<bool>
     {
-        public Task<Outcome<bool>> Run(Sequences sequences, CancellationToken ct) => Task.FromResult<Outcome<bool>>(new Outcome<bool>.Done(true));
+        public Task<Outcome<bool>> Run(CancellationToken ct) => Task.FromResult<Outcome<bool>>(new Outcome<bool>.Done(true));
     }
 }

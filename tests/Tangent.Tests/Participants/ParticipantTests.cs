@@ -1,5 +1,5 @@
+using Koan.Data.Core.Commands;
 using Microsoft.Extensions.DependencyInjection;
-using Tangent.Writer;
 using Xunit;
 
 namespace Tangent.Participants;
@@ -13,7 +13,6 @@ public sealed class ParticipantTests
     public async Task A_participant_round_trips_through_the_person_id_with_its_handle_profile_kind_and_standing()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         var personId = Guid.CreateVersion7().ToString("n");
         var until = new DateTimeOffset(2026, 11, 1, 0, 0, 0, TimeSpan.Zero);
         var captured = new DateTimeOffset(2026, 10, 29, 8, 30, 0, TimeSpan.Zero);
@@ -28,7 +27,7 @@ public sealed class ParticipantTests
             StandingNote = "Cooling off."
         };
 
-        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new Store<Participant>(participant), Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(participant).Send(Cancellation));
         var stored = await Participant.Get(personId, Cancellation);
 
         Assert.NotNull(stored);

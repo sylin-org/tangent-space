@@ -1,3 +1,4 @@
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
@@ -6,7 +7,6 @@ using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Render;
 using Tangent.Space;
-using Tangent.Writer;
 
 namespace Tangent.Tangents;
 
@@ -19,7 +19,7 @@ namespace Tangent.Tangents;
 /// with the reason above the list, or a problem. Both resolve the address as the Tangent page does
 /// (<see cref="PostWrites.Locate"/>) before anything else is judged, so a Tangent the reader may not view and one no row
 /// has answer alike.</summary>
-public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, WriteLoop writer, RoleCollection roles) : ControllerBase
+public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, RoleCollection roles) : ControllerBase
 {
     public const string Segment = "access";
 
@@ -41,7 +41,7 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, WriteLoop wr
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var (found, unseen) = await PostWrites.Locate(personId, tangent, null, null, ct);
+        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, null, null, ct);
         if (found is null) return unseen!;
         var read = await Page(found, personId, Math.Max(page ?? 1, 1), ct);
         return read.Gate is { } gate ? new ObjectResult(read) { StatusCode = PostWrites.Status(gate) } : Ok(read);
@@ -54,13 +54,13 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, WriteLoop wr
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
-        var (found, unseen) = await PostWrites.Locate(personId, tangent, null, null, ct);
+        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, null, null, ct);
         if (found is null) return unseen!;
         if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
 
         if (TangentWrites.Choice(fields, AccessField, Accesses, out _) is not { } chosen) return await Refused(found, personId, AccessRule, ct);
         if (Roles.KeyOf(fields.GetValueOrDefault(RoleField)) is not { } key) return await Refused(found, personId, RoleSettings.NoRole, ct);
-        var outcome = await writer.Send(new ChangeAccess(found.Tangent.Id, personId ?? "", key, Enum.GetValues<RoleAccess>()[chosen]), ct);
+        var outcome = await new ChangeAccess(found.Tangent.Id, personId ?? "", key, Enum.GetValues<RoleAccess>()[chosen]).Send();
         switch (outcome)
         {
             case Outcome<Tangent>.Done:
@@ -71,7 +71,7 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, WriteLoop wr
                     return StatusCode(StatusCodes.Status303SeeOther);
                 }
 
-                var (again, gone) = await PostWrites.Locate(personId, found.Tangent.Id, null, null, ct);
+                var (again, gone) = await PostWrites.Locate(HttpContext, personId, found.Tangent.Id, null, null, ct);
                 if (again is null) return gone!;
                 var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
                 var place = await Capabilities.Load(personId, null, null, ct);
@@ -79,47 +79,25 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, WriteLoop wr
                 return role is null
                     ? PostWrites.Absent()
                     : new ObjectResult(await Listed(role, again, place, personId, space, ct)) { ContentTypes = { "application/json" } };
-            case Outcome<Tangent>.Refused { Reason: ChangeTangent.NoTangent }:
-                return PostWrites.Absent();
-            case Outcome<Tangent>.Refused { Reason: var reason }:
+            case Outcome<Tangent>.Refused { Reason: var reason } when reason != ChangeTangent.NoTangent:
                 return await Refused(found, personId, reason, ct);
-            case Outcome<Tangent>.Failed { Cause: var cause }:
-                throw new InvalidOperationException($"Changing the access to the Tangent {tangent} failed.", cause);
             default:
-                throw new InvalidOperationException($"The writer answered {outcome} for changing the access to the Tangent {tangent}.");
+                return PostWrites.Answer(HttpContext, outcome);
         }
     }
 
     /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the page again, read afresh,
     /// with the reason above the list.</summary>
-    private async Task<IActionResult> Refused(PostWrites.Located found, string? personId, string reason, CancellationToken ct)
+    private async Task<IActionResult> Refused(PostWrites.Located found, string? personId, Reason reason, CancellationToken ct)
     {
-        var status = Status(reason);
-        var gate = reason != RoleSettings.NotManaged && status is StatusCodes.Status401Unauthorized or StatusCodes.Status403Forbidden;
-        if (PostWrites.WantsJson(Request))
-        {
-            if (gate) return PostWrites.Gated(reason);
-            return reason == RoleSettings.NotManaged
-                ? new Problem(status, "Not yours to change", reason, reason).ToResult()
-                : new Problem(status, "Not changed", reason).ToResult();
-        }
+        if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
 
-        var (again, unseen) = await PostWrites.Locate(personId, found.Tangent.Id, null, null, ct);
+        var (again, unseen) = await PostWrites.Locate(HttpContext, personId, found.Tangent.Id, null, null, ct);
         if (again is null) return unseen!;
         var page = await Page(again, personId, 1, ct);
-        page = gate ? page with { Gate = reason, Change = null, Roles = [], Next = null, Previous = null } : page with { Failure = reason };
-        return new ObjectResult(page) { StatusCode = status };
+        page = reason.Word is { } gate ? page with { Gate = gate, Change = null, Roles = [], Next = null, Previous = null } : page with { Failure = reason.Text };
+        return new ObjectResult(page) { StatusCode = PostWrites.Status(reason) };
     }
-
-    /// <summary>The status a refusal answers with: <c>404</c> for a role no one has, <c>403</c> for a role the actor does
-    /// not manage, <c>400</c> for what was sent, and a gate's own otherwise.</summary>
-    private static int Status(string reason) => reason switch
-    {
-        RoleSettings.NoRole => StatusCodes.Status404NotFound,
-        RoleSettings.NotManaged => StatusCodes.Status403Forbidden,
-        AccessRule or ChangeAccess.Administers or ChangeTangent.Fixed => StatusCodes.Status400BadRequest,
-        _ => PostWrites.Status(reason)
-    };
 
     private async Task<TangentAccessPage> Page(PostWrites.Located found, string? personId, int number, CancellationToken ct)
     {
@@ -130,7 +108,7 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, WriteLoop wr
         var here = baseUrl.PathBase + "/t/" + row.Id + "/" + TangentWrites.SettingsSegment + "/" + Segment;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
         var place = await Capabilities.Load(personId, null, null, ct);
-        var gate = TangentWrites.ManageGate(found.Capabilities);
+        var gate = TangentWrites.ManageGate(found.Capabilities)?.Word;
         var read = gate is null ? await roles.Page(page: number, pageSize: RolesController.PageSize, ct: ct) : null;
         var listed = new List<TangentAccessPage.Listed>();
         foreach (var role in read?.Items.Where(Listable) ?? []) listed.Add(await Listed(role, found, place, personId, space, ct));

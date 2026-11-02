@@ -30,8 +30,8 @@ public sealed record ProfileAnswer(string Did, string? DisplayName, string? Desc
 public sealed class ProfileReadFailed(string reason, Exception? inner = null) : Exception(reason, inner);
 
 /// <summary>The one public read of a participant's profile: <c>app.bsky.actor.getProfile</c> for a DID, one request,
-/// no redirect, bounded in time and in bytes. It runs in the profile job, never in a request and never in the
-/// writer.</summary>
+/// no redirect, bounded in time and in bytes. It runs in the profile job, never in a request and never in a
+/// command.</summary>
 public sealed class ProfileReader(HttpClient http, IOptions<ProfileReaderOptions> options)
 {
     private const int DisplayNameLimit = 640;

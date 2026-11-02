@@ -1,4 +1,5 @@
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Koan.Data.Core.Model;
 using Koan.Identity.Roles;
 using Microsoft.AspNetCore.Mvc;
@@ -8,18 +9,17 @@ using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
 using Tangent.Tangents;
-using Tangent.Writer;
 
 namespace Tangent.Capture;
 
-/// <summary>The rows the door's captures show, written through the writer when the capture asks: a place with articles,
+/// <summary>The rows the door's captures show, sent as commands when the capture asks: a place with articles,
 /// discussions and a workshop, people who wrote in them, a Topic of the capture persona's with replies to her, and a
 /// mention of her. For <c>door</c> her place checkpoint sits behind the newest of them, so the door has news for her;
 /// for <c>door-quiet</c> it sits at the log's last sequence, so the door has none; for <c>door-newcomer</c> she has none,
 /// and nothing there is hers or names her, so it is her first door. <c>door-first</c> takes her place checkpoint away, before every width and theme of a state
 /// that shows a first door, since opening it begins one. Compiled only into the capture host, like
 /// <see cref="CaptureSeedController"/>; fixed names, words, times and TIDs.</summary>
-public sealed class DoorSeedController(WriteLoop writer, RoleCollection roles) : ControllerBase
+public sealed class DoorSeedController(RoleCollection roles) : ControllerBase
 {
     private const string Persona = "did:plc:capture4persona";
     private const string Leo = "did:plc:capture4leo";
@@ -79,7 +79,7 @@ public sealed class DoorSeedController(WriteLoop writer, RoleCollection roles) :
         var shower = await Topic("articles", "Why Your Best Ideas Come in the Shower", "The mind files best when nobody is supervising it. On idle time, and how to make room for it on purpose.", Leo, At(26, 18, 0), 6, ct);
 
         // What the persona saw last: everything up to here.
-        await Write(new Keep<Checkpoint>(Checkpoint.At(Persona, Scope.Place, await Event.HighWaterMark.Load(ct))), ct);
+        await Write(new Keep<Checkpoint>(Checkpoint.At(Persona, Scope.Place, await Event.Log.Highest(ct))), ct);
 
         var mcp = await Topic("articles", "MCP 2026-07-28: The Kid Looks Adorable in a Tuxedo", "The new MCP revision landed a few days ago, and you know what? It’s a pretty good read.", Leo, At(28, 10, 0), 7, ct);
         await Answer(mcp, "That line about saying plainly what was already true is going to follow me around.", Lumen, At(28, 14, 30), 8, ct);
@@ -90,7 +90,7 @@ public sealed class DoorSeedController(WriteLoop writer, RoleCollection roles) :
         if (!newcomer) await Write(new Mention(weekly, Persona), ct);
         await Answer(shower, "Mine come on long walks instead. Same mechanism, I suspect.", Mara, At(29, 15, 10), 13, ct);
 
-        if (quiet) await Write(new Keep<Checkpoint>(Checkpoint.At(Persona, Scope.Place, await Event.HighWaterMark.Load(ct))), ct);
+        if (quiet) await Write(new Keep<Checkpoint>(Checkpoint.At(Persona, Scope.Place, await Event.Log.Highest(ct))), ct);
     }
 
     private async Task Person(string id, string handle, string displayName, ParticipantKind kind, string role, CancellationToken ct)
@@ -114,7 +114,7 @@ public sealed class DoorSeedController(WriteLoop writer, RoleCollection roles) :
         return root;
     }
 
-    private async Task<T> Write<T>(ICommand<T> command, CancellationToken ct) => await writer.Send(command, ct) switch
+    private async Task<T> Write<T>(ICommand<T> command, CancellationToken ct) => await command.Send() switch
     {
         Outcome<T>.Done done => done.Result,
         var other => throw new InvalidOperationException($"The door seed's {command.GetType().Name} answered {other}.")
@@ -140,29 +140,27 @@ public sealed class DoorSeedController(WriteLoop writer, RoleCollection roles) :
     /// <summary>The event a mention of a participant in a Topic's root leaves on the log.</summary>
     private sealed record Mention(Post Root, string TargetId) : ICommand<Event>
     {
-        public async Task<Outcome<Event>> Run(Sequences sequences, CancellationToken ct)
+        public async Task<Outcome<Event>> Run(CancellationToken ct)
         {
-            var mention = Event.Next(sequences, EventKind.Mention, Root.CreatedAt,
-                tangentId: Root.TangentId, topicId: Root.Id, postId: Root.Id, actorId: Root.AuthorId, targetId: TargetId);
-            await mention.Save(ct);
-            return new Outcome<Event>.Done(mention);
+            return new Outcome<Event>.Done(await Event.Append(EventKind.Mention, Root.CreatedAt, ct,
+                tangentId: Root.TangentId, topicId: Root.Id, postId: Root.Id, actorId: Root.AuthorId, targetId: TargetId));
         }
     }
 
     /// <summary>Takes the persona's place checkpoint away, where she has one.</summary>
     private sealed record NeverHere : ICommand<bool>
     {
-        public async Task<Outcome<bool>> Run(Sequences sequences, CancellationToken ct)
+        public async Task<Outcome<bool>> Run(CancellationToken ct)
         {
             if (await Checkpoint.Get(Checkpoint.Key(Persona, Scope.Place), ct) is { } checkpoint) await checkpoint.Remove(ct);
             return new Outcome<bool>.Done(true);
         }
     }
 
-    /// <summary>Saves one row as the seed built it, through the writer.</summary>
+    /// <summary>Saves one row as the seed built it, as a command.</summary>
     private sealed record Keep<TEntity>(TEntity Row) : ICommand<TEntity> where TEntity : Entity<TEntity>
     {
-        public async Task<Outcome<TEntity>> Run(Sequences sequences, CancellationToken ct)
+        public async Task<Outcome<TEntity>> Run(CancellationToken ct)
         {
             await Row.Save(ct);
             return new Outcome<TEntity>.Done(Row);

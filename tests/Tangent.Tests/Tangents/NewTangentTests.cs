@@ -78,7 +78,7 @@ public sealed class NewTangentTests
         Assert.Equal(BaseUrl + "/t/new", (await Send(leo.Client, HttpMethod.Get, "/t/workshop", json: true)).Json.GetProperty("newTangent").GetString());
         Assert.Contains($"href=\"{BaseUrl}/t/new\">", (await Send(leo.Client, HttpMethod.Get, "/t/workshop")).Body);
 
-        var gate = Capabilities.NoRoleGrants(Bit.ManageSpace);
+        var gate = Capabilities.NoRoleGrants(Bit.ManageSpace).Word;
         var offered = await Send(ada.Client, HttpMethod.Get, "/t/new");
         Assert.Contains($"data-gate=\"{gate}\"", offered.Body);
         Assert.DoesNotContain("type=\"submit\"", offered.Body);
@@ -89,7 +89,7 @@ public sealed class NewTangentTests
         var asJson = await Json(ada, "/t/workshop", "/t/new", new { name = "Mine" });
         Assert.Equal((HttpStatusCode.Forbidden, gate), (asJson.Status, asJson.Gate));
         Assert.Null(await Tangent.Get("mine", Cancellation));
-        Assert.Equal(Capabilities.SignIn, (await Send(Agent(tangentSpace), HttpMethod.Get, "/t/new", json: true)).Json.GetProperty("gate").GetString());
+        Assert.Equal(Capabilities.SignIn.Word, (await Send(Agent(tangentSpace), HttpMethod.Get, "/t/new", json: true)).Json.GetProperty("gate").GetString());
     }
 
     [Fact]
@@ -138,7 +138,7 @@ public sealed class NewTangentTests
         Assert.Equal(["topic", "article"], Strings(form.GetProperty("kinds")));
         Assert.Equal(["public", "private"], Strings(form.GetProperty("audiences")));
         var member = (await Send(ada.Client, HttpMethod.Get, "/t/new", json: true)).Json;
-        Assert.Equal(Capabilities.NoRoleGrants(Bit.ManageSpace), member.GetProperty("gate").GetString());
+        Assert.Equal(Capabilities.NoRoleGrants(Bit.ManageSpace).Word, member.GetProperty("gate").GetString());
         Assert.DoesNotContain("ManageSpace", Strings(member.GetProperty("can")));
         Assert.False(member.TryGetProperty("create", out _));
 

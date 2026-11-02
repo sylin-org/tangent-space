@@ -1,11 +1,11 @@
 using System.Security.Claims;
+using Koan.Data.Core.Commands;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
 using Tangent.Posts;
 using Tangent.Render;
 using Tangent.Space;
-using Tangent.Writer;
 
 namespace Tangent.Offers;
 
@@ -15,12 +15,9 @@ namespace Tangent.Offers;
 /// carry the address the site's pointers must now name; the person signs in again there. <b>Not this one</b> declines it
 /// and lands on the door, offering the next origin seen where there is one. To anyone but the place's operator an
 /// Offer does not exist, and the answer is a missing resource's. A second post of the same answer changes nothing
-/// and lands where the first did, and where the address the first one kept is not the one Koan holds — its request
-/// ended after the writer kept it — Koan is made to hold it, if it would take it. A use the writer is too busy to finish
-/// within the store's bound answers that it is under way, in one sentence: the writer still runs it, and the place moves
-/// once it commits. A use of an origin Koan will not take says why, keeps nothing and leaves the Offer open to
-/// decline.</summary>
-public sealed class OfferController(KoanWebBaseUrl baseUrl, WriteLoop writer, AddressOffers offers) : ControllerBase
+/// and lands where the first did. A use of an origin Koan will not take says why, keeps nothing and leaves the Offer open
+/// to decline.</summary>
+public sealed class OfferController(KoanWebBaseUrl baseUrl, AddressOffers offers) : ControllerBase
 {
     public const string UsePath = "/offers/use";
 
@@ -42,28 +39,20 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, WriteLoop writer, Ad
     {
         var (refusal, personId, row) = await Posted(ct);
         if (refusal is not null) return refusal;
-        if (row!.State == OfferState.Accepted) return await Landed(row, ct);
+        if (row!.State == OfferState.Accepted) return Landed();
         if (row.State != OfferState.Open || baseUrl.IsConfigured) return NoLongerOpen();
 
-        switch (await PlaceAddress.Use(baseUrl, new UseOffer(row.Id, personId!, row.Subject), ct))
+        var outcome = await PlaceAddress.Use(baseUrl, new UseOffer(row.Id, personId!, row.Subject));
+        switch (outcome)
         {
             case Outcome<Offer>.Done:
-                return await Landed(row, ct);
-            case Outcome<Offer>.Refused { Reason: Decision.NoOffer }:
-                return Absent();
-            case Outcome<Offer>.Refused { Reason: Offer.NotOpen }:
-                return (await Offer.Get(row.Id, ct))?.State == OfferState.Accepted ? await Landed(row, ct) : NoLongerOpen();
-            case Outcome<Offer>.Refused refused:
-                return new Problem(StatusCodes.Status409Conflict, "Not used", refused.Reason).ToResult();
-            case Outcome<Offer>.Failed { Cause: TimeoutException }:
-                return new Problem(StatusCodes.Status202Accepted, "Under way",
-                    $"This is taking longer than usual; the place moves to {row.Subject} as soon as it’s done.").ToResult();
-            case Outcome<Offer>.Failed { Cause: ArgumentException refused }:
-                return new Problem(StatusCodes.Status409Conflict, "Not used", refused.Message).ToResult();
-            case Outcome<Offer>.Failed failed:
-                throw new InvalidOperationException($"Using the offer {row.Id} failed.", failed.Cause);
-            case var other:
-                throw new InvalidOperationException($"The writer answered {other} for using the offer {row.Id}.");
+                return Landed();
+            case Outcome<Offer>.Refused { Reason: var reason } when reason == Offer.NotOpen:
+                return (await Offer.Get(row.Id, ct))?.State == OfferState.Accepted ? Landed() : NoLongerOpen();
+            case Outcome<Offer>.Refused { Reason: { Kind: not ReasonKind.Absent } refused }:
+                return new Problem(StatusCodes.Status409Conflict, "Not used", refused.Text).ToResult();
+            default:
+                return PostWrites.Answer(HttpContext, outcome);
         }
     }
 
@@ -75,21 +64,18 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, WriteLoop writer, Ad
         if (row!.State == OfferState.Declined) return Door();
         if (row.State != OfferState.Open) return NoLongerOpen();
 
-        switch (await writer.Send(new DeclineOffer(row.Id, personId!), ct))
+        var outcome = await new DeclineOffer(row.Id, personId!).Send();
+        switch (outcome)
         {
             case Outcome<Offer>.Done:
                 await offers.OfferNext(ct);
                 return Door();
-            case Outcome<Offer>.Refused { Reason: Decision.NoOffer }:
-                return Absent();
-            case Outcome<Offer>.Refused { Reason: Offer.NotOpen }:
+            case Outcome<Offer>.Refused { Reason: var reason } when reason == Offer.NotOpen:
                 return (await Offer.Get(row.Id, ct))?.State == OfferState.Declined ? Door() : NoLongerOpen();
-            case Outcome<Offer>.Refused refused:
-                return new Problem(StatusCodes.Status409Conflict, "Not declined", refused.Reason).ToResult();
-            case Outcome<Offer>.Failed failed:
-                throw new InvalidOperationException($"Declining the offer {row.Id} failed.", failed.Cause);
-            case var other:
-                throw new InvalidOperationException($"The writer answered {other} for declining the offer {row.Id}.");
+            case Outcome<Offer>.Refused { Reason: { Kind: not ReasonKind.Absent } refused }:
+                return new Problem(StatusCodes.Status409Conflict, "Not declined", refused.Text).ToResult();
+            default:
+                return PostWrites.Answer(HttpContext, outcome);
         }
     }
 
@@ -100,7 +86,7 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, WriteLoop writer, Ad
         Response.Headers.CacheControl = "no-store";
         if (PersonId(User) is not { } personId)
             return (new Problem(StatusCodes.Status401Unauthorized, "Sign in first", "Deciding an offer needs its decider signed in.",
-                Capabilities.SignIn).ToResult(), null, null);
+                Capabilities.SignIn.Word).ToResult(), null, null);
         if (!await FormToken.Validate(HttpContext))
             return (new Problem(StatusCodes.Status400BadRequest, "Open the door again",
                 "This form’s token is missing or has expired, so nothing was decided.").ToResult(), null, null);
@@ -111,13 +97,9 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, WriteLoop writer, Ad
         return (null, personId, row);
     }
 
-    /// <summary>Where Use it lands: first run's pointers, on the address the request came on, once Koan holds the address
-    /// the row keeps from <paramref name="offer"/>.</summary>
-    private async Task<IActionResult> Landed(Offer offer, CancellationToken ct)
+    /// <summary>Where Use it lands: first run's pointers, on the address the request came on.</summary>
+    private IActionResult Landed()
     {
-        if (!baseUrl.IsConfigured && (await TangentSpace.Get(TangentSpace.SingleRow, ct))?.Address is { } kept
-            && kept == offer.Subject && baseUrl.Accepted != kept && baseUrl.WouldAccept(kept, out _))
-            await baseUrl.Accept(kept, ct);
         Response.Headers.Location = baseUrl.PathBase + FirstRunController.Path;
         return StatusCode(StatusCodes.Status303SeeOther);
     }
@@ -132,7 +114,7 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, WriteLoop writer, Ad
     private static IActionResult Absent() => DoorController.Gated(Capabilities.Absent);
 
     private static IActionResult NoLongerOpen()
-        => new Problem(StatusCodes.Status409Conflict, "No longer open", Offer.NotOpen).ToResult();
+        => new Problem(StatusCodes.Status409Conflict, "No longer open", Offer.NotOpen.Text).ToResult();
 
     private static string? PersonId(ClaimsPrincipal user)
         => user.Identity?.IsAuthenticated == true ? user.FindFirst(ClaimTypes.NameIdentifier)?.Value : null;

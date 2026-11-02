@@ -1,4 +1,4 @@
-using Tangent.Writer;
+using Koan.Data.Core.Commands;
 
 namespace Tangent.Participants;
 
@@ -6,6 +6,6 @@ namespace Tangent.Participants;
 /// rules are <see cref="People.ChangeStanding"/>'s.</summary>
 public sealed record Ban(string ActorId, string ParticipantId, DateTimeOffset? At = null) : ICommand<Participant>
 {
-    public Task<Outcome<Participant>> Run(Sequences sequences, CancellationToken ct)
-        => People.ChangeStanding(sequences, ActorId, ParticipantId, (participant, now) => participant.Ban(now), At, ct);
+    public Task<Outcome<Participant>> Run(CancellationToken ct)
+        => People.ChangeStanding(ActorId, ParticipantId, (participant, now) => participant.Ban(now), At, ct);
 }

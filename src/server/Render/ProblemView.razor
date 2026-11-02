@@ -8,6 +8,10 @@
     {
         <p data-gate="@gate">@gate</p>
     }
+    @if (Model.Next is { } next)
+    {
+        <p><a href="@next">Sign in</a></p>
+    }
 </main>
 
 @code {

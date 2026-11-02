@@ -4,12 +4,12 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
 using Tangent.Delegates;
 using Tangent.Participants;
 using Tangent.Space;
-using Tangent.Writer;
 using Xunit;
 
 namespace Tangent.Posts;
@@ -45,26 +45,23 @@ internal static partial class Writing
         ["Koan:Web:Auth:Server:DevicePollIntervalSeconds"] = "0"
     };
 
-    /// <summary>The place, its Tangents and its people; then the writer.</summary>
-    public static async Task<WriteLoop> Place(TangentSpaceFixture tangentSpace)
+    /// <summary>The place, its Tangents and its people.</summary>
+    public static async Task Place(TangentSpaceFixture tangentSpace)
     {
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         await Given.AnEstablishedTangentSpace(tangentSpace, "Field notes", ct: Cancellation);
         await Given.ATangent(tangentSpace, Workshop, ct: Cancellation);
         await Given.ATangent(tangentSpace, Studio, Audience.Private, ct: Cancellation);
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(
-            new Store<Tangents.Tangent>(Tangents.Tangent.Create(Articles, "Articles", "", PostKind.Article, 2)), Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new Store<Tangents.Tangent>(Tangents.Tangent.Create(Articles, "Articles", "", PostKind.Article, 2)).Send(Cancellation));
         await Given.AParticipant(tangentSpace, Ada, [Roles.Member], ct: Cancellation);
         await Given.AParticipant(tangentSpace, Bea, [Roles.Member], ct: Cancellation);
         await Given.AParticipant(tangentSpace, Mo, [Roles.Moderator], ct: Cancellation);
-        return writer;
     }
 
-    public static async Task<Post> Started(WriteLoop writer, string author, string title, string body, string tangent = Workshop)
-        => Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), tangent, title, body, author), Cancellation)).Result;
+    public static async Task<Post> Started(string author, string title, string body, string tangent = Workshop)
+        => Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), tangent, title, body, author).Send(Cancellation)).Result;
 
-    public static async Task<Post> Replied(WriteLoop writer, Post root, string author, string body)
-        => Assert.IsType<Outcome<Post>.Done>(await writer.Send(new Reply(Tids.Mint(), root.Id, body, author), Cancellation)).Result;
+    public static async Task<Post> Replied(Post root, string author, string body)
+        => Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), root.Id, body, author).Send(Cancellation)).Result;
 
     /// <summary>A browser signed in as <paramref name="did"/>.</summary>
     public static async Task<Browser> SignedIn(TangentSpaceFixture tangentSpace, string did)

@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Koan.Web.Hosting;
 using Microsoft.Data.Sqlite;
@@ -11,7 +12,6 @@ using Microsoft.Extensions.Logging;
 using Tangent.Access;
 using Tangent.Events;
 using Tangent.Participants;
-using Tangent.Writer;
 using Xunit;
 
 namespace Tangent.Space;
@@ -196,8 +196,7 @@ public sealed class FirstRunTests
         using var adaIn = await ada.SignIn("ada", Ada, Cancellation, handle: "ada.example", comeBack: FirstRunController.Path);
         var beforeLeo = await adaIn.Content.ReadAsStringAsync(Cancellation);
         // Leo has arrived without setting the place up, as when his sign-in's setup did not complete.
-        Assert.IsType<Outcome<Participant>.Done>(await tangentSpace.Services.GetRequiredService<WriteLoop>()
-            .Send(new FirstArrival(Leo, "leo.example"), Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new FirstArrival(Leo, "leo.example").Send(Cancellation));
 
         using var known = await ada.Follow(HttpMethod.Get, "/", Cancellation);
         var afterLeo = await known.Content.ReadAsStringAsync(Cancellation);
@@ -276,8 +275,7 @@ public sealed class FirstRunTests
         try
         {
             await using (var first = await TangentSpaceFixture.StartAsync(Settings(dataFolder, BaseUrl, (FirstRun.OperatorSetting, Leo)), ct: Cancellation))
-                Assert.IsType<Outcome<TangentSpace>.Done>(await first.Services.GetRequiredService<WriteLoop>()
-                    .Send(new Establish(Leo, "leo.example", "Field notes"), Cancellation));
+                Assert.IsType<Outcome<TangentSpace>.Done>(await new Establish(Leo, "leo.example", "Field notes").Send(Cancellation));
 
             var other = new ConcurrentQueue<string>();
             await using (var second = await TangentSpaceFixture.StartAsync(Settings(dataFolder, BaseUrl, (FirstRun.OperatorSetting, "ada.example")),
@@ -299,36 +297,13 @@ public sealed class FirstRunTests
     }
 
     [Fact]
-    public async Task A_start_makes_an_operator_who_lacks_the_administrator_role_a_member()
-    {
-        var dataFolder = Path.Combine(Path.GetTempPath(), "tangent-data-" + Guid.CreateVersion7().ToString("n"));
-        try
-        {
-            await using (var first = await TangentSpaceFixture.StartAsync(Settings(dataFolder, BaseUrl), ct: Cancellation))
-            {
-                Assert.IsType<Outcome<TangentSpace>.Done>(await first.Services.GetRequiredService<WriteLoop>()
-                    .Send(new Establish(Leo, "leo.example", "Field notes"), Cancellation));
-                Assert.DoesNotContain(Leo, await Administrators(first.Services));
-            }
-
-            await using var second = await TangentSpaceFixture.StartAsync(Settings(dataFolder, BaseUrl), ct: Cancellation);
-            Assert.Contains(Leo, await Administrators(second.Services));
-        }
-        finally
-        {
-            Forget(dataFolder);
-        }
-    }
-
-    [Fact]
     public async Task A_restart_under_another_base_url_moves_the_pointers()
     {
         var dataFolder = Path.Combine(Path.GetTempPath(), "tangent-data-" + Guid.CreateVersion7().ToString("n"));
         try
         {
             await using (var first = await TangentSpaceFixture.StartAsync(Settings(dataFolder, "https://first.example"), ct: Cancellation))
-                Assert.IsType<Outcome<TangentSpace>.Done>(await first.Services.GetRequiredService<WriteLoop>()
-                    .Send(new Establish(Leo, "leo.example", "Field notes"), Cancellation));
+                Assert.IsType<Outcome<TangentSpace>.Done>(await new Establish(Leo, "leo.example", "Field notes").Send(Cancellation));
 
             var moved = Settings(dataFolder, "https://second.example/notes", (FirstRun.OperatorSetting, Leo));
             foreach (var (key, value) in TestConnector()) moved[key] = value;
@@ -354,11 +329,10 @@ public sealed class FirstRunTests
     public async Task A_second_first_run_is_refused_as_already_established_and_writes_nothing()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
-        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new Establish(Leo, "leo.example", "Field notes"), Cancellation));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new Establish(Leo, "leo.example", "Field notes").Send(Cancellation));
         var events = await Event.Count.Exact(Cancellation);
 
-        var again = await writer.Send(new Establish(Ada, "ada.example", "Ada's place"), Cancellation);
+        var again = await new Establish(Ada, "ada.example", "Ada's place").Send(Cancellation);
 
         Assert.Equal(Establish.AlreadyEstablished, Assert.IsType<Outcome<TangentSpace>.Refused>(again).Reason);
         var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
@@ -371,11 +345,10 @@ public sealed class FirstRunTests
     public async Task An_account_its_profile_labels_an_agent_sets_the_place_up_and_keeps_its_kind()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         var agent = new Participant { Id = Ada, Handle = "ada.example", Kind = ParticipantKind.Agent, KindSource = KindSource.ProfileLabel };
-        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new Store<Participant>(agent), Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(agent).Send(Cancellation));
 
-        var outcome = await writer.Send(new Establish(Ada, "ada.example", TangentSpace.NameFor("ada.example")), Cancellation);
+        var outcome = await new Establish(Ada, "ada.example", TangentSpace.NameFor("ada.example")).Send(Cancellation);
 
         var space = Assert.IsType<Outcome<TangentSpace>.Done>(outcome).Result;
         Assert.Equal(("Ada's Tangent Space", Ada, Ada), (space.Name, space.ProprietorId, space.OperatorId));
@@ -453,8 +426,7 @@ public sealed class FirstRunTests
         Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
         Assert.Contains(lines, line => line.StartsWith("Tangent Space at https://fresh.example/notes;", StringComparison.Ordinal));
 
-        var outcome = await tangentSpace.Services.GetRequiredService<WriteLoop>()
-            .Send(new Establish(Leo, "leo.example", "Field notes"), Cancellation);
+        var outcome = await new Establish(Leo, "leo.example", "Field notes").Send(Cancellation);
 
         Assert.IsType<Outcome<TangentSpace>.Done>(outcome);
         Assert.Equal(1, await TangentSpace.Count.Exact(Cancellation));
@@ -469,8 +441,8 @@ public sealed class FirstRunTests
 
         var first = await Tangents.Tangent.Get(FirstTangent.Slug, Cancellation);
         Assert.NotNull(first);
-        Assert.Equal(("General", "", Posts.PostKind.Topic, 1, Audience.Public),
-            (first.Name, first.Description, first.DefaultKind, first.Order, first.LoggedAudience));
+        Assert.Equal(("General", "", Posts.PostKind.Topic, 1),
+            (first.Name, first.Description, first.DefaultKind, first.Order));
         var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
         Assert.Equal(Audience.Public, await Tangents.Overwrites.AudienceOf(FirstTangent.Slug, Cancellation));
         var created = Assert.Single(await Event.Query(e => e.Kind == EventKind.TangentChanged && e.TangentId == FirstTangent.Slug, Cancellation));

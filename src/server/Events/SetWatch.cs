@@ -1,8 +1,8 @@
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Tangent.Access;
 using Tangent.Participants;
 using Tangent.Posts;
-using Tangent.Writer;
 
 namespace Tangent.Events;
 
@@ -13,9 +13,9 @@ namespace Tangent.Events;
 /// place is not a scope a participant watches.</summary>
 public sealed record SetWatch(string ParticipantId, Scope Scope, bool Watch) : ICommand<Checkpoint>
 {
-    public const string NoScope = "Nothing to watch is here.";
+    public static readonly Reason NoScope = Reason.Absent("Nothing to watch is here.");
 
-    public async Task<Outcome<Checkpoint>> Run(Sequences sequences, CancellationToken ct)
+    public async Task<Outcome<Checkpoint>> Run(CancellationToken ct)
     {
         if (await Participant.Get(ParticipantId, ct) is null || !await Exists(ct)) return new Outcome<Checkpoint>.Refused(NoScope);
 

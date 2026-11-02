@@ -11,8 +11,8 @@ namespace Tangent.Posts;
 /// sequence numbers: the replies it holds run from <see cref="Window.Low"/> to <see cref="Window.High"/>, the older
 /// window is the one before <see cref="Window.Low"/> and the newer the one after <see cref="Window.High"/>, so following
 /// them covers every reply once. Every read stops at the Topic's last sequence as its root was read, the window's
-/// boundary, so a reply written meanwhile waits for the next read. A Topic's sequences have no gap — the writer keeps a
-/// sequence only when its command commits, and a removed Post stays as a tombstone — so whether an older or a newer
+/// boundary, so a reply written meanwhile waits for the next read. A Topic's sequences have no gap — a command keeps a
+/// sequence only when it commits, and a removed Post stays as a tombstone — so whether an older or a newer
 /// window exists follows from the edges without a read. Reads only and takes no lock; whom the window may be shown to is
 /// the caller's to decide.</summary>
 public static class TopicWindow

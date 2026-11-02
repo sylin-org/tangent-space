@@ -1,4 +1,5 @@
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Koan.Data.Core.Model;
 using Koan.Identity.Roles;
 using Microsoft.AspNetCore.Mvc;
@@ -8,17 +9,16 @@ using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
 using Tangent.Tangents;
-using Tangent.Writer;
 
 namespace Tangent.Capture;
 
-/// <summary>The rows the Topic's captures show, written through the writer when the capture asks: a discussions Tangent
+/// <summary>The rows the Topic's captures show, sent as commands when the capture asks: a discussions Tangent
 /// with a short Topic whose replies answer one another in Markdown — emphasis, a list, code, a table and mentions — read by
 /// the capture persona up to its first reply; a long Topic
 /// of more replies than one window, which she has read halfway; a Topic with a reply a moderator rewrote and one a moderator removed; and a Topic
 /// without replies. Compiled only into the capture host, like <see cref="CaptureSeedController"/>; fixed names, words,
 /// times and TIDs.</summary>
-public sealed class TopicSeedController(WriteLoop writer, RoleCollection roles) : ControllerBase
+public sealed class TopicSeedController(RoleCollection roles) : ControllerBase
 {
     private const string Persona = "did:plc:capture4persona";
     private const string Leo = "did:plc:capture4leo";
@@ -101,7 +101,7 @@ public sealed class TopicSeedController(WriteLoop writer, RoleCollection roles) 
     private Task Seen(Post topic, long sequence, CancellationToken ct)
         => Write(new Keep<Checkpoint>(Checkpoint.At(Persona, Scope.Topic(topic.Id), sequence)), ct);
 
-    private async Task<T> Write<T>(ICommand<T> command, CancellationToken ct) => await writer.Send(command, ct) switch
+    private async Task<T> Write<T>(ICommand<T> command, CancellationToken ct) => await command.Send() switch
     {
         Outcome<T>.Done done => done.Result,
         var other => throw new InvalidOperationException($"The topic seed's {command.GetType().Name} answered {other}.")
@@ -124,10 +124,10 @@ public sealed class TopicSeedController(WriteLoop writer, RoleCollection roles) 
         return new string(characters);
     }
 
-    /// <summary>Saves one row as the seed built it, through the writer.</summary>
+    /// <summary>Saves one row as the seed built it, as a command.</summary>
     private sealed record Keep<TEntity>(TEntity Row) : ICommand<TEntity> where TEntity : Entity<TEntity>
     {
-        public async Task<Outcome<TEntity>> Run(Sequences sequences, CancellationToken ct)
+        public async Task<Outcome<TEntity>> Run(CancellationToken ct)
         {
             await Row.Save(ct);
             return new Outcome<TEntity>.Done(Row);

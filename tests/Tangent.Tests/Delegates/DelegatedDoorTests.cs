@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Koan.Security.Trust.Issuer;
 using Koan.Web.Auth.Server;
@@ -17,7 +18,6 @@ using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
 using Tangent.Tangents;
-using Tangent.Writer;
 using Xunit;
 
 namespace Tangent.Delegates;
@@ -309,7 +309,7 @@ public sealed class DelegatedDoorTests
         Assert.Equal("studio", asDelegate.RootElement.GetProperty("slug").GetString());
         Assert.Equal(Strings(asPerson.RootElement.GetProperty("can")), Strings(asDelegate.RootElement.GetProperty("can")));
         Assert.Contains("ManageTangent", Strings(asDelegate.RootElement.GetProperty("can")));
-        Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent), (visitor.Status, visitor.Gate));
+        Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent.Text), (visitor.Status, visitor.Gate));
         Assert.Equal((missing.Status, missing.Title, missing.Gate), (visitor.Status, visitor.Title, visitor.Gate));
 
         // A token Koan's issuer signed for another resource is not this Tangent Space's: it is refused, never read as
@@ -665,7 +665,7 @@ public sealed class DelegatedDoorTests
         using var browser = new Browser(tangentSpace);
         (await browser.SignIn("leo", Leo, Cancellation, handle: "leo.example")).Dispose();
         var token = await Delegate(tangentSpace, browser);
-        var through = (await Event.HighWaterMark.Load(Cancellation)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var through = (await Event.Log.Highest(Cancellation)).ToString(System.Globalization.CultureInfo.InvariantCulture);
         await Given.BeenAtTheDoor(tangentSpace, Leo, Cancellation);
 
         var session = await Answer(browser.Client, "/", content: Form((DoorController.Through, through)));
@@ -696,8 +696,7 @@ public sealed class DelegatedDoorTests
     private static async Task PrivatePlace(TangentSpaceFixture tangentSpace)
     {
         await Place(tangentSpace);
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await tangentSpace.Services.GetRequiredService<WriteLoop>().Send(
-            new CreateTangent("studio", "The studio", "", PostKind.Topic, 1, Audience.Private, Leo), Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent("studio", "The studio", "", PostKind.Topic, 1, Audience.Private, Leo).Send(Cancellation));
     }
 
     /// <summary>A loopback client registers itself, as Koan's dynamic registration lets anyone; its id.</summary>

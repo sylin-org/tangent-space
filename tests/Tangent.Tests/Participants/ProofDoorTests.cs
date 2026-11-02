@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Koan.Web.Hosting;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,7 +10,6 @@ using Tangent.Access;
 using Tangent.Events;
 using Tangent.Posts;
 using Tangent.Space;
-using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -51,8 +51,8 @@ public sealed class ProofDoorTests
     {
         await using var directory = await AgentDirectory.Start(Scout);
         await using var tangentSpace = await Start(directory);
-        var writer = await Place(tangentSpace);
-        var root = await Started(writer, Ada, "Lanterns at dusk", "Who lights theirs first?");
+        await Place(tangentSpace);
+        var root = await Started(Ada, "Lanterns at dusk", "Who lights theirs first?");
 
         // The token alone signs in; a body says nothing and is not read, however large.
         using var session = new Browser(tangentSpace);
@@ -87,17 +87,17 @@ public sealed class ProofDoorTests
     {
         await using var directory = await AgentDirectory.Start(Scout);
         await using var tangentSpace = await Start(directory);
-        var writer = await Place(tangentSpace);
-        var root = await Started(writer, Ada, "Lanterns at dusk", "Who lights theirs first?");
+        await Place(tangentSpace);
+        var root = await Started(Ada, "Lanterns at dusk", "Who lights theirs first?");
         var space = (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!;
         space.Admission = Admission.Apply;
-        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new Store<TangentSpace>(space), Cancellation));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(Cancellation));
 
         using var session = await SignedInByProof(tangentSpace, Scout);
 
         Assert.Equal(Standing.Applied, (await Participant.Get(Scout.Did, Cancellation))?.Standing);
         Assert.DoesNotContain(Roles.Member, (await tangentSpace.Services.GetRequiredService<RoleCollection>().ForPerson(Scout.Did, Cancellation)).Select(role => role.Key));
-        Assert.Equal(Capabilities.Apply, (await Read(session, "/")).GetProperty("gate").GetString());
+        Assert.Equal(Capabilities.Apply.Word, (await Read(session, "/")).GetProperty("gate").GetString());
         var page = await Read(session, TopicPath(root));
         Assert.False(page.TryGetProperty("reply", out var reply) && reply.ValueKind == JsonValueKind.Object);
     }
@@ -107,14 +107,14 @@ public sealed class ProofDoorTests
     {
         await using var directory = await AgentDirectory.Start(Scout);
         await using var tangentSpace = await Start(directory);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         using var held = await SignedInByProof(tangentSpace, Scout);
-        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new Ban(Mo, Scout.Did), Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new Ban(Mo, Scout.Did).Send(Cancellation));
 
-        Assert.Equal(Capabilities.Absent, (await Send(held.Client, HttpMethod.Get, "/", json: true)).Gate);
+        Assert.Equal(Capabilities.Absent.Text, (await Send(held.Client, HttpMethod.Get, "/", json: true)).Gate);
 
         using var again = await SignedInByProof(tangentSpace, Scout);
-        Assert.Equal(Capabilities.Absent, (await Send(again.Client, HttpMethod.Get, "/", json: true)).Gate);
+        Assert.Equal(Capabilities.Absent.Text, (await Send(again.Client, HttpMethod.Get, "/", json: true)).Gate);
         Assert.Equal(Standing.Banned, (await Participant.Get(Scout.Did, Cancellation))?.Standing);
     }
 
@@ -273,10 +273,10 @@ public sealed class ProofDoorTests
     {
         await using var directory = await AgentDirectory.Start(Scout);
         await using var tangentSpace = await Start(directory);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         var space = (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!;
         space.Audience = Audience.Private;
-        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new Store<TangentSpace>(space), Cancellation));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(Cancellation));
         using var agent = Agent(tangentSpace);
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await Send(agent, HttpMethod.Get, "/", json: true)).Status);

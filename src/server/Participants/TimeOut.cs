@@ -1,4 +1,4 @@
-using Tangent.Writer;
+using Koan.Data.Core.Commands;
 
 namespace Tangent.Participants;
 
@@ -7,6 +7,6 @@ namespace Tangent.Participants;
 /// tells the participant's door.</summary>
 public sealed record TimeOut(string ActorId, string ParticipantId, DateTimeOffset Until, DateTimeOffset? At = null) : ICommand<Participant>
 {
-    public Task<Outcome<Participant>> Run(Sequences sequences, CancellationToken ct)
-        => People.ChangeStanding(sequences, ActorId, ParticipantId, (participant, now) => participant.TimeOut(Until, now), At, ct);
+    public Task<Outcome<Participant>> Run(CancellationToken ct)
+        => People.ChangeStanding(ActorId, ParticipantId, (participant, now) => participant.TimeOut(Until, now), At, ct);
 }

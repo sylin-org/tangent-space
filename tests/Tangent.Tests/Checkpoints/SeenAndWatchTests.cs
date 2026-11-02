@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Koan.Data.Core.Commands;
 using Tangent.Access;
 using Tangent.Posts;
 using Xunit;
@@ -19,9 +20,9 @@ public sealed class SeenAndWatchTests
     public async Task The_seen_post_moves_the_topic_checkpoint_to_the_sequence_shown_never_backwards_a_get_moves_nothing_a_tokenless_session_post_is_refused_and_a_delegates_bearer_moves_its_persons()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var root = await Started(writer, Ada, "Lanterns", "How do you hang yours?");
-        for (var reply = 0; reply < 3; reply++) await Replied(writer, root, Mo, "From a hook, number " + reply + ".");
+        await Place(tangentSpace);
+        var root = await Started(Ada, "Lanterns", "How do you hang yours?");
+        for (var reply = 0; reply < 3; reply++) await Replied(root, Mo, "From a hook, number " + reply + ".");
         using var bea = await SignedIn(tangentSpace, Bea);
         var seenPath = TopicPath(root) + "/" + CheckpointController.SeenSegment;
 
@@ -62,9 +63,9 @@ public sealed class SeenAndWatchTests
     public async Task After_the_seen_post_the_tangent_page_no_longer_marks_the_topic_new_and_the_door_no_longer_lists_it_until_a_later_reply()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var root = await Started(writer, Ada, "Lanterns", "How do you hang yours?");
-        await Replied(writer, root, Mo, "From a hook.");
+        await Place(tangentSpace);
+        var root = await Started(Ada, "Lanterns", "How do you hang yours?");
+        await Replied(root, Mo, "From a hook.");
         using var bea = await SignedIn(tangentSpace, Bea);
         await Given.BeenAtTheDoor(tangentSpace, Bea, Cancellation);
 
@@ -79,7 +80,7 @@ public sealed class SeenAndWatchTests
         Assert.Equal(0, await NewOnDoor(bea));
         Assert.True((await Send(bea.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news").GetProperty("quiet").GetBoolean());
 
-        await Replied(writer, root, Mo, "Or a nail, at a pinch.");
+        await Replied(root, Mo, "Or a nail, at a pinch.");
 
         Assert.True(await NewOnTangentPage(bea, root));
         Assert.Equal(1, await NewOnDoor(bea));
@@ -89,10 +90,10 @@ public sealed class SeenAndWatchTests
     public async Task A_window_opened_past_a_gap_offers_no_seen_form_and_reading_from_the_first_unread_to_the_end_moves_the_checkpoint_to_the_last_reply()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var root = await Started(writer, Ada, "Lanterns", "How do you hang yours?");
+        await Place(tangentSpace);
+        var root = await Started(Ada, "Lanterns", "How do you hang yours?");
         var replies = new List<Post>();
-        for (var reply = 1; reply <= 60; reply++) replies.Add(await Replied(writer, root, Mo, "Reply number " + reply + "."));
+        for (var reply = 1; reply <= 60; reply++) replies.Add(await Replied(root, Mo, "Reply number " + reply + "."));
         using var bea = await SignedIn(tangentSpace, Bea);
         var seenPath = TopicPath(root) + "/" + CheckpointController.SeenSegment;
         await Form(bea, TopicPath(root), seenPath, new Dictionary<string, string> { ["through"] = "10" });
@@ -128,14 +129,14 @@ public sealed class SeenAndWatchTests
     public async Task A_mention_added_by_editing_a_post_the_reader_already_read_is_listed_on_the_door()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var root = await Started(writer, Ada, "Lanterns", "How do you hang yours?");
-        var old = await Replied(writer, root, Mo, "From a hook.");
+        await Place(tangentSpace);
+        var root = await Started(Ada, "Lanterns", "How do you hang yours?");
+        var old = await Replied(root, Mo, "From a hook.");
         using var bea = await SignedIn(tangentSpace, Bea);
         await Form(bea, TopicPath(root), TopicPath(root) + "/" + CheckpointController.SeenSegment, new Dictionary<string, string> { ["through"] = "1" });
         Assert.True((await Send(bea.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news").GetProperty("quiet").GetBoolean());
 
-        Assert.IsType<Writer.Outcome<Event>.Done>(await writer.Send(new Space.Mentioned(Workshop, root.Id, old.Id, Mo, Bea), Cancellation));
+        Assert.IsType<Outcome<Event>.Done>(await new Space.Mentioned(Workshop, root.Id, old.Id, Mo, Bea).Send(Cancellation));
 
         var mentions = (await Send(bea.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news").GetProperty("mentions");
         Assert.Equal((1, old.Id), (mentions.GetProperty("count").GetInt32(), mentions.GetProperty("posts")[0].GetProperty("postId").GetString()));
@@ -146,11 +147,11 @@ public sealed class SeenAndWatchTests
     public async Task Watch_and_unwatch_on_a_topic_and_a_tangent_set_and_clear_the_flag_without_moving_the_sequence_and_a_reader_who_may_not_view_gets_the_absent_answer()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
-        var root = await Started(writer, Ada, "Lanterns", "How do you hang yours?");
-        await Replied(writer, root, Mo, "From a hook.");
-        var hidden = await Started(writer, Leo, "Among administrators", "Only we read this.", Studio);
+        var root = await Started(Ada, "Lanterns", "How do you hang yours?");
+        await Replied(root, Mo, "From a hook.");
+        var hidden = await Started(Leo, "Among administrators", "Only we read this.", Studio);
         using var bea = await SignedIn(tangentSpace, Bea);
         var topicWatch = TopicPath(root) + "/" + CheckpointController.WatchSegment;
         var tangentWatch = "/t/" + Workshop + "/" + CheckpointController.WatchSegment;
@@ -189,7 +190,7 @@ public sealed class SeenAndWatchTests
             var absent = await Form(bea, TopicPath(root), path, new Dictionary<string, string> { ["watch"] = "true" });
             Assert.Equal(HttpStatusCode.NotFound, absent.Status);
             var absentJson = await Json(bea, TopicPath(root), path, new { watch = true });
-            Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent), (absentJson.Status, absentJson.Gate));
+            Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent.Text), (absentJson.Status, absentJson.Gate));
         }
 
         var hiddenSeen = await Form(bea, TopicPath(root), TopicPath(hidden) + "/" + CheckpointController.SeenSegment, new Dictionary<string, string> { ["through"] = "0" });
@@ -202,15 +203,15 @@ public sealed class SeenAndWatchTests
     public async Task On_the_door_a_watched_topic_with_news_is_listed_first_and_marked_watched()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var watchedTopic = await Started(writer, Ada, "Lanterns", "How do you hang yours?");
-        var other = await Started(writer, Ada, "Kites", "Who flies one?");
+        await Place(tangentSpace);
+        var watchedTopic = await Started(Ada, "Lanterns", "How do you hang yours?");
+        var other = await Started(Ada, "Kites", "Who flies one?");
         using var bea = await SignedIn(tangentSpace, Bea);
         await Given.BeenAtTheDoor(tangentSpace, Bea, Cancellation);
         await Form(bea, TopicPath(watchedTopic), TopicPath(watchedTopic) + "/" + CheckpointController.WatchSegment,
             new Dictionary<string, string> { ["watch"] = "true" });
-        await Replied(writer, watchedTopic, Mo, "From a hook.");
-        await Replied(writer, other, Mo, "On windy days.");
+        await Replied(watchedTopic, Mo, "From a hook.");
+        await Replied(other, Mo, "On windy days.");
 
         var news = (await Send(bea.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news");
         var first = news.EnumerateObject().Select(property => property.Name).SkipWhile(name => name is "from" or "through").First();

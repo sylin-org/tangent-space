@@ -1,3 +1,4 @@
+using Koan.Data.Core.Commands;
 using Tangent.Space;
 
 namespace Tangent.Offers;
@@ -7,7 +8,7 @@ namespace Tangent.Offers;
 /// decide (<see cref="NoOffer"/>), as for a missing resource.</summary>
 public static class Decision
 {
-    public const string NoOffer = "There is no such offer for you to decide.";
+    public static readonly Reason NoOffer = Reason.Absent("There is no such offer for you to decide.");
 
     public static async Task<(Offer? Offer, TangentSpace? Space)> Load(string offerId, string posterId, CancellationToken ct)
     {

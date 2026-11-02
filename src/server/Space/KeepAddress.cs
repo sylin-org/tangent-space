@@ -1,5 +1,5 @@
 using Koan.Data.Core;
-using Tangent.Writer;
+using Koan.Data.Core.Commands;
 
 namespace Tangent.Space;
 
@@ -10,7 +10,7 @@ public sealed record KeepAddress(string Address) : ICommand<TangentSpace>
 {
     public const string NoPlace = "This Tangent Space is not set up yet, so it has no address to keep.";
 
-    public async Task<Outcome<TangentSpace>> Run(Sequences sequences, CancellationToken ct)
+    public async Task<Outcome<TangentSpace>> Run(CancellationToken ct)
     {
         if (await TangentSpace.Get(TangentSpace.SingleRow, ct) is not { } space) return new Outcome<TangentSpace>.Refused(NoPlace);
         if (space.TakeAddress(Address)) await space.Save(ct);

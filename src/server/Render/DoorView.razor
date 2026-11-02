@@ -85,15 +85,15 @@
             }
         </aside>
         <div class="tangent-main">
-            @if (Model.Gate is Capabilities.Apply or Capabilities.Declined)
+            @if (Model.Gate == Access.Capabilities.Apply.Word || Model.Gate == Access.Capabilities.Declined.Word)
             {
                 <section class="door-offers" aria-label="Your application">
                     <div class="door-offer door-application" data-gate="@Model.Gate">
-                        <p class="door-offer-line">@PostWrites.Sentence(Model.Gate)</p>
+                        <p class="door-offer-line">@Access.Capabilities.Sentence(Model.Gate!)</p>
                     </div>
                 </section>
             }
-            @if (Model is { Gate: Capabilities.TimedOut, Until: { } until })
+            @if (Model.Gate == Access.Capabilities.TimedOut.Word && Model.Until is { } until)
             {
                 <section class="door-offers" aria-label="Your timeout">
                     <div class="door-offer door-application" data-gate="@Model.Gate">

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
@@ -7,7 +8,6 @@ using Tangent.Access;
 using Tangent.Events;
 using Tangent.Posts;
 using Tangent.Space;
-using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -27,17 +27,16 @@ public sealed class PeopleTests
 
     /// <summary>The writes' place, with Leo an administrator, Mia a second moderator and Otto its operator, an
     /// administrator.</summary>
-    private static async Task<WriteLoop> Keepers(TangentSpaceFixture tangentSpace)
+    private static async Task Keepers(TangentSpaceFixture tangentSpace)
     {
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Member, Roles.Administrator], ct: Cancellation);
         await Given.AParticipant(tangentSpace, Mia, [Roles.Member, Roles.Moderator], ct: Cancellation);
         await Given.AParticipant(tangentSpace, Otto, [Roles.Member, Roles.Administrator], ct: Cancellation);
         var space = (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!;
         space.OperatorId = Otto;
         space.ProprietorId = Otto;
-        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new Store<TangentSpace>(space), Cancellation));
-        return writer;
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(Cancellation));
     }
 
     /// <summary>Starts a Topic in the workshop as JSON, with the session's token from the workshop's page, which carries a
@@ -67,9 +66,9 @@ public sealed class PeopleTests
     public async Task A_moderator_times_a_member_out_who_reads_and_posts_nothing_until_it_is_lifted_or_passes_and_their_door_says_so()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var moderators = Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(new CreateModeratorsTangent(), Cancellation)).Result;
-        var topic = await Started(writer, Bea, "Lanterns at dusk", "Who lights theirs first?");
+        await Place(tangentSpace);
+        var moderators = Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateModeratorsTangent().Send(Cancellation)).Result;
+        var topic = await Started(Bea, "Lanterns at dusk", "Who lights theirs first?");
         using var mo = await SignedIn(tangentSpace, Mo);
         using var ada = await SignedIn(tangentSpace, Ada);
         var path = PeopleController.Path;
@@ -105,14 +104,14 @@ public sealed class PeopleTests
         // Timed out, she reads and reports, posts nothing, and her door says until when.
         Assert.Equal([nameof(Bit.View)], await Can(ada, "/t/" + Workshop));
         var refused = await StartIn(ada, "While timed out");
-        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.TimedOut), (refused.Status, refused.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.TimedOut.Word), (refused.Status, refused.Gate));
         var reportAction = PostPath(topic, topic) + "/report";
         var reportId = Tids.Mint();
         Assert.Equal(HttpStatusCode.OK, (await Json(ada, reportAction, reportAction, new { id = reportId, body = "This needs a look." })).Status);
         var report = (await Post.Get(reportId, Cancellation))!;
         Assert.Equal((moderators.Id, Ada, topic.Id), (report.TangentId, report.AuthorId, report.OriginId));
         var door = await Send(ada.Client, HttpMethod.Get, "/", json: true);
-        Assert.Equal(Capabilities.TimedOut, door.Json.GetProperty("gate").GetString());
+        Assert.Equal(Capabilities.TimedOut.Word, door.Json.GetProperty("gate").GetString());
         Assert.Equal(row.StandingUntil!.Value.ToUnixTimeSeconds(), door.Json.GetProperty("until").GetDateTimeOffset().ToUnixTimeSeconds());
         Assert.Contains("You’re timed out until", (await Send(ada.Client, HttpMethod.Get, "/")).Body);
         var timedRow = Row((await Send(mo.Client, HttpMethod.Get, path, json: true)).Json, Ada);
@@ -136,7 +135,7 @@ public sealed class PeopleTests
 
         // A timeout that has run its course is over: she posts, and the people list her admitted.
         var start = DateTimeOffset.UtcNow.AddMinutes(-61);
-        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new TimeOut(Mo, Ada, start.AddHours(1), start), Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new TimeOut(Mo, Ada, start.AddHours(1), start).Send(Cancellation));
         Assert.Equal(HttpStatusCode.Created, (await StartIn(ada, "After it passed")).Status);
         Assert.Equal("admitted", Row((await Send(mo.Client, HttpMethod.Get, path, json: true)).Json, Ada).GetProperty("standing").GetString());
 
@@ -151,7 +150,7 @@ public sealed class PeopleTests
     public async Task A_ban_makes_the_place_absent_to_the_participant_on_a_page_and_on_an_open_stream_and_a_lift_brings_them_back()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         using var mo = await SignedIn(tangentSpace, Mo);
         using var ada = await SignedIn(tangentSpace, Ada);
         await Given.BeenAtTheDoor(tangentSpace, Ada, Cancellation);
@@ -181,7 +180,7 @@ public sealed class PeopleTests
         Assert.Equal([People.Verb.Lift], Strings(bannedRow, "can"));
         // A banned participant is lifted before anything else.
         var timedOut = await Json(mo, path, PeopleController.TimeOutPath, new { participant = Ada, @for = "day" });
-        Assert.Equal((HttpStatusCode.Conflict, Participant.BannedFirst), (timedOut.Status, timedOut.Json.GetProperty("detail").GetString()));
+        Assert.Equal((HttpStatusCode.Conflict, Participant.BannedFirst.Text), (timedOut.Status, timedOut.Json.GetProperty("detail").GetString()));
 
         Assert.Equal(HttpStatusCode.OK, (await Json(mo, path, PeopleController.LiftPath, new { participant = Ada })).Status);
         var door = await Send(ada.Client, HttpMethod.Get, "/", json: true);
@@ -211,7 +210,7 @@ public sealed class PeopleTests
             Assert.Empty(Strings(row, "take"));
         }
 
-        foreach (var (target, reason) in new[] { (Leo, People.NotBelow), (Mia, People.NotBelow), (Mo, People.Themselves), (Otto, People.Operator) })
+        foreach (var (target, reason) in new[] { (Leo, People.NotBelow.Text), (Mia, People.NotBelow.Text), (Mo, People.Themselves.Text), (Otto, People.Operator.Text) })
         {
             foreach (var verb in new[] { PeopleController.BanPath, PeopleController.LiftPath })
             {
@@ -227,11 +226,11 @@ public sealed class PeopleTests
         // A form refused reads the page again, the reason above the list.
         var form = await Form(mo, path, PeopleController.BanPath, new Dictionary<string, string> { [PeopleController.ParticipantField] = Leo });
         Assert.Equal(HttpStatusCode.Forbidden, form.Status);
-        Assert.Contains(People.NotBelow, form.Body);
+        Assert.Contains(People.NotBelow.Text, form.Body);
 
         // An administrator acts on moderators and members, never on another administrator or the operator.
         Assert.Equal([People.Verb.TimeOut, People.Verb.Ban], Strings(Row((await Send(leo.Client, HttpMethod.Get, path, json: true)).Json, Mia), "can"));
-        Assert.Equal((HttpStatusCode.Forbidden, People.Operator), Refusal(await Json(leo, path, PeopleController.BanPath, new { participant = Otto })));
+        Assert.Equal((HttpStatusCode.Forbidden, People.Operator.Text), Refusal(await Json(leo, path, PeopleController.BanPath, new { participant = Otto })));
         Assert.Equal(HttpStatusCode.NotFound, (await Json(mo, path, PeopleController.BanPath, new { participant = "did:plc:nobody" })).Status);
         Assert.Empty(await Since(before));
     }
@@ -242,11 +241,11 @@ public sealed class PeopleTests
     public async Task A_participant_whose_timeout_has_ended_reads_as_admitted_in_every_decision_and_their_next_sign_in_puts_back_a_missing_member_role()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         // Timed out without the member role, whose write never happened, until five minutes ago.
         const string cy = "did:plc:cy4people";
         var ended = new Participant { Id = cy, Handle = "cy4people.example", Standing = Standing.TimedOut, StandingUntil = DateTimeOffset.UtcNow.AddMinutes(-5) };
-        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new Store<Participant>(ended), Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(ended).Send(Cancellation));
         Assert.False(await IsMember(tangentSpace, cy));
 
         using var signedIn = await SignedIn(tangentSpace, cy);
@@ -283,7 +282,7 @@ public sealed class PeopleTests
         // A moderator holds no ManageRoles: no role is offered, and giving one is refused with its gate.
         Assert.Empty(Strings(Row((await Send(mo.Client, HttpMethod.Get, path, json: true)).Json, Bea), "give"));
         var gated = await Json(mo, path, PeopleController.GivePath, new { participant = Bea, role = People.Moderator });
-        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageRoles)), (gated.Status, gated.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageRoles).Word), (gated.Status, gated.Gate));
 
         await Given.BeenAtTheDoor(tangentSpace, Bea, Cancellation);
         // The administrator is offered the moderator role on a member, never their own highest, and gives it from the
@@ -291,7 +290,7 @@ public sealed class PeopleTests
         var beaRow = Row((await Send(leo.Client, HttpMethod.Get, path, json: true)).Json, Bea);
         Assert.Equal([People.Moderator], Strings(beaRow, "give"));
         var notManaged = await Json(leo, path, PeopleController.GivePath, new { participant = Bea, role = People.Administrator });
-        Assert.Equal((HttpStatusCode.Forbidden, People.NotManaged), (notManaged.Status, notManaged.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, People.NotManaged.Text), (notManaged.Status, notManaged.Gate));
         Assert.Contains("Make moderator", (await Send(leo.Client, HttpMethod.Get, path)).Body);
         var before = await Head();
         var given = await Form(leo, path, PeopleController.GivePath, new Dictionary<string, string>
@@ -321,14 +320,14 @@ public sealed class PeopleTests
         Assert.DoesNotContain("Moderator", Strings(taken.Json, "roles"));
         Assert.Contains("took your moderator role", (await Send(bea.Client, HttpMethod.Get, "/")).Body);
         var refused = await Json(bea, "/t/" + Workshop, PeopleController.LiftPath, new { participant = Ada });
-        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageStanding)), (refused.Status, refused.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageStanding).Word), (refused.Status, refused.Gate));
         // The member role is admission's, never given here.
         Assert.Equal(HttpStatusCode.BadRequest, (await Json(leo, path, PeopleController.TakePath, new { participant = Ada, role = "member" })).Status);
 
         // An administrator never takes another's role, nor the operator's; the operator, above every role, takes theirs.
         Assert.Empty(Strings(Row((await Send(leo.Client, HttpMethod.Get, path, json: true)).Json, Otto), "take"));
         var operatorRefused = await Json(leo, path, PeopleController.TakePath, new { participant = Otto, role = People.Administrator });
-        Assert.Equal((HttpStatusCode.Forbidden, People.Operator), (operatorRefused.Status, operatorRefused.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, People.Operator.Text), (operatorRefused.Status, operatorRefused.Gate));
         Assert.Equal([People.Administrator], Strings(Row((await Send(otto.Client, HttpMethod.Get, path, json: true)).Json, Leo), "take"));
         Assert.Equal(HttpStatusCode.OK, (await Json(otto, path, PeopleController.TakePath, new { participant = Leo, role = People.Administrator })).Status);
         Assert.False((await roles.Bag(Leo, authenticated: true, Cancellation)).InRole(Roles.Administrator));
@@ -340,15 +339,14 @@ public sealed class PeopleTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         for (var i = 0; i < People.PageSize + 2; i++)
         {
             var person = new Participant { Id = $"did:plc:person{i:D2}", Handle = $"person{i:D2}.example" };
-            Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new Store<Participant>(person), Cancellation));
+            Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(person).Send(Cancellation));
         }
 
         var applicant = Participant.Arrive("did:plc:applicant", "applicant.example", Admission.Apply);
-        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new Store<Participant>(applicant), Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(applicant).Send(Cancellation));
         using var mo = await SignedIn(tangentSpace, Mo);
         var path = PeopleController.Path;
 
@@ -393,7 +391,7 @@ public sealed class PeopleTests
         // A member reads no one, and is refused with the gate.
         using var ada = await SignedIn(tangentSpace, Ada);
         var refused = await Send(ada.Client, HttpMethod.Get, path, json: true);
-        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageStanding)), (refused.Status, refused.Json.GetProperty("gate").GetString()));
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageStanding).Word), (refused.Status, refused.Json.GetProperty("gate").GetString()));
         Assert.Empty(refused.Json.GetProperty("people").EnumerateArray());
         Assert.DoesNotContain("People", (await Send(ada.Client, HttpMethod.Get, TangentSpaceSettingsController.Path, json: true)).Json
             .GetProperty("sections").EnumerateArray().Select(section => section.GetProperty("name").GetString()));

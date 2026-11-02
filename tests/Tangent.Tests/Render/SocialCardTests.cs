@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.RegularExpressions;
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
@@ -7,7 +8,6 @@ using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
 using Tangent.Tangents;
-using Tangent.Writer;
 using Xunit;
 
 namespace Tangent.Render;
@@ -37,10 +37,9 @@ public sealed partial class SocialCardTests
     public async Task A_public_topic_previews_its_title_first_words_address_and_the_places_name_wherever_it_is_linked()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = await Established(tangentSpace);
-        var topic = await Started(writer, "A first question", "The **first** words of it.");
-        var reply = Assert.IsType<Outcome<Post>.Done>(await writer.Send(
-            new Reply(Tids.Mint(), topic.Id, "Words of the reply.", "ada", At: Start.AddMinutes(1)), Cancellation)).Result;
+        await Established(tangentSpace);
+        var topic = await Started("A first question", "The **first** words of it.");
+        var reply = Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), topic.Id, "Words of the reply.", "ada", At: Start.AddMinutes(1)).Send(Cancellation)).Result;
         var address = $"{BaseUrl}/t/{Workshop}/{topic.Slug}";
 
         foreach (var path in new[] { $"/t/{Workshop}/{topic.Slug}", $"/t/{Workshop}/{topic.Slug}/{reply.Id}" })
@@ -62,8 +61,8 @@ public sealed partial class SocialCardTests
     public async Task An_article_says_it_is_one_and_a_long_opening_is_cut_at_a_word()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = await Established(tangentSpace);
-        var article = await Started(writer, "A published piece", string.Concat(Enumerable.Repeat("word ", 100)), PostKind.Article);
+        await Established(tangentSpace);
+        var article = await Started("A published piece", string.Concat(Enumerable.Repeat("word ", 100)), PostKind.Article);
 
         var html = await Page(tangentSpace.Client, $"/t/{Workshop}/{article.Slug}");
 
@@ -77,9 +76,9 @@ public sealed partial class SocialCardTests
     public async Task A_description_carries_no_markup_and_names_no_one()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = await Established(tangentSpace);
+        await Established(tangentSpace);
         await Given.AParticipant(tangentSpace, "did:plc:ines", [Roles.Member], ct: Cancellation);
-        var topic = await Started(writer, "A question",
+        var topic = await Started("A question",
             "[@ines](at://did:plc:ines), thanks to [@ines](at://did:plc:ines).\n\n## Heading\n\nThe *words*, `code`, [a page](/about) and ![a sketch](/media/sketch.png) <b>here</b>.");
 
         var html = await Page(tangentSpace.Client, $"/t/{Workshop}/{topic.Slug}");
@@ -95,13 +94,12 @@ public sealed partial class SocialCardTests
     public async Task A_members_only_topic_previews_nothing_for_a_visitor_or_on_its_members_own_page()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
-        var writer = await Established(tangentSpace);
+        await Established(tangentSpace);
         var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
         await Overwrites.SetAudience(roles, Back, Audience.Private, Cancellation);
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(new Store<Tangents.Tangent>(Tangents.Tangent.Create(Back, "The back room", "Kept close.", PostKind.Topic, 2)), Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new Store<Tangents.Tangent>(Tangents.Tangent.Create(Back, "The back room", "Kept close.", PostKind.Topic, 2)).Send(Cancellation));
         await Overwrites.SetAccess(roles, Back, Roles.Member, RoleAccess.Post, Cancellation);
-        var inside = Assert.IsType<Outcome<Post>.Done>(await writer.Send(
-            new StartTopic(Tids.Mint(), Back, "Said in the back", "Secret words.", "ada", null, Start), Cancellation)).Result;
+        var inside = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Back, "Said in the back", "Secret words.", "ada", null, Start).Send(Cancellation)).Result;
         using var member = new Browser(tangentSpace);
         (await member.SignIn("reader", Reader, Cancellation)).Dispose();
 
@@ -123,11 +121,10 @@ public sealed partial class SocialCardTests
     public async Task A_private_place_previews_nothing_for_a_visitor_or_a_participant()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         await Given.AnEstablishedTangentSpace(tangentSpace, "Off the record", Audience.Private, ct: Cancellation);
         await Given.AParticipant(tangentSpace, "ada", [Roles.Member], ct: Cancellation);
         await Given.ATangent(tangentSpace, Workshop, ct: Cancellation);
-        var topic = await Started(writer, "Said in private", "Private words.");
+        var topic = await Started("Said in private", "Private words.");
         using var member = new Browser(tangentSpace);
         (await member.SignIn("reader", Reader, Cancellation)).Dispose();
 
@@ -147,11 +144,11 @@ public sealed partial class SocialCardTests
     public async Task A_removed_topic_says_nothing_of_its_words()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = await Established(tangentSpace);
-        var topic = await Started(writer, "A question", "These words go.");
+        await Established(tangentSpace);
+        var topic = await Started("A question", "These words go.");
         Assert.Equal("These words go.", Meta(await Page(tangentSpace.Client, $"/t/{Workshop}/{topic.Slug}"), "og:description"));
 
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new RemovePost(topic.Id, "leo", Start.AddMinutes(1)), Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new RemovePost(topic.Id, "leo", Start.AddMinutes(1)).Send(Cancellation));
 
         var html = await Page(tangentSpace.Client, $"/t/{Workshop}/{topic.Slug}");
         Assert.Null(Meta(html, "og:description"));
@@ -163,7 +160,7 @@ public sealed partial class SocialCardTests
     public async Task A_tangent_and_the_door_preview_as_themselves_and_the_door_takes_the_places_new_name()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = await Established(tangentSpace);
+        await Established(tangentSpace);
 
         var tangent = await Page(tangentSpace.Client, $"/t/{Workshop}");
         Assert.Equal("The workshop", Meta(tangent, "og:title"));
@@ -176,8 +173,7 @@ public sealed partial class SocialCardTests
         Assert.Null(Meta(door, "og:description"));
         Assert.Equal($"{BaseUrl}/", Meta(door, "og:url"));
 
-        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(
-            new ChangeTangentSpace("leo", "The new name", "What is here."), Cancellation));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new ChangeTangentSpace("leo", "The new name", "What is here.").Send(Cancellation));
 
         var renamed = await Page(tangentSpace.Client, "/");
         Assert.Equal("The new name", Meta(renamed, "og:title"));
@@ -189,8 +185,8 @@ public sealed partial class SocialCardTests
     public async Task A_fragment_carries_no_card()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = await Established(tangentSpace);
-        var topic = await Started(writer, "A question", "The first words.");
+        await Established(tangentSpace);
+        var topic = await Started("A question", "The first words.");
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"/t/{Workshop}/{topic.Slug}");
         request.Headers.Accept.ParseAdd("text/html");
@@ -200,19 +196,16 @@ public sealed partial class SocialCardTests
         NoCard(await response.Content.ReadAsStringAsync(Cancellation));
     }
 
-    private static async Task<WriteLoop> Established(TangentSpaceFixture tangentSpace)
+    private static async Task Established(TangentSpaceFixture tangentSpace)
     {
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         await Given.AnEstablishedTangentSpace(tangentSpace, Place, ct: Cancellation);
         await Given.AParticipant(tangentSpace, "leo", [Roles.Administrator], ct: Cancellation);
         await Given.AParticipant(tangentSpace, "ada", [Roles.Member], ct: Cancellation);
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(
-            new CreateTangent(Workshop, "The workshop", "Where things get made.", PostKind.Topic, 1, Audience.Public, "leo"), Cancellation));
-        return writer;
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent(Workshop, "The workshop", "Where things get made.", PostKind.Topic, 1, Audience.Public, "leo").Send(Cancellation));
     }
 
-    private static async Task<Post> Started(WriteLoop writer, string title, string body, PostKind? kind = null)
-        => Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), Workshop, title, body, "ada", kind, Start), Cancellation)).Result;
+    private static async Task<Post> Started(string title, string body, PostKind? kind = null)
+        => Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, title, body, "ada", kind, Start).Send(Cancellation)).Result;
 
     private static async Task<(HttpStatusCode Status, string Html)> Answer(HttpClient client, string path)
     {

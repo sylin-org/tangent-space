@@ -17,11 +17,11 @@
                     <p class="sign-in-failure" id="space-settings-failure" role="alert" data-gate="@gate">
                         @if (Model.SignIn is { } signIn)
                         {
-                            @(PostWrites.Sentence(gate) + " ")<a href="@signIn">Sign in</a>
+                            @(Access.Capabilities.Sentence(gate) + " ")<a href="@signIn">Sign in</a>
                         }
                         else
                         {
-                            @PostWrites.Sentence(gate)
+                            @Access.Capabilities.Sentence(gate)
                         }
                     </p>
                 }

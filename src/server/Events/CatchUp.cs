@@ -1,7 +1,7 @@
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Tangent.Access;
 using Tangent.Participants;
-using Tangent.Writer;
 
 namespace Tangent.Events;
 
@@ -12,10 +12,10 @@ namespace Tangent.Events;
 /// stays as it was.</summary>
 public sealed record CatchUp(string ParticipantId, long Through) : ICommand<Checkpoint>
 {
-    public const string NoPlace = "No Tangent Space is here.";
+    public static readonly Reason NoPlace = Reason.Absent("No Tangent Space is here.");
     public const string NoEvent = "No event has this sequence.";
 
-    public async Task<Outcome<Checkpoint>> Run(Sequences sequences, CancellationToken ct)
+    public async Task<Outcome<Checkpoint>> Run(CancellationToken ct)
     {
         if (await Participant.Get(ParticipantId, ct) is null) return new Outcome<Checkpoint>.Refused(NoPlace);
         if (!(await Capabilities.Load(ParticipantId, null, null, ct)).Exists) return new Outcome<Checkpoint>.Refused(NoPlace);

@@ -1,10 +1,10 @@
+using Koan.Data.Core.Commands;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
 using Tangent.Posts;
 using Tangent.Render;
 using Tangent.Space;
-using Tangent.Writer;
 
 namespace Tangent.Tangents;
 
@@ -15,7 +15,7 @@ namespace Tangent.Tangents;
 /// <see cref="CreateTangent"/>: a form is sent on to the new Tangent's page, a JSON request reads the Tangent
 /// (<c>201</c>); a refusal reads the form again with the reason inline, or a problem with the gate. A reader for whom the
 /// place does not exist receives what an address with nothing there receives.</summary>
-public sealed class NewTangentController(KoanWebBaseUrl baseUrl, WriteLoop writer) : ControllerBase
+public sealed class NewTangentController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
     public const string Route = "/t/" + Tangent.NewSegment;
 
@@ -34,7 +34,7 @@ public sealed class NewTangentController(KoanWebBaseUrl baseUrl, WriteLoop write
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(place.Gate(Bit.View));
+        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
         return Ok(await Page(place, personId, ct));
     }
 
@@ -46,7 +46,7 @@ public sealed class NewTangentController(KoanWebBaseUrl baseUrl, WriteLoop write
         var personId = PostWrites.PersonId(User);
         if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(place.Gate(Bit.View));
+        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
         if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
 
         var name = fields.GetValueOrDefault(TangentWrites.NameField) ?? "";
@@ -60,25 +60,21 @@ public sealed class NewTangentController(KoanWebBaseUrl baseUrl, WriteLoop write
         for (var attempt = 0; attempt < Attempts; attempt++)
         {
             if (await Tangent.FreeSlug(Posts.Slug.From(name, Unnamed), ct) is not { } slug) return await Refused(place, personId, fields, NoSlug, ct);
-            var outcome = await writer.Send(new CreateTangent(slug, name, description,
+            var outcome = await new CreateTangent(slug, name, description,
                 kind is { } chosenKind ? Enum.GetValues<PostKind>()[chosenKind] : PostKind.Topic, await Tangent.NextOrder(ct),
-                audience is { } chosenAudience ? Enum.GetValues<Audience>()[chosenAudience] : Audience.Public, personId ?? ""), ct);
+                audience is { } chosenAudience ? Enum.GetValues<Audience>()[chosenAudience] : Audience.Public, personId ?? "").Send();
             switch (outcome)
             {
                 case Outcome<Tangent>.Done { Result: var tangent }:
                     return await TangentWrites.Written(HttpContext, tangent, BaseAddress(), personId, created: true,
                         PostWrites.TangentAddress(BaseAddress(), tangent.Id), ct);
-                case Outcome<Tangent>.Refused { Reason: CreateTangent.NoPlace }:
-                    return PostWrites.Absent();
-                case Outcome<Tangent>.Refused { Reason: var reason }:
-                    return await Refused(place, personId, fields, reason, ct);
-                case Outcome<Tangent>.Conflict:
+                case Outcome<Tangent>.Refused { Reason.Kind: ReasonKind.Conflict }:
                     // Another Tangent took the slug between reading it free and the create: read again.
                     continue;
-                case Outcome<Tangent>.Failed { Cause: var cause }:
-                    throw new InvalidOperationException("Creating a Tangent failed.", cause);
+                case Outcome<Tangent>.Refused { Reason: { Kind: not ReasonKind.Absent } reason }:
+                    return await Refused(place, personId, fields, reason, ct);
                 default:
-                    throw new InvalidOperationException($"The writer answered {outcome} for creating a Tangent.");
+                    return PostWrites.Answer(HttpContext, outcome);
             }
         }
 
@@ -87,10 +83,10 @@ public sealed class NewTangentController(KoanWebBaseUrl baseUrl, WriteLoop write
 
     /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the form again keeping what
     /// was sent, with the reason where it belongs.</summary>
-    private async Task<IActionResult> Refused(Capabilities place, string? personId, IReadOnlyDictionary<string, string> fields, string reason,
+    private async Task<IActionResult> Refused(Capabilities place, string? personId, IReadOnlyDictionary<string, string> fields, Reason reason,
         CancellationToken ct)
     {
-        if (PostWrites.WantsJson(Request)) return TangentWrites.Refused(reason);
+        if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
         var page = await Page(place, personId, ct) with
         {
             Name = fields.GetValueOrDefault(TangentWrites.NameField) ?? "",
@@ -100,12 +96,12 @@ public sealed class NewTangentController(KoanWebBaseUrl baseUrl, WriteLoop write
         };
         page = TangentWrites.Concerning(reason) switch
         {
-            TangentWrites.About.Name => page with { NameFailure = reason },
-            TangentWrites.About.Description => page with { DescriptionFailure = reason },
-            TangentWrites.About.Sent => page with { Failure = reason },
-            _ => page with { Gate = reason, Create = null }
+            TangentWrites.About.Name => page with { NameFailure = reason.Text },
+            TangentWrites.About.Description => page with { DescriptionFailure = reason.Text },
+            TangentWrites.About.Sent => page with { Failure = reason.Text },
+            _ => page with { Gate = reason.Word, Create = null }
         };
-        return new ObjectResult(page) { StatusCode = TangentWrites.Status(reason) };
+        return new ObjectResult(page) { StatusCode = PostWrites.Status(reason) };
     }
 
     /// <summary>The word a field sent where it is one of <paramref name="words"/>, else <paramref name="otherwise"/>.</summary>
@@ -120,7 +116,7 @@ public sealed class NewTangentController(KoanWebBaseUrl baseUrl, WriteLoop write
         return new NewTangentPage(
             place.Gate(Bit.ManageSpace) is null ? TangentWrites.CreateForm(baseAddress + Route, FormToken.For(HttpContext)) : null,
             place.Can,
-            place.Gate(Bit.ManageSpace),
+            place.Gate(Bit.ManageSpace)?.Word,
             "",
             "",
             PostWrites.Word(PostKind.Topic),

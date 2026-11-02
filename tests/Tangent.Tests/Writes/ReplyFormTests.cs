@@ -1,8 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.RegularExpressions;
+using Koan.Data.Core.Commands;
 using Tangent.Access;
-using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -18,8 +18,8 @@ public sealed partial class ReplyFormTests
     public async Task A_reader_who_may_reply_holds_a_form_with_a_fresh_tid_and_the_token_and_sending_it_without_script_replies_and_lands_on_the_reply()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var root = await Started(writer, Ada, "Lanterns at dusk", "Who lights theirs first?");
+        await Place(tangentSpace);
+        var root = await Started(Ada, "Lanterns at dusk", "Who lights theirs first?");
         using var bea = await SignedIn(tangentSpace, Bea);
 
         var (first, caching) = await Page(bea.Client, TopicPath(root));
@@ -57,9 +57,9 @@ public sealed partial class ReplyFormTests
     public async Task At_a_replys_address_the_form_answers_that_reply_and_sending_it_replies_to_it()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var root = await Started(writer, Ada, "Wicks", "Cotton or hemp?");
-        var cotton = await Replied(writer, root, Ada, "Cotton, always.");
+        await Place(tangentSpace);
+        var root = await Started(Ada, "Wicks", "Cotton or hemp?");
+        var cotton = await Replied(root, Ada, "Cotton, always.");
         using var bea = await SignedIn(tangentSpace, Bea);
 
         var (atTopic, _) = await Page(bea.Client, TopicPath(root));
@@ -84,14 +84,14 @@ public sealed partial class ReplyFormTests
     public async Task At_a_removed_replys_address_the_form_answers_the_topic_and_never_the_tombstone()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var root = await Started(writer, Ada, "Glazes", "Which one cracks least?");
-        var gone = await Replied(writer, root, Ada, "Said and taken back.");
+        await Place(tangentSpace);
+        var root = await Started(Ada, "Glazes", "Which one cracks least?");
+        var gone = await Replied(root, Ada, "Said and taken back.");
         var row = (await Post.Get(gone.Id, Cancellation))!;
         row.Removed = true;
         row.RemovedBy = Ada;
         row.RemovedAt = DateTimeOffset.UtcNow;
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new Store<Post>(row), Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(row).Send(Cancellation));
         using var bea = await SignedIn(tangentSpace, Bea);
 
         var (atTombstone, _) = await Page(bea.Client, PostPath(root, gone));
@@ -105,12 +105,12 @@ public sealed partial class ReplyFormTests
     public async Task A_topics_root_tid_under_its_tangent_answers_a_redirect_to_the_topic_while_a_slug_that_looks_like_a_tid_names_its_own_topic()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var root = await Started(writer, Ada, "Kiln days", "First and third Thursday.");
-        var reply = await Replied(writer, root, Bea, "Noted.");
-        var elsewhere = await Started(writer, Ada, "Wicks", "Cotton or hemp?", Articles);
+        await Place(tangentSpace);
+        var root = await Started(Ada, "Kiln days", "First and third Thursday.");
+        var reply = await Replied(root, Bea, "Noted.");
+        var elsewhere = await Started(Ada, "Wicks", "Cotton or hemp?", Articles);
         // A Topic whose title yields a slug in a TID's shape: its slug names it, whatever TID it equals.
-        var lookalike = await Started(writer, Bea, Tids.Mint(), "A title that is a TID.");
+        var lookalike = await Started(Bea, Tids.Mint(), "A title that is a TID.");
         using var visitor = Agent(tangentSpace);
 
         var found = await Send(visitor, HttpMethod.Get, "/t/" + Workshop + "/" + root.Id, json: true);
@@ -133,12 +133,12 @@ public sealed partial class ReplyFormTests
     public async Task A_reader_who_may_not_reply_reads_the_gates_sentence_and_holds_no_form()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var open = await Started(writer, Ada, "Open", "Anyone may answer.");
-        var closed = await Started(writer, Ada, "Closed", "Said and done.");
+        await Place(tangentSpace);
+        var open = await Started(Ada, "Open", "Anyone may answer.");
+        var closed = await Started(Ada, "Closed", "Said and done.");
         var row = (await Post.Get(closed.Id, Cancellation))!;
         row.Locked = true;
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new Store<Post>(row), Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(row).Send(Cancellation));
         using var bea = await SignedIn(tangentSpace, Bea);
         using var visitor = Agent(tangentSpace);
 
@@ -146,11 +146,11 @@ public sealed partial class ReplyFormTests
         var (locked, _) = await Page(bea.Client, TopicPath(closed));
 
         Assert.DoesNotContain("class=\"reply-form\"", visiting);
-        Assert.Contains($"<p class=\"topic-closed\" data-gate=\"{Capabilities.SignIn}\">", visiting);
-        Assert.Matches(Regex.Escape(PostWrites.Sentence(Capabilities.SignIn)) + " <a href=\"[^\"]*/sign-in\\?return=[^\"]+\">Sign in</a>", visiting);
+        Assert.Contains($"<p class=\"topic-closed\" data-gate=\"{Capabilities.SignIn.Word}\">", visiting);
+        Assert.Matches(Regex.Escape(Capabilities.SignIn.Text) + " <a href=\"[^\"]*/sign-in\\?return=[^\"]+\">Sign in</a>", visiting);
         Assert.DoesNotContain("class=\"reply-form\"", locked);
-        Assert.Contains($"<p class=\"topic-closed\" data-gate=\"{Capabilities.Locked}\">", locked);
-        Assert.Contains(PostWrites.Sentence(Capabilities.Locked), locked);
+        Assert.Contains($"<p class=\"topic-closed\" data-gate=\"{Capabilities.Locked.Word}\">", locked);
+        Assert.Contains(Capabilities.Locked.Text, locked);
     }
 
     /// <summary>A page as a browser reads it: its HTML and its <c>Cache-Control</c>.</summary>

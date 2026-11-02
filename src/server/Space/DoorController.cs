@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Koan.Data.Abstractions;
+using Koan.Data.Core.Commands;
 using Koan.Data.Core.Sorting;
 using Koan.Web.Auth.Infrastructure;
 using Koan.Web.Hosting;
@@ -12,7 +13,6 @@ using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Render;
 using Tangent.Tangents;
-using Tangent.Writer;
 
 namespace Tangent.Space;
 
@@ -23,8 +23,8 @@ namespace Tangent.Space;
 /// per distinct Tangent among them and the events; the Posts and Topics the events name; the reader's checkpoints for
 /// those Topics and Tangents; and the people it shows. A reader with no place checkpoint is at their first door: nothing
 /// in the place counts as new to them, whatever it holds, so it says none of it, and what concerns them alone still
-/// shows. Their own opening of it, never a delegate's, begins their place checkpoint through what it read, handed to the
-/// writer only where its queue is not full and never waited on, and a later opening makes good one that did not land; it
+/// shows. Their own opening of it, never a delegate's, begins their place checkpoint through what it read, tried and never
+/// waited on, and a later opening makes good one that did not land; it
 /// is the one thing the door's <c>GET</c> writes, and from then on the door reads past that checkpoint. An event is new to the reader when it is past their place
 /// checkpoint, past their checkpoint for its Topic (in the Topic's own sequence) and for its Tangent where those exist,
 /// not their own, and in a Tangent they may view; an event in a Tangent they may not view does not exist for them. A
@@ -44,8 +44,8 @@ namespace Tangent.Space;
 /// holds <see cref="Bit.ManageStanding"/> in the place, it reads how many applications wait, one bounded read of those
 /// that wait (<see cref="Applications.Waiting"/>), and says so, linked to where they are decided. A reader
 /// without <see cref="Bit.View"/> on the place receives its gate. Its <c>POST</c>
-/// moves the reader's place checkpoint to the sequence a door read through, through the writer.</summary>
-public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, AddressOffers offers) : ControllerBase
+/// moves the reader's place checkpoint to the sequence a door read through, by a command.</summary>
+public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers) : ControllerBase
 {
     /// <summary>The form field that carries the sequence the door was read through.</summary>
     public const string Through = "through";
@@ -206,7 +206,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
             Response.Headers.CacheControl = news.CaughtUp is null && !first ? "private" : "no-cache, no-store";
             // Their own arrival is on the log, so a place with nothing in it to read still has somewhere to begin.
             if (first && HttpMethods.IsGet(Request.Method) && !DelegateIdentity.Delegated(HttpContext))
-                _ = writer.TrySend(new CatchUp(reader.Id, Math.Max(through, targeted.Where(e => e.TangentId is null).Select(e => e.Seq).DefaultIfEmpty(0).Max())));
+                _ = new CatchUp(reader.Id, Math.Max(through, targeted.Where(e => e.TangentId is null).Select(e => e.Seq).DefaultIfEmpty(0).Max())).TrySend();
         }
 
         var offered = reader is not null && reader.Id == space.OperatorId && !baseUrl.IsConfigured ? await Offered(reader.Id, baseAddress, ct) : null;
@@ -252,7 +252,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
                 ? null
                 : new Door.Waiting(waiting.Count, waiting.Count > Notifications.CountLimit, baseAddress + ApplicationsController.Path),
             AllTangents = page.Next is null ? null : baseAddress + TangentsController.Route,
-            Gate = place.Gate(Bit.Post),
+            Gate = place.Gate(Bit.Post)?.Word,
             Until = reader is not null && reader.StandingAt(now) == Standing.TimedOut ? reader.StandingUntil : null
         });
     }
@@ -295,7 +295,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
         Response.Headers.CacheControl = "no-store";
         if (PersonId(User) is not { } personId)
             return new Problem(StatusCodes.Status401Unauthorized, "Sign in first", "Marking the door seen needs a signed-in participant.",
-                Capabilities.SignIn).ToResult();
+                Capabilities.SignIn.Word).ToResult();
         if (!await FormToken.Validate(HttpContext))
             return new Problem(StatusCodes.Status400BadRequest, "Open the door again",
                 "This form’s token is missing or has expired, so nothing was marked seen.").ToResult();
@@ -305,35 +305,27 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, WriteLoop writer, Add
             return new Problem(StatusCodes.Status400BadRequest, "Not a sequence of the log",
                 $"The {Through} field carries the sequence the door names as read through.").ToResult();
 
-        switch (await writer.Send(new CatchUp(personId, sequence), ct))
+        var outcome = await new CatchUp(personId, sequence).Send();
+        switch (outcome)
         {
             case Outcome<Checkpoint>.Done:
                 Response.Headers.Location = baseUrl.PathBase + "/";
                 return StatusCode(StatusCodes.Status303SeeOther);
-            case Outcome<Checkpoint>.Refused { Reason: CatchUp.NoPlace }:
-                return Gated(Capabilities.Absent);
-            case Outcome<Checkpoint>.Refused refused:
-                return new Problem(StatusCodes.Status400BadRequest, "Not a sequence of the log", refused.Reason).ToResult();
-            case Outcome<Checkpoint>.Failed failed:
-                throw new InvalidOperationException($"Marking the door seen for {personId} failed.", failed.Cause);
-            case var other:
-                throw new InvalidOperationException($"The writer answered {other} for marking the door seen for {personId}.");
+            case Outcome<Checkpoint>.Refused { Reason: { Kind: ReasonKind.Invalid } reason }:
+                return new Problem(StatusCodes.Status400BadRequest, "Not a sequence of the log", reason.Text).ToResult();
+            default:
+                return PostWrites.Answer(HttpContext, outcome);
         }
     }
 
     /// <summary>What a reader without <see cref="Bit.View"/> on the place receives: a missing resource's answer where
     /// the place is absent to them; otherwise the one step that stands between them and reading.</summary>
-    internal static IActionResult Gated(string gate) => gate switch
-    {
-        Capabilities.Absent => new Problem(StatusCodes.Status404NotFound, "Not found", "Nothing answers at this address.", gate).ToResult(),
-        Capabilities.SignIn => new Problem(StatusCodes.Status401Unauthorized, "Sign in to read",
-            "This Tangent Space is read by its participants.", gate).ToResult(),
-        Capabilities.Apply => new Problem(StatusCodes.Status403Forbidden, "Waiting to be admitted",
-            "Your application is waiting: you can read here once someone admits you.", gate).ToResult(),
-        Capabilities.Declined => new Problem(StatusCodes.Status403Forbidden, "Not admitted",
-            "Your application was declined, so this Tangent Space is not open to you.", gate).ToResult(),
-        _ => new Problem(StatusCodes.Status403Forbidden, "Not readable", "This Tangent Space is not open to you.", gate).ToResult()
-    };
+    internal static IActionResult Gated(Reason gate) => (gate.Kind == ReasonKind.Absent
+        ? new Problem(StatusCodes.Status404NotFound, "Not found", gate.Said, Capabilities.Absent.Text)
+        : gate == Capabilities.SignIn ? new Problem(StatusCodes.Status401Unauthorized, "Sign in to read", "This Tangent Space is read by its participants.", gate.Word)
+        : gate == Capabilities.Apply ? new Problem(StatusCodes.Status403Forbidden, "Waiting to be admitted", "Your application is waiting: you can read here once someone admits you.", gate.Word)
+        : gate == Capabilities.Declined ? new Problem(StatusCodes.Status403Forbidden, "Not admitted", "Your application was declined, so this Tangent Space is not open to you.", gate.Word)
+        : new Problem(StatusCodes.Status403Forbidden, "Not readable", "This Tangent Space is not open to you.", gate.Word)).ToResult();
 
     /// <summary>One group of new Posts: how many, whether that is a lower bound, and the newest few.</summary>
     private Door.Group Group(IReadOnlyList<Event> events, bool atLeast, IReadOnlyDictionary<string, Post> posts,

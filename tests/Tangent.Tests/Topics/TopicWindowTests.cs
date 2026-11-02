@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Koan.Data.Core.Commands;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
@@ -11,7 +12,6 @@ using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
 using Tangent.Tangents;
-using Tangent.Writer;
 using Xunit;
 
 namespace Tangent.Topics;
@@ -19,7 +19,7 @@ namespace Tangent.Topics;
 /// <summary>The Topic both ways: its root and one bounded window of its replies, each Post with its author and
 /// <c>can</c>; windows whose cursors are sequence numbers and cover every reply once; the window opened around a Post's
 /// address, at a reader's first unread or from the start; the byte budget; and what a reader who may not read, a
-/// removed Post and the page's <c>ETag</c> receive. Every Topic and reply is written through the writer's commands.</summary>
+/// removed Post and the page's <c>ETag</c> receive. Every Topic and reply is written by command.</summary>
 public sealed class TopicWindowTests(ITestOutputHelper output)
 {
     private const string BaseUrl = TangentSpaceFixture.DefaultBaseUrl;
@@ -44,11 +44,11 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
     public async Task A_topic_as_html_and_json_carries_its_root_and_its_replies_in_sequence_order_each_with_its_author_and_can()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var topic = await Started(writer, "An opening question", "First line.\nSecond <b>line</b>.");
-        var first = await Replied(writer, topic, "Agreed.", Leo, 1);
-        var second = await Replied(writer, topic, "Thanks, Leo.", Ada, 2, parentId: first.Id);
-        var third = await Replied(writer, topic, "And one more.", Leo, 3);
+        await Place(tangentSpace);
+        var topic = await Started("An opening question", "First line.\nSecond <b>line</b>.");
+        var first = await Replied(topic, "Agreed.", Leo, 1);
+        var second = await Replied(topic, "Thanks, Leo.", Ada, 2, parentId: first.Id);
+        var third = await Replied(topic, "And one more.", Leo, 3);
         var address = $"{BaseUrl}/t/{Workshop}/an-opening-question";
 
         using (var json = await Json(tangentSpace.Client, "/t/" + Workshop + "/an-opening-question"))
@@ -58,7 +58,7 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
                 (page.GetProperty("id").GetString(), page.GetProperty("slug").GetString(), page.GetProperty("title").GetString(),
                     page.GetProperty("kind").GetString(), page.GetProperty("address").GetString()));
             Assert.Equal(["View"], Strings(page.GetProperty("can")));
-            Assert.Equal(Capabilities.SignIn, page.GetProperty("gate").GetString());
+            Assert.Equal(Capabilities.SignIn.Word, page.GetProperty("gate").GetString());
             var root = page.GetProperty("root");
             Assert.Equal((topic.Id, 0L, Ada, "First line.\nSecond <b>line</b>."), (root.GetProperty("id").GetString(), root.GetProperty("sequence").GetInt64(),
                 root.GetProperty("author").GetProperty("id").GetString(), root.GetProperty("body").GetString()));
@@ -113,10 +113,10 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
     public async Task More_replies_than_one_window_yield_cursors_that_cover_every_reply_once_both_ways_with_no_total_through_the_window_index_with_a_limit()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var topic = await Started(writer, "A long one", "Many replies follow.");
+        await Place(tangentSpace);
+        var topic = await Started("A long one", "Many replies follow.");
         var count = 2 * WindowPlanner.Limit + 3;
-        for (var index = 1; index <= count; index++) await Replied(writer, topic, "Reply " + index + ".", index % 2 == 0 ? Leo : Ada, index);
+        for (var index = 1; index <= count; index++) await Replied(topic, "Reply " + index + ".", index % 2 == 0 ? Leo : Ada, index);
         var expected = Enumerable.Range(1, count).Select(index => (long)index).ToList();
 
         var forward = new List<long>();
@@ -167,12 +167,12 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
     public async Task A_posts_address_opens_the_window_around_it_marked_and_a_post_of_another_topic_answers_as_absent()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var topic = await Started(writer, "Around a reply", "The opening.");
-        var other = await Started(writer, "Another topic", "Somewhere else.");
-        var elsewhere = await Replied(writer, other, "A reply elsewhere.", Leo, 1);
+        await Place(tangentSpace);
+        var topic = await Started("Around a reply", "The opening.");
+        var other = await Started("Another topic", "Somewhere else.");
+        var elsewhere = await Replied(other, "A reply elsewhere.", Leo, 1);
         var replies = new List<Post>();
-        for (var index = 1; index <= 40; index++) replies.Add(await Replied(writer, topic, "Reply " + index + ".", Leo, index));
+        for (var index = 1; index <= 40; index++) replies.Add(await Replied(topic, "Reply " + index + ".", Leo, index));
         var anchor = replies[29];
 
         using (var json = await Json(tangentSpace.Client, $"/t/{Workshop}/around-a-reply/{anchor.Id}"))
@@ -192,7 +192,7 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
         Assert.Single(Regex.Matches(html, "<article [^>]*aria-current=\"true\""));
 
         var missing = await Problem(tangentSpace.Client, $"/t/{Workshop}/nothing-here");
-        Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent), (missing.Status, missing.Gate));
+        Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent.Text), (missing.Status, missing.Gate));
         Assert.Equal(missing, await Problem(tangentSpace.Client, $"/t/{Workshop}/around-a-reply/{elsewhere.Id}"));
         Assert.Equal(missing, await Problem(tangentSpace.Client, $"/t/{Workshop}/around-a-reply/{Tids.Mint()}"));
         Assert.Equal(missing, await Problem(tangentSpace.Client, $"/t/{Workshop}/around-a-reply/not-a-tid"));
@@ -202,11 +202,11 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
     public async Task A_signed_in_reader_with_a_checkpoint_opens_at_their_first_unread_reading_moves_nothing_and_a_visitor_opens_at_the_start()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Reader, [Roles.Member], ct: Cancellation);
-        var topic = await Started(writer, "Where it opens", "The opening.");
-        for (var index = 1; index <= 40; index++) await Replied(writer, topic, "Reply " + index + ".", Leo, index);
-        Assert.IsType<Outcome<Checkpoint>.Done>(await writer.Send(new Store<Checkpoint>(Checkpoint.At(Reader, Scope.Topic(topic.Id), 30)), Cancellation));
+        var topic = await Started("Where it opens", "The opening.");
+        for (var index = 1; index <= 40; index++) await Replied(topic, "Reply " + index + ".", Leo, index);
+        Assert.IsType<Outcome<Checkpoint>.Done>(await new Store<Checkpoint>(Checkpoint.At(Reader, Scope.Topic(topic.Id), 30)).Send(Cancellation));
         using var browser = new Browser(tangentSpace);
         (await browser.SignIn("reader", Reader, Cancellation)).Dispose();
 
@@ -230,7 +230,7 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
         }
 
         // A reader who has read everything opens at the newest window.
-        Assert.IsType<Outcome<Checkpoint>.Done>(await writer.Send(new Store<Checkpoint>(Checkpoint.At(Reader, Scope.Topic(topic.Id), 40)), Cancellation));
+        Assert.IsType<Outcome<Checkpoint>.Done>(await new Store<Checkpoint>(Checkpoint.At(Reader, Scope.Topic(topic.Id), 40)).Send(Cancellation));
         using (var json = await Json(browser.Client, $"/t/{Workshop}/where-it-opens"))
             Assert.Equal(Enumerable.Range(40 - WindowPlanner.Limit + 1, WindowPlanner.Limit).Select(index => (long)index).ToList(), Sequences(json.RootElement));
     }
@@ -239,11 +239,11 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
     public async Task The_byte_budget_cuts_a_window_of_very_long_posts_short_and_the_cursor_continues_it()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var topic = await Started(writer, "Long posts", "Each reply is nearly as long as a Post may be.");
+        await Place(tangentSpace);
+        var topic = await Started("Long posts", "Each reply is nearly as long as a Post may be.");
         var body = string.Join(' ', Enumerable.Repeat("words", 60 * 1024 / 6));
         var count = 20;
-        for (var index = 1; index <= count; index++) await Replied(writer, topic, index + " " + body, Leo, index);
+        for (var index = 1; index <= count; index++) await Replied(topic, index + " " + body, Leo, index);
 
         var windows = new List<List<long>>();
         string? address = $"/t/{Workshop}/long-posts";
@@ -267,31 +267,29 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
     public async Task A_reader_who_may_not_view_gets_the_absent_answer_a_tombstone_keeps_its_place_and_the_etag_holds_until_a_reply()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Reader, [Roles.Member], ct: Cancellation);
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(
-            new CreateTangent("studio", "The studio", "", PostKind.Topic, 2, Audience.Private, Leo), Cancellation));
-        var hidden = Assert.IsType<Outcome<Post>.Done>(await writer.Send(
-            new StartTopic(Tids.Mint(), "studio", "Behind the door", "Not for everyone.", Leo, At: Start), Cancellation)).Result;
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent("studio", "The studio", "", PostKind.Topic, 2, Audience.Private, Leo).Send(Cancellation));
+        var hidden = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "studio", "Behind the door", "Not for everyone.", Leo, At: Start).Send(Cancellation)).Result;
         using var browser = new Browser(tangentSpace);
         (await browser.SignIn("reader", Reader, Cancellation)).Dispose();
 
         var missing = await Problem(browser.Client, "/t/studio/nothing-here");
-        Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent), (missing.Status, missing.Gate));
+        Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent.Text), (missing.Status, missing.Gate));
         Assert.Equal(missing, await Problem(browser.Client, "/t/studio/behind-the-door"));
         Assert.Equal(missing, await Problem(browser.Client, $"/t/studio/behind-the-door/{hidden.Id}"));
         Assert.Equal(missing, await Problem(tangentSpace.Client, "/t/studio/behind-the-door"));
         Assert.Equal(missing, await Problem(browser.Client, "/t/nowhere/behind-the-door"));
 
-        var topic = await Started(writer, "A removal", "The opening.");
-        await Replied(writer, topic, "Kept.", Ada, 1);
-        var removed = await Replied(writer, topic, "Said and taken back.", Ada, 2);
-        await Replied(writer, topic, "Also kept.", Ada, 3);
+        var topic = await Started("A removal", "The opening.");
+        await Replied(topic, "Kept.", Ada, 1);
+        var removed = await Replied(topic, "Said and taken back.", Ada, 2);
+        await Replied(topic, "Also kept.", Ada, 3);
         var row = (await Post.Get(removed.Id, Cancellation))!;
         row.Removed = true;
         row.RemovedBy = Leo;
         row.RemovedAt = Start.AddMinutes(10);
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new Store<Post>(row), Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(row).Send(Cancellation));
 
         using (var json = await Json(tangentSpace.Client, $"/t/{Workshop}/a-removal"))
         {
@@ -316,7 +314,7 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
         Assert.Equal(HttpStatusCode.OK, first.Status);
         Assert.Equal(first.ETag, second.ETag);
         Assert.Equal(HttpStatusCode.NotModified, (await Tag(tangentSpace.Client, $"/t/{Workshop}/a-removal", first.ETag)).Status);
-        await Replied(writer, topic, "A late reply.", Leo, 4);
+        await Replied(topic, "A late reply.", Leo, 4);
         var after = await Tag(tangentSpace.Client, $"/t/{Workshop}/a-removal", first.ETag);
         Assert.Equal(HttpStatusCode.OK, after.Status);
         Assert.NotEqual(first.ETag, after.ETag);
@@ -324,26 +322,26 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
         // A locked Topic says so, and no one may reply in it.
         var root = (await Post.Get(topic.Id, Cancellation))!;
         root.Locked = true;
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new Store<Post>(root), Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(root).Send(Cancellation));
         using (var json = await Json(browser.Client, $"/t/{Workshop}/a-removal"))
         {
             Assert.True(json.RootElement.GetProperty("locked").GetBoolean());
             Assert.DoesNotContain("Post", Strings(json.RootElement.GetProperty("can")));
-            Assert.Equal(Capabilities.Locked, json.RootElement.GetProperty("gate").GetString());
+            Assert.Equal(Capabilities.Locked.Word, json.RootElement.GetProperty("gate").GetString());
         }
 
-        Assert.Contains(PostWrites.Sentence(Capabilities.Locked), await Html(browser.Client, $"/t/{Workshop}/a-removal"));
+        Assert.Contains(Capabilities.Locked.Text, await Html(browser.Client, $"/t/{Workshop}/a-removal"));
     }
 
     [Fact]
     public async Task In_a_locked_or_removed_topic_no_reply_holds_post_with_the_topics_gate_and_an_open_topics_replies_are_unchanged()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Reader, [Roles.Member], ct: Cancellation);
-        var topic = await Started(writer, "A closing", "The opening.");
-        var leos = await Replied(writer, topic, "Leo's reply.", Leo, 1);
-        var readers = await Replied(writer, topic, "The reader's reply.", Reader, 2);
+        var topic = await Started("A closing", "The opening.");
+        var leos = await Replied(topic, "Leo's reply.", Leo, 1);
+        var readers = await Replied(topic, "The reader's reply.", Reader, 2);
         using var browser = new Browser(tangentSpace);
         (await browser.SignIn("reader", Reader, Cancellation)).Dispose();
 
@@ -361,51 +359,47 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
         var participant = (await Participant.Get(Reader, Cancellation))!;
         var member = Bits.Tokens(Roles.MemberBits).Append(Roles.Member).ToList();
         var place = new TangentSpace { Audience = Audience.Public };
-        string? Gate(Post reply, Post root) => Capabilities.For(participant, member, place, reply.TangentId, [], DateTimeOffset.UtcNow, reply, root).Gate(Bit.Post);
+        string? Gate(Post reply, Post root) => Capabilities.For(participant, member, place, reply.TangentId, [], DateTimeOffset.UtcNow, reply, root).Gate(Bit.Post)?.Word;
 
         var root = (await Post.Get(topic.Id, Cancellation))!;
         root.Locked = true;
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new Store<Post>(root), Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(root).Send(Cancellation));
         var locked = await ReplyCans();
         Assert.All(locked, can => Assert.DoesNotContain("Post", can));
         Assert.Equal(["View", "Topic", "EditOwn", "RemoveOwn"], locked[1]);
-        Assert.All([leos, readers], reply => Assert.Equal(Capabilities.Locked, Gate(reply, root)));
+        Assert.All([leos, readers], reply => Assert.Equal(Capabilities.Locked.Word, Gate(reply, root)));
 
         root.Locked = false;
         root.Removed = true;
         root.RemovedBy = Leo;
         root.RemovedAt = Start.AddMinutes(5);
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new Store<Post>(root), Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(root).Send(Cancellation));
         var removed = await ReplyCans();
         Assert.All(removed, can => Assert.DoesNotContain("Post", can));
         Assert.Equal(["View", "Topic", "EditOwn", "RemoveOwn"], removed[1]);
-        Assert.All([leos, readers], reply => Assert.Equal(Capabilities.Removed, Gate(reply, root)));
+        Assert.All([leos, readers], reply => Assert.Equal(Capabilities.Removed.Word, Gate(reply, root)));
 
         root.Removed = false;
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new Store<Post>(root), Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(root).Send(Cancellation));
         Assert.Equal(open, await ReplyCans());
         Assert.All([leos, readers], reply => Assert.Null(Gate(reply, root)));
     }
 
     /// <summary>The place every proof starts from: established, with an administrator who sets up the public Tangent,
     /// and a member who starts its Topics.</summary>
-    private static async Task<WriteLoop> Place(TangentSpaceFixture tangentSpace)
+    private static async Task Place(TangentSpaceFixture tangentSpace)
     {
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
         await Given.AnEstablishedTangentSpace(tangentSpace, ct: Cancellation);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         await Given.AParticipant(tangentSpace, Ada, [Roles.Member], ct: Cancellation);
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(
-            new CreateTangent(Workshop, "The workshop", "Where things get made.", PostKind.Topic, 1, Audience.Public, Leo), Cancellation));
-        return writer;
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent(Workshop, "The workshop", "Where things get made.", PostKind.Topic, 1, Audience.Public, Leo).Send(Cancellation));
     }
 
-    private static async Task<Post> Started(WriteLoop writer, string title, string body)
-        => Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), Workshop, title, body, Ada, At: Start), Cancellation)).Result;
+    private static async Task<Post> Started(string title, string body)
+        => Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, title, body, Ada, At: Start).Send(Cancellation)).Result;
 
-    private static async Task<Post> Replied(WriteLoop writer, Post topic, string body, string author, int minute, string? parentId = null)
-        => Assert.IsType<Outcome<Post>.Done>(await writer.Send(
-            new Reply(Tids.Mint(), topic.Id, body, author, parentId, Start.AddMinutes(minute)), Cancellation)).Result;
+    private static async Task<Post> Replied(Post topic, string body, string author, int minute, string? parentId = null)
+        => Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), topic.Id, body, author, parentId, Start.AddMinutes(minute)).Send(Cancellation)).Result;
 
     private static List<long> Sequences(JsonElement page)
         => page.GetProperty("replies").EnumerateArray().Select(reply => reply.GetProperty("sequence").GetInt64()).ToList();

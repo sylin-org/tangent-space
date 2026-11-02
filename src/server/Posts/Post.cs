@@ -1,7 +1,7 @@
 using System.Text;
 using Koan.Data.Abstractions.Annotations;
+using Koan.Data.Core.Commands;
 using Koan.Data.Core.Model;
-using Tangent.Writer;
 
 namespace Tangent.Posts;
 
@@ -40,15 +40,15 @@ public sealed class Post : Entity<Post>
     public const string NeedsTangent = "A Topic starts in a Tangent.";
     public const string NeedsAuthor = "A Post has an author.";
     public const string NotARoot = "A reply goes to a Topic.";
-    public const string TopicLocked = "The Topic is locked.";
-    public const string TopicRemoved = "The Topic is removed.";
+    public static readonly Reason TopicLocked = Access.Capabilities.Locked;
+    public static readonly Reason TopicRemoved = Access.Capabilities.Removed;
     public const string NoTitleOnReply = "A reply has no title; a Topic's title is on its root.";
-    public const string PostRemoved = "The Post is removed.";
+    public static readonly Reason PostRemoved = Access.Capabilities.Removed;
     public const string NeedsRemover = "A removal names who removes.";
 
     /// <summary>The one answer for an Id a Post outside the place a command names already holds: it says nothing of
     /// where, whose or what that Post is.</summary>
-    public const string IdTaken = "This id is not available; mint another.";
+    public static readonly Reason IdTaken = Reason.Conflict("This id is not available; mint another.");
 
     /// <summary>The Tangent the Topic is in; on every row.</summary>
     [Index(Name = "ix_post_topics", Order = 0)]

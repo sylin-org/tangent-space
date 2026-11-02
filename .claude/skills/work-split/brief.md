@@ -24,7 +24,7 @@ The capabilities this package touches, each with what the lead already knows Koa
 
 ## Constraints
 
-The standing rules that bite here, by name: the language file's words, no dialogs, bounded reads, the writer as the only code that opens a transaction, Koan before hand-rolled, never derive a Koan identifier. Any decision already made that the executor must not reopen, with its ADR.
+The standing rules that bite here, by name: the language file's words, no dialogs, bounded reads, every write a command, Koan before hand-rolled, never derive a Koan identifier. Any decision already made that the executor must not reopen, with its ADR.
 
 ## Done is checked by
 

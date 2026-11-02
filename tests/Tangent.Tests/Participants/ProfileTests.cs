@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Koan.Web.Authorization;
 using Microsoft.Extensions.DependencyInjection;
@@ -8,7 +9,6 @@ using Tangent.Access;
 using Tangent.Delegates;
 using Tangent.Posts;
 using Tangent.Space;
-using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -29,20 +29,20 @@ public sealed class ProfileTests
     public async Task A_profile_shows_the_pds_profile_roles_arrival_and_recent_posts_and_leaves_out_a_tangent_the_reader_may_not_view()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         await Given.AParticipant(tangentSpace, Ann, [Roles.Administrator], ct: Cancellation);
         using var leo = await SignedIn(tangentSpace, Leo);
         using var ada = await SignedIn(tangentSpace, Ada);
         using var ann = await SignedIn(tangentSpace, Ann);
-        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new CaptureProfile(
-            new ProfileAnswer(Leo, "Leo Botinelly", "Builds places to talk.", "https://cdn.example/leo.jpg"), DateTimeOffset.UtcNow), Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new CaptureProfile(
+            new ProfileAnswer(Leo, "Leo Botinelly", "Builds places to talk.", "https://cdn.example/leo.jpg"), DateTimeOffset.UtcNow).Send(Cancellation));
 
-        var open = await Started(writer, Leo, "Lanterns at dusk", "Who lights theirs first?");
-        var reply = await Replied(writer, open, Leo, "I do, at six.");
-        var secret = await Started(writer, Leo, "The kiln budget", "Numbers for the studio.", Studio);
-        var removed = await Started(writer, Leo, "A draft", "Gone soon.");
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new RemovePost(removed.Id, Leo), Cancellation));
+        var open = await Started(Leo, "Lanterns at dusk", "Who lights theirs first?");
+        var reply = await Replied(open, Leo, "I do, at six.");
+        var secret = await Started(Leo, "The kiln budget", "Numbers for the studio.", Studio);
+        var removed = await Started(Leo, "A draft", "Gone soon.");
+        Assert.IsType<Outcome<Post>.Done>(await new RemovePost(removed.Id, Leo).Send(Cancellation));
 
         var asAda = await Send(ada.Client, HttpMethod.Get, "/p/" + LeoHandle, json: true);
         Assert.Equal(HttpStatusCode.OK, asAda.Status);
@@ -82,9 +82,9 @@ public sealed class ProfileTests
     public async Task A_visitor_reads_a_profile_on_a_public_place_and_on_a_private_one_reads_its_gate_whatever_the_handle()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         (await SignedIn(tangentSpace, Ada)).Dispose();
-        await Started(writer, Ada, "Wicks", "Cotton or hemp?");
+        await Started(Ada, "Wicks", "Cotton or hemp?");
         using var visitor = Agent(tangentSpace);
 
         var page = await Send(visitor, HttpMethod.Get, "/p/" + AdaHandle);
@@ -92,18 +92,20 @@ public sealed class ProfileTests
 
         Assert.Equal(HttpStatusCode.OK, page.Status);
         Assert.Contains("Wicks", page.Body);
-        Assert.Equal((Capabilities.SignIn, BaseUrl + "/sign-in?return=%2Fp%2F" + AdaHandle),
+        Assert.Equal((Capabilities.SignIn.Word, BaseUrl + "/sign-in?return=%2Fp%2F" + AdaHandle),
             (json.Json.GetProperty("gate").GetString(), json.Json.GetProperty("signIn").GetString()));
         Assert.DoesNotContain("Post", Strings(json.Json.GetProperty("can")));
 
         var space = (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!;
         space.Audience = Audience.Private;
-        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new Store<TangentSpace>(space), Cancellation));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(Cancellation));
 
         var held = await Send(visitor, HttpMethod.Get, "/p/" + AdaHandle, json: true);
         var unheld = await Send(visitor, HttpMethod.Get, "/p/nobody.example", json: true);
-        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn), (held.Status, held.Gate));
-        Assert.Equal(held.Body, unheld.Body);
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (held.Status, held.Gate));
+        Assert.Equal(BaseUrl + "/sign-in?return=%2Fp%2F" + AdaHandle, held.Json.GetProperty("next").GetString());
+        Assert.Equal(BaseUrl + "/sign-in?return=%2Fp%2Fnobody.example", unheld.Json.GetProperty("next").GetString());
+        Assert.Equal((held.Status, held.Title, held.Gate), (unheld.Status, unheld.Title, unheld.Gate));
         Assert.DoesNotContain("Wicks", (await Send(visitor, HttpMethod.Get, "/p/" + AdaHandle)).Body);
     }
 
@@ -116,7 +118,7 @@ public sealed class ProfileTests
         using var visitor = Agent(tangentSpace);
 
         var unknown = await Send(visitor, HttpMethod.Get, "/p/nobody.example", json: true);
-        Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent), (unknown.Status, unknown.Gate));
+        Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent.Text), (unknown.Status, unknown.Gate));
         Assert.Equal(HttpStatusCode.NotFound, (await Send(ada.Client, HttpMethod.Get, "/p/did%3Aplc%3Anobody")).Status);
 
         // Ada signs in again under a new handle: the row keeps the new one, and the old one is no one's here.
@@ -152,9 +154,9 @@ public sealed class ProfileTests
     public async Task Names_on_posts_and_on_the_door_link_to_their_profiles()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         (await SignedIn(tangentSpace, Ada)).Dispose();
-        var root = await Started(writer, Ada, "Wicks", "Cotton or hemp?");
+        var root = await Started(Ada, "Wicks", "Cotton or hemp?");
         using var visitor = Agent(tangentSpace);
 
         var topic = await Send(visitor, HttpMethod.Get, TopicPath(root));
@@ -246,11 +248,11 @@ public sealed class ProfileTests
     public async Task The_json_carries_can_gate_and_a_cursor_through_the_posts()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         using var ada = await SignedIn(tangentSpace, Ada);
         var written = new List<string>();
         for (var index = 0; index < RecentPosts.PageSize + 5; index++)
-            written.Add((await Started(writer, Ada, "Topic " + index, "Body " + index)).Id);
+            written.Add((await Started(Ada, "Topic " + index, "Body " + index)).Id);
         written.Reverse();
 
         var first = (await Send(ada.Client, HttpMethod.Get, "/p/" + AdaHandle, json: true)).Json;
@@ -275,16 +277,16 @@ public sealed class ProfileTests
     public async Task Posts_in_a_tangent_the_reader_may_not_view_leave_no_trace_on_a_page()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         using var ada = await SignedIn(tangentSpace, Ada);
         using var leo = await SignedIn(tangentSpace, Leo);
         var older = new List<string>();
-        for (var index = 0; index < 2; index++) older.Add((await Started(writer, Leo, "Older " + index, "Body.")).Id);
+        for (var index = 0; index < 2; index++) older.Add((await Started(Leo, "Older " + index, "Body.")).Id);
         var hidden = new List<string>();
-        for (var index = 0; index < 101; index++) hidden.Add((await Started(writer, Leo, "Studio " + index, "Body.", Studio)).Id);
+        for (var index = 0; index < 101; index++) hidden.Add((await Started(Leo, "Studio " + index, "Body.", Studio)).Id);
         var newer = new List<string>();
-        for (var index = 0; index < 3; index++) newer.Add((await Started(writer, Leo, "Newer " + index, "Body.")).Id);
+        for (var index = 0; index < 3; index++) newer.Add((await Started(Leo, "Newer " + index, "Body.")).Id);
         older.Reverse();
         newer.Reverse();
 
@@ -336,11 +338,11 @@ public sealed class ProfileTests
     public async Task A_page_keeps_only_viewable_posts_and_continues_from_the_last_it_keeps()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
-        await Started(writer, Leo, "Older", "Body.");
-        for (var index = 0; index < RecentPosts.PageSize + 5; index++) await Started(writer, Leo, "Studio " + index, "Body.", Studio);
-        var newest = await Started(writer, Leo, "Newest", "Body.");
+        await Started(Leo, "Older", "Body.");
+        for (var index = 0; index < RecentPosts.PageSize + 5; index++) await Started(Leo, "Studio " + index, "Body.", Studio);
+        var newest = await Started(Leo, "Newest", "Body.");
         var viewable = new HashSet<string>([Workshop], StringComparer.Ordinal);
 
         var first = await RecentPosts.Read(Leo, viewable, [], null, Cancellation);

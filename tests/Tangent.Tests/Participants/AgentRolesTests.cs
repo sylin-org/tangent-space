@@ -1,11 +1,11 @@
 using System.Net;
 using System.Text.Json;
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
 using Tangent.Posts;
 using Tangent.Space;
-using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -25,14 +25,14 @@ public sealed class AgentRolesTests
     public async Task An_agent_given_the_moderator_role_reads_a_report_moderates_the_post_and_times_out_a_member_by_the_forms_its_pages_give()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await writer.Send(new CreateModeratorsTangent(), Cancellation));
+        await Place(tangentSpace);
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateModeratorsTangent().Send(Cancellation));
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
-        var topic = await Started(writer, Bea, "Lanterns at dusk", "Who lights theirs first?");
-        var reply = await Replied(writer, topic, Bea, "Whoever is slowest, obviously.");
+        var topic = await Started(Bea, "Lanterns at dusk", "Who lights theirs first?");
+        var reply = await Replied(topic, Bea, "Whoever is slowest, obviously.");
         using var leo = await SignedIn(tangentSpace, Leo);
         using var ada = await SignedIn(tangentSpace, Ada);
-        using var scout = await AgentArrives(tangentSpace, writer, Scout, ScoutHandle);
+        using var scout = await AgentArrives(tangentSpace, Scout, ScoutHandle);
 
         // A member like any other: no settings, and the people are not theirs to read.
         Assert.False(Who(await Page(scout, "/")).TryGetProperty("settings", out var none) && none.ValueKind == JsonValueKind.String);
@@ -48,7 +48,7 @@ public sealed class AgentRolesTests
         Assert.True(given.Status == HttpStatusCode.OK, given.Body);
 
         // A report reaches it, and the addresses lead from the notification to the reported Post.
-        var report = Assert.IsType<Outcome<Post>.Done>(await writer.Send(new ReportPost(Tids.Mint(), reply.Id, PostBody.Of("This mocks someone."), Ada), Cancellation)).Result;
+        var report = Assert.IsType<Outcome<Post>.Done>(await new ReportPost(Tids.Mint(), reply.Id, PostBody.Of("This mocks someone."), Ada).Send(Cancellation)).Result;
         var door = await Page(scout, "/");
         Assert.Contains("moderator", door.GetProperty("news").GetProperty("roles").EnumerateArray().Select(role => role.GetProperty("role").GetString()));
         var notifications = await Page(scout, Under(Who(door).GetProperty("notifications").GetProperty("address").GetString()!));
@@ -83,25 +83,24 @@ public sealed class AgentRolesTests
         var timedOut = await Follow(scout, forms.GetProperty("timeOut"),
             new Dictionary<string, string> { [PeopleController.ParticipantField] = Ada, [PeopleController.ForField] = "hour" }, json: false);
         Assert.True(timedOut.Status == HttpStatusCode.SeeOther, timedOut.Body);
-        Assert.Equal(Capabilities.TimedOut, (await Page(ada, "/")).GetProperty("gate").GetString());
+        Assert.Equal(Capabilities.TimedOut.Word, (await Page(ada, "/")).GetProperty("gate").GetString());
         Assert.Equal((Standing.TimedOut, Scout), await StoodBy(Ada));
 
         // The same rules hold it: nothing against anyone not below it, and whoever stands above it times it out.
         Assert.Empty(Strings(Row(await Page(scout, PeopleController.Path), Leo), "can"));
         var refused = await Follow(scout, (await Page(scout, PeopleController.Path)).GetProperty("forms").GetProperty("ban"),
             new Dictionary<string, string> { [PeopleController.ParticipantField] = Leo });
-        Assert.Equal((HttpStatusCode.Forbidden, People.NotBelow), (refused.Status, refused.Json.GetProperty("detail").GetString()));
+        Assert.Equal((HttpStatusCode.Forbidden, People.NotBelow.Text), (refused.Status, refused.Json.GetProperty("detail").GetString()));
         var timedOutAgent = await Follow(leo, (await Page(leo, PeopleController.Path)).GetProperty("forms").GetProperty("timeOut"),
             new Dictionary<string, string> { [PeopleController.ParticipantField] = Scout, [PeopleController.ForField] = "hour" });
         Assert.True(timedOutAgent.Status == HttpStatusCode.OK, timedOutAgent.Body);
-        Assert.Equal(Capabilities.TimedOut, (await Page(scout, "/")).GetProperty("gate").GetString());
+        Assert.Equal(Capabilities.TimedOut.Word, (await Page(scout, "/")).GetProperty("gate").GetString());
     }
 
     [Fact]
     public async Task An_agent_that_signs_in_first_sets_the_place_up_as_its_proprietor_and_operator_and_an_agent_it_makes_administrator_manages_the_place()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = tangentSpace.Services.GetRequiredService<WriteLoop>();
 
         // Every address answers first run, and its challenge comes back to it.
         var first = await Visitor(tangentSpace, "/");
@@ -111,7 +110,7 @@ public sealed class AgentRolesTests
         using var scout = new Browser(tangentSpace);
         using (var landed = await scout.SignIn("scout", Scout, Cancellation, handle: ScoutHandle, comeBack: comeBack))
             Assert.Equal((HttpStatusCode.OK, FirstRunController.Path), (landed.StatusCode, landed.RequestMessage!.RequestUri!.AbsolutePath));
-        await LabelledAnAgent(writer, Scout);
+        await LabelledAnAgent(Scout);
 
         var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
         Assert.Equal(("Scout's Tangent Space", Scout, Scout), (space?.Name, space?.ProprietorId, space?.OperatorId));
@@ -133,7 +132,7 @@ public sealed class AgentRolesTests
         Assert.Equal("The lookout", (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.Name);
 
         // As the operator it makes another agent an administrator, which only the operator may.
-        using var rook = await AgentArrives(tangentSpace, writer, Rook, "rook.agent.example");
+        using var rook = await AgentArrives(tangentSpace, Rook, "rook.agent.example");
         using var bea = await SignedIn(tangentSpace, Bea);
         var people = await Page(scout, PeopleController.Path);
         Assert.Equal(["person", "agent"], new[] { Row(people, Bea), Row(people, Rook) }.Select(row => row.GetProperty("kind").GetString()));
@@ -155,7 +154,7 @@ public sealed class AgentRolesTests
         Assert.Empty(Strings(Row(byRook, Scout), "can"));
         var banned = await Follow(rook, byRook.GetProperty("forms").GetProperty("ban"),
             new Dictionary<string, string> { [PeopleController.ParticipantField] = Scout });
-        Assert.Equal((HttpStatusCode.Forbidden, People.Operator), (banned.Status, banned.Json.GetProperty("detail").GetString()));
+        Assert.Equal((HttpStatusCode.Forbidden, People.Operator.Text), (banned.Status, banned.Json.GetProperty("detail").GetString()));
     }
 
     [Theory]
@@ -195,17 +194,16 @@ public sealed class AgentRolesTests
     }
 
     /// <summary>An agent's first sign-in with its own DID, with its profile read as saying it labels itself a bot.</summary>
-    private static async Task<Browser> AgentArrives(TangentSpaceFixture tangentSpace, WriteLoop writer, string did, string handle)
+    private static async Task<Browser> AgentArrives(TangentSpaceFixture tangentSpace, string did, string handle)
     {
         var browser = new Browser(tangentSpace);
         (await browser.SignIn(handle.Split('.')[0], did, Cancellation, handle: handle)).Dispose();
-        await LabelledAnAgent(writer, did);
+        await LabelledAnAgent(did);
         return browser;
     }
 
-    private static async Task LabelledAnAgent(WriteLoop writer, string did)
-        => Assert.IsType<Outcome<Participant>.Done>(await writer.Send(
-            new CaptureProfile(new ProfileAnswer(did, null, null, null, AgentLabel: true), DateTimeOffset.UtcNow), Cancellation));
+    private static async Task LabelledAnAgent(string did)
+        => Assert.IsType<Outcome<Participant>.Done>(await new CaptureProfile(new ProfileAnswer(did, null, null, null, AgentLabel: true), DateTimeOffset.UtcNow).Send(Cancellation));
 
     /// <summary>A page's JSON as this session reads it, which must answer.</summary>
     private static async Task<JsonElement> Page(Browser session, string path)

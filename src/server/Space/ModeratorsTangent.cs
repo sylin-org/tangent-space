@@ -1,11 +1,11 @@
-using Koan.Data.Core;
 using Koan.Core.Hosting.App;
+using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Tangent.Access;
 using Tangent.Events;
 using Tangent.Posts;
 using Tangent.Tangents;
-using Tangent.Writer;
 
 namespace Tangent.Space;
 
@@ -14,10 +14,8 @@ namespace Tangent.Space;
 /// <see cref="Bit.View"/>, <see cref="Bit.Post"/> and <see cref="Bit.Topic"/>, so moderators and administrators read,
 /// reply and start Topics there and nobody else finds it. First run creates it with the place
 /// (<see cref="Establish"/>), and a start creates it for a place established without one
-/// (<see cref="CreateModeratorsTangent"/>); the settings row records its slug. Its overwrites are written before the
-/// transaction that creates it, since Koan commits an overwrite only outside one, and the transaction creates it only
-/// where Koan's rows already state exactly that access, so it exists for nobody else from the instant it
-/// commits.</summary>
+/// (<see cref="CreateModeratorsTangent"/>); the settings row records its slug. Its overwrites commit with it, so it exists
+/// for nobody else from the instant it commits.</summary>
 public static class ModeratorsTangent
 {
     public const string Slug = "moderators";
@@ -32,10 +30,6 @@ public static class ModeratorsTangent
     /// <summary>The bits the moderator role's overwrite allows there.</summary>
     public const Bit ModeratorBits = Bit.View | Bit.Post | Bit.Topic;
 
-    /// <summary>The answer when Koan's rows do not state the Tangent's access as the command runs, so it was not created;
-    /// the next start or first run writes the access anew.</summary>
-    public const string NoAccess = "The moderators' Tangent's access could not be put in place, so it was not created; try again.";
-
     /// <summary>The answer when every slug tried is another Tangent's.</summary>
     public const string NoSlug = "Every slug tried for the moderators' Tangent belongs to another Tangent.";
 
@@ -43,26 +37,18 @@ public static class ModeratorsTangent
     /// (<see cref="Tangents.Tangent.FreeSlug"/>).</summary>
     public static Task<string?> FreeSlug(CancellationToken ct) => Tangents.Tangent.FreeSlug(Slug, ct);
 
-    /// <summary>Writes its access on <paramref name="slug"/>'s resource, over whatever overwrites of the two subjects the
-    /// resource holds: <c>everyone</c> denied <see cref="Bit.View"/>, the moderator role allowed
-    /// <see cref="ModeratorBits"/>. Runs outside the writer's transaction (<see cref="ICommand{TResult}.Prepare"/>).</summary>
-    public static async Task WriteAccess(string slug, CancellationToken ct)
+    /// <summary>Creates the Tangent on <paramref name="slug"/> inside the running command, with its access over whatever
+    /// overwrites of the two subjects the resource holds: <c>everyone</c> denied <see cref="Bit.View"/>, the moderator role
+    /// allowed <see cref="ModeratorBits"/>; and <see cref="EventKind.TangentChanged"/> carrying its private audience.
+    /// Recording it on the settings row is the caller's.</summary>
+    public static async Task<Tangents.Tangent> Create(string slug, string? actorId, DateTimeOffset at, CancellationToken ct)
     {
+        var tangent = Tangents.Tangent.Create(slug, Name, Description, PostKind.Topic, Order);
         var roles = Collection();
         await Overwrites.SetAudience(roles, slug, Audience.Private, ct);
         await roles.Overwrite(Overwrites.Resource(slug), OverwriteSubjectKind.Role, Roles.Moderator, Bits.Tokens(ModeratorBits), [], ct: ct);
-    }
-
-    /// <summary>Creates the Tangent on <paramref name="slug"/> inside the writer's transaction, with
-    /// <see cref="EventKind.TangentChanged"/> carrying its private audience, or refuses with <see cref="NoAccess"/> where
-    /// Koan's rows do not state its access exactly. Recording it on the settings row is the caller's.</summary>
-    public static async Task<Tangents.Tangent> Create(Sequences sequences, string slug, string? actorId, DateTimeOffset at, CancellationToken ct)
-    {
-        var tangent = Tangents.Tangent.Create(slug, Name, Description, PostKind.Topic, Order);
-        if (!await HasAccess(slug, ct)) throw new Refusal(NoAccess);
-        tangent.LoggedAudience = Audience.Private;
         await tangent.Save(ct);
-        await Event.Next(sequences, EventKind.TangentChanged, at, tangentId: tangent.Id, actorId: actorId, audience: Audience.Private).Save(ct);
+        await Event.Append(EventKind.TangentChanged, at, ct, tangentId: tangent.Id, actorId: actorId, audience: Audience.Private);
         return tangent;
     }
 
@@ -81,15 +67,6 @@ public static class ModeratorsTangent
             permissions.Where(permission => permission.StartsWith(RoleTokens.GlobalPrefix, StringComparison.Ordinal)));
         var overwrites = await roles.OverwritesFor(bag, Overwrites.Resource(tangentId), ct);
         return Capabilities.For(holder, bag.Tokens, space, tangentId, overwrites, DateTimeOffset.UtcNow).Exists;
-    }
-
-    /// <summary>Whether Koan's rows on <paramref name="slug"/>'s resource state its access: a private audience, and the
-    /// moderator role allowed <see cref="ModeratorBits"/>; two keyed reads.</summary>
-    private static async Task<bool> HasAccess(string slug, CancellationToken ct)
-    {
-        if (await Overwrites.AudienceOf(slug, ct) != Audience.Private) return false;
-        var moderator = await Overwrites.Of(slug, Roles.Moderator, ct);
-        return moderator is not null && Bits.InTokens(moderator.Allow) == ModeratorBits && moderator.Deny.Count == 0;
     }
 
     private static RoleCollection Collection() => AppHost.GetRequiredService<RoleCollection>(nameof(ModeratorsTangent));

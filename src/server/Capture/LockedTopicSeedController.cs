@@ -1,4 +1,5 @@
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Koan.Data.Core.Model;
 using Koan.Identity.Roles;
 using Microsoft.AspNetCore.Mvc;
@@ -7,15 +8,14 @@ using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
 using Tangent.Tangents;
-using Tangent.Writer;
 
 namespace Tangent.Capture;
 
-/// <summary>The rows the Topic capture's locked state shows, written through the writer when the capture asks: a
+/// <summary>The rows the Topic capture's locked state shows, sent as commands when the capture asks: a
 /// discussions Tangent with a Topic Leo locked after one reply, read by the capture persona, a member, who may not reply
 /// in it. Compiled only into the capture host, like <see cref="CaptureSeedController"/>; fixed names, words, times and
 /// TIDs, so the Topic is at /t/discussions/the-kiln-schedule-is-settled.</summary>
-public sealed class LockedTopicSeedController(WriteLoop writer, RoleCollection roles) : ControllerBase
+public sealed class LockedTopicSeedController(RoleCollection roles) : ControllerBase
 {
     private const string Persona = "did:plc:capture4persona";
     private const string Leo = "did:plc:capture4leo";
@@ -51,7 +51,7 @@ public sealed class LockedTopicSeedController(WriteLoop writer, RoleCollection r
         await roles.Add(role, id, ct);
     }
 
-    private async Task<T> Write<T>(ICommand<T> command, CancellationToken ct) => await writer.Send(command, ct) switch
+    private async Task<T> Write<T>(ICommand<T> command, CancellationToken ct) => await command.Send() switch
     {
         Outcome<T>.Done done => done.Result,
         var other => throw new InvalidOperationException($"The locked seed's {command.GetType().Name} answered {other}.")
@@ -74,10 +74,10 @@ public sealed class LockedTopicSeedController(WriteLoop writer, RoleCollection r
         return new string(characters);
     }
 
-    /// <summary>Saves one row as the seed built it, through the writer.</summary>
+    /// <summary>Saves one row as the seed built it, as a command.</summary>
     private sealed record Keep<TEntity>(TEntity Row) : ICommand<TEntity> where TEntity : Entity<TEntity>
     {
-        public async Task<Outcome<TEntity>> Run(Sequences sequences, CancellationToken ct)
+        public async Task<Outcome<TEntity>> Run(CancellationToken ct)
         {
             await Row.Save(ct);
             return new Outcome<TEntity>.Done(Row);

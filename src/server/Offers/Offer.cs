@@ -1,6 +1,6 @@
 using Koan.Data.Abstractions.Annotations;
+using Koan.Data.Core.Commands;
 using Koan.Data.Core.Model;
-using Tangent.Writer;
 
 namespace Tangent.Offers;
 
@@ -31,7 +31,7 @@ public sealed class Offer : Entity<Offer>
     /// <summary>The most open Offers one read takes.</summary>
     public const int OpenLimit = 8;
 
-    public const string NotOpen = "This offer is no longer open; nothing changed.";
+    public static readonly Reason NotOpen = Reason.Conflict("This offer is no longer open; nothing changed.");
 
     /// <summary>The Id of the Offer of <paramref name="kind"/> on <paramref name="subject"/>: its kind's word and the
     /// subject percent-encoded, so no part holds <c>/</c>.</summary>

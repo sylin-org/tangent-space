@@ -2,11 +2,11 @@ using System.Globalization;
 using Koan.Data.Abstractions;
 using Koan.Data.Abstractions.Filtering;
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Koan.Data.Core.Sorting;
 using Tangent.Access;
 using Tangent.Events;
 using Tangent.Space;
-using Tangent.Writer;
 
 namespace Tangent.Participants;
 
@@ -22,10 +22,10 @@ public static class Applications
     public const int PageSize = 25;
 
     /// <summary>The answer to a decider for whom the place does not exist.</summary>
-    public const string NoPlace = "No Tangent Space is here.";
+    public static readonly Reason NoPlace = Reason.Absent("No Tangent Space is here.");
 
     /// <summary>The answer to a decision about someone who never arrived.</summary>
-    public const string NoApplicant = "No one by that id has arrived here.";
+    public static readonly Reason NoApplicant = Reason.Absent("No one by that id has arrived here.");
 
     /// <summary>One decision: the place exists for the actor, who holds <see cref="Bit.View"/> on it, or the command
     /// answers that no place is here; the actor holds <see cref="Bit.ManageStanding"/>, or is refused with the gate word;
@@ -33,7 +33,7 @@ public static class Applications
     /// standing, or refuses with <see cref="Participant.NotAnApplication"/>. A decision that changes something appends
     /// one <see cref="EventKind.StandingChanged"/> with the actor, the applicant as its target, the standing it left
     /// them with and the one they held before; one that changes nothing writes nothing.</summary>
-    public static async Task<Outcome<Participant>> Decide(Sequences sequences, string actorId, string participantId,
+    public static async Task<Outcome<Participant>> Decide(string actorId, string participantId,
         Func<Participant, DateTimeOffset, bool> decide, DateTimeOffset? at, CancellationToken ct)
     {
         if (await TangentSpace.Get(TangentSpace.SingleRow, ct) is null) return new Outcome<Participant>.Refused(NoPlace);
@@ -47,8 +47,8 @@ public static class Applications
         var before = participant.StandingAt(now);
         if (!decide(participant, now)) return new Outcome<Participant>.Done(participant);
         await participant.Save(ct);
-        await Event.Next(sequences, EventKind.StandingChanged, now, actorId: actorId, targetId: participant.Id,
-            standing: participant.Standing, before: before).Save(ct);
+        await Event.Append(EventKind.StandingChanged, now, ct, actorId: actorId, targetId: participant.Id,
+            standing: participant.Standing, before: before);
         return new Outcome<Participant>.Done(participant);
     }
 

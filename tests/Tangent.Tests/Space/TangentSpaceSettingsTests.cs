@@ -1,9 +1,9 @@
 using System.Net;
 using System.Net.Http.Headers;
+using Koan.Data.Core.Commands;
 using Tangent.Access;
 using Tangent.Events;
 using Tangent.Participants;
-using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -93,7 +93,7 @@ public sealed class TangentSpaceSettingsTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
         using var ada = await SignedIn(tangentSpace, Ada);
-        var gate = Capabilities.NoRoleGrants(Bit.ManageSpace);
+        var gate = Capabilities.NoRoleGrants(Bit.ManageSpace).Word;
 
         Assert.DoesNotContain($"href=\"{BaseUrl}{TangentSpaceSettingsController.Path}\"", (await Send(ada.Client, HttpMethod.Get, "/")).Body);
         Assert.False((await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("who").TryGetProperty("settings", out _));
@@ -115,9 +115,9 @@ public sealed class TangentSpaceSettingsTests
 
         using var visitor = Agent(tangentSpace);
         var read = await Send(visitor, HttpMethod.Get, TangentSpaceSettingsController.Path, json: true);
-        Assert.Equal(Capabilities.SignIn, read.Json.GetProperty("gate").GetString());
+        Assert.Equal(Capabilities.SignIn.Word, read.Json.GetProperty("gate").GetString());
         var posted = await Send(visitor, HttpMethod.Post, TangentSpaceSettingsController.Path, JsonBody(new { name = "Nobody's place" }), json: true);
-        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn), (posted.Status, posted.Gate));
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (posted.Status, posted.Gate));
 
         Assert.Equal("Field notes", (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Name);
         Assert.Equal(before, await Event.Count.Exact(Cancellation));
@@ -146,7 +146,7 @@ public sealed class TangentSpaceSettingsTests
 
         // An agent reading as JSON reads the gate and the sections it may use, and the account menu opens the first of them.
         var read = await Send(mo.Client, HttpMethod.Get, TangentSpaceSettingsController.Path, json: true);
-        Assert.Equal((HttpStatusCode.OK, Capabilities.NoRoleGrants(Bit.ManageSpace)), (read.Status, read.Json.GetProperty("gate").GetString()));
+        Assert.Equal((HttpStatusCode.OK, Capabilities.NoRoleGrants(Bit.ManageSpace).Word), (read.Status, read.Json.GetProperty("gate").GetString()));
         Assert.Equal([TangentSpaceSettingsController.ApplicationsSection, TangentSpaceSettingsController.PeopleSection],
             read.Json.GetProperty("sections").EnumerateArray().Select(section => section.GetProperty("name").GetString()));
         Assert.Equal(applications, (await Send(mo.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("who").GetProperty("settings").GetString());
@@ -184,8 +184,8 @@ public sealed class TangentSpaceSettingsTests
     public async Task A_private_place_serves_a_visitor_only_the_sign_in_and_asks_that_nothing_be_indexed_while_its_participants_read_it()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        await Started(writer, Ada, "What should we build?", "Kilns, glazes, lanterns.");
+        await Place(tangentSpace);
+        await Started(Ada, "What should we build?", "Kilns, glazes, lanterns.");
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         using var leo = await SignedIn(tangentSpace, Leo);
         using var ada = await SignedIn(tangentSpace, Ada);
@@ -214,9 +214,9 @@ public sealed class TangentSpaceSettingsTests
         }
 
         var asJson = await Send(visitor, HttpMethod.Get, "/t/" + Workshop, json: true);
-        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn), (asJson.Status, asJson.Gate));
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (asJson.Status, asJson.Gate));
         var posted = await Send(visitor, HttpMethod.Post, "/t/" + Workshop + "/new", JsonBody(new { title = "Hello" }), json: true);
-        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn), (posted.Status, posted.Gate));
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (posted.Status, posted.Gate));
         Assert.Equal(HttpStatusCode.OK, (await Page(visitor, "/sign-in")).Status);
         Assert.Equal(HttpStatusCode.OK, (await Send(visitor, HttpMethod.Get, "/tangent.json", json: true)).Status);
 

@@ -1,8 +1,8 @@
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Tangent.Access;
 using Tangent.Participants;
 using Tangent.Posts;
-using Tangent.Writer;
 
 namespace Tangent.Events;
 
@@ -14,10 +14,10 @@ namespace Tangent.Events;
 /// checkpoint stands for every Topic in it, which reading one of them says nothing about.</summary>
 public sealed record CatchUpTopic(string ParticipantId, string TopicId, long Through) : ICommand<Checkpoint>
 {
-    public const string NoTopic = "No topic is here.";
+    public static readonly Reason NoTopic = Reason.Absent("No topic is here.");
     public const string NoSequence = "No post of this topic has this sequence.";
 
-    public async Task<Outcome<Checkpoint>> Run(Sequences sequences, CancellationToken ct)
+    public async Task<Outcome<Checkpoint>> Run(CancellationToken ct)
     {
         if (await Participant.Get(ParticipantId, ct) is null) return new Outcome<Checkpoint>.Refused(NoTopic);
         if (await Post.Get(TopicId, ct) is not { ParentId: null } root) return new Outcome<Checkpoint>.Refused(NoTopic);

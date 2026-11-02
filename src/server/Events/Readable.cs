@@ -12,7 +12,7 @@ namespace Tangent.Events;
 /// holds the answers for each Tangent it has met and asks again for all of them, the place's among them, when
 /// <see cref="Refresh"/> has passed since it last asked, or at once when a row it is
 /// about to send changed a standing, a role, a Tangent or the place, so a reader who loses <see cref="Bit.View"/>
-/// receives nothing more from that Tangent from the first row past the change that the writer commits more than
+/// receives nothing more from that Tangent from the first row past the change that commits more than
 /// <see cref="Refresh"/> after it, and from the very next row where the change is itself in the log. Each ask is the bounded,
 /// lock-free read capability makes (<see cref="Capabilities.LoadEach"/>), for the Tangents the rows name and nothing
 /// else.</summary>

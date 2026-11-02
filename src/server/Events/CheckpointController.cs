@@ -1,10 +1,10 @@
 using System.Globalization;
+using Koan.Data.Core.Commands;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
 using Tangent.Posts;
 using Tangent.Render;
-using Tangent.Writer;
 
 namespace Tangent.Events;
 
@@ -16,7 +16,7 @@ namespace Tangent.Events;
 /// A request a session authenticated answers to <see cref="FormToken.Validate"/> before anything else; then the address
 /// is resolved as the page resolves it (<see cref="PostWrites.Locate"/>), so a Tangent or Topic the sender may not see
 /// and one no address names answer alike; then a visitor is asked to sign in.</summary>
-public sealed class CheckpointController(KoanWebBaseUrl baseUrl, WriteLoop writer) : ControllerBase
+public sealed class CheckpointController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
     public const string SeenSegment = "seen";
 
@@ -50,21 +50,20 @@ public sealed class CheckpointController(KoanWebBaseUrl baseUrl, WriteLoop write
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         if (personId is not null && !await FormToken.Validate(HttpContext)) return TokenRefused();
-        var (found, unseen) = await PostWrites.Locate(personId, tangent, topic, null, ct);
+        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, topic, null, ct);
         if (found is null) return unseen!;
-        if (personId is null) return PostWrites.Gated(Capabilities.SignIn);
+        if (personId is null) return PostWrites.Refused(HttpContext, Capabilities.SignIn);
         if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
         if (!long.TryParse(fields.GetValueOrDefault(ThroughField), NumberStyles.None, CultureInfo.InvariantCulture, out var through))
             return NotASequence($"The {ThroughField} field carries the sequence the Topic page names as shown through.");
 
         var root = found.Root!;
-        return await writer.Send(new CatchUpTopic(personId, root.Id, through), ct) switch
+        var outcome = await new CatchUpTopic(personId, root.Id, through).Send();
+        return outcome switch
         {
             Outcome<Checkpoint>.Done { Result: var checkpoint } => Moved(checkpoint, PostWrites.TopicAddress(BaseAddress(), root.TangentId, root.Slug ?? root.Id)),
-            Outcome<Checkpoint>.Refused { Reason: CatchUpTopic.NoTopic } => PostWrites.Absent(),
-            Outcome<Checkpoint>.Refused { Reason: var reason } => NotASequence(reason),
-            Outcome<Checkpoint>.Failed { Cause: var cause } => throw new InvalidOperationException($"Marking {tangent}/{topic} seen failed.", cause),
-            var other => throw new InvalidOperationException($"The writer answered {other} for marking {tangent}/{topic} seen.")
+            Outcome<Checkpoint>.Refused { Reason: { Kind: ReasonKind.Invalid } reason } => NotASequence(reason.Text),
+            _ => PostWrites.Answer(HttpContext, outcome)
         };
     }
 
@@ -79,9 +78,9 @@ public sealed class CheckpointController(KoanWebBaseUrl baseUrl, WriteLoop write
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         if (personId is not null && !await FormToken.Validate(HttpContext)) return TokenRefused();
-        var (found, unseen) = await PostWrites.Locate(personId, tangent, topic, null, ct);
+        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, topic, null, ct);
         if (found is null) return unseen!;
-        if (personId is null) return PostWrites.Gated(Capabilities.SignIn);
+        if (personId is null) return PostWrites.Refused(HttpContext, Capabilities.SignIn);
         if (await PostWrites.Fields(Request, ct) is not { } fields) return PostWrites.Unreadable();
         if (!bool.TryParse(fields.GetValueOrDefault(WatchField), out var watch))
             return new Problem(StatusCodes.Status400BadRequest, "Not a watch flag", $"The {WatchField} field is true or false.").ToResult();
@@ -89,13 +88,8 @@ public sealed class CheckpointController(KoanWebBaseUrl baseUrl, WriteLoop write
         var (scope, address) = found.Root is { } root
             ? (Scope.Topic(root.Id), PostWrites.TopicAddress(BaseAddress(), root.TangentId, root.Slug ?? root.Id))
             : (Scope.Tangent(found.Tangent.Id), PostWrites.TangentAddress(BaseAddress(), found.Tangent.Id));
-        return await writer.Send(new SetWatch(personId, scope, watch), ct) switch
-        {
-            Outcome<Checkpoint>.Done { Result: var checkpoint } => Moved(checkpoint, address),
-            Outcome<Checkpoint>.Refused => PostWrites.Absent(),
-            Outcome<Checkpoint>.Failed { Cause: var cause } => throw new InvalidOperationException($"Setting the watch on {scope} failed.", cause),
-            var other => throw new InvalidOperationException($"The writer answered {other} for setting the watch on {scope}.")
-        };
+        var outcome = await new SetWatch(personId, scope, watch).Send();
+        return outcome is Outcome<Checkpoint>.Done { Result: var checkpoint } ? Moved(checkpoint, address) : PostWrites.Answer(HttpContext, outcome);
     }
 
     /// <summary>A checkpoint as it stands after the command: a form is sent back to the page at

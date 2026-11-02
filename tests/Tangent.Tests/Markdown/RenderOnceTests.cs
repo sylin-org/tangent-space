@@ -1,6 +1,6 @@
 using System.Net;
+using Koan.Data.Core.Commands;
 using Tangent.Access;
-using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -10,7 +10,7 @@ namespace Tangent.Posts;
 [CollectionDefinition(nameof(ParseCount), DisableParallelization = true)]
 public sealed class ParseCount;
 
-/// <summary>A body is judged where its command is built, so the writer never parses; and each Post version is parsed at
+/// <summary>A body is judged where its command is built, so no hold ever parses; and each Post version is parsed at
 /// most once in this process, whatever reads it afterwards — the Topic page as HTML, its JSON, the Tangent page and the
 /// door.</summary>
 [Collection(nameof(ParseCount))]
@@ -20,7 +20,7 @@ public sealed class RenderOnceTests
     public async Task The_writer_never_parses_a_body_and_every_read_parses_each_post_version_at_most_once()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         var paragraph = "A long note with *emphasis*, a [link](https://example.org/x) and a `code` span.\n\n";
         var body = $"For [@bea](at://{Bea}).\n\n" + string.Concat(Enumerable.Repeat(paragraph, 300));
 
@@ -28,10 +28,10 @@ public sealed class RenderOnceTests
         var rootId = Tids.Mint();
         var start = new StartTopic(rootId, Workshop, "Long reads", body, Ada);
         var built = MarkdownHtml.Parses;
-        var root = Assert.IsType<Outcome<Post>.Done>(await writer.Send(start, Cancellation)).Result;
+        var root = Assert.IsType<Outcome<Post>.Done>(await start.Send(Cancellation)).Result;
         var replies = new List<Reply> { new(Tids.Mint(), rootId, body + "One.", Bea), new(Tids.Mint(), rootId, body + "Two.", Mo) };
         built = MarkdownHtml.Parses;
-        foreach (var reply in replies) Assert.IsType<Outcome<Post>.Done>(await writer.Send(reply, Cancellation));
+        foreach (var reply in replies) Assert.IsType<Outcome<Post>.Done>(await reply.Send(Cancellation));
         Assert.Equal(built, MarkdownHtml.Parses);
 
         // The first page parses each of its three Posts once; the page again, its JSON, the Tangent page and the door none.
@@ -49,7 +49,7 @@ public sealed class RenderOnceTests
         // An edit makes a new version: built once, sent without a parse, read once.
         var edit = new EditPost(root.Id, root.Version, body + "Edited.", null, Ada);
         built = MarkdownHtml.Parses;
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(edit, Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await edit.Send(Cancellation));
         Assert.Equal(built, MarkdownHtml.Parses);
         Assert.Contains("Edited.", (await Send(visitor, HttpMethod.Get, TopicPath(root))).Body);
         Assert.Equal(built + 1, MarkdownHtml.Parses);
@@ -59,8 +59,8 @@ public sealed class RenderOnceTests
     public async Task A_write_the_gate_refuses_is_answered_with_the_gate_without_its_body_being_judged()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var root = await Started(writer, Ada, "Lanterns", "How do you hang yours?");
+        await Place(tangentSpace);
+        var root = await Started(Ada, "Lanterns", "How do you hang yours?");
         var heavy = string.Concat(Enumerable.Repeat("A line with *emphasis* and a [link](https://example.org/x).\n", 300));
         Assert.True(MarkdownHtml.Tractable(heavy));
         using var visitor = Agent(tangentSpace);
@@ -78,7 +78,7 @@ public sealed class RenderOnceTests
             token: token.Values.Single());
         Assert.Equal(parses, MarkdownHtml.Parses);
 
-        Assert.Equal([Capabilities.SignIn, Capabilities.SignIn, Capabilities.SignIn, Capabilities.NotYours],
+        Assert.Equal([Capabilities.SignIn.Word, Capabilities.SignIn.Word, Capabilities.SignIn.Word, Capabilities.NotYours.Word],
             new[] { started, replied, edited, notYours }.Select(answer => answer.Gate).ToList());
         Assert.Equal(before, await Counted());
     }

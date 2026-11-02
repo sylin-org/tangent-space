@@ -1,8 +1,8 @@
 using System.Text.RegularExpressions;
 using AngleSharp.Dom;
 using Ganss.Xss;
+using Koan.Data.Core.Commands;
 using Tangent.Posts;
-using Tangent.Writer;
 
 namespace Tangent.Space;
 
@@ -108,10 +108,6 @@ public sealed partial record Slots
 
     [GeneratedRegex("\\s(?:src|href)=\"(/media/[^\"]*)\"", RegexOptions.CultureInvariant)]
     private static partial Regex Target();
-
-    /// <summary>Whether <paramref name="reason"/> is a slot's refusal.</summary>
-    public static bool IsRule(string reason)
-        => reason is HeadRule or MastheadRule or DoorIntroRule or ArticleHeaderRule or FooterRule;
 
     /// <summary>These slots with what is written in them, sanitized, or a refusal with the rule of a slot that keeps more
     /// than its bound; one left null stays as it is.</summary>

@@ -1,8 +1,8 @@
 using Koan.Data.Abstractions;
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Tangent.Access;
 using Tangent.Events;
-using Tangent.Writer;
 
 namespace Tangent.Posts;
 
@@ -16,8 +16,8 @@ namespace Tangent.Posts;
 /// articles Tangent is an article. Idempotent by Id: the same Id with the same request answers with the existing Post,
 /// before any gate, so a replay is safe, whoever the handles it typed name by then; a Post of this Tangent holding the
 /// Id with a different title, kind, body or author is a conflict, and a Post anywhere else holding it is refused with
-/// <see cref="Post.IdTaken"/>, which says nothing of that Post. The body is judged where the command is built (<see cref="PostBody"/>), never in the
-/// writer. A Topic taken on a tangent names its <see cref="OriginId"/>: the origin exists for the author, who holds
+/// <see cref="Post.IdTaken"/>, which says nothing of that Post. The body is judged where the command is built (<see cref="PostBody"/>), never in its
+/// hold. A Topic taken on a tangent names its <see cref="OriginId"/>: the origin exists for the author, who holds
 /// <see cref="Bit.View"/> in its Tangent, or the command answers that no Post has the Id before anything else; a removed
 /// origin is refused with <see cref="Capabilities.Removed"/>; the root carries the origin, may start without a body of
 /// the author's own (<see cref="Post.RootBody"/>), and its <see cref="EventKind.PostCreated"/> targets the origin's
@@ -39,11 +39,11 @@ public sealed record StartTopic(
     /// <summary>How many numbered suffixes are tried before the Post's own Id becomes the suffix.</summary>
     public const int SuffixBound = 50;
 
-    public const string NoTangent = "No Tangent has this slug.";
+    public static readonly Reason NoTangent = Reason.Absent("No Tangent has this slug.");
 
-    public const string NoOrigin = "No Post has the origin's Id.";
+    public static readonly Reason NoOrigin = Reason.Absent("No Post has the origin's Id.");
 
-    public async Task<Outcome<Post>> Run(Sequences sequences, CancellationToken ct)
+    public async Task<Outcome<Post>> Run(CancellationToken ct)
     {
         Post? origin = null;
         if (OriginId is not null && ((origin = await Post.Get(OriginId, ct)) is null || !(await Capabilities.Load(AuthorId, origin.TangentId, origin, ct)).Exists))
@@ -60,7 +60,7 @@ public sealed record StartTopic(
         if (existing is not null)
         {
             return existing.TangentId == TangentId
-                ? new Outcome<Post>.Conflict($"Post '{Id}' already exists with a different body.")
+                ? new Outcome<Post>.Refused(Reason.Conflict($"Post '{Id}' already exists with a different body."))
                 : new Outcome<Post>.Refused(Post.IdTaken);
         }
 
@@ -77,10 +77,10 @@ public sealed record StartTopic(
         await MediaUse.Record(root, AuthorId, [], ct);
         tangent.TopicStarted();
         await tangent.Save(ct);
-        await Event.Next(sequences, EventKind.PostCreated, at,
+        await Event.Append(EventKind.PostCreated, at, ct,
             tangentId: root.TangentId, topicId: root.TopicId, postId: root.Id, actorId: root.AuthorId,
-            targetId: origin is null || origin.AuthorId == root.AuthorId ? null : origin.AuthorId, version: root.Version).Save(ct);
-        await Mentions.Notify(sequences, root, root.AuthorId, [], at, ct);
+            targetId: origin is null || origin.AuthorId == root.AuthorId ? null : origin.AuthorId, version: root.Version);
+        await Mentions.Notify(root, root.AuthorId, [], at, ct);
         return new Outcome<Post>.Done(root);
     }
 

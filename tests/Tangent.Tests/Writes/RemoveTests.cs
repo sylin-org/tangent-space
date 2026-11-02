@@ -1,7 +1,7 @@
 using System.Net;
+using Koan.Data.Core.Commands;
 using Tangent.Access;
 using Tangent.Events;
-using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -16,10 +16,10 @@ public sealed class RemoveTests
     public async Task The_author_removes_by_form_and_a_moderator_by_json_each_leaving_a_tombstone_in_place_its_body_in_the_snapshot_and_post_removed()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var root = await Started(writer, Ada, "Lanterns", "How do you hang yours?");
-        var own = await Replied(writer, root, Ada, "From the porch beam.");
-        var bea = await Replied(writer, root, Bea, "From a hook by the door.");
+        await Place(tangentSpace);
+        var root = await Started(Ada, "Lanterns", "How do you hang yours?");
+        var own = await Replied(root, Ada, "From the porch beam.");
+        var bea = await Replied(root, Bea, "From a hook by the door.");
         using var ada = await SignedIn(tangentSpace, Ada);
         using var mo = await SignedIn(tangentSpace, Mo);
 
@@ -51,16 +51,16 @@ public sealed class RemoveTests
     public async Task Removing_twice_answers_the_same_tombstone_to_anyone_who_may_remove_it_and_writes_nothing_and_a_removed_root_leaves_its_replies()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var root = await Started(writer, Ada, "Lanterns", "How do you hang yours?");
-        var reply = await Replied(writer, root, Bea, "From a hook by the door.");
+        await Place(tangentSpace);
+        var root = await Started(Ada, "Lanterns", "How do you hang yours?");
+        var reply = await Replied(root, Bea, "From a hook by the door.");
 
-        var first = Assert.IsType<Outcome<Post>.Done>(await writer.Send(new RemovePost(root.Id, Ada), Cancellation)).Result;
+        var first = Assert.IsType<Outcome<Post>.Done>(await new RemovePost(root.Id, Ada).Send(Cancellation)).Result;
         var counted = (await Counted(), await Snapshots());
-        var again = Assert.IsType<Outcome<Post>.Done>(await writer.Send(new RemovePost(root.Id, Ada), Cancellation)).Result;
-        var byModerator = Assert.IsType<Outcome<Post>.Done>(await writer.Send(new RemovePost(root.Id, Mo), Cancellation)).Result;
-        var bySomeoneElse = await writer.Send(new RemovePost(root.Id, Bea), Cancellation);
-        var answer = await writer.Send(new Reply(Tids.Mint(), root.Id, "Still here?", Bea), Cancellation);
+        var again = Assert.IsType<Outcome<Post>.Done>(await new RemovePost(root.Id, Ada).Send(Cancellation)).Result;
+        var byModerator = Assert.IsType<Outcome<Post>.Done>(await new RemovePost(root.Id, Mo).Send(Cancellation)).Result;
+        var bySomeoneElse = await new RemovePost(root.Id, Bea).Send(Cancellation);
+        var answer = await new Reply(Tids.Mint(), root.Id, "Still here?", Bea).Send(Cancellation);
 
         Assert.Equal((first.Id, first.RemovedAt, Ada, first.Body), (again.Id, again.RemovedAt, again.RemovedBy, again.Body));
         Assert.Equal((first.Id, first.RemovedAt, Ada, first.Body), (byModerator.Id, byModerator.RemovedAt, byModerator.RemovedBy, byModerator.Body));

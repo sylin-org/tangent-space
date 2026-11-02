@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using SkiaSharp;
@@ -9,7 +10,6 @@ using Tangent.Access;
 using Tangent.Participants;
 using Tangent.Space;
 using Tangent.Tangents;
-using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -218,7 +218,7 @@ public sealed class ArticleMediaTests
     public async Task An_image_in_a_private_tangent_is_absent_to_a_reader_who_cannot_view_it_and_stays_so_for_a_render_or_a_validator()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, "did:plc:leo4writes", [Roles.Administrator], ct: Cancellation);
         using var leo = await SignedIn(tangentSpace, "did:plc:leo4writes");
         using var bea = await SignedIn(tangentSpace, Bea);
@@ -226,7 +226,7 @@ public sealed class ArticleMediaTests
         var brought = await Bring(leo, Jpeg(), Studio, "/t/" + Studio + "/new");
         var id = IdOf(brought);
         var reference = "/media/" + id;
-        var post = await Started(writer, "did:plc:leo4writes", "Plans", "![The plan](" + reference + ")", Studio);
+        var post = await Started("did:plc:leo4writes", "Plans", "![The plan](" + reference + ")", Studio);
         Assert.Contains(id, post.MediaIds);
 
         // Whoever may read the Tangent reads the image; nobody else finds anything there, as at an Id nothing has.
@@ -249,11 +249,11 @@ public sealed class ArticleMediaTests
         Assert.Equal(HttpStatusCode.NotFound, notModified.StatusCode);
 
         // Naming the image in a public Post is no way to reach it.
-        var naming = await Started(writer, Bea, "Look", "![Mine now](" + reference + ")");
+        var naming = await Started(Bea, "Look", "![Mine now](" + reference + ")");
         Assert.False(await MediaUse.Reaches(Bea, id, Cancellation));
         Assert.Null(await MediaUse.Get(MediaUse.Key(id, naming.Id), Cancellation));
         Assert.Equal(HttpStatusCode.NotFound, (await Send(bea.Client, HttpMethod.Get, reference)).Status);
-        var stolen = await writer.Send(new StartTopic(Tids.Mint(), Articles, "Mine", "Words.", Bea, CoverId: id), Cancellation);
+        var stolen = await new StartTopic(Tids.Mint(), Articles, "Mine", "Words.", Bea, CoverId: id).Send(Cancellation);
         Assert.Equal(Post.NoCover, Assert.IsType<Outcome<Post>.Refused>(stolen).Reason);
     }
 
@@ -261,13 +261,13 @@ public sealed class ArticleMediaTests
     public async Task In_a_private_place_an_image_is_absent_to_a_visitor()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         using var ada = await SignedIn(tangentSpace, Ada);
         var id = IdOf(await Bring(ada, Jpeg()));
-        await Started(writer, Ada, "Open", "![Open](/media/" + id + ")", Articles);
+        await Started(Ada, "Open", "![Open](/media/" + id + ")", Articles);
         var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
         space!.Audience = Audience.Private;
-        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new Store<TangentSpace>(space), Cancellation));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(Cancellation));
 
         Assert.Equal(HttpStatusCode.NotFound, (await Send(Agent(tangentSpace), HttpMethod.Get, "/media/" + id)).Status);
         Assert.Equal(HttpStatusCode.OK, (await Send(ada.Client, HttpMethod.Get, "/media/" + id)).Status);
@@ -325,9 +325,9 @@ public sealed class ArticleMediaTests
         var token = (await bea.Token("/t/" + Articles + "/new", Cancellation)).Values.Single();
 
         var visitor = await Send(Agent(tangentSpace), HttpMethod.Post, "/t/" + Articles + "/media", JsonBody(new { file = Convert.ToBase64String(Jpeg()) }), json: true);
-        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn), (visitor.Status, visitor.Gate));
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (visitor.Status, visitor.Gate));
         var hidden = await Send(bea.Client, HttpMethod.Post, "/t/" + Studio + "/media", JsonBody(new { file = Convert.ToBase64String(Jpeg()) }), json: true, token: token);
-        Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent), (hidden.Status, hidden.Gate));
+        Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent.Text), (hidden.Status, hidden.Gate));
         var discussion = await Send(bea.Client, HttpMethod.Get, "/t/" + Workshop + "/new", json: true);
         Assert.False(discussion.Json.TryGetProperty("bring", out var bring) && bring.ValueKind == System.Text.Json.JsonValueKind.Object);
     }
@@ -336,33 +336,32 @@ public sealed class ArticleMediaTests
     public async Task An_edit_that_drops_an_image_and_a_removal_end_its_use_and_only_an_article_has_a_cover()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         using var ada = await SignedIn(tangentSpace, Ada);
         var picture = IdOf(await Bring(ada, Jpeg(40)));
         var cover = IdOf(await Bring(ada, Jpeg(41)));
         var visitor = Agent(tangentSpace);
 
-        var article = Assert.IsType<Outcome<Post>.Done>(await writer.Send(
-            new StartTopic(Tids.Mint(), Articles, "Lanterns", "![Lit](/media/" + picture + ")", Ada, CoverId: cover), Cancellation)).Result;
+        var article = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Articles, "Lanterns", "![Lit](/media/" + picture + ")", Ada, CoverId: cover).Send(Cancellation)).Result;
         Assert.Equal(HttpStatusCode.OK, (await Send(visitor, HttpMethod.Get, "/media/" + picture)).Status);
         Assert.Equal(HttpStatusCode.OK, (await Send(visitor, HttpMethod.Get, "/media/" + cover)).Status);
 
         // The same request sent again is the same article, and another cover under its Id is another request.
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(article.Id, Articles, "Lanterns", "![Lit](/media/" + picture + ")", Ada, CoverId: cover), Cancellation));
-        Assert.IsType<Outcome<Post>.Conflict>(await writer.Send(new StartTopic(article.Id, Articles, "Lanterns", "![Lit](/media/" + picture + ")", Ada), Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(article.Id, Articles, "Lanterns", "![Lit](/media/" + picture + ")", Ada, CoverId: cover).Send(Cancellation));
+        Assert.Equal(ReasonKind.Conflict, Assert.IsType<Outcome<Post>.Refused>(await new StartTopic(article.Id, Articles, "Lanterns", "![Lit](/media/" + picture + ")", Ada).Send(Cancellation)).Reason.Kind);
 
-        var edited = Assert.IsType<Outcome<Post>.Done>(await writer.Send(new EditPost(article.Id, article.Version, "Words alone.", null, Ada), Cancellation)).Result;
+        var edited = Assert.IsType<Outcome<Post>.Done>(await new EditPost(article.Id, article.Version, "Words alone.", null, Ada).Send(Cancellation)).Result;
         Assert.Equal(cover, edited.CoverId);
         Assert.Empty(edited.MediaIds);
         Assert.Equal(HttpStatusCode.NotFound, (await Send(visitor, HttpMethod.Get, "/media/" + picture)).Status);
         Assert.Equal(HttpStatusCode.OK, (await Send(ada.Client, HttpMethod.Get, "/media/" + picture)).Status);
 
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new RemovePost(article.Id, Ada), Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new RemovePost(article.Id, Ada).Send(Cancellation));
         Assert.Equal(HttpStatusCode.NotFound, (await Send(visitor, HttpMethod.Get, "/media/" + cover)).Status);
         var tombstone = await Send(visitor, HttpMethod.Get, "/t/" + Articles + "/" + article.Slug, json: true);
         Assert.False(tombstone.Json.TryGetProperty("cover", out _));
 
-        var discussion = await writer.Send(new StartTopic(Tids.Mint(), Workshop, "Wicks", "Cotton.", Ada, CoverId: cover), Cancellation);
+        var discussion = await new StartTopic(Tids.Mint(), Workshop, "Wicks", "Cotton.", Ada, CoverId: cover).Send(Cancellation);
         Assert.Equal(Post.CoverOnArticle, Assert.IsType<Outcome<Post>.Refused>(discussion).Reason);
     }
 
@@ -371,13 +370,13 @@ public sealed class ArticleMediaTests
     {
         const string header = "<p>From the long reads.</p>";
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         using var ada = await SignedIn(tangentSpace, Ada);
         var cover = IdOf(await Bring(ada, Jpeg()));
-        var article = Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), Articles, "Lanterns", "Words.", Ada, CoverId: cover), Cancellation)).Result;
+        var article = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Articles, "Lanterns", "Words.", Ada, CoverId: cover).Send(Cancellation)).Result;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
         space!.Slots.ArticleHeader = header;
-        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new Store<TangentSpace>(space), Cancellation));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(Cancellation));
 
         var page = (await Send(Agent(tangentSpace), HttpMethod.Get, TopicPath(article))).Body;
 
@@ -393,14 +392,14 @@ public sealed class ArticleMediaTests
     public async Task A_public_articles_card_previews_its_cover_large_and_a_card_with_no_image_stays_small()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Overwrites.SetAudience(tangentSpace.Services.GetRequiredService<RoleCollection>(), Articles, Audience.Public, Cancellation);
         await Given.AParticipant(tangentSpace, "did:plc:leo4writes", [Roles.Administrator], ct: Cancellation);
         using var ada = await SignedIn(tangentSpace, Ada);
         using var leo = await SignedIn(tangentSpace, "did:plc:leo4writes");
         var cover = IdOf(await Bring(ada, Jpeg()));
-        var article = Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), Articles, "Lanterns", "Words.", Ada, CoverId: cover), Cancellation)).Result;
-        var bare = await Started(writer, Ada, "No cover here", "Words.", Articles);
+        var article = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Articles, "Lanterns", "Words.", Ada, CoverId: cover).Send(Cancellation)).Result;
+        var bare = await Started(Ada, "No cover here", "Words.", Articles);
 
         var page = (await Send(Agent(tangentSpace), HttpMethod.Get, TopicPath(article))).Body;
         Assert.Contains($"<meta property=\"og:image\" content=\"{BaseUrl}/media/{cover}/{MediaRecipes.CardName}\"", page);
@@ -413,7 +412,7 @@ public sealed class ArticleMediaTests
 
         // Where a visitor may not read, there is no card and so no cover in it, even for who may read there.
         var hidden = IdOf(await Bring(leo, Jpeg(50), Studio, "/t/" + Studio + "/new"));
-        var inside = Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), Studio, "Inside", "Words.", "did:plc:leo4writes"), Cancellation)).Result;
+        var inside = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Studio, "Inside", "Words.", "did:plc:leo4writes").Send(Cancellation)).Result;
         var kept = (await Send(leo.Client, HttpMethod.Get, TopicPath(inside))).Body;
         Assert.DoesNotContain("og:image", kept);
         Assert.DoesNotContain("twitter:", kept);
@@ -427,11 +426,11 @@ public sealed class ArticleMediaTests
         var settings = Settings();
         settings["Koan:Web:ApplicationUrl"] = place;
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(settings, ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         var cover = await Media.Keep(Jpeg(), Cancellation);
         var inline = await Media.Keep(Jpeg(40), Cancellation);
-        foreach (var image in new[] { cover, inline }) Assert.IsType<Outcome<MediaUse>.Done>(await writer.Send(new BringMedia(image.Id, Ada), Cancellation));
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), Articles, "Lanterns", "![Lit](/media/" + inline.Id + ")", Ada, CoverId: cover.Id), Cancellation));
+        foreach (var image in new[] { cover, inline }) Assert.IsType<Outcome<MediaUse>.Done>(await new BringMedia(image.Id, Ada).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Articles, "Lanterns", "![Lit](/media/" + inline.Id + ")", Ada, CoverId: cover.Id).Send(Cancellation));
         using var reader = Agent(tangentSpace);
 
         foreach (var feed in new[] { "/notes" + Feeds.ArticlesPath, "/notes/t/" + Articles + "/" + Feeds.TangentSegment })
@@ -450,7 +449,7 @@ public sealed class ArticleMediaTests
             Assert.Equal(HttpStatusCode.OK, (await Send(reader, HttpMethod.Get, "/notes/media/" + image.Id)).Status);
 
         // An entry with no cover says nothing of one.
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), Articles, "Words alone", "Words.", Ada), Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Articles, "Words alone", "Words.", Ada).Send(Cancellation));
         var newest = System.Text.Json.JsonDocument.Parse((await Send(reader, HttpMethod.Get, "/notes" + Feeds.ArticlesPath + Render.JsonFeed.Extension)).Body).RootElement.GetProperty("items")[0];
         Assert.False(newest.TryGetProperty("image", out _));
     }
@@ -472,15 +471,14 @@ public sealed class ArticleMediaTests
 
     private static string Img(string id) => $"<img src=\"/media/{id}\" alt=\"\">";
 
-    private static async Task Slots(WriteLoop writer, string? masthead = null, string? doorIntro = null, string? footer = null, string? head = null, Audience? audience = null)
-        => Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(
-            new ChangeTangentSpace(Keeper, Masthead: masthead, DoorIntro: doorIntro, Footer: footer, Head: head, Audience: audience), Cancellation));
+    private static async Task Slots(string? masthead = null, string? doorIntro = null, string? footer = null, string? head = null, Audience? audience = null)
+        => Assert.IsType<Outcome<TangentSpace>.Done>(await new ChangeTangentSpace(Keeper, Masthead: masthead, DoorIntro: doorIntro, Footer: footer, Head: head, Audience: audience).Send(Cancellation));
 
     [Fact]
     public async Task An_image_a_slot_names_reaches_whoever_reads_its_page_and_ends_when_no_slot_names_it()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Keeper, [Roles.Administrator], ct: Cancellation);
         using var leo = await SignedIn(tangentSpace, Keeper);
         using var visitor = Agent(tangentSpace);
@@ -488,28 +486,28 @@ public sealed class ArticleMediaTests
         var icon = IdOf(await Bring(leo, Jpeg(32)));
         Assert.Equal(HttpStatusCode.NotFound, (await Send(visitor, HttpMethod.Get, "/media/" + logo)).Status);
 
-        await Slots(writer, masthead: Img(logo), head: $"<link rel=\"icon\" href=\"/media/{icon}\">");
+        await Slots(masthead: Img(logo), head: $"<link rel=\"icon\" href=\"/media/{icon}\">");
         Assert.Contains($"src=\"{BaseUrl}/media/{logo}\"", (await Send(visitor, HttpMethod.Get, "/")).Body);
         foreach (var path in new[] { "/media/" + logo, $"/media/{logo}/{MediaRecipes.CardName}", "/media/" + icon })
             Assert.Equal(HttpStatusCode.OK, (await Send(visitor, HttpMethod.Get, path)).Status);
 
         // Moved to another slot it stays, even for someone who reaches it only through the slot; named in no slot it ends.
-        await Slots(writer, masthead: "", footer: Img(logo));
+        await Slots(masthead: "", footer: Img(logo));
         Assert.Equal(HttpStatusCode.OK, (await Send(visitor, HttpMethod.Get, "/media/" + logo)).Status);
         Assert.Null(await MediaUse.Get(MediaUse.Key(logo, "slot:" + Space.Slots.MastheadName), Cancellation));
-        await Slots(writer, footer: "");
+        await Slots(footer: "");
         Assert.Equal(HttpStatusCode.NotFound, (await Send(visitor, HttpMethod.Get, "/media/" + logo)).Status);
         Assert.Equal(HttpStatusCode.OK, (await Send(leo.Client, HttpMethod.Get, "/media/" + logo)).Status);
 
         // An image used elsewhere goes on being used; a slot is no way to reach an image its writer may not see.
         var hidden = IdOf(await Bring(leo, Jpeg(50), Studio, "/t/" + Studio + "/new"));
-        await Started(writer, Keeper, "Plans", "![The plan](/media/" + hidden + ")", Studio);
+        await Started(Keeper, "Plans", "![The plan](/media/" + hidden + ")", Studio);
         Assert.Equal(HttpStatusCode.NotFound, (await Send(visitor, HttpMethod.Get, "/media/" + hidden)).Status);
         var keeperRole = "role:keeper";
         var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
         await roles.Define(keeperRole, "Keeper", Bits.Tokens(Bit.ManageSpace), ct: Cancellation);
         await Given.AParticipant(tangentSpace, "did:plc:kay4writes", [Roles.Member, keeperRole], ct: Cancellation);
-        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new ChangeTangentSpace("did:plc:kay4writes", Masthead: Img(hidden)), Cancellation));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new ChangeTangentSpace("did:plc:kay4writes", Masthead: Img(hidden)).Send(Cancellation));
         Assert.Equal(HttpStatusCode.NotFound, (await Send(visitor, HttpMethod.Get, "/media/" + hidden)).Status);
     }
 
@@ -517,14 +515,14 @@ public sealed class ArticleMediaTests
     public async Task In_a_private_place_an_image_on_every_page_reaches_a_visitor_and_one_on_the_door_does_not()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Keeper, [Roles.Administrator], ct: Cancellation);
         using var leo = await SignedIn(tangentSpace, Keeper);
         using var bea = await SignedIn(tangentSpace, Bea);
         using var visitor = Agent(tangentSpace);
         var logo = IdOf(await Bring(leo, Jpeg(64)));
         var welcome = IdOf(await Bring(leo, Jpeg(65)));
-        await Slots(writer, masthead: Img(logo), doorIntro: Img(welcome), audience: Audience.Private);
+        await Slots(masthead: Img(logo), doorIntro: Img(welcome), audience: Audience.Private);
 
         // The sign-in, all a visitor reads here, carries the masthead, so its logo shows; the door's picture stays inside.
         Assert.Contains($"src=\"{BaseUrl}/media/{logo}\"", (await Send(visitor, HttpMethod.Get, "/")).Body);
@@ -542,11 +540,11 @@ public sealed class ArticleMediaTests
         var settings = Settings();
         settings["Koan:Web:ApplicationUrl"] = place;
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(settings, ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Keeper, [Roles.Administrator], ct: Cancellation);
         var logo = await Media.Keep(Jpeg(), Cancellation);
-        Assert.IsType<Outcome<MediaUse>.Done>(await writer.Send(new BringMedia(logo.Id, Keeper), Cancellation));
-        await Slots(writer, masthead: Img(logo.Id));
+        Assert.IsType<Outcome<MediaUse>.Done>(await new BringMedia(logo.Id, Keeper).Send(Cancellation));
+        await Slots(masthead: Img(logo.Id));
         using var visitor = Agent(tangentSpace);
 
         Assert.Contains($"src=\"{place}/media/{logo.Id}\"", (await Send(visitor, HttpMethod.Get, "/notes/")).Body);
@@ -557,10 +555,10 @@ public sealed class ArticleMediaTests
     public async Task Only_the_render_the_place_names_answers_and_a_format_or_a_size_in_the_address_does_not()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         using var ada = await SignedIn(tangentSpace, Ada);
         var id = IdOf(await Bring(ada, Jpeg()));
-        await Started(writer, Ada, "Open", "![Open](/media/" + id + ")", Articles);
+        await Started(Ada, "Open", "![Open](/media/" + id + ")", Articles);
         using var visitor = Agent(tangentSpace);
 
         Assert.Equal(HttpStatusCode.OK, (await Send(visitor, HttpMethod.Get, $"/media/{id}/{MediaRecipes.CardName}")).Status);
@@ -583,10 +581,10 @@ public sealed class ArticleMediaTests
     public async Task The_plain_form_works_without_script_and_keeps_an_articles_cover_through_an_edit()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         using var ada = await SignedIn(tangentSpace, Ada);
         var cover = IdOf(await Bring(ada, Jpeg(40)));
-        var article = Assert.IsType<Outcome<Post>.Done>(await writer.Send(new StartTopic(Tids.Mint(), Articles, "Lanterns", "First words.", Ada, CoverId: cover), Cancellation)).Result;
+        var article = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Articles, "Lanterns", "First words.", Ada, CoverId: cover).Send(Cancellation)).Result;
 
         var path = TopicPath(article) + "/" + article.Id + "/edit";
         var page = await Send(ada.Client, HttpMethod.Get, path);

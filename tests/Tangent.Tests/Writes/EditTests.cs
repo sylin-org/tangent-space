@@ -1,11 +1,11 @@
 using System.Net;
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
 using Tangent.Events;
 using Tangent.Space;
 using Tangent.Tangents;
-using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -20,14 +20,14 @@ public sealed class EditTests
     public async Task The_author_edits_their_own_post_by_form_and_a_moderator_edits_anyones_by_json_each_in_one_commit_with_its_snapshot_version_and_event()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var root = await Started(writer, Ada, "Lanterns", "How do you hang yours?");
-        var reply = await Replied(writer, root, Ada, "From the porch beam.");
+        await Place(tangentSpace);
+        var root = await Started(Ada, "Lanterns", "How do you hang yours?");
+        var reply = await Replied(root, Ada, "From the porch beam.");
         using var ada = await SignedIn(tangentSpace, Ada);
         using var mo = await SignedIn(tangentSpace, Mo);
         await Reached.Settled(tangentSpace, Cancellation);
         var commits = new List<Committed>();
-        writer.Committed += commits.Add;
+        tangentSpace.Commits.Landed += commits.Add;
 
         var page = await Send(ada.Client, HttpMethod.Get, PostPath(root, root) + "/edit");
         Assert.Equal(HttpStatusCode.OK, page.Status);
@@ -44,7 +44,7 @@ public sealed class EditTests
             (snapshot.Id, snapshot.Title, snapshot.Body, snapshot.Version, snapshot.AuthorId));
         var editedEvent = Assert.Single(await Event.Query(e => e.Kind == EventKind.PostEdited, Cancellation));
         Assert.Equal((root.Id, root.Id, Workshop, Ada, 2L), (editedEvent.PostId, editedEvent.TopicId, editedEvent.TangentId, editedEvent.ActorId, editedEvent.Version));
-        // One commit carried the snapshot, the row and the event: the writer announced it once, with the event's sequence.
+        // One commit carried the snapshot, the row and the event: it was announced once, with the event's sequence.
         Assert.Equal(editedEvent.Seq, Assert.Single(commits).Sequences[Event.Log]);
         Assert.IsType<EditPost>(commits[0].Command);
 
@@ -66,17 +66,17 @@ public sealed class EditTests
     public async Task A_member_whom_an_overwrite_grants_moderate_in_a_tangent_edits_and_removes_anyones_post_there_and_nowhere_else()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         await tangentSpace.Services.GetRequiredService<RoleCollection>().Overwrite(Overwrites.Resource(Workshop), OverwriteSubjectKind.Person,
             Bea, [Bits.Token(Bit.Moderate)], [], ct: Cancellation);
-        var root = await Started(writer, Ada, "Lanterns", "How do you hang yours?");
-        var reply = await Replied(writer, root, Ada, "From the porch beam.");
-        var elsewhere = await Started(writer, Ada, "On wicks", "A short piece.", Articles);
+        var root = await Started(Ada, "Lanterns", "How do you hang yours?");
+        var reply = await Replied(root, Ada, "From the porch beam.");
+        var elsewhere = await Started(Ada, "On wicks", "A short piece.", Articles);
 
-        var edited = await writer.Send(new EditPost(root.Id, 1, "How do you hang yours? (moderated)", null, Bea), Cancellation);
-        var removed = await writer.Send(new RemovePost(reply.Id, Bea), Cancellation);
-        var notThere = await writer.Send(new EditPost(elsewhere.Id, 1, "Not mine to change.", null, Bea), Cancellation);
-        var notThereEither = await writer.Send(new RemovePost(elsewhere.Id, Bea), Cancellation);
+        var edited = await new EditPost(root.Id, 1, "How do you hang yours? (moderated)", null, Bea).Send(Cancellation);
+        var removed = await new RemovePost(reply.Id, Bea).Send(Cancellation);
+        var notThere = await new EditPost(elsewhere.Id, 1, "Not mine to change.", null, Bea).Send(Cancellation);
+        var notThereEither = await new RemovePost(elsewhere.Id, Bea).Send(Cancellation);
 
         Assert.Equal(2L, Assert.IsType<Outcome<Post>.Done>(edited).Result.Version);
         Assert.Equal((true, Bea), (Assert.IsType<Outcome<Post>.Done>(removed).Result.Removed, Assert.IsType<Outcome<Post>.Done>(removed).Result.RemovedBy));
@@ -92,22 +92,22 @@ public sealed class EditTests
     public async Task An_edit_from_a_stale_version_is_a_conflict_carrying_the_current_text_as_json_and_on_the_form_and_writes_nothing_while_a_repeat_writes_nothing_and_answers_the_post()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Place(tangentSpace);
-        var root = await Started(writer, Ada, "Lanterns", "How do you hang yours?");
-        Assert.IsType<Outcome<Post>.Done>(await writer.Send(new EditPost(root.Id, 1, "Hung from the beam, says the moderator.", null, Mo), Cancellation));
+        await Place(tangentSpace);
+        var root = await Started(Ada, "Lanterns", "How do you hang yours?");
+        Assert.IsType<Outcome<Post>.Done>(await new EditPost(root.Id, 1, "Hung from the beam, says the moderator.", null, Mo).Send(Cancellation));
         var before = (await Counted(), await Snapshots());
         using var ada = await SignedIn(tangentSpace, Ada);
         var edit = PostPath(root, root) + "/edit";
 
         var asJson = await Json(ada, edit, edit, new { title = "Lanterns", body = "Mine hang from the porch.", version = 1 });
         var onForm = await Form(ada, edit, edit, new Dictionary<string, string> { ["title"] = "Lanterns", ["body"] = "Mine hang from the porch.", ["version"] = "1" });
-        var repeat = await writer.Send(new EditPost(root.Id, 1, "Hung from the beam, says the moderator.", null, Mo), Cancellation);
+        var repeat = await new EditPost(root.Id, 1, "Hung from the beam, says the moderator.", null, Mo).Send(Cancellation);
 
         Assert.Equal((HttpStatusCode.Conflict, "application/problem+json"), (asJson.Status, asJson.MediaType));
         var current = asJson.Json.GetProperty("current");
         Assert.Equal(("Hung from the beam, says the moderator.", "Lanterns", 2L),
             (current.GetProperty("body").GetString(), current.GetProperty("title").GetString(), current.GetProperty("version").GetInt64()));
-        Assert.Equal(EditPost.Stale(2), asJson.Json.GetProperty("detail").GetString());
+        Assert.Equal(EditPost.Stale(2).Text, asJson.Json.GetProperty("detail").GetString());
         Assert.Equal(HttpStatusCode.Conflict, onForm.Status);
         Assert.Contains(">Hung from the beam, says the moderator.</textarea>", onForm.Body);
         Assert.Contains("<input type=\"hidden\" name=\"version\" value=\"2\" />", onForm.Body);

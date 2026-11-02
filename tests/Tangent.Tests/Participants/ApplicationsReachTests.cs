@@ -1,11 +1,11 @@
 using System.Net;
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
 using Tangent.Events;
 using Tangent.Posts;
 using Tangent.Space;
-using Tangent.Writer;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -26,12 +26,12 @@ public sealed class ApplicationsReachTests
     public async Task A_moderators_count_notifications_stream_and_door_show_a_new_application_and_a_members_do_not()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Applying(tangentSpace);
+        await Applying(tangentSpace);
         using var mo = await SignedIn(tangentSpace, Mo);
         using var ada = await SignedIn(tangentSpace, Ada);
         var before = (await Event.All(Cancellation)).Select(e => e.Seq).DefaultIfEmpty(0).Max();
 
-        var applicant = await Applies(writer, Grace);
+        var applicant = await Applies(Grace);
 
         // One row for the applicant and one event, however many may decide it.
         var arrival = Assert.Single(await Event.All(Cancellation), e => e.Seq > before);
@@ -84,16 +84,16 @@ public sealed class ApplicationsReachTests
     public async Task A_decision_by_one_decider_ends_the_application_for_every_other()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Applying(tangentSpace);
+        await Applying(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
-        await Applies(writer, Grace);
-        await Applies(writer, Hal);
+        await Applies(Grace);
+        await Applies(Hal);
         using var mo = await SignedIn(tangentSpace, Mo);
         using var leo = await SignedIn(tangentSpace, Leo);
         Assert.Equal((2, 2), (Count(await Send(mo.Client, HttpMethod.Get, "/", json: true)), Count(await Send(leo.Client, HttpMethod.Get, "/", json: true))));
         Assert.Equal([Hal, Grace], Applicants(await Send(leo.Client, HttpMethod.Get, Notifications.Path, json: true)));
 
-        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new Admit(Leo, Grace), Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new Admit(Leo, Grace).Send(Cancellation));
 
         var door = (await Send(mo.Client, HttpMethod.Get, "/", json: true)).Json;
         Assert.Equal((1, 1), (door.GetProperty("who").GetProperty("notifications").GetProperty("count").GetInt32(),
@@ -101,7 +101,7 @@ public sealed class ApplicationsReachTests
         Assert.Equal([Hal], Applicants(await Send(mo.Client, HttpMethod.Get, Notifications.Path, json: true)));
         Assert.Null((await Participant.Get(Grace, Cancellation))!.WaitingSeq);
 
-        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new Decline(Leo, Hal), Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new Decline(Leo, Hal).Send(Cancellation));
 
         door = (await Send(mo.Client, HttpMethod.Get, "/", json: true)).Json;
         Assert.Equal(0, door.GetProperty("who").GetProperty("notifications").GetProperty("count").GetInt32());
@@ -117,13 +117,13 @@ public sealed class ApplicationsReachTests
     public async Task A_decider_made_a_moderator_after_the_application_arrived_still_learns_of_it()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Applying(tangentSpace);
+        await Applying(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         using var ada = await SignedIn(tangentSpace, Ada);
-        await Applies(writer, Grace);
+        await Applies(Grace);
         Assert.Equal(0, Count(await Send(ada.Client, HttpMethod.Get, "/", json: true)));
 
-        Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new ChangeRole(Leo, Ada, Roles.Moderator, Give: true), Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new ChangeRole(Leo, Ada, Roles.Moderator, Give: true).Send(Cancellation));
 
         var door = (await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json;
         Assert.Equal((2, 1), (door.GetProperty("who").GetProperty("notifications").GetProperty("count").GetInt32(),
@@ -137,8 +137,8 @@ public sealed class ApplicationsReachTests
     public async Task Opening_the_notifications_sees_an_application_which_still_waits_until_someone_decides_it()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Applying(tangentSpace);
-        var applicant = await Applies(writer, Grace);
+        await Applying(tangentSpace);
+        var applicant = await Applies(Grace);
         using var mo = await SignedIn(tangentSpace, Mo);
         Assert.Equal(1, Count(await Send(mo.Client, HttpMethod.Get, "/", json: true)));
 
@@ -156,26 +156,26 @@ public sealed class ApplicationsReachTests
         Assert.Equal((Grace, false), (entry.GetProperty("who").GetProperty("id").GetString(), entry.GetProperty("new").GetBoolean()));
 
         // A new application counts past it.
-        await Applies(writer, Hal);
+        await Applies(Hal);
         Assert.Equal(1, Count(await Send(mo.Client, HttpMethod.Get, "/", json: true)));
 
         // Only whoever decides it sees an application: a member's mark of it is refused.
         Assert.Equal(new Outcome<Checkpoint>.Refused(SeeNotifications.NoNotification),
-            await writer.Send(new SeeNotifications(Ada, applicant.WaitingSeq!.Value), Cancellation));
+            await new SeeNotifications(Ada, applicant.WaitingSeq!.Value).Send(Cancellation));
     }
 
     [Fact]
     public async Task An_application_older_than_a_full_read_of_rows_the_decider_may_not_view_never_skips_what_lies_between()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        var writer = await Applying(tangentSpace);
+        await Applying(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
-        await Applies(writer, Grace);
-        var mine = await Started(writer, Mo, "Lanterns", "Who lights theirs first?");
-        await Replied(writer, mine, Bea, "I do, at six.");
+        await Applies(Grace);
+        var mine = await Started(Mo, "Lanterns", "Who lights theirs first?");
+        await Replied(mine, Bea, "I do, at six.");
         // A whole read of rows that target the moderator in the studio, which he may not view, newer than both.
-        var secret = await Started(writer, Leo, "Studio notes", "Only for us.", Studio);
-        Assert.IsType<Outcome<int>.Done>(await writer.Send(new Many(Leo, Mo, secret, Notifications.ScanLimit), Cancellation));
+        var secret = await Started(Leo, "Studio notes", "Only for us.", Studio);
+        Assert.IsType<Outcome<int>.Done>(await new Many(Leo, Mo, secret, Notifications.ScanLimit).Send(Cancellation));
         using var mo = await SignedIn(tangentSpace, Mo);
 
         var shown = new List<string>();
@@ -192,19 +192,18 @@ public sealed class ApplicationsReachTests
         Assert.DoesNotContain("Studio notes", (await Send(mo.Client, HttpMethod.Get, Notifications.Path)).Body);
     }
 
-    /// <summary>The writing place, whose admission says apply; then the writer.</summary>
-    private static async Task<WriteLoop> Applying(TangentSpaceFixture tangentSpace)
+    /// <summary>The writing place, whose admission says apply.</summary>
+    private static async Task Applying(TangentSpaceFixture tangentSpace)
     {
-        var writer = await Place(tangentSpace);
+        await Place(tangentSpace);
         var space = (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!;
         space.Admission = Admission.Apply;
-        Assert.IsType<Outcome<TangentSpace>.Done>(await writer.Send(new Store<TangentSpace>(space), Cancellation));
-        return writer;
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(Cancellation));
     }
 
     /// <summary>A newcomer's first arrival, which applies.</summary>
-    private static async Task<Participant> Applies(WriteLoop writer, string id)
-        => Assert.IsType<Outcome<Participant>.Done>(await writer.Send(new FirstArrival(id, id.Split(':')[^1] + ".example"), Cancellation)).Result;
+    private static async Task<Participant> Applies(string id)
+        => Assert.IsType<Outcome<Participant>.Done>(await new FirstArrival(id, id.Split(':')[^1] + ".example").Send(Cancellation)).Result;
 
     /// <summary>How many notifications the reader has not seen, as a page's JSON says.</summary>
     private static int Count(Answered page) => page.Json.GetProperty("who").GetProperty("notifications").GetProperty("count").GetInt32();
@@ -218,11 +217,11 @@ public sealed class ApplicationsReachTests
     /// <paramref name="TargetId"/>, in one transaction.</summary>
     private sealed record Many(string ActorId, string TargetId, Post Root, int Times) : ICommand<int>
     {
-        public async Task<Outcome<int>> Run(Sequences sequences, CancellationToken ct)
+        public async Task<Outcome<int>> Run(CancellationToken ct)
         {
             for (var index = 0; index < Times; index++)
-                await Event.Next(sequences, EventKind.PostCreated, DateTimeOffset.UtcNow, tangentId: Root.TangentId, topicId: Root.Id, postId: Root.Id,
-                    actorId: ActorId, targetId: TargetId).Save(ct);
+                await Event.Append(EventKind.PostCreated, DateTimeOffset.UtcNow, ct, tangentId: Root.TangentId, topicId: Root.Id, postId: Root.Id,
+                    actorId: ActorId, targetId: TargetId);
             return new Outcome<int>.Done(Times);
         }
     }

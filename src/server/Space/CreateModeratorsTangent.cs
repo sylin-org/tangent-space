@@ -1,6 +1,6 @@
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Tangent.Events;
-using Tangent.Writer;
 
 namespace Tangent.Space;
 
@@ -16,15 +16,7 @@ public sealed record CreateModeratorsTangent(DateTimeOffset? At = null) : IComma
     /// <summary>The answer for a row that records a moderators' Tangent no row holds.</summary>
     public const string Missing = "The moderators' Tangent this Tangent Space records is missing.";
 
-    /// <summary>Writes the access outside the transaction, only where <see cref="Run"/> goes on to create the
-    /// Tangent: the place is established and records none.</summary>
-    public async Task Prepare(CancellationToken ct)
-    {
-        if (await TangentSpace.Get(TangentSpace.SingleRow, ct) is not { ModeratorsTangentId: null }) return;
-        if (await ModeratorsTangent.FreeSlug(ct) is { } slug) await ModeratorsTangent.WriteAccess(slug, ct);
-    }
-
-    public async Task<Outcome<Tangents.Tangent>> Run(Sequences sequences, CancellationToken ct)
+    public async Task<Outcome<Tangents.Tangent>> Run(CancellationToken ct)
     {
         if (await TangentSpace.Get(TangentSpace.SingleRow, ct) is not { } space) return new Outcome<Tangents.Tangent>.Refused(NoPlace);
         if (space.ModeratorsTangentId is { } recorded)
@@ -32,10 +24,10 @@ public sealed record CreateModeratorsTangent(DateTimeOffset? At = null) : IComma
 
         var slug = await ModeratorsTangent.FreeSlug(ct) ?? throw new Refusal(ModeratorsTangent.NoSlug);
         var at = At ?? DateTimeOffset.UtcNow;
-        var tangent = await ModeratorsTangent.Create(sequences, slug, space.OperatorId, at, ct);
+        var tangent = await ModeratorsTangent.Create(slug, space.OperatorId, at, ct);
         space.RecordModerators(tangent.Id);
         await space.Save(ct);
-        await Event.Next(sequences, EventKind.SpaceChanged, at, actorId: space.OperatorId).Save(ct);
+        await Event.Append(EventKind.SpaceChanged, at, ct, actorId: space.OperatorId);
         return new Outcome<Tangents.Tangent>.Done(tangent);
     }
 }

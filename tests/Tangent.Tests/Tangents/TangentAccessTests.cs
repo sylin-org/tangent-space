@@ -54,7 +54,7 @@ public sealed class TangentAccessTests
 
         // A visitor finds nothing there, as at an address with nothing.
         var absent = await Send(visitor, HttpMethod.Get, "/t/" + Studio, json: true);
-        Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent), (absent.Status, absent.Gate));
+        Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent.Text), (absent.Status, absent.Gate));
         Assert.Equal((await Send(visitor, HttpMethod.Get, "/t/nowhere", json: true)).Body, absent.Body);
         Assert.DoesNotContain("Members only", (await Send(visitor, HttpMethod.Get, "/t/" + Studio)).Body);
 
@@ -67,12 +67,12 @@ public sealed class TangentAccessTests
 
         // A member who reads the Tangent reads the gate on its access, and no role.
         var unmanaged = await Send(ada.Client, HttpMethod.Get, access, json: true);
-        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageTangent)), (unmanaged.Status, unmanaged.Json.GetProperty("gate").GetString()));
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageTangent).Word), (unmanaged.Status, unmanaged.Json.GetProperty("gate").GetString()));
         Assert.Empty(unmanaged.Json.GetProperty("roles").EnumerateArray());
 
         // A member manages nothing here; a role no one has is not found; an administrator's access is not set.
         var refused = await Json(ada, "/t/" + Studio, access, new { role = "member", access = "post" });
-        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageTangent)), (refused.Status, refused.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageTangent).Word), (refused.Status, refused.Gate));
         Assert.Equal(HttpStatusCode.NotFound, (await Json(leo, access, access, new { role = "nobody", access = "post" })).Status);
         Assert.Equal(HttpStatusCode.BadRequest, (await Json(leo, access, access, new { role = "administrator", access = "read" })).Status);
         Assert.Equal(HttpStatusCode.BadRequest, (await Json(leo, access, access, new { role = "member", access = "everything" })).Status);

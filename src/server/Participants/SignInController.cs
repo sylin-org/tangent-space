@@ -44,7 +44,7 @@ public sealed class SignInController(KoanWebBaseUrl baseUrl) : ControllerBase
     public static IActionResult Answer(HttpContext http, KoanWebBaseUrl baseUrl, TangentSpace space)
     {
         http.Response.Headers.CacheControl = "no-store";
-        if (PostWrites.WantsJson(http.Request)) return PostWrites.Gated(Capabilities.SignIn);
+        if (PostWrites.WantsJson(http.Request)) return PostWrites.Refused(http, Capabilities.SignIn);
         var requested = HttpMethods.IsGet(http.Request.Method) || HttpMethods.IsHead(http.Request.Method)
             ? http.Request.PathBase + http.Request.Path + http.Request.QueryString
             : null;

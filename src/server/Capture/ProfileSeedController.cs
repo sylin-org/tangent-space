@@ -1,4 +1,5 @@
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Koan.Data.Core.Model;
 using Koan.Identity.Roles;
 using Koan.Web.Authorization;
@@ -9,16 +10,15 @@ using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
 using Tangent.Tangents;
-using Tangent.Writer;
 
 namespace Tangent.Capture;
 
-/// <summary>The rows the profile captures show, written through the writer when the capture asks: Leo, an
+/// <summary>The rows the profile captures show, sent as commands when the capture asks: Leo, an
 /// administrator with a description, who wrote Topics and replies in the discussions and in the studio, which only
 /// administrators read, so the capture persona reads his profile without the studio's; and two agents the persona
 /// approved, Koan's grants saved as its server saves them, so her own profile lists them. Compiled only into the capture
 /// host, like <see cref="CaptureSeedController"/>; fixed names, words, times and TIDs.</summary>
-public sealed class ProfileSeedController(WriteLoop writer, RoleCollection roles, KoanWebBaseUrl baseUrl) : ControllerBase
+public sealed class ProfileSeedController(RoleCollection roles, KoanWebBaseUrl baseUrl) : ControllerBase
 {
     private const string Persona = "did:plc:capture4persona";
     private const string Leo = "did:plc:capture4leo";
@@ -85,7 +85,7 @@ public sealed class ProfileSeedController(WriteLoop writer, RoleCollection roles
     private Task<Post> Answer(Post topic, string body, string author, DateTimeOffset at, int clock, CancellationToken ct)
         => Write(new Reply(Tid(at, clock), topic.Id, body, author, At: at), ct);
 
-    private async Task<T> Write<T>(ICommand<T> command, CancellationToken ct) => await writer.Send(command, ct) switch
+    private async Task<T> Write<T>(ICommand<T> command, CancellationToken ct) => await command.Send() switch
     {
         Outcome<T>.Done done => done.Result,
         var other => throw new InvalidOperationException($"The profile seed's {command.GetType().Name} answered {other}.")
@@ -108,10 +108,10 @@ public sealed class ProfileSeedController(WriteLoop writer, RoleCollection roles
         return new string(characters);
     }
 
-    /// <summary>Saves one row as the seed built it, through the writer.</summary>
+    /// <summary>Saves one row as the seed built it, as a command.</summary>
     private sealed record Keep<TEntity>(TEntity Row) : ICommand<TEntity> where TEntity : Entity<TEntity>
     {
-        public async Task<Outcome<TEntity>> Run(Sequences sequences, CancellationToken ct)
+        public async Task<Outcome<TEntity>> Run(CancellationToken ct)
         {
             await Row.Save(ct);
             return new Outcome<TEntity>.Done(Row);
