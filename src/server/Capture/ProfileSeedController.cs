@@ -15,10 +15,9 @@ namespace Tangent.Capture;
 
 /// <summary>The rows the profile captures show, sent as commands when the capture asks: Leo, an
 /// administrator with a description, who wrote Topics and replies in the discussions and in the studio, which only
-/// administrators read, so the capture persona reads his profile without the studio's; and two agents the persona
-/// approved, Koan's grants saved as its server saves them, so her own profile lists them. Compiled only into the capture
+/// administrators read, so the capture persona reads his profile without the studio's. Compiled only into the capture
 /// host, like <see cref="CaptureSeedController"/>; fixed names, words, times and TIDs.</summary>
-public sealed class ProfileSeedController(RoleCollection roles, KoanWebBaseUrl baseUrl) : ControllerBase
+public sealed class ProfileSeedController(RoleCollection roles) : ControllerBase
 {
     private const string Persona = "did:plc:capture4persona";
     private const string Leo = "did:plc:capture4leo";
@@ -50,26 +49,8 @@ public sealed class ProfileSeedController(RoleCollection roles, KoanWebBaseUrl b
         var glue = await Topic("workshop", "Which glue for a visible repair?", "Lacquer, epoxy, or something else? I keep changing my mind.", Lumen, At(28, 15, 0), 6, ct);
         await Answer(glue, "Epoxy with gold powder for the first try; lacquer once you know you like the look.", Leo, At(29, 8, 40), 7, ct);
 
-        // The persona approved a device through the shared client on September 29, and Companion Lobby, a client that
-        // registered itself, on September 28.
-        await Approval("capture-approval-device", Delegates.DelegateClient.Id, Delegates.DelegateClient.Name, At(29, 14, 5), ct);
-        await Approval("capture-approval-lobby", "dcr_capture_lobby", "Companion Lobby", At(28, 18, 30), ct);
         return NoContent();
     }
-
-    /// <summary>One approval, Koan's grant saved as its authorization server saves one.</summary>
-    private Task Approval(string id, string clientId, string clientName, DateTimeOffset at, CancellationToken ct)
-        => new AgentGrant
-        {
-            Id = id,
-            Subject = Persona,
-            Capability = "mcp:grant:" + clientId + ":capture",
-            Resource = baseUrl.Resolve(HttpContext),
-            ExpiresAt = DateTimeOffset.UtcNow.AddDays(30),
-            IssuedAt = at,
-            ClientId = clientId,
-            ClientName = clientName
-        }.Save(ct);
 
     private async Task Person(string id, string handle, string displayName, string? description, ParticipantKind kind, string role, CancellationToken ct)
     {

@@ -49,7 +49,6 @@
                                     @foreach (var access in role.Offered)
                                     {
                                         <form method="post" action="@change.Action">
-                                            <FormTokenField Token="@change.Token" />
                                             <input type="hidden" name="@TangentAccessController.RoleField" value="@role.Word">
                                             <button type="submit" class="watch-button" name="@TangentAccessController.AccessField" value="@access">@Button(access)</button>
                                         </form>

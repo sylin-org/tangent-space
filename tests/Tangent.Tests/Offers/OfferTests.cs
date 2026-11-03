@@ -279,8 +279,6 @@ public sealed class OfferTests
         await Reached.Settled(tangentSpace, Cancellation);
         var offer = Assert.Single(await Offer.All(Cancellation));
         using var leo = await SignedIn(tangentSpace, "leo", Leo);
-        // The form as the door held it, kept open: once the offer is used, the door has no form to take a token from.
-        var form = await leo.Token("/", Cancellation);
         var baseUrl = tangentSpace.Services.GetRequiredService<KoanWebBaseUrl>();
 
         // Koan holds the origin only once the command has judged and kept it: refused there, nothing changes.
@@ -289,7 +287,7 @@ public sealed class OfferTests
         Assert.Null((await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Address);
         Assert.Equal(OfferState.Open, (await Offer.Get(offer.Id, Cancellation))!.State);
 
-        using (var used = await Answer(leo, OfferController.UsePath, offer.Id, form))
+        using (var used = await Answer(leo, OfferController.UsePath, offer.Id))
         {
             Assert.Equal(HttpStatusCode.SeeOther, used.StatusCode);
             Assert.Equal(FirstRunController.Path, used.Headers.Location?.OriginalString);
@@ -315,7 +313,7 @@ public sealed class OfferTests
         }
 
         var events = await Event.Log.Highest(Cancellation);
-        using (var again = await Answer(leo, OfferController.UsePath, offer.Id, form))
+        using (var again = await Answer(leo, OfferController.UsePath, offer.Id))
         {
             Assert.Equal(HttpStatusCode.SeeOther, again.StatusCode);
             Assert.Equal(FirstRunController.Path, again.Headers.Location?.OriginalString);
@@ -528,12 +526,10 @@ public sealed class OfferTests
         return browser;
     }
 
-    /// <summary>Posts one answer to an Offer, as its form does, with the token of <paramref name="form"/>, or of the form
-    /// the workshop's page holds now.</summary>
-    private static async Task<HttpResponseMessage> Answer(Browser browser, string path, string offerId, Dictionary<string, string>? form = null)
+    /// <summary>Posts one answer to an Offer, as its form does.</summary>
+    private static async Task<HttpResponseMessage> Answer(Browser browser, string path, string offerId)
     {
-        var fields = new Dictionary<string, string>(form ?? await browser.Token("/t/workshop", Cancellation));
-        fields[OfferController.Field] = offerId;
+        var fields = new Dictionary<string, string> { [OfferController.Field] = offerId };
         return await browser.Client.PostAsync(path, new FormUrlEncodedContent(fields), Cancellation);
     }
 

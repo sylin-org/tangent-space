@@ -19,45 +19,6 @@
   color: var(--ts-text-2);
 }
 
-.profile-delegates {
-  margin-bottom: 32px;
-}
-
-.profile-delegate-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border-top: 1px solid var(--ts-line);
-}
-
-.profile-delegate {
-  padding: 14px 0;
-  border-bottom: 1px solid var(--ts-line);
-}
-
-.profile-delegate-text {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 12px;
-}
-
-.profile-delegate-name {
-  font: var(--ts-type-ui-large);
-  font-size: 14px;
-}
-
-.profile-delegate-when {
-  color: var(--ts-text-3);
-  font: var(--ts-type-meta);
-}
-
-.profile-revoke {
-  margin-top: 10px;
-  padding-top: 0;
-  border-top: 0;
-}
-
 a.post-author,
 .around-name {
   color: inherit;

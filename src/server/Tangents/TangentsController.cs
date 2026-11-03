@@ -27,7 +27,7 @@ public sealed class TangentsController(KoanWebBaseUrl baseUrl, IDataProtectionPr
     [HttpGet(Route)]
     [HttpHead(Route)]
     [Tool(Name = "read_tangents")]
-    [Description("List the Tangents you may read, a page at a time.")]
+    [Description("List the Tangents you may read, a page at a time. Follow with read_tangent on one's slug, or start_topic in it.")]
     public async Task<IActionResult> Get([FromQuery(Name = After), Description(Holds.After)] string? after, CancellationToken ct)
     {
         var personId = PostWrites.PersonId(User);

@@ -9,7 +9,6 @@ export const article = defineComponent({
     host: { type: Object as PropType<HTMLElement>, required: true },
     door: { type: String, default: '/' },
     bring: { type: String, default: null },
-    token: { type: String, default: null },
     participant: { type: String, default: null },
     edit: { type: String, default: null },
   },

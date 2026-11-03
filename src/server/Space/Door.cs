@@ -173,8 +173,7 @@ public sealed record Door(
     public sealed record Position(long Through, string Next);
 
     /// <summary>The version the door's <c>ETag</c> carries: a hash of everything the door says, so a new event the
-    /// reader may see, a moved checkpoint, a changed <c>can</c> or a new day changes it. A door with the form carries a
-    /// new antiforgery token every time, so its version never repeats and it is never answered as unchanged.</summary>
+    /// reader may see, a moved checkpoint, a changed <c>can</c> or a new day changes it.</summary>
     public static long Version(Door door)
         => BitConverter.ToInt64(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(door)), 0) & long.MaxValue;
 }

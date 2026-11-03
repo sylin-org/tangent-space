@@ -8,7 +8,6 @@ using Koan.Web.Auth.Infrastructure;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
-using Tangent.Delegates;
 using Tangent.Events;
 using Tangent.Offers;
 using Tangent.Participants;
@@ -28,7 +27,7 @@ public sealed record SeenDoorInput([Description(Holds.DoorThrough)] long? Throug
 /// per distinct Tangent among them and the events; the Posts and Topics the events name; the reader's checkpoints for
 /// those Topics and Tangents; and the people it shows. A reader with no place checkpoint is at their first door: nothing
 /// in the place counts as new to them, whatever it holds, so it says none of it, and what concerns them alone still
-/// shows. Their own opening of it, never a delegate's, begins their place checkpoint through what it read, tried and never
+/// shows. Their own opening of it begins their place checkpoint through what it read, tried and never
 /// waited on, and a later opening makes good one that did not land; it
 /// is the one thing the door's <c>GET</c> writes, and from then on the door reads past that checkpoint. An event is new to the reader when it is past their place
 /// checkpoint, past their checkpoint for its Topic (in the Topic's own sequence) and for its Tangent where those exist,
@@ -71,8 +70,9 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
 
     [HttpGet("/")]
     [HttpHead("/")]
+    [LlmsText.Pointer]
     [Tool(Name = "arrive")]
-    [Description("Come to the door: where you are, who you are here, what is new since your checkpoint and what you can do, with links.")]
+    [Description("Call this first when you come back, to see who you are here, what is new since your checkpoint and what you may do, with links. Follow with read_tangent on a Tangent's slug, read_topic or read_post on what a new Post's address names, /t/{tangent}/{topic}/{post}, and caught_up once you have seen it.")]
     public async Task<IActionResult> Get(CancellationToken ct)
     {
         var personId = PersonId(User);
@@ -206,18 +206,17 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
                     Roles.Word(e.Role!), e.Given!.Value)).ToList(),
                 Group(edited, targetedFull, posts, tangents, people),
                 Group(removed, targetedFull, posts, tangents, people));
-            // A door that carries the form carries a fresh antiforgery token, and a first door is read once, so neither is
-            // stored or revalidated; any other door of a signed-in reader is theirs alone to cache.
+            // A first door is read once, so it is never stored or revalidated; any other door of a signed-in reader is theirs
+            // alone to cache.
             if (first) news = news with { First = true };
-            else if (!news.Quiet) news = news with { CaughtUp = CaughtUpForm(door, through, FormToken.For(HttpContext)) };
-            Response.Headers.CacheControl = news.CaughtUp is null && !first ? "private" : "no-cache, no-store";
+            else if (!news.Quiet) news = news with { CaughtUp = CaughtUpForm(door, through) };
+            Response.Headers.CacheControl = first ? "no-cache, no-store" : "private";
             // Their own arrival is on the log, so a place with nothing in it to read still has somewhere to begin.
-            if (first && HttpMethods.IsGet(Request.Method) && !DelegateIdentity.Delegated(HttpContext))
+            if (first && HttpMethods.IsGet(Request.Method))
                 _ = new CatchUp(reader.Id, Math.Max(through, targeted.Where(e => e.TangentId is null).Select(e => e.Seq).DefaultIfEmpty(0).Max())).TrySend();
         }
 
         var offered = reader is not null && reader.Id == space.OperatorId && !baseUrl.IsConfigured ? await Offered(reader.Id, baseAddress, ct) : null;
-        if (offered is not null) Response.Headers.CacheControl = "no-cache, no-store";
 
         // The door names the reader's notifications, with how many they have not seen, while there are some.
         var unseen = reader is null ? null : await Notifications.Count(reader.Id, baseAddress, ct);
@@ -271,12 +270,11 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
         var open = await Offer.Query(offer => offer.State == OfferState.Open && offer.DeciderId == deciderId,
             new QueryDefinition { Page = 1, PageSize = Offer.OpenLimit }, ct);
         if (open.Count == 0) return null;
-        var token = FormToken.For(HttpContext);
         return open.Select(offer =>
         {
             var seen = offers.Evidence(offer.Subject);
             return new Door.Offered(offer.Id, Offer.Word(offer.Kind), offer.Subject, seen?.Count, seen?.FirstSeen,
-                OfferController.UseForm(baseAddress, offer.Id, token), OfferController.DeclineForm(baseAddress, offer.Id, token));
+                OfferController.UseForm(baseAddress, offer.Id), OfferController.DeclineForm(baseAddress, offer.Id));
         }).ToList();
     }
 
@@ -288,24 +286,19 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
 
     /// <summary>The form that marks the door at <paramref name="door"/> seen through <paramref name="through"/>, the
     /// sequence it read through.</summary>
-    public static Form CaughtUpForm(string door, long through, FormToken token) => Form.Posting(door, token,
+    public static Form CaughtUpForm(string door, long through) => Form.Posting(door,
         new Form.Field(Through, Holds.DoorThrough, through.ToString(System.Globalization.CultureInfo.InvariantCulture)));
 
     /// <summary>Marks the door seen: moves the signed-in reader's place checkpoint to the sequence in the
-    /// <see cref="Through"/> field, sent as a form or a JSON object, never backwards, and sends them back to the door. The
-    /// request answers to <see cref="FormToken.Validate"/>, a session with its antiforgery token, before its fields are
-    /// read.</summary>
+    /// <see cref="Through"/> field, sent as a form or a JSON object, never backwards, and sends them back to the door.</summary>
     [HttpPost("/")]
-    [Tool(Name = "caught_up")]
-    [Description("Say you have seen the place through a sequence the door read through, so the door shows nothing new until something happens.")]
+    [Tool(Name = "caught_up", Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Call this after arrive, once you have seen what it showed, with the sequence its news read through: the door then shows nothing new until something happens. It never moves back.")]
     public async Task<IActionResult> MarkSeen(SeenDoorInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         if (PersonId(User) is not { } personId)
             return PostWrites.Refused(HttpContext, Capabilities.SignIn, "Marking the door seen needs a signed-in participant.");
-        if (!await FormToken.Validate(HttpContext))
-            return new Problem(StatusCodes.Status400BadRequest, "Open the door again",
-                "This form’s token is missing or has expired, so nothing was marked seen.").ToResult();
 
         if (input.Through is not (>= 0 and var sequence))
             return new Problem(StatusCodes.Status400BadRequest, "Not a sequence of the log",

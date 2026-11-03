@@ -5,7 +5,6 @@ using Koan.Web.Hosting;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
-using Tangent.Delegates;
 using Tangent.Offers;
 using Tangent.Participants;
 using Tangent.Posts;
@@ -20,11 +19,10 @@ namespace Tangent.Events;
 /// sealed cursor that is refused with 400 when it does not open, each one line about one thing — the Post, the Topic, the
 /// report in the moderators' Tangent, naming the reported Post's author where the reader may view that Post, the door,
 /// the reader's profile, where the place answers, or, for an application that waits, the applications — with an open
-/// Offer's two answers inline. The person opening them in their own session moves their notifications checkpoint
+/// Offer's two answers inline. Opening them moves the reader's notifications checkpoint
 /// through the newest the page shows (<see cref="SeeNotifications"/>), so the count every page's frame shows reads past
 /// it; it never moves backwards, and it decides no Offer and no application. The mark is tried and never waited on: the page answers
-/// whatever becomes of it, and a later opening makes good one that did not land. A delegate reads them as its person does and moves nothing, since seen means the person saw
-/// them. The page is never stored. A visitor is asked to sign in, and a reader without <see cref="Bit.View"/> on the
+/// whatever becomes of it, and a later opening makes good one that did not land. The page is never stored. A visitor is asked to sign in, and a reader without <see cref="Bit.View"/> on the
 /// place receives its gate.</summary>
 public sealed class NotificationsController(KoanWebBaseUrl baseUrl, IDataProtectionProvider protection,
     [FromKeyedServices(Readable.Clock)] TimeProvider clock) : ControllerBase
@@ -34,7 +32,7 @@ public sealed class NotificationsController(KoanWebBaseUrl baseUrl, IDataProtect
 
     [HttpGet(Notifications.Path)]
     [Tool(Name = "read_notifications")]
-    [Description("Read what is for you, newest first, a page at a time: replies to you, mentions of you, and what a role of yours decides.")]
+    [Description("Read what is for you, newest first, a page at a time: replies to you, mentions of you, and what a role of yours decides. Follow with read_topic or read_post on what an entry's address names, /t/{tangent}/{topic}/{post}, or use_offer or decline_offer with an open Offer's id.")]
     public async Task<IActionResult> Get([FromQuery(Name = After), Description(Holds.After)] string? after, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
@@ -53,8 +51,8 @@ public sealed class NotificationsController(KoanWebBaseUrl baseUrl, IDataProtect
         var from = cursor?.From ?? seen;
         var page = await Notifications.Read(personId, cursor?.Before, ct, clock);
         var newest = page.Events.Count > 0 ? page.Events[0].Seq : 0;
-        // Only the person's own opening marks them seen, and it never waits for that to land.
-        var marked = newest > seen && !DelegateIdentity.Delegated(HttpContext) && new SeeNotifications(personId, newest).TrySend() is not null;
+        // Opening them marks them seen, and it never waits for that to land.
+        var marked = newest > seen && new SeeNotifications(personId, newest).TrySend() is not null;
         var through = marked ? newest : seen;
 
         var baseAddress = baseUrl.Resolve(HttpContext);
@@ -104,7 +102,6 @@ public sealed class NotificationsController(KoanWebBaseUrl baseUrl, IDataProtect
                 .Concat(reported.Values.Select(origin => origin.AuthorId)),
             ct);
 
-        var token = offers.Values.Any(offer => offer.State == OfferState.Open) ? FormToken.For(HttpContext) : null;
         var door = baseAddress + "/";
         var profile = reader is null ? door : ProfilePage.AddressOf(baseAddress, reader.Handle);
         var answers = !baseUrl.IsConfigured && reader?.Id == space.OperatorId;
@@ -175,8 +172,8 @@ public sealed class NotificationsController(KoanWebBaseUrl baseUrl, IDataProtect
                         Offer = new NotificationsPage.Offered(offer.Id, Offer.Word(offer.Kind), offer.Subject,
                             offer.State.ToString().ToLowerInvariant(), offer.DecidedAt)
                         {
-                            Use = open ? OfferController.UseForm(baseAddress, offer.Id, token!) : null,
-                            Decline = open ? OfferController.DeclineForm(baseAddress, offer.Id, token!) : null
+                            Use = open ? OfferController.UseForm(baseAddress, offer.Id) : null,
+                            Decline = open ? OfferController.DeclineForm(baseAddress, offer.Id) : null
                         }
                     };
                 default:

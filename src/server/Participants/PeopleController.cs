@@ -83,7 +83,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
 
     [HttpGet(Path)]
     [Tool(Name = "read_people")]
-    [Description("Find the participants admitted here, a page at a time, with what you may change of each, for whoever holds ManageStanding or ManageRoles.")]
+    [Description("Find the participants admitted here, a page at a time, with what you may change of each, for whoever holds ManageStanding or ManageRoles. Follow with time_out, ban, lift, give_role or take_role where one's entry allows it.")]
     public async Task<IActionResult> Get([FromQuery(Name = After), Description(Holds.After)] string? after, [FromQuery(Name = HandleQuery), Description(Holds.HandleStart)] string? handle,
         CancellationToken ct)
     {
@@ -103,8 +103,8 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
 
     [HttpPost(TimeOutPath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    [Tool(Name = "time_out")]
-    [Description("Time a participant out for an hour, a day or a week, for whoever holds ManageStanding: they read and report, and post nothing.")]
+    [Tool(Name = "time_out", Destructive = true, Idempotent = false, OpenWorld = false)]
+    [Description("Time a participant out for an hour, a day or a week, for whoever holds ManageStanding: they read and report, and post nothing, and they are told. lift ends it early.")]
     public Task<IActionResult> PostTimeOut(TimeOutInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) =>
         People.Length(input.For) is { } length
             ? new TimeOut(actor, participant, DateTimeOffset.UtcNow + length)
@@ -112,39 +112,38 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
 
     [HttpPost(BanPath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    [Tool(Name = "ban")]
-    [Description("Ban a participant, for whoever holds ManageStanding: the place no longer exists for them.")]
+    [Tool(Name = "ban", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Description("Ban a participant, for whoever holds ManageStanding: the place no longer exists for them, and they are told. lift reverses it.")]
     public Task<IActionResult> PostBan(StandingInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) => new Ban(actor, participant), "", ct);
 
     [HttpPost(LiftPath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    [Tool(Name = "lift")]
-    [Description("Lift a participant's timeout or ban, for whoever holds ManageStanding.")]
+    [Tool(Name = "lift", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Description("Lift a participant's timeout or ban, so they take part again, for whoever holds ManageStanding.")]
     public Task<IActionResult> PostLift(StandingInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) => new Lift(actor, participant), "", ct);
 
     [HttpPost(GivePath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    [Tool(Name = "give_role")]
-    [Description("Give a participant a role, for whoever holds ManageRoles and manages the role.")]
+    [Tool(Name = "give_role", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Description("Give a participant a role listed in their give in read_people, for whoever holds ManageRoles and manages the role. They hold what it grants at once, power over others among it.")]
     public Task<IActionResult> PostGive(GiveRoleInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) =>
         Roles.KeyOf(input.Role) is { } role ? new ChangeRole(actor, participant, role, Give: true) : null,
         People.NotARole, ct);
 
     [HttpPost(TakePath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    [Tool(Name = "take_role")]
-    [Description("Take a role from a participant, for whoever holds ManageRoles and manages the role.")]
+    [Tool(Name = "take_role", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Description("Take from a participant a role listed in their take in read_people, for whoever holds ManageRoles and manages the role. They lose what it granted at once.")]
     public Task<IActionResult> PostTake(TakeRoleInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) =>
         Roles.KeyOf(input.Role) is { } role ? new ChangeRole(actor, participant, role, Give: false) : null,
         People.NotARole, ct);
 
-    /// <summary>One change: the form's token, the place; the command <paramref name="command"/> builds for who sent it and
+    /// <summary>One change: the place; the command <paramref name="command"/> builds for who sent it and
     /// whom it names, or <paramref name="unsent"/> where what was sent names none; then the command's outcome.</summary>
     private async Task<IActionResult> Change(string? named, string? back, Func<string, string, ICommand<Participant>?> command, Reason unsent, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
 
@@ -209,7 +208,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
             people + Query(narrowed, ""),
             start ?? "",
             people,
-            Forms(HttpContext, place, baseAddress, here),
+            Forms(place, baseAddress, here),
             place.Can,
             gate,
             personId is null ? baseAddress + SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,
@@ -226,16 +225,15 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
         => place.Holds(Bit.ManageStanding) || place.Holds(Bit.ManageRoles) ? null : place.Gate(Bit.ManageStanding);
 
     /// <summary>The forms of the changes the reader of <paramref name="place"/> may make, under
-    /// <paramref name="baseAddress"/>, with a fresh token for <paramref name="http"/>, returning to <paramref name="back"/>,
+    /// <paramref name="baseAddress"/>, returning to <paramref name="back"/>,
     /// a path under the base URL; null where they may not read the people.</summary>
-    public static PeopleForms? Forms(HttpContext http, Capabilities place, string baseAddress, string back)
+    public static PeopleForms? Forms(Capabilities place, string baseAddress, string back)
     {
         if (ReadGate(place) is not null) return null;
-        var token = FormToken.For(http);
         var standing = place.Holds(Bit.ManageStanding);
         var roles = place.Holds(Bit.ManageRoles);
         var durations = People.Durations.Select(duration => duration.Word).ToList();
-        Form Changing(string path, string whose, params Form.Field[] more) => Form.Posting(baseAddress + path, token,
+        Form Changing(string path, string whose, params Form.Field[] more) => Form.Posting(baseAddress + path,
         [
             new Form.Field(ParticipantField, $"The id of a participant listed here with {whose}."),
             .. more,

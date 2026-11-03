@@ -281,21 +281,14 @@ public sealed class DoorTests(ITestOutputHelper output)
 
         using (var json = await Json(browser.Client, "/"))
             Assert.True(json.RootElement.GetProperty("alive")[0].GetProperty("topic").GetProperty("new").GetBoolean());
-        // The door with the form is never stored, and its fresh token makes every answer a new version.
+        // The door with the form is the reader's alone to cache, and answers unchanged while nothing changes.
         var (status, busy, through, _, caching) = await Read(browser.Client, null);
-        Assert.Equal(HttpStatusCode.OK, status);
-        Assert.Contains("no-store", caching);
-        var again = await Read(browser.Client, busy);
-        Assert.Equal(HttpStatusCode.OK, again.Status);
-        Assert.NotEqual(busy, again.ETag);
+        Assert.Equal((HttpStatusCode.OK, "private"), (status, caching));
+        Assert.Equal(HttpStatusCode.NotModified, (await Read(browser.Client, busy)).Status);
         Assert.Equal(await Event.Log.Highest(Cancellation), through);
-
-        using (var refused = await browser.Client.PostAsync("/", Form(new() { [DoorController.Through] = through.ToString(CultureInfo.InvariantCulture) }), Cancellation))
-            Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
         Assert.Equal(0, (await Checkpoint.Get(Checkpoint.Key(Reader, Scope.Place), Cancellation))!.Seq);
 
-        var token = await Token(browser);
-        using (var marked = await MarkSeen(browser, through, new Dictionary<string, string>(token)))
+        using (var marked = await MarkSeen(browser, through))
         {
             Assert.Equal(HttpStatusCode.SeeOther, marked.StatusCode);
             Assert.Equal("/", marked.Headers.Location?.OriginalString);
@@ -315,7 +308,7 @@ public sealed class DoorTests(ITestOutputHelper output)
         }
         Assert.Contains("Nothing new since you were here.", await Html(browser.Client, "/"));
 
-        using (var backwards = await MarkSeen(browser, through - 1, new Dictionary<string, string>(token)))
+        using (var backwards = await MarkSeen(browser, through - 1))
             Assert.Equal(HttpStatusCode.SeeOther, backwards.StatusCode);
         Assert.Equal(through, (await Checkpoint.Get(Checkpoint.Key(Reader, Scope.Place), Cancellation))!.Seq);
 
@@ -466,14 +459,8 @@ public sealed class DoorTests(ITestOutputHelper output)
         return browser;
     }
 
-    private static async Task<Dictionary<string, string>> Token(Browser browser) => await browser.Token("/", Cancellation);
-
-    private static async Task<HttpResponseMessage> MarkSeen(Browser browser, long through, Dictionary<string, string>? token = null)
-    {
-        var fields = token ?? await Token(browser);
-        fields[DoorController.Through] = through.ToString(CultureInfo.InvariantCulture);
-        return await browser.Client.PostAsync("/", Form(fields), Cancellation);
-    }
+    private static async Task<HttpResponseMessage> MarkSeen(Browser browser, long through)
+        => await browser.Client.PostAsync("/", Form(new() { [DoorController.Through] = through.ToString(CultureInfo.InvariantCulture) }), Cancellation);
 
     private static FormUrlEncodedContent Form(Dictionary<string, string> fields) => new(fields);
 

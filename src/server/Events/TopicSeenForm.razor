@@ -5,7 +5,6 @@
 @if (Model is { } seen)
 {
     <form class="topic-seen" method="post" action="@seen.Action" data-island="seen">
-        <FormTokenField Token="@seen.Token" />
         <input type="hidden" name="@CheckpointController.ThroughField" value="@seen.Value(CheckpointController.ThroughField)">
         <button type="submit" class="topic-seen-button">Mark seen</button>
     </form>

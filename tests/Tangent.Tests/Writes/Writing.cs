@@ -7,7 +7,6 @@ using Koan.Data.Core;
 using Koan.Data.Core.Commands;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
-using Tangent.Delegates;
 using Tangent.Participants;
 using Tangent.Space;
 using Xunit;
@@ -16,7 +15,7 @@ namespace Tangent.Posts;
 
 /// <summary>The place every proof of the write verbs starts from, and the requests they send. A public Tangent Space
 /// with the workshop, an articles Tangent and the studio, which only administrators read; Ada and Bea are members, Mo a
-/// moderator. A request goes as a person's browser sends a form, as JSON, or as a delegate's bearer; each answer is read
+/// moderator. A request goes as a person's browser sends a form from a page of the place, or as JSON; each answer is read
 /// whole, without following a redirect.</summary>
 internal static partial class Writing
 {
@@ -28,21 +27,14 @@ internal static partial class Writing
     public const string Bea = "did:plc:bea4writes";
     public const string Mo = "did:plc:mo4writes";
 
-    /// <summary>The header ASP.NET's antiforgery reads a JSON request's token from.</summary>
-    public const string TokenHeader = "RequestVerificationToken";
-
-    private const string DeviceGrant = "urn:ietf:params:oauth:grant-type:device_code";
-
     public static CancellationToken Cancellation => TestContext.Current.CancellationToken;
 
-    /// <summary>Koan's test connector signs people in, no profile job reaches the network, and a device polls as often as
-    /// a proof asks.</summary>
+    /// <summary>Koan's test connector signs people in, and no profile job reaches the network.</summary>
     public static Dictionary<string, string?> Settings() => new()
     {
         ["Koan:Web:Auth:TestProvider:Enabled"] = "true",
         ["Tangent:Profile:BaseAddress"] = "http://127.0.0.1:1/",
-        ["Tangent:Profile:Timeout"] = "00:00:01",
-        ["Koan:Web:Auth:Server:DevicePollIntervalSeconds"] = "0"
+        ["Tangent:Profile:Timeout"] = "00:00:01"
     };
 
     /// <summary>The place, its Tangents and its people.</summary>
@@ -71,7 +63,7 @@ internal static partial class Writing
         return browser;
     }
 
-    /// <summary>A client that keeps no cookie and follows no redirect: a visitor, or an agent with a bearer.</summary>
+    /// <summary>A client that keeps no cookie and follows no redirect: a visitor.</summary>
     public static HttpClient Agent(TangentSpaceFixture tangentSpace)
         => new(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false }) { BaseAddress = tangentSpace.Client.BaseAddress };
 
@@ -92,15 +84,21 @@ internal static partial class Writing
         public string? Title => MediaType is "application/problem+json" && Json.TryGetProperty("title", out var title) ? title.GetString() : null;
     }
 
-    /// <summary>Sends a request as JSON (<paramref name="json"/>) or as a page asks, with a bearer or an antiforgery
-    /// header when given.</summary>
+    /// <summary>Sends a request as JSON (<paramref name="json"/>) or as a page asks, with a bearer when given, and, from
+    /// <paramref name="page"/>, as a browser sends it from that page of the place: same-origin, with its origin and the
+    /// page as its referrer.</summary>
     public static async Task<Answered> Send(HttpClient client, HttpMethod method, string path, HttpContent? content = null, bool json = false,
-        string? bearer = null, string? token = null)
+        string? bearer = null, string? page = null)
     {
         using var request = new HttpRequestMessage(method, path) { Content = content };
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(json ? "application/json" : "text/html"));
         if (bearer is not null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
-        if (token is not null) request.Headers.Add(TokenHeader, token);
+        if (page is not null)
+        {
+            request.Headers.Add("Sec-Fetch-Site", "same-origin");
+            request.Headers.Add("Origin", BaseUrl);
+            request.Headers.Referrer = new Uri(BaseUrl + page);
+        }
         using var response = await client.SendAsync(request, Cancellation);
         return new Answered(response.StatusCode, response.Headers.Location?.ToString(), response.Content.Headers.ContentType?.MediaType,
             await response.Content.ReadAsStringAsync(Cancellation));
@@ -110,17 +108,13 @@ internal static partial class Writing
 
     public static FormUrlEncodedContent FormBody(IReadOnlyDictionary<string, string> fields) => new(fields);
 
-    /// <summary>Posts a form as the page at <paramref name="page"/> holds it: its fields with the page's token.</summary>
-    public static async Task<Answered> Form(Browser browser, string page, string action, Dictionary<string, string> fields)
-    {
-        foreach (var (name, value) in await browser.Token(page, Cancellation)) fields[name] = value;
-        return await Send(browser.Client, HttpMethod.Post, action, FormBody(fields));
-    }
+    /// <summary>Posts a form from the page at <paramref name="page"/>, as its browser does.</summary>
+    public static Task<Answered> Form(Browser browser, string page, string action, Dictionary<string, string> fields)
+        => Send(browser.Client, HttpMethod.Post, action, FormBody(fields), page: page);
 
-    /// <summary>Posts JSON from a signed-in browser with the antiforgery token the page at <paramref name="page"/> holds,
-    /// in the header.</summary>
-    public static async Task<Answered> Json(Browser browser, string page, string action, object fields)
-        => await Send(browser.Client, HttpMethod.Post, action, JsonBody(fields), json: true, token: (await browser.Token(page, Cancellation)).Values.Single());
+    /// <summary>Posts JSON from the page at <paramref name="page"/>, as a signed-in browser's script does.</summary>
+    public static Task<Answered> Json(Browser browser, string page, string action, object fields)
+        => Send(browser.Client, HttpMethod.Post, action, JsonBody(fields), json: true, page: page);
 
     /// <summary>The value a form in a page's JSON gives the field named <paramref name="name"/>; null where it gives none.</summary>
     public static string? Valued(JsonElement form, string name)
@@ -133,31 +127,10 @@ internal static partial class Writing
     public static List<string> FieldNames(JsonElement form)
         => form.GetProperty("fields").EnumerateArray().Select(field => field.GetProperty("name").GetString()!).ToList();
 
-    /// <summary>Makes the write a form in a page's JSON says how to make, as an agent with a bearer does, knowing nothing
-    /// else: to the form's action, under the base URL the fixture's client answers for, with its method, as one JSON
-    /// object of every field the page gives a value, as it gives it, and the others from <paramref name="filled"/>, which
-    /// names only fields the form has.</summary>
-    public static async Task<Answered> Follow(HttpClient client, JsonElement form, IReadOnlyDictionary<string, string> filled, string bearer)
-    {
-        var names = FieldNames(form);
-        Assert.All(filled.Keys, name => Assert.Contains(name, names));
-        var fields = new Dictionary<string, string>();
-        foreach (var name in names)
-        {
-            if (filled.TryGetValue(name, out var mine)) fields[name] = mine;
-            else if (Valued(form, name) is { } given) fields[name] = given;
-        }
-
-        var action = form.GetProperty("action").GetString()!;
-        Assert.StartsWith(BaseUrl + "/", action);
-        return await Send(client, new HttpMethod(form.GetProperty("method").GetString()!), action[BaseUrl.Length..], JsonBody(fields),
-            json: true, bearer: bearer);
-    }
-
-    /// <summary>Makes the write a form in a page's JSON says how to make, as an agent signed in as itself does: with its
-    /// session and the form's token, as one JSON object with the token in the header, or as a form with it in the field
-    /// the token names. <paramref name="filled"/> names only fields the form has; every other field the page gives a value
-    /// goes as it gives it.</summary>
+    /// <summary>Makes the write a form in a page's JSON says how to make, as an agent signed in as itself does, knowing
+    /// nothing else: to the form's action, under the base URL the fixture's client answers for, with its method and its
+    /// session, as one JSON object or as a form. <paramref name="filled"/> names only fields the form has; every other
+    /// field the page gives a value goes as it gives it.</summary>
     public static async Task<Answered> Follow(Browser session, JsonElement form, IReadOnlyDictionary<string, string> filled, bool json = true)
     {
         var names = FieldNames(form);
@@ -171,11 +144,10 @@ internal static partial class Writing
 
         var action = form.GetProperty("action").GetString()!;
         Assert.StartsWith(BaseUrl + "/", action);
-        var token = form.GetProperty("token");
         var method = new HttpMethod(form.GetProperty("method").GetString()!);
-        if (json) return await Send(session.Client, method, action[BaseUrl.Length..], JsonBody(fields), json: true, token: token.GetProperty("value").GetString());
-        fields[token.GetProperty("field").GetString()!] = token.GetProperty("value").GetString()!;
-        return await Send(session.Client, method, action[BaseUrl.Length..], FormBody(fields));
+        return json
+            ? await Send(session.Client, method, action[BaseUrl.Length..], JsonBody(fields), json: true)
+            : await Send(session.Client, method, action[BaseUrl.Length..], FormBody(fields));
     }
 
     /// <summary>The TID the new-topic form at <paramref name="html"/> carries.</summary>
@@ -189,38 +161,6 @@ internal static partial class Writing
 
     /// <summary>How many snapshots of Posts the audit partition holds.</summary>
     public static async Task<int> Snapshots() => (await Data<Post, string>.All(AuditPartition.Name, Cancellation)).Count;
-
-    /// <summary>The whole Device flow for the person signed in in <paramref name="browser"/>: their delegate's access
-    /// token.</summary>
-    public static async Task<string> Delegate(TangentSpaceFixture tangentSpace, Browser browser)
-    {
-        using var device = await JsonOf(tangentSpace.Client, "/oauth/device", new FormUrlEncodedContent(new Dictionary<string, string>
-        {
-            ["client_id"] = DelegateClient.Id,
-            ["resource"] = BaseUrl
-        }));
-        var deviceCode = device.RootElement.GetProperty("device_code").GetString()!;
-        var code = device.RootElement.GetProperty("user_code").GetString()!;
-        var token = await browser.Token(ConsentController.Path + "?" + ConsentController.CodeField + "=" + code, Cancellation);
-        using (var approved = await browser.Client.PostAsync("/oauth/request/" + code.Replace("-", "") + "/approve",
-                   new FormUrlEncodedContent(token), Cancellation))
-            Assert.Equal(HttpStatusCode.Redirect, approved.StatusCode);
-        using var granted = await JsonOf(tangentSpace.Client, "/oauth/token", new FormUrlEncodedContent(new Dictionary<string, string>
-        {
-            ["grant_type"] = DeviceGrant,
-            ["device_code"] = deviceCode,
-            ["client_id"] = DelegateClient.Id
-        }));
-        return granted.RootElement.GetProperty("access_token").GetString()!;
-    }
-
-    private static async Task<JsonDocument> JsonOf(HttpClient client, string path, HttpContent content)
-    {
-        using var response = await client.PostAsync(path, content, Cancellation);
-        var body = await response.Content.ReadAsStringAsync(Cancellation);
-        Assert.True(response.StatusCode == HttpStatusCode.OK, $"{path} answered {(int)response.StatusCode}: {body}");
-        return JsonDocument.Parse(body);
-    }
 
     [GeneratedRegex("<input type=\"hidden\" name=\"id\" value=\"(?<id>[^\"]+)\"")]
     private static partial Regex MintedField();

@@ -137,7 +137,7 @@ public sealed class Archive
         var page = 1;
         do
         {
-            if (await As<ProfileController>().Get(address, before, null, ct) is not OkObjectResult { Value: ProfilePage read }) return;
+            if (await As<ProfileController>().Get(address, before, ct) is not OkObjectResult { Value: ProfilePage read }) return;
             before = read.Older is { } older ? Uri.UnescapeDataString(older[(older.IndexOf('=') + 1)..]) : null;
             await _export.Page(folder + "/" + Export.PagePath(page), read with
             {

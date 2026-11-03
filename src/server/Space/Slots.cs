@@ -13,10 +13,10 @@ namespace Tangent.Space;
 /// http and https its only schemes, an image on the place's own origin only under <c>/media/</c>
 /// (<see cref="MarkdownHtml.SafeImage"/>), so no <c>script</c>, no event handler and no <c>javascript:</c> link survives, and no
 /// image signs a reader out by loading. None keeps <c>form</c>, <c>input</c>, <c>base</c>, <c>iframe</c> or <c>svg</c>, nor <c>id</c>
-/// or a <c>data-</c> attribute, and only a head's <c>meta</c> keeps <c>name</c>: a slot can post nothing with a reader's token,
+/// or a <c>data-</c> attribute, and only a head's <c>meta</c> keeps <c>name</c>: a slot can post nothing with a reader's session,
 /// move where a page's links and forms lead, clobber what a script looks up, or start an island.</para>
-/// <para>No slot holds CSS, as a <c>style</c> element, a <c>style</c> attribute or a stylesheet. A selector reads a form's token
-/// from its attribute, and keywords alone can then bring a lazy image into view, which sends what was read to another host:
+/// <para>No slot holds CSS, as a <c>style</c> element, a <c>style</c> attribute or a stylesheet. A selector reads what a page holds in
+/// an attribute, a hidden field's value among it, and keywords alone can then bring a lazy image into view, which sends what was read to another host:
 /// no list of allowed CSS closes that. <c>class</c> is kept, so a slot can wear the design's own classes, and they are all it
 /// reaches: a script looks a class up only inside an <c>article</c>, a <c>main</c> or an island's own element, none of which a
 /// slot can hold.</para>

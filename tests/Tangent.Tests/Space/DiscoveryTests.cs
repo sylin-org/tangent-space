@@ -18,7 +18,7 @@ public sealed partial class DiscoveryTests
     private static CancellationToken Cancellation => TestContext.Current.CancellationToken;
 
     [Fact]
-    public async Task A_public_descriptor_states_the_place_its_people_its_links_and_the_delegated_door()
+    public async Task A_public_descriptor_states_the_place_its_people_its_links_and_where_its_tools_answer()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Establish(tangentSpace, "Field notes", operatorDid: Leo, proprietorDid: Ada);
@@ -39,8 +39,7 @@ public sealed partial class DiscoveryTests
         Assert.Equal(Leo, root.GetProperty("operator").GetProperty("did").GetString());
         Assert.Equal("https://tangent.test/", root.GetProperty("door").GetString());
         Assert.Equal("https://tangent.test/llms.txt", root.GetProperty("llms").GetString());
-        Assert.Equal("https://tangent.test/.well-known/oauth-authorization-server", root.GetProperty("delegated").GetProperty("authorizationServer").GetString());
-        Assert.Equal("delegate", root.GetProperty("delegated").GetProperty("clientId").GetString());
+        Assert.Equal("https://tangent.test/mcp", root.GetProperty("tools").GetString());
         Assert.False(root.TryGetProperty("did", out _));
         Assert.False(root.TryGetProperty("publication", out _));
     }
@@ -55,12 +54,34 @@ public sealed partial class DiscoveryTests
         using var descriptor = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Cancellation));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal(new[] { "name", "address", "audience", "delegated", "proof", "tools", "api", "door", "llms" }.Order(),
+        Assert.Equal(new[] { "name", "address", "audience", "proof", "tools", "api", "door", "llms" }.Order(),
             descriptor.RootElement.EnumerateObject().Select(property => property.Name).Order());
         Assert.Equal("private", descriptor.RootElement.GetProperty("audience").GetString());
-        Assert.Equal("delegate", descriptor.RootElement.GetProperty("delegated").GetProperty("clientId").GetString());
         Assert.DoesNotContain(Leo, await Body(tangentSpace, "/tangent.json"));
         Assert.DoesNotContain("leo.example", await Body(tangentSpace, "/tangent.json"));
+    }
+
+    [Theory]
+    [InlineData(Audience.Public)]
+    [InlineData(Audience.Private)]
+    public async Task The_places_address_points_at_llms_txt_in_a_header_and_in_its_head_and_speaks_no_mcp(Audience audience)
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        await Establish(tangentSpace, "Field notes", operatorDid: Leo, audience: audience);
+
+        using var door = await tangentSpace.Client.GetAsync("/", Cancellation);
+        Assert.Equal("<https://tangent.test/llms.txt>; rel=\"describedby\"", string.Join(", ", door.Headers.GetValues("Link")));
+        Assert.Contains("<link rel=\"describedby\" href=\"https://tangent.test/llms.txt\" />", await door.Content.ReadAsStringAsync(Cancellation));
+
+        using var initialize = new HttpRequestMessage(HttpMethod.Post, "/")
+        {
+            Content = new StringContent("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}", System.Text.Encoding.UTF8, "application/json")
+        };
+        initialize.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        using var answered = await tangentSpace.Client.SendAsync(initialize, Cancellation);
+        var body = await answered.Content.ReadAsStringAsync(Cancellation);
+        Assert.Equal(HttpStatusCode.Unauthorized, answered.StatusCode);
+        Assert.DoesNotContain("jsonrpc", body);
     }
 
     [Fact]
@@ -75,17 +96,15 @@ public sealed partial class DiscoveryTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("text/plain", response.Content.Headers.ContentType?.MediaType);
         Assert.StartsWith("# Field notes\n", text.ReplaceLineEndings("\n"));
+        Assert.Contains("## Tools", text);
+        Assert.Contains("## Signing in", text);
         Assert.Contains("## Reading", text);
-        Assert.Contains("## Acting as a person's delegate", text);
+        Assert.Contains("Use https://tangent.test/mcp", text);
+        Assert.Contains("you are a visitor", text);
         Assert.Contains("`Accept: application/json`", text);
         Assert.Contains("https://tangent.test/ is the door", text);
         Assert.Contains("`gate`", text);
-        Assert.Contains("https://tangent.test/.well-known/oauth-authorization-server", text);
-        Assert.Contains("Device flow", text);
-        Assert.Contains("`delegate`", text);
-        Assert.Contains("consent page", text);
-        var stated = JsonDocument.Parse(await tangentSpace.Client.GetStringAsync("/tangent.json", Cancellation)).RootElement.GetProperty("address").GetString();
-        Assert.Contains($"send `resource={stated}`", text);
+        Assert.DoesNotContain("token`", text);
         var addresses = Addresses().Matches(text).Select(match => match.Value).ToList();
         Assert.NotEmpty(addresses);
         Assert.All(addresses, address => Assert.True(address == "https://tangent.test" || address.StartsWith("https://tangent.test/", StringComparison.Ordinal), address));
@@ -106,7 +125,7 @@ public sealed partial class DiscoveryTests
         Assert.Contains("`fields`", joining);
         Assert.Contains("`holds`", joining);
         Assert.Contains("TID", joining);
-        Assert.Contains("`Authorization: Bearer`", joining);
+        Assert.Contains("session's cookie", joining);
         Assert.Contains("Signing in here makes you a participant at once.", joining);
 
         space.Admission = Admission.Apply;
@@ -213,12 +232,11 @@ public sealed partial class DiscoveryTests
         Assert.Equal(baseUrl, descriptorJson.RootElement.GetProperty("address").GetString());
         Assert.Equal($"{baseUrl}/", descriptorJson.RootElement.GetProperty("door").GetString());
         Assert.Equal($"{baseUrl}/llms.txt", descriptorJson.RootElement.GetProperty("llms").GetString());
-        Assert.Equal($"{baseUrl}/.well-known/oauth-authorization-server",
-            descriptorJson.RootElement.GetProperty("delegated").GetProperty("authorizationServer").GetString());
+        Assert.Equal($"{baseUrl}/mcp", descriptorJson.RootElement.GetProperty("tools").GetString());
         Assert.Equal(HttpStatusCode.OK, llms.StatusCode);
         Assert.All(Addresses().Matches(llmsText).Select(match => match.Value),
             address => Assert.True(address == baseUrl || address.StartsWith($"{baseUrl}/", StringComparison.Ordinal), address));
-        Assert.Contains($"send `resource={baseUrl}`", llmsText);
+        Assert.Contains($"Use {baseUrl}/mcp", llmsText);
         Assert.Contains($"{baseUrl}/tangent.json", llmsText);
 
         foreach (var outside in new[] { "/", "/tangent.json", "/llms.txt", "/notesx/tangent.json" })

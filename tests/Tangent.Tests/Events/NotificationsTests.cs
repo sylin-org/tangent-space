@@ -291,13 +291,12 @@ public sealed class NotificationsTests
         Assert.Equal(OfferState.Open, (await Offer.Get(offer.Id, Cancellation))!.State);
 
         // Answered from there, once: a second answer changes nothing, and the other one is refused.
-        var token = await leo.Token(Notifications.Path, Cancellation);
-        var declined = await Answer(leo, OfferController.DeclinePath, offer.Id, token);
+        var declined = await Answer(leo, OfferController.DeclinePath, offer.Id);
         Assert.Equal((HttpStatusCode.SeeOther, "/"), (declined.Status, declined.Location));
         var decidedAt = (await Offer.Get(offer.Id, Cancellation))!.DecidedAt;
         Assert.Equal(OfferState.Declined, (await Offer.Get(offer.Id, Cancellation))!.State);
-        Assert.Equal(HttpStatusCode.SeeOther, (await Answer(leo, OfferController.DeclinePath, offer.Id, token)).Status);
-        Assert.Equal(HttpStatusCode.Conflict, (await Answer(leo, OfferController.UsePath, offer.Id, token)).Status);
+        Assert.Equal(HttpStatusCode.SeeOther, (await Answer(leo, OfferController.DeclinePath, offer.Id)).Status);
+        Assert.Equal(HttpStatusCode.Conflict, (await Answer(leo, OfferController.UsePath, offer.Id)).Status);
         Assert.Equal((OfferState.Declined, decidedAt), ((await Offer.Get(offer.Id, Cancellation))!.State, (await Offer.Get(offer.Id, Cancellation))!.DecidedAt));
 
         // Decided, it says how, with no answers.
@@ -359,32 +358,6 @@ public sealed class NotificationsTests
         await Reached.Settled(tangentSpace, Cancellation);
         Assert.Equal(shownThrough, (await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Notifications), Cancellation))!.Seq);
         Assert.DoesNotContain("Studio notes", newest.Body + older.GetRawText());
-    }
-
-    [Fact]
-    public async Task A_delegate_reads_its_persons_notifications_and_leaves_them_unseen_and_the_persons_own_opening_sees_them()
-    {
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        await Place(tangentSpace);
-        var mine = await Started(Ada, "Lanterns", "Who lights theirs first?");
-        var reply = await Replied(mine, Bea, "I do, at six.");
-        using var ada = await SignedIn(tangentSpace, Ada);
-        var bearer = await Delegate(tangentSpace, ada);
-        using var agent = Agent(tangentSpace);
-
-        var read = await Send(agent, HttpMethod.Get, Notifications.Path, json: true, bearer: bearer);
-        Assert.Equal(HttpStatusCode.OK, read.Status);
-        Assert.Equal([AddressOf(mine, reply)], Posts(read.Json));
-        Assert.Equal((0L, 0L, 1), (read.Json.GetProperty("from").GetInt64(), read.Json.GetProperty("through").GetInt64(),
-            read.Json.GetProperty("who").GetProperty("notifications").GetProperty("count").GetInt32()));
-        await Reached.Settled(tangentSpace, Cancellation);
-        Assert.Null(await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Notifications), Cancellation));
-        Assert.Equal(1, Count(await Send(ada.Client, HttpMethod.Get, "/", json: true)));
-
-        Assert.Equal(HttpStatusCode.OK, (await Send(ada.Client, HttpMethod.Get, Notifications.Path)).Status);
-        await Reached.Settled(tangentSpace, Cancellation);
-        Assert.Equal(0, Count(await Send(ada.Client, HttpMethod.Get, "/", json: true)));
-        Assert.Equal(0, Count(await Send(agent, HttpMethod.Get, "/", json: true, bearer: bearer)));
     }
 
     [Fact]
@@ -454,11 +427,8 @@ public sealed class NotificationsTests
         return response.Headers.CacheControl?.ToString() ?? "";
     }
 
-    private static async Task<Answered> Answer(Browser browser, string path, string offerId, Dictionary<string, string> token)
-    {
-        var fields = new Dictionary<string, string>(token) { [OfferController.Field] = offerId };
-        return await Send(browser.Client, HttpMethod.Post, path, FormBody(fields));
-    }
+    private static Task<Answered> Answer(Browser browser, string path, string offerId)
+        => Form(browser, Notifications.Path, path, new Dictionary<string, string> { [OfferController.Field] = offerId });
 
     /// <summary>Appends one event of <paramref name="Kind"/> by <paramref name="ActorId"/> targeting
     /// <paramref name="TargetId"/>, about <paramref name="Post"/> where one is named: for a proof

@@ -19,43 +19,38 @@ public sealed class TwoDoorsTests
 {
     private const string Leo = "did:plc:leo4writes";
 
-    /// <summary>A place, Ada with a bearer, and a Topic of Bea's.</summary>
+    /// <summary>A place, Ada signed in, and a Topic of Bea's.</summary>
     private sealed class Doors : IDisposable
     {
         public required TangentSpaceFixture TangentSpace { get; init; }
         public required Browser AdaBrowser { get; init; }
-        public required string AdaBearer { get; init; }
-        public required HttpClient Http { get; init; }
         public required ToolClient AdaTools { get; init; }
         public required Post Root { get; init; }
 
-        public async Task<Answered> Posted(string path, object fields, string? bearer = null)
-            => await Send(Http, HttpMethod.Post, path, JsonBody(fields), json: true, bearer: bearer ?? AdaBearer);
+        /// <summary>JSON posted with the session of <paramref name="by"/>, Ada's where none is named.</summary>
+        public async Task<Answered> Posted(string path, object fields, Browser? by = null)
+            => await Send((by ?? AdaBrowser).Client, HttpMethod.Post, path, JsonBody(fields), json: true);
 
         public void Dispose()
         {
             AdaTools.Dispose();
             AdaBrowser.Dispose();
-            Http.Dispose();
         }
     }
 
     /// <summary>Not an async method, so the binding a fixture makes stays on the proof's flow.</summary>
-    private static Task<TangentSpaceFixture> Starting(Action<IServiceCollection>? services = null) => TangentSpaceFixture.StartAsync(Settings(), services, Cancellation);
+    private static Task<TangentSpaceFixture> Starting() => TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
 
     private static async Task<Doors> Open(TangentSpaceFixture tangentSpace)
     {
         await Place(tangentSpace);
         var root = await Started(Bea, "Lanterns", "How do you hang yours?");
         var browser = await SignedIn(tangentSpace, Ada);
-        var bearer = await Delegate(tangentSpace, browser);
         return new Doors
         {
             TangentSpace = tangentSpace,
             AdaBrowser = browser,
-            AdaBearer = bearer,
-            Http = Agent(tangentSpace),
-            AdaTools = await ToolClient.Connect(tangentSpace, bearer),
+            AdaTools = await ToolClient.Connect(tangentSpace, browser),
             Root = root
         };
     }
@@ -114,7 +109,7 @@ public sealed class TwoDoorsTests
     }
 
     [Fact]
-    public async Task A_private_places_visitor_is_challenged_at_the_edge_and_asked_to_sign_in_on_a_page_and_a_participant_reads_on_both()
+    public async Task A_private_places_visitor_is_asked_to_sign_in_on_both_doors_and_a_participant_reads_on_both()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Given.AnEstablishedTangentSpace(tangentSpace, "Field notes", Audience.Private, ct: Cancellation);
@@ -123,18 +118,15 @@ public sealed class TwoDoorsTests
         var root = await Started(Ada, "Lanterns", "How do you hang yours?");
         using var http = Agent(tangentSpace);
 
-        using var challenge = await http.SendAsync(ToolClient.Request(new { jsonrpc = "2.0", id = 1, method = "ping" }, bearer: null), Cancellation);
-        Assert.Equal(HttpStatusCode.Unauthorized, challenge.StatusCode);
-        Assert.Contains("resource_metadata=\"" + BaseUrl + "/.well-known/oauth-protected-resource/mcp\"", challenge.Headers.WwwAuthenticate.ToString());
-
+        using var visitor = await ToolClient.Connect(tangentSpace);
         var page = await Send(http, HttpMethod.Get, TopicPath(root), json: true);
         Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (page.Status, page.Gate));
+        SameRefusal(page, await visitor.Call("read_topic", new { tangent = Workshop, topic = root.Slug }));
 
         using var ada = await SignedIn(tangentSpace, Ada);
-        var bearer = await Delegate(tangentSpace, ada);
-        using var tools = await ToolClient.Connect(tangentSpace, bearer);
+        using var tools = await ToolClient.Connect(tangentSpace, ada);
         var read = await tools.Call("read_topic", new { tangent = Workshop, topic = root.Slug });
-        var onHttp = await Send(http, HttpMethod.Get, TopicPath(root), json: true, bearer: bearer);
+        var onHttp = await Send(ada.Client, HttpMethod.Get, TopicPath(root), json: true);
         Assert.Equal((200, HttpStatusCode.OK), (read.Status, onHttp.Status));
         Assert.Equal(root.Id, read.Structured!.Value.GetProperty("id").GetString());
         Assert.Equal(onHttp.Json.GetProperty("root").GetProperty("body").GetString(), read.Structured!.Value.GetProperty("root").GetProperty("body").GetString());
@@ -155,7 +147,7 @@ public sealed class TwoDoorsTests
         SameRefusal(http, tool);
         Assert.Equal("gated", tool.ErrorCode);
 
-        // A bearer whose person has no participant here reads as a visitor: sign in, and where.
+        // A session whose participant is no longer here reads as a visitor: sign in, and where.
         var row = await Participant.Get(Ada, Cancellation);
         await row!.Remove(Cancellation);
         var signIn = await doors.Posted(TopicPath(root), new { body = "Anyone?" });
@@ -236,9 +228,9 @@ public sealed class TwoDoorsTests
 
         // A body of neither shape says so, and says nothing of what the address holds.
         using var array = new StringContent("[]", System.Text.Encoding.UTF8, "application/json");
-        var malformed = await Send(doors.Http, HttpMethod.Post, TopicPath(root), array, json: true, bearer: doors.AdaBearer);
+        var malformed = await Send(doors.AdaBrowser.Client, HttpMethod.Post, TopicPath(root), array, json: true);
         using var elsewhere = new StringContent("[]", System.Text.Encoding.UTF8, "application/json");
-        var nowhere = await Send(doors.Http, HttpMethod.Post, "/t/nowhere/nothing", elsewhere, json: true, bearer: doors.AdaBearer);
+        var nowhere = await Send(doors.AdaBrowser.Client, HttpMethod.Post, "/t/nowhere/nothing", elsewhere, json: true);
         Assert.Equal(HttpStatusCode.BadRequest, malformed.Status);
         Assert.Equal((malformed.Status, malformed.Body), (nowhere.Status, nowhere.Body));
         Assert.Equal(before, await Counted());
@@ -251,7 +243,7 @@ public sealed class TwoDoorsTests
         using var doors = await Open(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         using var leo = await SignedIn(tangentSpace, Leo);
-        using var tools = await ToolClient.Connect(tangentSpace, await Delegate(tangentSpace, leo));
+        using var tools = await ToolClient.Connect(tangentSpace, leo);
 
         async Task<IReadOnlyList<string?>> Granted(Called answer)
         {
@@ -265,9 +257,8 @@ public sealed class TwoDoorsTests
         // Left out they stay; an empty list grants none, on either door.
         Assert.Equal(["View", "Topic"], await Granted(await tools.Call("change_role", new { role = "keepers", name = "The keepers" })));
         Assert.Empty(await Granted(await tools.Call("change_role", new { role = "keepers", permissions = Array.Empty<string>() })));
-        var bearer = await Delegate(tangentSpace, leo);
-        Assert.Equal(HttpStatusCode.OK, (await doors.Posted(RolesController.ChangePath, new { role = "keepers", permissions = "View" }, bearer)).Status);
-        var emptied = await doors.Posted(RolesController.ChangePath, new { role = "keepers", permissions = Array.Empty<string>() }, bearer);
+        Assert.Equal(HttpStatusCode.OK, (await doors.Posted(RolesController.ChangePath, new { role = "keepers", permissions = "View" }, leo)).Status);
+        var emptied = await doors.Posted(RolesController.ChangePath, new { role = "keepers", permissions = Array.Empty<string>() }, leo);
         Assert.Equal(0, emptied.Json.GetProperty("permissions").GetArrayLength());
     }
 
@@ -296,8 +287,7 @@ public sealed class TwoDoorsTests
         using var doors = await Open(tangentSpace);
         await Given.AParticipant(doors.TangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         using var leo = await SignedIn(doors.TangentSpace, Leo);
-        var bearer = await Delegate(doors.TangentSpace, leo);
-        using var tools = await ToolClient.Connect(doors.TangentSpace, bearer);
+        using var tools = await ToolClient.Connect(doors.TangentSpace, leo);
         const string settings = "/t/" + Workshop + "/settings";
 
         async Task<string> Description() => (await Tangents.Tangent.Get(Workshop, Cancellation))!.Description;
@@ -314,52 +304,35 @@ public sealed class TwoDoorsTests
         Assert.Equal(HttpStatusCode.SeeOther, form.Status);
         Assert.Equal("", await Description());
         await tools.Call("change_tangent", new { tangent = Workshop, description = "For the bench." });
-        var json = await Send(doors.Http, HttpMethod.Post, settings, JsonBody(new { description = "" }), json: true, bearer: bearer);
+        var json = await Send(leo.Client, HttpMethod.Post, settings, JsonBody(new { description = "" }), json: true);
         Assert.Equal(HttpStatusCode.OK, json.Status);
         Assert.Equal("", await Description());
     }
 
     [Fact]
-    public async Task A_retry_makes_one_post_on_either_door_and_across_them_and_the_same_words_later_make_another()
+    public async Task A_retry_with_its_id_makes_one_post_on_either_door_and_across_them_and_without_one_each_send_is_new()
     {
-        var clock = new MovedClock();
-        await using var tangentSpace = await Starting(services => services.AddSingleton<TimeProvider>(clock));
+        await using var tangentSpace = await Starting();
         using var doors = await Open(tangentSpace);
         var root = doors.Root;
-        object Sent(string? parent = null) => new { tangent = root.TangentId, topic = root.Slug, body = "Whoever is first home.", parent };
+        var id = Tids.Mint();
+        object Sent(string? sent) => new { tangent = root.TangentId, topic = root.Slug, body = "Whoever is first home.", id = sent };
 
-        var first = await doors.AdaTools.Call("reply", Sent());
-        var again = await doors.AdaTools.Call("reply", Sent());
-        var overHttp = await doors.Posted(TopicPath(root), new { body = "Whoever is first home." });
-        var id = first.Structured!.Value.GetProperty("id").GetString()!;
-        Assert.True(Tid.IsValid(id));
+        var first = await doors.AdaTools.Call("reply", Sent(id));
+        var again = await doors.AdaTools.Call("reply", Sent(id));
+        var overHttp = await doors.Posted(TopicPath(root), new { id, body = "Whoever is first home." });
+        Assert.Equal((201, id), (first.Status, first.Structured!.Value.GetProperty("id").GetString()));
         Assert.Equal(id, again.Structured!.Value.GetProperty("id").GetString());
         Assert.Equal(id, overHttp.Json.GetProperty("id").GetString());
         Assert.Equal(1, await CountOf("Whoever is first home."));
 
-        // Whichever window it falls in, a retry soon after is that Post.
-        clock.Move(Tid.RetryWindow);
-        Assert.Equal(id, (await doors.AdaTools.Call("reply", Sent())).Structured!.Value.GetProperty("id").GetString());
-        Assert.Equal(1, await CountOf("Whoever is first home."));
-
-        // Other words, or the same words to another Post, are another Post at once.
-        Assert.NotEqual(id, (await doors.AdaTools.Call("reply", Sent(id))).Structured!.Value.GetProperty("id").GetString());
-
-        // Later, the same words are a new Post, standing after everything before it.
-        clock.Move(Tid.RetryWindow * 2);
-        var later = await doors.AdaTools.Call("reply", Sent());
-        Assert.NotEqual(id, later.Structured!.Value.GetProperty("id").GetString());
-        var newest = await doors.Posted(TopicPath(root), new { body = "Something else." });
-        Assert.True(later.Structured!.Value.GetProperty("sequence").GetInt64() > first.Structured!.Value.GetProperty("sequence").GetInt64());
-        Assert.True(newest.Json.GetProperty("sequence").GetInt64() > later.Structured!.Value.GetProperty("sequence").GetInt64());
-
-        // Removed, the words can be said again at once: nothing stands to retry.
-        var removable = await doors.AdaTools.Call("reply", new { tangent = root.TangentId, topic = root.Slug, body = "Said once." });
-        var removedId = removable.Structured!.Value.GetProperty("id").GetString()!;
-        Assert.Equal(200, (await doors.AdaTools.Call("remove", new { tangent = root.TangentId, topic = root.Slug, post = removedId })).Status);
-        var said = await doors.AdaTools.Call("reply", new { tangent = root.TangentId, topic = root.Slug, body = "Said once." });
-        Assert.Equal(201, said.Status);
-        Assert.NotEqual(removedId, said.Structured!.Value.GetProperty("id").GetString());
+        // With no id, the same words sent again are another Post, standing after everything before it.
+        var unnamed = await doors.AdaTools.Call("reply", Sent(null));
+        var unnamedAgain = await doors.Posted(TopicPath(root), new { body = "Whoever is first home." });
+        Assert.True(Tid.IsValid(unnamed.Structured!.Value.GetProperty("id").GetString()));
+        Assert.NotEqual(unnamed.Structured!.Value.GetProperty("id").GetString(), unnamedAgain.Json.GetProperty("id").GetString());
+        Assert.True(unnamedAgain.Json.GetProperty("sequence").GetInt64() > first.Structured!.Value.GetProperty("sequence").GetInt64());
+        Assert.Equal(3, await CountOf("Whoever is first home."));
 
         static async Task<long> CountOf(string body) => (await Post.Query(post => post.Body == body, Cancellation)).Count;
     }
@@ -393,8 +366,7 @@ public sealed class TwoDoorsTests
         var root = doors.Root;
         var second = await Replied(root, Bea, "A second reply.");
         using var mo = await SignedIn(doors.TangentSpace, Mo);
-        var moderator = await Delegate(doors.TangentSpace, mo);
-        using var moTools = await ToolClient.Connect(doors.TangentSpace, moderator);
+        using var moTools = await ToolClient.Connect(doors.TangentSpace, mo);
 
         object Removing(Post post) => new { tangent = post.TangentId, topic = root.Slug, post = post.Id };
         var memberHttp = await doors.Posted(PostPath(root, root) + "/remove", new { });
@@ -404,7 +376,7 @@ public sealed class TwoDoorsTests
         Assert.False((await Post.Get(root.Id, Cancellation))!.Removed);
 
         var moderatorTool = await moTools.Call("remove", Removing(second));
-        var moderatorHttp = await doors.Posted(PostPath(root, root) + "/remove", new { }, moderator);
+        var moderatorHttp = await doors.Posted(PostPath(root, root) + "/remove", new { }, mo);
         Assert.Equal((200, HttpStatusCode.OK), (moderatorTool.Status, moderatorHttp.Status));
         Assert.True((await Post.Get(second.Id, Cancellation))!.Removed);
         Assert.True((await Post.Get(root.Id, Cancellation))!.Removed);
@@ -416,33 +388,5 @@ public sealed class TwoDoorsTests
         var refusedHttp = await doors.Posted(PeopleController.TimeOutPath, new { participant = Bea, @for = "hour" });
         Assert.Equal(HttpStatusCode.Forbidden, refusedHttp.Status);
         SameRefusal(refusedHttp, refused);
-    }
-
-    [Fact]
-    public async Task A_cookie_is_no_credential_at_the_edge_and_a_token_is_good_there_without_a_form_token()
-    {
-        await using var tangentSpace = await Starting();
-        using var doors = await Open(tangentSpace);
-        using var refused = await doors.AdaBrowser.Client.SendAsync(
-            ToolClient.Request(new { jsonrpc = "2.0", id = 1, method = "initialize", @params = new { protocolVersion = "2025-06-18", capabilities = new { }, clientInfo = new { name = "c", version = "1" } } }, bearer: null), Cancellation);
-        Assert.Equal(HttpStatusCode.Unauthorized, refused.StatusCode);
-        Assert.StartsWith("Bearer", refused.Headers.WwwAuthenticate.ToString());
-
-        // The session's own rule stands: its write needs the form's token, and a bearer's does not.
-        var page = TopicPath(doors.Root);
-        using var body = JsonBody(new { body = "By my session." });
-        var noToken = await Send(doors.AdaBrowser.Client, HttpMethod.Post, page, body, json: true);
-        Assert.Equal((HttpStatusCode.BadRequest, "Open the form again"), (noToken.Status, noToken.Title));
-        Assert.Equal(201, (await doors.AdaTools.Call("reply", new { tangent = doors.Root.TangentId, topic = doors.Root.Slug, body = "By my token." })).Status);
-    }
-
-    /// <summary>The wall clock, moved on by what a proof says.</summary>
-    private sealed class MovedClock : TimeProvider
-    {
-        private TimeSpan _moved;
-
-        public void Move(TimeSpan by) => _moved += by;
-
-        public override DateTimeOffset GetUtcNow() => TimeProvider.System.GetUtcNow() + _moved;
     }
 }

@@ -58,7 +58,7 @@ Three tracks run beside each other.
 
 - **T — the tree**, slices 0 to 9 of FEATURES.
 - **K — Koan**, the four briefs: K1 SQLite posture and base URL, K2 overwrites with deny, K3 atproto content, K4 lexical search. Each is a first-of-its-kind package in the Koan checkout.
-- **D — design**, mocks for the screens that have no reference (the door, take this on a tangent, bring your agent, consent, connections), each approved by Leo before it becomes a target.
+- **D — design**, mocks for the screens that have no reference (the door, take this on a tangent, bring your agent, connections), each approved by Leo before it becomes a target.
 
 Dependencies: K1 before slice 0 closes; K2 before slice 1 closes (slice 1 composes its own overwrite step until then); K3 before slice 3; K4 before slice 6; D before the first visual loop of each of its screens.
 

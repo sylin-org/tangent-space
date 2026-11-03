@@ -148,12 +148,10 @@ public sealed class TypedMentionTests
         Assert.Equal(("mention", Ada, "Spare parts"),
             (heard.GetProperty("kind").GetString(), heard.GetProperty("who").GetProperty("id").GetString(), heard.GetProperty("topic").GetString()));
 
-        // Ada's agent replies as JSON with her delegate's bearer, typing Mo's handle in another case: Mo hears it.
-        var token = await Delegate(tangentSpace, ada);
-        using var agent = Agent(tangentSpace);
+        // Ada replies as JSON, typing Mo's handle in another case: Mo hears it.
         var agentReplyId = Tids.Mint();
-        var asJson = await Send(agent, HttpMethod.Post, TopicPath(root),
-            JsonBody(new { id = agentReplyId, body = "Thanks (@Mo4Writes.Example), I'll bring it Friday." }), json: true, bearer: token);
+        var asJson = await Send(ada.Client, HttpMethod.Post, TopicPath(root),
+            JsonBody(new { id = agentReplyId, body = "Thanks (@Mo4Writes.Example), I'll bring it Friday." }), json: true);
 
         Assert.Equal(HttpStatusCode.Created, asJson.Status);
         Assert.Equal($"Thanks ({Mention(Mo, "@Mo4Writes.Example")}), I'll bring it Friday.", asJson.Json.GetProperty("body").GetString());

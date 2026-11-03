@@ -15,7 +15,7 @@ namespace Tangent.Offers;
 public sealed record OfferInput([Description(Holds.Offer)] string? Offer = null);
 
 /// <summary>An Offer's two answers, each a form its decider posts from the door, carrying the Offer in
-/// <see cref="Field"/>, under <see cref="FormToken.Validate"/>. <b>Use it</b> uses the address (<see cref="PlaceAddress.Use"/>)
+/// <see cref="Field"/>. <b>Use it</b> uses the address (<see cref="PlaceAddress.Use"/>)
 /// and lands on first run's pointers, which say in one line where the place now answers, with the link to it, and
 /// carry the address the site's pointers must now name; the person signs in again there. <b>Not this one</b> declines it
 /// and lands on the door, offering the next origin seen where there is one. To anyone but the place's operator an
@@ -32,16 +32,16 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, AddressOffers offers
     public const string Field = "offer";
 
     /// <summary>The form that uses the Offer <paramref name="offer"/>, under <paramref name="baseAddress"/>.</summary>
-    public static Form UseForm(string baseAddress, string offer, FormToken token) => Form.Posting(baseAddress + UsePath, token, Named(offer));
+    public static Form UseForm(string baseAddress, string offer) => Form.Posting(baseAddress + UsePath, Named(offer));
 
     /// <summary>The form that declines the Offer <paramref name="offer"/>, under <paramref name="baseAddress"/>.</summary>
-    public static Form DeclineForm(string baseAddress, string offer, FormToken token) => Form.Posting(baseAddress + DeclinePath, token, Named(offer));
+    public static Form DeclineForm(string baseAddress, string offer) => Form.Posting(baseAddress + DeclinePath, Named(offer));
 
     private static Form.Field Named(string offer) => new(Field, Holds.Offer, offer);
 
     [HttpPost(UsePath)]
-    [Tool(Name = "use_offer")]
-    [Description("Use what an open Offer proposes, for the one who decides it: an origin the place is reached at becomes its address, and whoever is signed in signs in again there.")]
+    [Tool(Name = "use_offer", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Description("Use what an open Offer from read_notifications proposes, for the one who decides it: an origin the place is reached at becomes its address, and whoever is signed in signs in again there.")]
     public async Task<IActionResult> Use(OfferInput input, CancellationToken ct)
     {
         var (refusal, personId, row) = await Posted(input, ct);
@@ -64,8 +64,8 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, AddressOffers offers
     }
 
     [HttpPost(DeclinePath)]
-    [Tool(Name = "decline_offer")]
-    [Description("Decline an open Offer, for the one who decides it; the place never offers it again.")]
+    [Tool(Name = "decline_offer", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Description("Decline an open Offer from read_notifications, for the one who decides it; the place never offers it again.")]
     public async Task<IActionResult> Decline(OfferInput input, CancellationToken ct)
     {
         var (refusal, personId, row) = await Posted(input, ct);
@@ -88,16 +88,13 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, AddressOffers offers
         }
     }
 
-    /// <summary>What every answer asks first: a signed-in poster, the form's token, and the Offer its <see cref="Field"/>
+    /// <summary>What every answer asks first: a signed-in poster and the Offer its <see cref="Field"/>
     /// names, sent as a form or a JSON object, that exists for them, which only the place's operator has.</summary>
     private async Task<(IActionResult? Refusal, string? PersonId, Offer? Row)> Posted(OfferInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         if (PersonId(User) is not { } personId)
             return (PostWrites.Refused(HttpContext, Capabilities.SignIn, "Deciding an offer needs its decider signed in."), null, null);
-        if (!await FormToken.Validate(HttpContext))
-            return (new Problem(StatusCodes.Status400BadRequest, "Open the door again",
-                "This form’s token is missing or has expired, so nothing was decided.").ToResult(), null, null);
         if (input.Offer is not { Length: > 0 } offer || await Offer.Get(offer, ct) is not { } row
             || (await TangentSpace.Get(TangentSpace.SingleRow, ct))?.OperatorId != personId)
             return (Absent(), null, null);

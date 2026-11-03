@@ -99,8 +99,7 @@ public sealed partial record TangentPage(
 
     /// <summary>The version the page's <c>ETag</c> carries: a hash of everything the page says, the day its times are
     /// written for among it, so the same page for a visitor on the same day answers the same tag, and a new Post, a
-    /// changed <c>can</c> or a new day changes it. A signed-in reader's page carries their watch form with a new
-    /// antiforgery token every time, so its version never repeats and it is never answered as unchanged.</summary>
+    /// changed <c>can</c> or a new day changes it.</summary>
     public static long Version(TangentPage page)
         => BitConverter.ToInt64(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(page)), 0) & long.MaxValue;
 

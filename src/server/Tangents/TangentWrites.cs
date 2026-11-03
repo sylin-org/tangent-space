@@ -47,7 +47,7 @@ public static class TangentWrites
 
     /// <summary>The form that creates a Tangent at <paramref name="action"/>: its name, and what else stands at its default
     /// until it is sent.</summary>
-    public static Form CreateForm(string action, FormToken token) => Form.Posting(action, token,
+    public static Form CreateForm(string action) => Form.Posting(action,
         new Form.Field(NameField, Holds.TangentName),
         new Form.Field(DescriptionField, Holds.TangentDescription),
         new Form.Field(KindField, Holds.TangentKind),
@@ -56,7 +56,7 @@ public static class TangentWrites
     /// <summary>The form that changes a Tangent's settings at <paramref name="action"/>, each field left as it is when not
     /// sent: its audience only where it is not <paramref name="fixedAudience"/>, its place among the Tangents only where
     /// the reader <paramref name="movable"/> it.</summary>
-    public static Form ChangeForm(string action, bool fixedAudience, bool movable, FormToken token)
+    public static Form ChangeForm(string action, bool fixedAudience, bool movable)
     {
         List<Form.Field> fields =
         [
@@ -66,7 +66,7 @@ public static class TangentWrites
         ];
         if (!fixedAudience) fields.Add(new(AudienceField, Holds.ChangedTangentAudience));
         if (movable && !fixedAudience) fields.Add(new(MoveField, Holds.TangentMove));
-        return new Form(action, HttpMethods.Post, fields, token);
+        return new Form(action, HttpMethods.Post, fields);
     }
 
     public static string Word(Audience audience) => audience.ToString().ToLowerInvariant();

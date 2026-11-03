@@ -51,7 +51,7 @@ public sealed class RefusalPageTests
         using var ada = await SignedIn(tangentSpace, Ada);
         using var visitor = Agent(tangentSpace);
 
-        var fields = await ada.Token(TopicPath(root), Cancellation);
+        var fields = new Dictionary<string, string>();
         fields["body"] = new string('x', (int)PostWrites.RequestLimit * 2);
         var large = await Send(ada.Client, HttpMethod.Post, TopicPath(root), FormBody(fields));
         Assert.Equal((HttpStatusCode.RequestEntityTooLarge, "text/html"), (large.Status, large.MediaType));
@@ -89,9 +89,7 @@ public sealed class RefusalPageTests
         await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         using var leo = await SignedIn(tangentSpace, Leo);
-        var bearer = await Delegate(tangentSpace, leo);
-        using var http = Agent(tangentSpace);
-        using var tools = await ToolClient.Connect(tangentSpace, bearer);
+        using var tools = await ToolClient.Connect(tangentSpace, leo);
 
         foreach (var (path, tool, arguments) in new (string, string, object)[]
                  {
@@ -99,15 +97,15 @@ public sealed class RefusalPageTests
                      ("/t/" + Workshop + "/settings/access", "read_tangent_access", new { tangent = Workshop, page })
                  })
         {
-            var first = await Send(http, HttpMethod.Get, path, json: true, bearer: bearer);
-            var bad = await Send(http, HttpMethod.Get, path + "?page=" + page, json: true, bearer: bearer);
+            var first = await Send(leo.Client, HttpMethod.Get, path, json: true);
+            var bad = await Send(leo.Client, HttpMethod.Get, path + "?page=" + page, json: true);
             Assert.Equal(HttpStatusCode.OK, bad.Status);
             Assert.Equal(first.Json.GetProperty("roles").GetArrayLength(), bad.Json.GetProperty("roles").GetArrayLength());
             Assert.Equal(JsonValueKindOfPrevious(first), JsonValueKindOfPrevious(bad));
             Assert.Equal(200, (await tools.Call(tool, arguments)).Status);
 
             // A page that is a number is still that page.
-            var second = await Send(http, HttpMethod.Get, path + "?page=2", json: true, bearer: bearer);
+            var second = await Send(leo.Client, HttpMethod.Get, path + "?page=2", json: true);
             Assert.Equal(System.Text.Json.JsonValueKind.String, JsonValueKindOfPrevious(second));
         }
     }

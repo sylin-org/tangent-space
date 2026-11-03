@@ -23,11 +23,10 @@ export function refusedHere(file: File): string | null {
   return null
 }
 
-/** Sends the image as a multipart form with the form's token, answered as JSON; throws an Error whose words a person
+/** Sends the image as a multipart form, answered as JSON; throws an Error whose words a person
  *  reads where it did not come. */
-export async function bring(action: string, file: File, token: { field: string; value: string } | null, signal: AbortSignal): Promise<Brought> {
+export async function bring(action: string, file: File, signal: AbortSignal): Promise<Brought> {
   const fields = new FormData()
-  if (token) fields.append(token.field, token.value)
   fields.append('file', file)
   const bound = AbortSignal.any([signal, AbortSignal.timeout(bringing.timeout)])
   let response: Response

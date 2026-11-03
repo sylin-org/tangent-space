@@ -19,7 +19,6 @@ class Observer {
 function render() {
   document.body.innerHTML =
     `<form class="topic-seen" method="post" action="${action}" data-island="seen">` +
-    '<input type="hidden" name="__RequestVerificationToken" value="token-value">' +
     '<input type="hidden" name="through" value="7">' +
     '<button type="submit">Mark seen</button></form>'
   return document.querySelector('form')!
@@ -50,7 +49,7 @@ test('the seen island posts its form once when the end of the window comes on sc
   expect(url).toBe(action)
   expect(init.method).toBe('POST')
   expect(new Headers(init.headers).get('Accept')).toBe('application/json')
-  expect(String(init.body)).toBe('__RequestVerificationToken=token-value&through=7')
+  expect(String(init.body)).toBe('through=7')
 })
 
 test('a seen post that does not succeed leaves the form and its button as they were', async () => {

@@ -28,9 +28,10 @@ public sealed record SearchPage(
     /// <summary>One Post found: a Topic's root (<c>topic</c> or <c>article</c>) or a <c>reply</c>, the title of its Topic, the
     /// Tangent it is in, its address, who wrote it and when, who other than them last edited it where someone did, and its
     /// <see cref="Snippet"/>: its words around the matches in plain text, as runs, the matched words marked, or its first
-    /// words, unmarked, where the title is what matched.</summary>
+    /// words, unmarked, where the title is what matched. <see cref="TangentSlug"/> and <see cref="TopicSlug"/> are what its
+    /// address names, which a tool takes.</summary>
     public sealed record Hit(string Id, string Kind, string Topic, string Tangent, string Address, TangentPage.Author Author, DateTimeOffset At,
-        IReadOnlyList<Run> Snippet, TangentPage.Edited? Edited = null);
+        IReadOnlyList<Run> Snippet, TangentPage.Edited? Edited = null, string TangentSlug = "", string TopicSlug = "");
 
     /// <summary>A stretch of a snippet's words, marked where they are what matched. A run is words and never markup, so a
     /// page or an agent shows it safely whatever a Post's body holds.</summary>

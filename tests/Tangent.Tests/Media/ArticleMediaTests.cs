@@ -120,15 +120,14 @@ public sealed class ArticleMediaTests
         return codec.Info.Width;
     }
 
-    /// <summary>Brings an image in as the page does: a multipart form with the page's token, answered as JSON.</summary>
+    /// <summary>Brings an image in as the page at <paramref name="page"/> does: a multipart form, answered as JSON.</summary>
     internal static async Task<Answered> Bring(Browser browser, byte[] image, string tangent = Articles, string page = "/t/" + Articles + "/new")
     {
         var fields = new MultipartFormDataContent();
-        foreach (var (name, value) in await browser.Token(page, Cancellation)) fields.Add(new StringContent(value), name);
         var file = new ByteArrayContent(image);
         file.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
         fields.Add(file, NewMediaController.FileField, "holiday.jpg");
-        return await Send(browser.Client, HttpMethod.Post, "/t/" + tangent + "/" + NewMediaController.Segment, fields, json: true);
+        return await Send(browser.Client, HttpMethod.Post, "/t/" + tangent + "/" + NewMediaController.Segment, fields, json: true, page: page);
     }
 
     private static async Task<byte[]> Read(HttpClient client, string address)
@@ -184,34 +183,33 @@ public sealed class ArticleMediaTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
         using var ada = await SignedIn(tangentSpace, Ada);
-        var bearer = await Delegate(tangentSpace, ada);
-        var agent = Agent(tangentSpace);
+        using var visitor = Agent(tangentSpace);
 
-        var page = (await Send(agent, HttpMethod.Get, "/t/" + Articles + "/new", json: true, bearer: bearer)).Json;
-        var brought = await Follow(agent, page.GetProperty("bring"), new Dictionary<string, string> { [NewMediaController.FileField] = Convert.ToBase64String(Jpeg()) }, bearer);
+        var page = (await Send(ada.Client, HttpMethod.Get, "/t/" + Articles + "/new", json: true)).Json;
+        var brought = await Follow(ada, page.GetProperty("bring"), new Dictionary<string, string> { [NewMediaController.FileField] = Convert.ToBase64String(Jpeg()) });
         Assert.Equal(HttpStatusCode.Created, brought.Status);
         var id = IdOf(brought);
 
-        var started = await Follow(agent, page.GetProperty("start"), new Dictionary<string, string>
+        var started = await Follow(ada, page.GetProperty("start"), new Dictionary<string, string>
         {
             [PostWrites.TitleField] = "Field notes",
             [PostWrites.BodyField] = "![A wick](" + brought.Json.GetProperty("reference").GetString() + ")",
             [PostWrites.CoverField] = id
-        }, bearer);
+        });
         Assert.Equal(HttpStatusCode.Created, started.Status);
         Assert.Equal(id, started.Json.GetProperty("coverId").GetString());
 
-        var topic = (await Send(agent, HttpMethod.Get, started.Location!.Replace(BaseUrl, ""), json: true, bearer: bearer)).Json;
+        var topic = (await Send(ada.Client, HttpMethod.Get, started.Location!.Replace(BaseUrl, ""), json: true)).Json;
         Assert.Equal(BaseUrl + "/media/" + id, topic.GetProperty("cover").GetString());
 
-        var edit = (await Send(agent, HttpMethod.Get, started.Location!.Replace(BaseUrl, "") + "/edit", json: true, bearer: bearer)).Json;
+        var edit = (await Send(ada.Client, HttpMethod.Get, started.Location!.Replace(BaseUrl, "") + "/edit", json: true)).Json;
         Assert.Equal(id, Valued(edit.GetProperty("edit"), PostWrites.CoverField));
-        var edited = await Follow(agent, edit.GetProperty("edit"), new Dictionary<string, string> { [PostWrites.BodyField] = "Words alone.", [PostWrites.CoverField] = "" }, bearer);
+        var edited = await Follow(ada, edit.GetProperty("edit"), new Dictionary<string, string> { [PostWrites.BodyField] = "Words alone.", [PostWrites.CoverField] = "" });
         Assert.Equal(HttpStatusCode.OK, edited.Status);
         Assert.False(edited.Json.TryGetProperty("coverId", out var left) && left.ValueKind == System.Text.Json.JsonValueKind.String);
 
         // Nothing in the article uses it now: it reaches the one who brought it, and nobody else.
-        Assert.Equal(HttpStatusCode.NotFound, (await Send(agent, HttpMethod.Get, "/media/" + id)).Status);
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(visitor, HttpMethod.Get, "/media/" + id)).Status);
     }
 
     [Fact]
@@ -322,11 +320,10 @@ public sealed class ArticleMediaTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
         using var bea = await SignedIn(tangentSpace, Bea);
-        var token = (await bea.Token("/t/" + Articles + "/new", Cancellation)).Values.Single();
 
         var visitor = await Send(Agent(tangentSpace), HttpMethod.Post, "/t/" + Articles + "/media", JsonBody(new { file = Convert.ToBase64String(Jpeg()) }), json: true);
         Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (visitor.Status, visitor.Gate));
-        var hidden = await Send(bea.Client, HttpMethod.Post, "/t/" + Studio + "/media", JsonBody(new { file = Convert.ToBase64String(Jpeg()) }), json: true, token: token);
+        var hidden = await Send(bea.Client, HttpMethod.Post, "/t/" + Studio + "/media", JsonBody(new { file = Convert.ToBase64String(Jpeg()) }), json: true);
         Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent.Text), (hidden.Status, hidden.Gate));
         var discussion = await Send(bea.Client, HttpMethod.Get, "/t/" + Workshop + "/new", json: true);
         Assert.False(discussion.Json.TryGetProperty("bring", out var bring) && bring.ValueKind == System.Text.Json.JsonValueKind.Object);

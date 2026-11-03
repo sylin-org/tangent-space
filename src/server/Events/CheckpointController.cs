@@ -21,8 +21,7 @@ public sealed record WatchInput([Description(Holds.Watch)] bool? Watch = null);
 /// <see cref="CatchUpTopic"/>; <c>POST /t/{tangent}/{topic}/watch</c> and <c>POST /t/{tangent}/watch</c> take
 /// <c>watch</c>, <c>true</c> or <c>false</c>, and send <see cref="SetWatch"/>. Each takes a form or a JSON object and
 /// answers in kind: a form is sent back to the page (<c>303</c>), a JSON request reads the checkpoint as it now stands.
-/// A request a session authenticated answers to <see cref="FormToken.Validate"/> before anything else; then the address
-/// is resolved as the page resolves it (<see cref="PostWrites.Locate"/>), so a Tangent or Topic the sender may not see
+/// The address is resolved as the page resolves it (<see cref="PostWrites.Locate"/>), so a Tangent or Topic the sender may not see
 /// and one no address names answer alike; then a visitor is asked to sign in.</summary>
 public sealed class CheckpointController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
@@ -42,22 +41,21 @@ public sealed class CheckpointController(KoanWebBaseUrl baseUrl) : ControllerBas
 
     /// <summary>The form that moves the reader's checkpoint on the Topic at <paramref name="topicAddress"/> through
     /// <paramref name="through"/>, the sequence its page showed.</summary>
-    public static Form SeenForm(string topicAddress, long through, FormToken token) => Form.Posting(topicAddress + "/" + SeenSegment, token,
+    public static Form SeenForm(string topicAddress, long through) => Form.Posting(topicAddress + "/" + SeenSegment,
         new Form.Field(ThroughField, Holds.TopicThrough, through.ToString(CultureInfo.InvariantCulture)));
 
     /// <summary>The reader's watch flag on the Tangent or Topic at <paramref name="address"/>, <paramref name="watch"/>,
     /// with the form that sets it, carrying the opposite.</summary>
-    public static Watching WatchingOf(string address, bool watch, FormToken token) => new(watch, Form.Posting(address + "/" + WatchSegment, token,
+    public static Watching WatchingOf(string address, bool watch) => new(watch, Form.Posting(address + "/" + WatchSegment,
         new Form.Field(WatchField, Holds.Watch + " The value given is the opposite of where the flag stands.", watch ? "false" : "true")));
 
     [HttpPost("/t/{tangent}/{topic}/" + SeenSegment)]
-    [Tool(Name = "caught_up_in_topic")]
-    [Description("Say you have seen a Topic through a sequence, so what is new there starts after it.")]
+    [Tool(Name = "caught_up_in_topic", Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Call this after read_topic with the through it returned, so what is new there starts after it. It never moves back.")]
     public async Task<IActionResult> Seen([FromRoute, Description(Holds.Tangent)] string tangent, [FromRoute, Description(Holds.Topic)] string topic, SeenInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        if (personId is not null && !await FormToken.Validate(HttpContext)) return TokenRefused();
         var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, topic, null, ct);
         if (found is null) return unseen!;
         if (personId is null) return PostWrites.Refused(HttpContext, Capabilities.SignIn);
@@ -75,21 +73,20 @@ public sealed class CheckpointController(KoanWebBaseUrl baseUrl) : ControllerBas
     }
 
     [HttpPost("/t/{tangent}/{topic}/" + WatchSegment)]
-    [Tool(Name = "watch_topic")]
-    [Description("Ask for attention on what is new in a Topic, or stop.")]
+    [Tool(Name = "watch_topic", Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Ask for attention on what is new in a Topic, or stop. Sending the same value again changes nothing.")]
     public Task<IActionResult> WatchTopic([FromRoute, Description(Holds.Tangent)] string tangent, [FromRoute, Description(Holds.Topic)] string topic, WatchInput input, CancellationToken ct)
         => Flag(tangent, topic, input, ct);
 
     [HttpPost("/t/{tangent}/" + WatchSegment)]
-    [Tool(Name = "watch_tangent")]
-    [Description("Ask for attention on what is new in a Tangent, or stop.")]
+    [Tool(Name = "watch_tangent", Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Ask for attention on what is new in a Tangent, or stop. Sending the same value again changes nothing.")]
     public Task<IActionResult> WatchTangent([FromRoute, Description(Holds.Tangent)] string tangent, WatchInput input, CancellationToken ct) => Flag(tangent, null, input, ct);
 
     private async Task<IActionResult> Flag(string tangent, string? topic, WatchInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        if (personId is not null && !await FormToken.Validate(HttpContext)) return TokenRefused();
         var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, topic, null, ct);
         if (found is null) return unseen!;
         if (personId is null) return PostWrites.Refused(HttpContext, Capabilities.SignIn);
@@ -119,10 +116,6 @@ public sealed class CheckpointController(KoanWebBaseUrl baseUrl) : ControllerBas
             ContentTypes = { "application/json" }
         };
     }
-
-    private static IActionResult TokenRefused()
-        => new Problem(StatusCodes.Status400BadRequest, "Open the page again",
-            "This form’s token is missing or has expired, so nothing was changed.").ToResult();
 
     private static IActionResult NotASequence(string detail)
         => new Problem(StatusCodes.Status400BadRequest, "Not a sequence of this topic", detail).ToResult();

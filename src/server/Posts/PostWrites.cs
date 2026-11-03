@@ -16,9 +16,8 @@ namespace Tangent.Posts;
 /// tool's call, to the same address and the same typed input, and is answered in kind: a form is sent on to the Post's
 /// address (<c>303</c>) or, refused, reads its page again with the reason inline; a JSON request reads the Post with its
 /// <c>can</c>, or a problem carrying the gate. Refusals answer by their kind, in one place (<see cref="Refused"/>). A
-/// request a session or a bearer authenticated answers to <see cref="FormToken.Validate"/> before its address is resolved;
-/// one that authenticates nobody holds no credential a form could borrow, and its command refuses it on its own
-/// terms.</summary>
+/// write answers to its sender's session cookie; one a page of another site sent is refused before it reaches
+/// here.</summary>
 public static class PostWrites
 {
     /// <summary>The most bytes a write request's body holds: a body at its limit, escaped as a form escapes it.</summary>
@@ -126,38 +125,20 @@ public static class PostWrites
         return mayWrite ? await PostBody.Written(text, CancellationToken.None) : PostBody.Unjudged(text);
     }
 
-    /// <summary>The Id a write that makes a Post goes by: the one it sent; else the one its sender's words name
-    /// (<see cref="Tid.Derived"/>), from who sent them, where they go (<paramref name="where"/>) and the words themselves.
-    /// The words name it for a retry window and the window before, so a retry whose answer was lost finds the Post it
-    /// wrote whichever window it falls in; later, the same words name a new one. An Id already holding anything else, the
-    /// same Post edited or removed since among it, is no retry of it, and a TID is minted instead. A Topic's order is its
-    /// sequence, which the command takes in its hold, so the time an Id reads says nothing of where the Post stands. One
-    /// keyed read of each window's Id.</summary>
-    public static async Task<string> IdFor(HttpContext http, string? sent, string? personId, PostBody body, params string?[] where)
-    {
-        if (sent is { Length: > 0 }) return sent;
-        var now = http.RequestServices.GetRequiredService<TimeProvider>().GetUtcNow();
-        var words = string.Join('\0', [personId, .. where, body.SentHash]);
-        foreach (var at in new[] { now, now - Tid.RetryWindow })
-        {
-            var id = Tid.Derived(words, at);
-            if (await Post.Get(id, http.RequestAborted) is { } row)
-                return row.AuthorId == personId && row.SentHash == body.SentHash ? id : Tid.Mint(now);
-        }
-
-        return Tid.Derived(words, now);
-    }
+    /// <summary>The Id a write that makes a Post goes by: the one it sent, which makes its retry safe, or else a new
+    /// TID, so the same words sent again make another Post.</summary>
+    public static string Id(string? sent) => sent is { Length: > 0 } ? sent : Tid.Mint(DateTimeOffset.UtcNow);
 
     /// <summary>The form that replies in the Topic at <paramref name="topicAddress"/>: a TID minted for it, the body, and
     /// the Post it answers, <paramref name="parent"/>, or the Topic where none is named.</summary>
-    public static Form ReplyForm(string topicAddress, string? parent, FormToken token) => Form.Posting(topicAddress, token,
+    public static Form ReplyForm(string topicAddress, string? parent) => Form.Posting(topicAddress,
         Form.Minted(IdField, Tid.Mint(DateTimeOffset.UtcNow)),
         new Form.Field(BodyField, Holds.ReplyBody),
         new Form.Field(ParentField, Holds.Parent, parent ?? ""));
 
     /// <summary>The form that starts a Topic at <paramref name="action"/>, a Tangent's, whose default kind is
     /// <paramref name="kind"/>: a TID minted for it, the title, the body and the kind.</summary>
-    public static Form StartForm(string action, PostKind kind, FormToken token)
+    public static Form StartForm(string action, PostKind kind)
     {
         Form.Field[] fields =
         [
@@ -166,33 +147,33 @@ public static class PostWrites
             new Form.Field(BodyField, Holds.TopicBody),
             new Form.Field(KindField, $"{Holds.Kind} Here, {Word(kind)}.")
         ];
-        return Form.Posting(action, token, kind == PostKind.Article ? [.. fields, new Form.Field(CoverField, Holds.Cover)] : fields);
+        return Form.Posting(action, kind == PostKind.Article ? [.. fields, new Form.Field(CoverField, Holds.Cover)] : fields);
     }
 
     /// <summary>The form that brings an image in for someone writing at <paramref name="tangentAddress"/>.</summary>
-    public static Form MediaForm(string tangentAddress, FormToken token) => Form.Posting(tangentAddress + "/" + NewMediaController.Segment, token,
+    public static Form MediaForm(string tangentAddress) => Form.Posting(tangentAddress + "/" + NewMediaController.Segment,
         new Form.Field(NewMediaController.FileField, Holds.BroughtImage));
 
     /// <summary>The form that edits a Post at <paramref name="action"/> from the <paramref name="version"/> its editor read:
     /// the version, the title on a Topic's <paramref name="root"/>, and the body, which may be empty on a root taken on a
     /// tangent.</summary>
-    public static Form EditForm(string action, long version, bool root, bool bodyOptional, FormToken token, string? cover = null, bool article = false)
+    public static Form EditForm(string action, long version, bool root, bool bodyOptional, string? cover = null, bool article = false)
     {
         var body = new Form.Field(BodyField, Holds.EditBody + (bodyOptional ? Holds.EditBodyOptional : ""));
         var from = new Form.Field(VersionField, Holds.EditVersion, version.ToString(CultureInfo.InvariantCulture));
         if (article)
-            return Form.Posting(action, token, from, new Form.Field(TitleField, Holds.EditTitle), body, new Form.Field(CoverField, Holds.EditCover, cover ?? ""));
+            return Form.Posting(action, from, new Form.Field(TitleField, Holds.EditTitle), body, new Form.Field(CoverField, Holds.EditCover, cover ?? ""));
         return root
-            ? Form.Posting(action, token, from, new Form.Field(TitleField, Holds.EditTitle), body)
-            : Form.Posting(action, token, from, body);
+            ? Form.Posting(action, from, new Form.Field(TitleField, Holds.EditTitle), body)
+            : Form.Posting(action, from, body);
     }
 
-    /// <summary>The form that removes a Post at <paramref name="action"/>: nothing but its token.</summary>
-    public static Form RemoveForm(string action, FormToken token) => Form.Posting(action, token);
+    /// <summary>The form that removes a Post at <paramref name="action"/>, which carries no field.</summary>
+    public static Form RemoveForm(string action) => Form.Posting(action);
 
     /// <summary>The form that reports a Post at <paramref name="action"/>, with the TID <paramref name="minted"/> for it, and
     /// the reason.</summary>
-    public static Form ReportForm(string action, string minted, FormToken token) => Form.Posting(action, token,
+    public static Form ReportForm(string action, string minted) => Form.Posting(action,
         Form.Minted(IdField, minted),
         new Form.Field(BodyField, Holds.Reason));
 
@@ -238,10 +219,6 @@ public static class PostWrites
     /// <summary>What a reader without <see cref="Bit.View"/> where they ask receives: the missing resource's answer where
     /// it is absent to them, otherwise the one step between them and it.</summary>
     public static IActionResult Unseen(HttpContext http, Reason? gate) => gate is null ? Absent() : Refused(http, gate);
-
-    public static IActionResult TokenRefused()
-        => new Problem(StatusCodes.Status400BadRequest, "Open the form again",
-            "This form’s token is missing or has expired, so nothing was written.").ToResult();
 
     /// <summary>The one answer to a command that is not done, as a page or as JSON by the request's <c>Accept</c>, through
     /// the shell and in the words of <see cref="Refused"/>.</summary>

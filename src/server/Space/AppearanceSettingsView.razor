@@ -33,7 +33,6 @@
                 <form class="sign-in-form" method="post" action="@Model.Change?.Action" data-island="@(Mutable ? "submitting" : null)">
                     @if (Model.Change is { } change)
                     {
-                        <FormTokenField Token="@change.Token" />
                     }
                     <fieldset class="post-form-choice">
                         <legend class="field-label">The place's accent</legend>

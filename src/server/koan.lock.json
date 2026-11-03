@@ -99,10 +99,6 @@
       "version": "1.0"
     },
     {
-      "id": "Koan.Web.Auth.Server",
-      "version": "1.0"
-    },
-    {
       "id": "Koan.Web.OpenGraph",
       "version": "1.0"
     },
@@ -138,10 +134,6 @@
     },
     {
       "kind": "project",
-      "id": "Koan.Security.Trust"
-    },
-    {
-      "kind": "project",
       "id": "Koan.Storage.Connector.Local"
     },
     {
@@ -151,10 +143,6 @@
     {
       "kind": "project",
       "id": "Koan.Web.Auth.Connector.Atproto"
-    },
-    {
-      "kind": "project",
-      "id": "Koan.Web.Auth.Server"
     },
     {
       "kind": "project",

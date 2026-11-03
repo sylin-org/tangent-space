@@ -145,8 +145,8 @@ public sealed record TopicPage(
 
     /// <summary>The version the page's <c>ETag</c> carries: a hash of everything the page says, so the same window for
     /// a visitor on the same day answers the same tag, and a reply, an edit, a removal, a changed <c>can</c> or a new day
-    /// changes it. A signed-in reader's page carries their forms with a new antiforgery token every time, so its version
-    /// never repeats and it is never answered as unchanged.</summary>
+    /// changes it. A signed-in reader's page carries the TIDs minted for their forms, new every time, so its version
+    /// never repeats.</summary>
     public static long Version(TopicPage page)
         => BitConverter.ToInt64(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(page)), 0) & long.MaxValue;
 }
