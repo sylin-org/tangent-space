@@ -24,27 +24,27 @@ public sealed class Post : Entity<Post>
 
     public const int TitleLimit = 200;
 
-    public const string NeedsTid = "A Post's Id is a TID.";
-    public const string NeedsBody = "A Post's body holds at least one visible character.";
-    public const string BodyTooLong = "A Post's body holds at most 64 KiB of UTF-8.";
-    public const string BodyHasNul = "A Post's body holds no NUL character.";
-    public const string BodyRendersTooLong = "A Post's body renders to at most 512 KiB of HTML, its elements nested no deeper than the renderer allows.";
-    public const string TooManyMentions = "A Post's body mentions at most 32 identities.";
-    public const string BodyNotJudged = "This body was not judged before it was sent; send it again.";
-    public const string BodyTooIntricate = "A Post's body holds too many unclosed links, brackets or emphasis marks to render quickly.";
-    public const string TooManyImages = "A Post's body holds at most 64 images of this place.";
-    public const string NoCover = "This cover isn't an image you can use here.";
-    public const string CoverOnArticle = "Only an article has a cover.";
-    public const string NeedsTitle = "A Topic's title holds at least one visible character.";
-    public const string TitleTooLong = "A Topic's title holds at most 200 characters.";
-    public const string NeedsTangent = "A Topic starts in a Tangent.";
-    public const string NeedsAuthor = "A Post has an author.";
-    public const string NotARoot = "A reply goes to a Topic.";
+    public static readonly Reason NeedsTid = Reason.Invalid("A Post's Id is a TID.");
+    public static readonly Reason NeedsBody = Reason.Invalid("A Post's body holds at least one visible character.");
+    public static readonly Reason BodyTooLong = Reason.Invalid("A Post's body holds at most 64 KiB of UTF-8.");
+    public static readonly Reason BodyHasNul = Reason.Invalid("A Post's body holds no NUL character.");
+    public static readonly Reason BodyRendersTooLong = Reason.Invalid("A Post's body renders to at most 512 KiB of HTML, its elements nested no deeper than the renderer allows.");
+    public static readonly Reason TooManyMentions = Reason.Invalid("A Post's body mentions at most 32 identities.");
+    public static readonly Reason BodyNotJudged = Reason.Invalid("This body was not judged before it was sent; send it again.");
+    public static readonly Reason BodyTooIntricate = Reason.Invalid("A Post's body holds too many unclosed links, brackets or emphasis marks to render quickly.");
+    public static readonly Reason TooManyImages = Reason.Invalid("A Post's body holds at most 64 images of this place.");
+    public static readonly Reason NoCover = Reason.Invalid("This cover isn't an image you can use here.");
+    public static readonly Reason CoverOnArticle = Reason.Invalid("Only an article has a cover.");
+    public static readonly Reason NeedsTitle = Reason.Invalid("A Topic's title holds at least one visible character.");
+    public static readonly Reason TitleTooLong = Reason.Invalid("A Topic's title holds at most 200 characters.");
+    public static readonly Reason NeedsTangent = Reason.Invalid("A Topic starts in a Tangent.");
+    public static readonly Reason NeedsAuthor = Reason.Invalid("A Post has an author.");
+    public static readonly Reason NotARoot = Reason.Invalid("A reply goes to a Topic.");
     public static readonly Reason TopicLocked = Access.Capabilities.Locked;
     public static readonly Reason TopicRemoved = Access.Capabilities.Removed;
-    public const string NoTitleOnReply = "A reply has no title; a Topic's title is on its root.";
+    public static readonly Reason NoTitleOnReply = Reason.Invalid("A reply has no title; a Topic's title is on its root.");
     public static readonly Reason PostRemoved = Access.Capabilities.Removed;
-    public const string NeedsRemover = "A removal names who removes.";
+    public static readonly Reason NeedsRemover = Reason.Invalid("A removal names who removes.");
 
     /// <summary>The one answer for an Id a Post outside the place a command names already holds: it says nothing of
     /// where, whose or what that Post is.</summary>

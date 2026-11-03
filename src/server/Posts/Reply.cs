@@ -26,7 +26,7 @@ public sealed record Reply(
     DateTimeOffset? At = null) : ICommand<Post>
 {
     public static readonly Reason NoTopic = Reason.Absent("No Topic has this Id.");
-    public const string NoParent = "The parent is not a Post of this Topic.";
+    public static readonly Reason NoParent = Reason.Invalid("The parent is not a Post of this Topic.");
 
     public async Task<Outcome<Post>> Run(CancellationToken ct)
     {

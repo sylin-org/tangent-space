@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Security.Claims;
 using Koan.Web.Attributes;
 using Koan.Web.Auth.Infrastructure;
+using Koan.Web.Controllers;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -49,8 +50,8 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
 
         TopicList.Cursor? cursor = null;
         if (after is not null && (cursor = TopicList.Cursor.Parse(after)) is null)
-            return new Problem(StatusCodes.Status400BadRequest, "Not a page of this Tangent",
-                $"The {After} parameter is the cursor a page of this Tangent names as its next.").ToResult();
+            return new Problem(StatusCodes.Status400BadRequest,
+                $"The {After} parameter is the cursor a page of this Tangent names as its next.") { Title = "Not a page of this Tangent" }.ToResult();
 
         var page = await TopicList.Read(row.Id, cursor, ct);
         var reader = personId is null ? null : await Participant.Get(personId, ct);

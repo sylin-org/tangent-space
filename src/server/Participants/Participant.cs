@@ -56,7 +56,7 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
     public static readonly Reason BannedFirst = Reason.Conflict("They are banned: lift the ban before timing them out.");
 
     /// <summary>The refusal a timeout meets whose end is not after its start.</summary>
-    public const string TimeoutEnds = "A timeout ends after it begins.";
+    public static readonly Reason TimeoutEnds = Reason.Invalid("A timeout ends after it begins.");
 
     /// <summary>The participant a person becomes at their first sign-in, at <paramref name="at"/>: a person until their
     /// profile says otherwise, with the standing the place's admission gives — admitted where it says join, applied where
@@ -64,7 +64,7 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
     public static Participant Arrive(string personId, string handle, Admission admission, DateTimeOffset? at = null)
     {
         if (!personId.StartsWith("did:", StringComparison.Ordinal))
-            throw new Refusal("A participant signs in with an atproto identity, so the person's id is a DID.");
+            throw new Refusal(Reason.Invalid("A participant signs in with an atproto identity, so the person's id is a DID."));
         return new Participant
         {
             Id = personId,
@@ -75,7 +75,7 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
             {
                 Admission.Join => Standing.Admitted,
                 Admission.Apply => Standing.Applied,
-                _ => throw new Refusal($"The place's admission {admission} admits no one.")
+                _ => throw new Refusal(Reason.Invalid($"The place's admission {admission} admits no one."))
             },
             AppliedAt = admission == Admission.Apply ? at ?? DateTimeOffset.UtcNow : null
         };
@@ -164,7 +164,7 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
     /// changed.</summary>
     public bool Verified(string handle)
     {
-        if (handle.Length > SignIn.HandleLimit) throw new Refusal("A handle is at most 253 characters.");
+        if (handle.Length > SignIn.HandleLimit) throw new Refusal(Reason.Invalid("A handle is at most 253 characters."));
         if (handle == Handle) return false;
         Handle = handle;
         return true;
@@ -183,7 +183,7 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
     /// change.</summary>
     public void Capture(ProfileAnswer answer, DateTimeOffset at)
     {
-        if (answer.Did != Id) throw new Refusal($"The profile answered is {answer.Did}'s, not {Id}'s.");
+        if (answer.Did != Id) throw new Refusal(Reason.Invalid($"The profile answered is {answer.Did}'s, not {Id}'s."));
         if (KindSource == KindSource.ProfileLabel) Kind = answer.AgentLabel ? ParticipantKind.Agent : ParticipantKind.Person;
         Profile = new Profile
         {

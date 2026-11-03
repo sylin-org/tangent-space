@@ -192,7 +192,7 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
         Assert.Single(Regex.Matches(html, "<article [^>]*aria-current=\"true\""));
 
         var missing = await Problem(tangentSpace.Client, $"/t/{Workshop}/nothing-here");
-        Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent.Text), (missing.Status, missing.Gate));
+        Assert.Equal((HttpStatusCode.NotFound, "absent"), (missing.Status, missing.Kind));
         Assert.Equal(missing, await Problem(tangentSpace.Client, $"/t/{Workshop}/around-a-reply/{elsewhere.Id}"));
         Assert.Equal(missing, await Problem(tangentSpace.Client, $"/t/{Workshop}/around-a-reply/{Tids.Mint()}"));
         Assert.Equal(missing, await Problem(tangentSpace.Client, $"/t/{Workshop}/around-a-reply/not-a-tid"));
@@ -275,7 +275,7 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
         (await browser.SignIn("reader", Reader, Cancellation)).Dispose();
 
         var missing = await Problem(browser.Client, "/t/studio/nothing-here");
-        Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent.Text), (missing.Status, missing.Gate));
+        Assert.Equal((HttpStatusCode.NotFound, "absent"), (missing.Status, missing.Kind));
         Assert.Equal(missing, await Problem(browser.Client, "/t/studio/behind-the-door"));
         Assert.Equal(missing, await Problem(browser.Client, $"/t/studio/behind-the-door/{hidden.Id}"));
         Assert.Equal(missing, await Problem(tangentSpace.Client, "/t/studio/behind-the-door"));
@@ -432,7 +432,7 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
         return await response.Content.ReadAsStringAsync(Cancellation);
     }
 
-    private sealed record Answer(HttpStatusCode Status, string? MediaType, string? Title, string? Detail, string? Gate);
+    private sealed record Answer(HttpStatusCode Status, string? MediaType, string? Title, string? Detail, string? Gate, string? Kind);
 
     private static async Task<Answer> Problem(HttpClient client, string path)
     {
@@ -441,7 +441,7 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
         using var response = await client.SendAsync(request, Cancellation);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Cancellation));
         string? Text(string name) => json.RootElement.TryGetProperty(name, out var value) ? value.GetString() : null;
-        return new Answer(response.StatusCode, response.Content.Headers.ContentType?.MediaType, Text("title"), Text("detail"), Text("gate"));
+        return new Answer(response.StatusCode, response.Content.Headers.ContentType?.MediaType, Text("title"), Text("detail"), Text("gate"), Text("kind"));
     }
 
     private static async Task<(HttpStatusCode Status, EntityTagHeaderValue? ETag)> Tag(HttpClient client, string path, EntityTagHeaderValue? held)

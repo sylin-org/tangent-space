@@ -223,18 +223,18 @@ public sealed class SlotsTests
             var over = new string('x', limit + 1);
             var json = await Json(leo, Path, Path, new Dictionary<string, string> { [field] = over });
             Assert.Equal(HttpStatusCode.BadRequest, json.Status);
-            Assert.Contains(rule, json.Body);
+            Assert.Contains(rule.Text, json.Body);
             var form = await Form(leo, Path, Path, new Dictionary<string, string> { [field] = over, [F.AccentField] = "jade" });
             Assert.Equal(HttpStatusCode.BadRequest, form.Status);
             Assert.Contains("id=\"space-appearance-failure\"", form.Body);
-            Assert.Contains(rule, form.Body);
+            Assert.Contains(rule.Text, form.Body);
             Assert.Contains(over, form.Body);
         }
 
         var head = "<meta name=\"long\" content=\"" + new string('x', Slots.HeadLimit) + "\">";
         var refused = await Json(leo, Path, Path, new { head });
         Assert.Equal(HttpStatusCode.BadRequest, refused.Status);
-        Assert.Contains(Slots.HeadRule, refused.Body);
+        Assert.Contains(Slots.HeadRule.Text, refused.Body);
 
         Assert.Equal(new Slots(), await Held());
         Assert.Equal(before, await Event.Count.Exact(Cancellation));

@@ -18,22 +18,22 @@ public static class RoleSettings
     /// <summary>The longest name a role takes.</summary>
     public const int NameLimit = 80;
 
-    public const string NameRule = "Name the role in 1 to 80 characters, on one line.";
+    public static readonly Reason NameRule = Reason.Invalid("Name the role in 1 to 80 characters, on one line.");
 
-    public const string PermissionsRule = "A role’s permissions are named as its can names them: View, Post, Topic, EditOwn, RemoveOwn, Moderate, "
-        + "ManageTangent, ManageRoles, ManageStanding, ManageSpace and Administrator.";
+    public static readonly Reason PermissionsRule = Reason.Invalid("A role’s permissions are named as its can names them: View, Post, Topic, EditOwn, RemoveOwn, Moderate, "
+        + "ManageTangent, ManageRoles, ManageStanding, ManageSpace and Administrator.");
 
     public static readonly Reason NoRole = Reason.Absent("No role here has that word.");
 
-    public static readonly Reason NotManaged = Reason.Gated("You change only the roles below your own highest role.");
+    public static readonly Reason NotManaged = Reason.Gated("not managed", "You change only the roles below your own highest role.");
 
-    public const string EveryoneStays = "Everyone stays as it is: every reader holds it, and a place’s audience says what they read.";
+    public static readonly Reason EveryoneStays = Reason.Invalid("Everyone stays as it is: every reader holds it, and a place’s audience says what they read.");
 
-    public const string SeededStays = "The member, moderator and administrator roles stay: rename them, change what they grant or move them instead.";
+    public static readonly Reason SeededStays = Reason.Invalid("The member, moderator and administrator roles stay: rename them, change what they grant or move them instead.");
 
-    public const string Administers = "The administrator role always administers.";
+    public static readonly Reason Administers = Reason.Invalid("The administrator role always administers.");
 
-    public const string NoWord = "Every word this name gives belongs to another role; choose another name.";
+    public static readonly Reason NoWord = Reason.Invalid("Every word this name gives belongs to another role; choose another name.");
 
     /// <summary>The word of a role whose name holds no letter or digit.</summary>
     public const string Unnamed = "role";

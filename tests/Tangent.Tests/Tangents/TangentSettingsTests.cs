@@ -120,7 +120,7 @@ public sealed class TangentSettingsTests
         var logged = (await Event.All(Cancellation)).OrderBy(e => e.Seq).Last();
         Assert.Equal((EventKind.TangentChanged, "workshop", Audience.Private), (logged.Kind, logged.TangentId, logged.Audience));
         var absent = await Send(ada.Client, HttpMethod.Get, "/t/workshop", json: true);
-        Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent.Text), (absent.Status, absent.Gate));
+        Assert.Equal((HttpStatusCode.NotFound, "absent"), (absent.Status, absent.Kind));
         Assert.Equal(HttpStatusCode.OK, (await Send(leo.Client, HttpMethod.Get, "/t/workshop", json: true)).Status);
 
         Assert.Equal(HttpStatusCode.SeeOther, (await Form(leo, "/t/workshop/settings", "/t/workshop/settings", Workshop(audience: "public"))).Status);
@@ -178,11 +178,11 @@ public sealed class TangentSettingsTests
 
         var opened = await Form(leo, Path, Path, new() { ["name"] = "Moderation", ["description"] = "Reports and talk.", ["kind"] = "topic", ["audience"] = "public" });
         Assert.Equal(HttpStatusCode.BadRequest, opened.Status);
-        Assert.Contains(ChangeTangent.Fixed, WebUtility.HtmlDecode(opened.Body));
+        Assert.Contains(ChangeTangent.Fixed.Text, WebUtility.HtmlDecode(opened.Body));
         var asJson = await Json(leo, Path, Path, new { audience = "public" });
-        Assert.Equal((HttpStatusCode.BadRequest, ChangeTangent.Fixed), (asJson.Status, asJson.Json.GetProperty("detail").GetString()));
+        Assert.Equal((HttpStatusCode.BadRequest, ChangeTangent.Fixed.Text), (asJson.Status, asJson.Json.GetProperty("detail").GetString()));
         var moved = await Json(leo, Path, Path, new { move = "earlier" });
-        Assert.Equal((HttpStatusCode.BadRequest, ChangeTangent.Fixed), (moved.Status, moved.Json.GetProperty("detail").GetString()));
+        Assert.Equal((HttpStatusCode.BadRequest, ChangeTangent.Fixed.Text), (moved.Status, moved.Json.GetProperty("detail").GetString()));
         Assert.Equal(Audience.Private, await Overwrites.AudienceOf(ModeratorsTangent.Slug, Cancellation));
         Assert.Equal(ModeratorsTangent.Name, (await Tangent.Get(ModeratorsTangent.Slug, Cancellation))!.Name);
 
@@ -218,7 +218,7 @@ public sealed class TangentSettingsTests
         Assert.Equal(["View", "Post", "Topic"], Strings(member.GetProperty("can")));
         Assert.False(member.TryGetProperty("change", out _));
         var studio = await Send(ada.Client, HttpMethod.Get, "/t/studio/settings", json: true);
-        Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent.Text), (studio.Status, studio.Gate));
+        Assert.Equal((HttpStatusCode.NotFound, "absent"), (studio.Status, studio.Kind));
 
         var described = await Json(leo, "/t/workshop/settings", "/t/workshop/settings", new { description = "Only this." });
 

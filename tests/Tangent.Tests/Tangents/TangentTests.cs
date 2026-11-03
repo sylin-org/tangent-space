@@ -137,7 +137,7 @@ public sealed class TangentTests(ITestOutputHelper output)
         {
             Assert.Equal(HttpStatusCode.NotFound, answer.Status);
             using var problem = JsonDocument.Parse(answer.Body);
-            Assert.Equal(Capabilities.Absent.Text, problem.RootElement.GetProperty("gate").GetString());
+            Assert.Equal("absent", problem.RootElement.GetProperty("kind").GetString());
         });
         Assert.All(answers.Where(answer => answer.Path == "/"), answer =>
         {

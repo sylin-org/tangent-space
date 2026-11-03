@@ -21,7 +21,7 @@ public sealed record Establish(
     string Name,
     DateTimeOffset? At = null) : ICommand<TangentSpace>
 {
-    public const string AlreadyEstablished = "This Tangent Space is already set up.";
+    public static readonly Reason AlreadyEstablished = Reason.Invalid("This Tangent Space is already set up.");
 
     public async Task<Outcome<TangentSpace>> Run(CancellationToken ct)
     {

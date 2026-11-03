@@ -73,7 +73,7 @@ public sealed class CommandTests(ITestOutputHelper output)
         var refused = await new CreateSlip("blank", "s", 0, " ").Send(Cancellation);
         var next = await new CreateSlip("written", "s", 1, "body").Send(Cancellation);
 
-        Assert.Equal(Slip.NeedsBody, Assert.IsType<Outcome<Slip>.Refused>(refused).Reason.Text);
+        Assert.Equal(Slip.NeedsBody, Assert.IsType<Outcome<Slip>.Refused>(refused).Reason);
         Assert.Null(await Slip.Get("blank", Cancellation));
         Assert.Equal(1, Assert.IsType<Outcome<Slip>.Done>(next).Result.Sequence);
         Assert.Equal(1, await Slip.Count.Exact(Cancellation));

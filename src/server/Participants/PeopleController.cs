@@ -2,6 +2,7 @@ using System.ComponentModel;
 using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Koan.Web.Attributes;
+using Koan.Web.Controllers;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
@@ -94,11 +95,11 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
 
         People.Cursor? cursor = null;
         if (after is not null && (cursor = People.Cursor.Open(after, protection)) is null)
-            return new Problem(StatusCodes.Status400BadRequest, "Not a page of the people",
-                $"The {After} parameter is the cursor a page of the people names as its next.").ToResult();
+            return new Problem(StatusCodes.Status400BadRequest,
+                $"The {After} parameter is the cursor a page of the people names as its next.") { Title = "Not a page of the people" }.ToResult();
 
         var page = await Page(place, personId, People.Start(handle), cursor, ct);
-        return page.Gate is { } gate ? new ObjectResult(page) { StatusCode = PostWrites.Status(gate) } : Ok(page);
+        return ReadGate(place) is { } gate ? new ObjectResult(page) { StatusCode = Answers.Status(HttpContext, gate) } : Ok(page);
     }
 
     [HttpPost(TimeOutPath)]
@@ -114,13 +115,13 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "ban", Destructive = true, Idempotent = true, OpenWorld = false)]
     [Description("Ban a participant, for whoever holds ManageStanding: the place no longer exists for them, and they are told. lift reverses it.")]
-    public Task<IActionResult> PostBan(StandingInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) => new Ban(actor, participant), "", ct);
+    public Task<IActionResult> PostBan(StandingInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) => new Ban(actor, participant), null, ct);
 
     [HttpPost(LiftPath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "lift", Destructive = true, Idempotent = true, OpenWorld = false)]
     [Description("Lift a participant's timeout or ban, so they take part again, for whoever holds ManageStanding.")]
-    public Task<IActionResult> PostLift(StandingInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) => new Lift(actor, participant), "", ct);
+    public Task<IActionResult> PostLift(StandingInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) => new Lift(actor, participant), null, ct);
 
     [HttpPost(GivePath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
@@ -140,14 +141,14 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
 
     /// <summary>One change: the place; the command <paramref name="command"/> builds for who sent it and
     /// whom it names, or <paramref name="unsent"/> where what was sent names none; then the command's outcome.</summary>
-    private async Task<IActionResult> Change(string? named, string? back, Func<string, string, ICommand<Participant>?> command, Reason unsent, CancellationToken ct)
+    private async Task<IActionResult> Change(string? named, string? back, Func<string, string, ICommand<Participant>?> command, Reason? unsent, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
 
-        if (command(personId ?? "", named ?? "") is not { } sent) return await Refused(personId, unsent, ct);
+        if (command(personId ?? "", named ?? "") is not { } sent) return await Refused(personId, unsent!, ct);
         var outcome = await sent.Send();
         switch (outcome)
         {
@@ -156,7 +157,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
             case Outcome<Participant>.Refused { Reason: var reason }:
                 return await Refused(personId, reason, ct);
             default:
-                return PostWrites.Answer(HttpContext, outcome);
+                return Answers.NotDone(HttpContext, outcome);
         }
     }
 
@@ -180,13 +181,13 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
     /// with the reason above the list.</summary>
     private async Task<IActionResult> Refused(string? personId, Reason reason, CancellationToken ct)
     {
-        if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
+        if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
 
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
         var page = await Page(place, personId, null, null, ct);
         if (page.Gate is null) page = page with { Failure = reason.Text };
-        return new ObjectResult(page) { StatusCode = PostWrites.Status(reason) };
+        return new ObjectResult(page) { StatusCode = Answers.Status(HttpContext, reason) };
     }
 
     private async Task<PeoplePage> Page(Capabilities place, string? personId, string? start, People.Cursor? cursor, CancellationToken ct)

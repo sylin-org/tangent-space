@@ -12,7 +12,7 @@ public sealed class TangentSpace : Entity<TangentSpace>
     public const string SingleRow = "tangent-space";
 
     /// <summary>The refusal an address that is not an origin meets.</summary>
-    public const string AddressRule = "The address is an origin: a scheme, a host and a port, with nothing after them.";
+    public static readonly Reason AddressRule = Reason.Invalid("The address is an origin: a scheme, a host and a port, with nothing after them.");
 
     /// <summary>The name a place shows before first run names it.</summary>
     public const string Unnamed = "New Tangent Space";
@@ -21,22 +21,22 @@ public sealed class TangentSpace : Entity<TangentSpace>
     public const int NameLimit = 120;
 
     /// <summary>The refusal a name outside the rule meets.</summary>
-    public const string NameRule = "Name the Tangent Space in 1 to 120 characters, on one line.";
+    public static readonly Reason NameRule = Reason.Invalid("Name the Tangent Space in 1 to 120 characters, on one line.");
 
     /// <summary>The longest description a place takes: the line under its name on the door.</summary>
     public const int DescriptionLimit = 300;
 
     /// <summary>The refusal a description outside the rule meets.</summary>
-    public const string DescriptionRule = "Describe the Tangent Space in at most 300 characters.";
+    public static readonly Reason DescriptionRule = Reason.Invalid("Describe the Tangent Space in at most 300 characters.");
 
     /// <summary>The refusal an admission other than join or apply meets.</summary>
-    public const string AdmissionRule = "A newcomer joins at once or applies and waits: choose join or apply.";
+    public static readonly Reason AdmissionRule = Reason.Invalid("A newcomer joins at once or applies and waits: choose join or apply.");
 
     /// <summary>The refusal an audience other than public or private meets.</summary>
-    public const string AudienceRule = "The place is read by anyone or by its participants alone: choose public or private.";
+    public static readonly Reason AudienceRule = Reason.Invalid("The place is read by anyone or by its participants alone: choose public or private.");
 
     /// <summary>The refusal an accent outside the four meets.</summary>
-    public const string AccentRule = "The place's accent is one of four: choose gold, jade, iris or copper.";
+    public static readonly Reason AccentRule = Reason.Invalid("The place's accent is one of four: choose gold, jade, iris or copper.");
 
     /// <summary>The name first run gives a place set up by someone whose sign-in verified no handle.</summary>
     public const string PlainName = "Tangent Space";

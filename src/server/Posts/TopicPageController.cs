@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Security.Claims;
 using Koan.Web.Attributes;
 using Koan.Web.Auth.Infrastructure;
+using Koan.Web.Controllers;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -210,7 +211,7 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
         => long.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var sequence) ? sequence : null;
 
     private static IActionResult NotAWindow(string detail)
-        => new Problem(StatusCodes.Status400BadRequest, "Not a window of this Topic", detail).ToResult();
+        => new Problem(StatusCodes.Status400BadRequest, detail) { Title = "Not a window of this Topic" }.ToResult();
 
     public static TangentPage.Author Person(IReadOnlyDictionary<string, TangentPage.Author> people, string id)
         => people.TryGetValue(id, out var person) ? person : new TangentPage.Author(id, id, id, "person", null);

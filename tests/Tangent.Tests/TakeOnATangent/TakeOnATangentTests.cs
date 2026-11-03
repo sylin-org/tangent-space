@@ -220,7 +220,7 @@ public sealed class TakeOnATangentTests
 
         Assert.Equal(Post.NeedsBody, Assert.IsType<Outcome<Post>.Refused>(bare).Reason);
         Assert.Equal(HttpStatusCode.BadRequest, bareJson.Status);
-        Assert.Equal(Post.NeedsBody, bareJson.Json.GetProperty("detail").GetString());
+        Assert.Equal(Post.NeedsBody.Text, bareJson.Json.GetProperty("detail").GetString());
         Assert.Equal(Post.NeedsBody, Assert.IsType<Outcome<Post>.Refused>(bareReply).Reason);
         Assert.Equal("", taken.Body);
         var edited = Assert.IsType<Outcome<Post>.Done>(retitled).Result;

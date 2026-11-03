@@ -52,19 +52,19 @@ public static class People
     /// <summary>The answer to a change of someone who never arrived.</summary>
     public static readonly Reason NoOne = Reason.Absent("No one by that id has arrived here.");
 
-    public static readonly Reason Themselves = Reason.Gated("No one changes their own standing or roles.");
+    public static readonly Reason Themselves = Reason.Gated("themselves", "No one changes their own standing or roles.");
 
-    public static readonly Reason Operator = Reason.Gated("The operator answers for this place: no one times them out, bans them or changes their roles.");
+    public static readonly Reason Operator = Reason.Gated("operator", "The operator answers for this place: no one times them out, bans them or changes their roles.");
 
-    public static readonly Reason NotBelow = Reason.Gated("You change the standing and roles only of someone whose highest role is below yours.");
+    public static readonly Reason NotBelow = Reason.Gated("not below", "You change the standing and roles only of someone whose highest role is below yours.");
 
-    public static readonly Reason NotHeld = Reason.Gated("No one gives or takes a role whose permissions they do not hold.");
+    public static readonly Reason NotHeld = Reason.Gated("not held", "No one gives or takes a role whose permissions they do not hold.");
 
-    public static readonly Reason NotManaged = Reason.Gated("You give and take only the roles below your own highest role.");
+    public static readonly Reason NotManaged = Reason.Gated("not managed", "You give and take only the roles below your own highest role.");
 
-    public const string NotARole = "Give or take a role this place has; the member role is admission’s.";
+    public static readonly Reason NotARole = Reason.Invalid("Give or take a role this place has; the member role is admission’s.");
 
-    public const string NotADuration = "A timeout lasts an hour, a day or a week: send hour, day or week.";
+    public static readonly Reason NotADuration = Reason.Invalid("A timeout lasts an hour, a day or a week: send hour, day or week.");
 
     /// <summary>How long a timeout lasts, by the word a form sends, shortest first.</summary>
     public static readonly IReadOnlyList<(string Word, TimeSpan Length)> Durations =

@@ -64,7 +64,7 @@ public sealed class TangentModule : KoanModule
         services.AddScoped<HtmlRenderer>();
         services.AddSingleton(new ResourceComponents()
             .Add<Door, DoorView>(door => door.Name, Door.Version, DoorView.Frame, Door.Card)
-            .Add<Problem, ProblemView>(problem => problem.Title)
+            .Add<Koan.Web.Controllers.Problem, ProblemView>(ProblemView.Heading)
             .Add<Participants.SignIn, Participants.SignInView>(signIn => "Sign in · " + signIn.Name, frame: Participants.SignInView.Frame)
             .Add<Tangents.TangentPage, Tangents.TangentView>(page => page.Name + " · " + page.Place, Tangents.TangentPage.Version, Tangents.TangentView.Frame, Tangents.TangentPage.Card)
             .Add<Tangents.TangentsPage, Tangents.TangentsView>(page => "Tangents · " + page.Place, frame: Tangents.TangentsView.Frame)
@@ -90,7 +90,6 @@ public sealed class TangentModule : KoanModule
             .Add<Posts.SearchPage, Posts.SearchView>(page => (page.Text is { } text ? text + " · Search · " : "Search · ") + page.Place, frame: Posts.SearchView.Frame)
             .Add<Participants.BringYourAgent, Participants.BringYourAgentView>(page => "Bring your agent · " + page.Place, frame: Participants.BringYourAgentView.Frame));
         services.AddSingleton<HtmlFormatter>();
-        services.AddSingleton<Koan.Web.Controllers.IProblemView, ProblemFrame>();
         services.AddOptions<MvcOptions>().Configure<HtmlFormatter>((mvc, html) =>
         {
             mvc.OutputFormatters.Insert(0, html);

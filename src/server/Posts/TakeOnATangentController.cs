@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Koan.Data.Core.Commands;
 using Koan.Web.Attributes;
+using Koan.Web.Controllers;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
@@ -67,15 +68,15 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, IDataProtec
         if (found is null) return unseen!;
         ViewableTangents.Cursor? cursor = null;
         if (after is not null && (cursor = ViewableTangents.Cursor.Open(after, protection)) is null)
-            return new Problem(StatusCodes.Status400BadRequest, "Not a page of these Tangents",
-                $"The {After} parameter is the cursor a page of this form names as its next.").ToResult();
+            return new Problem(StatusCodes.Status400BadRequest,
+                $"The {After} parameter is the cursor a page of this form names as its next.") { Title = "Not a page of these Tangents" }.ToResult();
         return Ok(await Page(found, personId, null, cursor, ct));
     }
 
     [HttpPost(TakenFrom)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "take_on_a_tangent", Destructive = false, Idempotent = false, OpenWorld = false)]
-    [Description("Make a Post the start of a new Topic in a Tangent you choose, linked both ways, when a reply would wander from its Topic. Send an id, a TID you mint, and the same call again returns the same Topic, so a retry is safe; without one, each call makes a new Topic. Refused, its gate says why and its next, where there is one, what to do now.")]
+    [Description("Make a Post the start of a new Topic in a Tangent you choose, linked both ways, when a reply would wander from its Topic. Send an id, a TID you mint, and the same call again returns the same Topic, so a retry is safe; without one, each call makes a new Topic. Refused, its gate says why.")]
     public async Task<IActionResult> Take([FromRoute, Description(Holds.TakeFrom)] string from, [FromRoute, Description(Holds.Topic)] string topic,
         [FromRoute, Description(Holds.Post)] string post, TakeInput input, CancellationToken ct)
     {
@@ -106,13 +107,13 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, IDataProtec
             case Outcome<Post>.Refused { Reason: var reason } when reason != StartTopic.NoOrigin && reason.Kind != ReasonKind.Conflict:
                 return await Refused(found, personId, input, reason, ct);
             case Outcome<Post>.Refused { Reason: { Kind: ReasonKind.Conflict } reason }:
-                if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
+                if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
                 return await Again(found, personId, input, StatusCodes.Status409Conflict, keepId: false, page => page with
                 {
                     Failure = "This form was already sent with other words, so nothing was posted. Send it again to post these words as well."
                 }, ct);
             default:
-                return PostWrites.Answer(HttpContext, outcome);
+                return Answers.NotDone(HttpContext, outcome);
         }
     }
 
@@ -123,12 +124,12 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, IDataProtec
     {
         if (reason == StartTopic.NoTangent)
         {
-            if (PostWrites.WantsJson(Request)) return new Problem(StatusCodes.Status400BadRequest, "Not written", reason.Text).ToResult();
+            if (PostWrites.WantsJson(Request)) return new Problem(StatusCodes.Status400BadRequest, reason.Text) { Title = "Not written" }.ToResult();
             return await Again(found, personId, input, StatusCodes.Status400BadRequest, keepId: true, page => page with { ChoiceFailure = ChooseListed }, ct);
         }
 
-        if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
-        return await Again(found, personId, input, PostWrites.Status(reason), keepId: true, page => PostWrites.Concerning(reason) switch
+        if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
+        return await Again(found, personId, input, Answers.Status(HttpContext, reason), keepId: true, page => PostWrites.Concerning(reason) switch
         {
             PostWrites.About.Title => page with { TitleFailure = reason.Text },
             PostWrites.About.Body => page with { BodyFailure = reason.Text },

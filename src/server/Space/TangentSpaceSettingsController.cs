@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Koan.Data.Core.Commands;
 using Koan.Web.Attributes;
+using Koan.Web.Controllers;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -190,7 +191,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
             case Outcome<TangentSpace>.Refused { Reason: { Kind: not ReasonKind.Absent } reason }:
                 return await Refused(personId, input, reason, ct);
             default:
-                return PostWrites.Answer(HttpContext, outcome);
+                return Answers.NotDone(HttpContext, outcome);
         }
     }
 
@@ -233,7 +234,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
             case Outcome<TangentSpace>.Refused { Reason: { Kind: not ReasonKind.Absent } reason }:
                 return await AdmissionRefused(personId, sent, reason, ct);
             default:
-                return PostWrites.Answer(HttpContext, outcome);
+                return Answers.NotDone(HttpContext, outcome);
         }
     }
 
@@ -241,14 +242,14 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
     /// read afresh, with what was sent chosen where it is one of the choices, and the reason above the form.</summary>
     private async Task<IActionResult> AdmissionRefused(string? personId, string? sent, Reason reason, CancellationToken ct)
     {
-        if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
+        if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
 
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
         var page = await AdmissionPage(place, personId, ct);
         if (sent is not null && Admissions.Contains(sent, StringComparer.Ordinal)) page = page with { Admission = sent };
         page = reason.Kind == ReasonKind.Gated ? page with { Gate = reason.Word, Change = null } : page with { Failure = reason.Text };
-        return new ObjectResult(page) { StatusCode = PostWrites.Status(reason) };
+        return new ObjectResult(page) { StatusCode = Answers.Status(HttpContext, reason) };
     }
 
     private async Task<AdmissionSettingsPage> AdmissionPage(Capabilities place, string? personId, CancellationToken ct)
@@ -308,7 +309,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
             case Outcome<TangentSpace>.Refused { Reason: { Kind: not ReasonKind.Absent } reason }:
                 return await AppearanceRefused(personId, input, reason, ct);
             default:
-                return PostWrites.Answer(HttpContext, outcome);
+                return Answers.NotDone(HttpContext, outcome);
         }
     }
 
@@ -317,7 +318,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
     /// the form.</summary>
     private async Task<IActionResult> AppearanceRefused(string? personId, ChangeAppearanceInput input, Reason reason, CancellationToken ct)
     {
-        if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
+        if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
 
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
@@ -335,7 +336,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
             }
         };
         page = reason.Kind == ReasonKind.Gated ? page with { Gate = reason.Word, Change = null } : page with { Failure = reason.Text };
-        return new ObjectResult(page) { StatusCode = PostWrites.Status(reason) };
+        return new ObjectResult(page) { StatusCode = Answers.Status(HttpContext, reason) };
     }
 
     private async Task<AppearanceSettingsPage> AppearancePage(Capabilities place, string? personId, CancellationToken ct)
@@ -380,7 +381,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
     /// keeping what was sent, with the reason where it belongs.</summary>
     private async Task<IActionResult> Refused(string? personId, ChangeSpaceInput input, Reason reason, CancellationToken ct)
     {
-        if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
+        if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
 
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
@@ -391,13 +392,11 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
             Description = input.Description ?? page.Description,
             Audience = input.Audience is { } audience && Audiences.Contains(audience, StringComparer.Ordinal) ? audience : page.Audience
         };
-        page = reason.Kind == ReasonKind.Gated ? page with { Gate = reason.Word, Change = null } : reason.Text switch
-        {
-            TangentSpace.NameRule => page with { NameFailure = reason.Text },
-            TangentSpace.DescriptionRule => page with { DescriptionFailure = reason.Text },
-            _ => page with { Failure = reason.Text }
-        };
-        return new ObjectResult(page) { StatusCode = PostWrites.Status(reason) };
+        page = reason.Kind == ReasonKind.Gated ? page with { Gate = reason.Word, Change = null }
+            : reason == TangentSpace.NameRule ? page with { NameFailure = reason.Text }
+            : reason == TangentSpace.DescriptionRule ? page with { DescriptionFailure = reason.Text }
+            : page with { Failure = reason.Text };
+        return new ObjectResult(page) { StatusCode = Answers.Status(HttpContext, reason) };
     }
 
     private async Task<TangentSpaceSettingsPage> Page(Capabilities place, string? personId, CancellationToken ct)

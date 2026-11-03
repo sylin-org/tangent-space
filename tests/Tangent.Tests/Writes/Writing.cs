@@ -82,6 +82,9 @@ internal static partial class Writing
         public string? Gate => MediaType is "application/problem+json" && Json.TryGetProperty("gate", out var gate) ? gate.GetString() : null;
 
         public string? Title => MediaType is "application/problem+json" && Json.TryGetProperty("title", out var title) ? title.GetString() : null;
+
+        /// <summary>The problem's kind, which every problem carries: invalid, absent, gated, conflict or failed.</summary>
+        public string? Kind => MediaType is "application/problem+json" && Json.TryGetProperty("kind", out var kind) ? kind.GetString() : null;
     }
 
     /// <summary>Sends a request as JSON (<paramref name="json"/>) or as a page asks, with a bearer when given, and, from

@@ -38,7 +38,7 @@ public sealed record ChangeTangent(
     public static readonly Reason NoTangent = Reason.Absent("No Tangent has this slug.");
 
     /// <summary>The answer to a change of the moderators' Tangent's audience or order.</summary>
-    public const string Fixed = "The moderators’ Tangent keeps its audience and its place: only moderators read it, and it comes after every other Tangent.";
+    public static readonly Reason Fixed = Reason.Invalid("The moderators’ Tangent keeps its audience and its place: only moderators read it, and it comes after every other Tangent.");
 
     /// <summary>The most Tangents one read of a move takes: a page of the Tangents in their order.</summary>
     public const int OrderPage = 100;
@@ -74,7 +74,7 @@ public sealed record ChangeTangent(
         if (TangentWrites.ManageGate(capabilities) is { } gate) return gate;
         if (Move is not null && (await Capabilities.Load(ActorId, null, null, ct)).Gate(Bit.ManageSpace) is { } arranging) return arranging;
         var moderators = (await TangentSpace.Get(TangentSpace.SingleRow, ct))?.ModeratorsTangentId == Slug;
-        return moderators && (Move is not null || (Audience is { } asked && asked != actual)) ? (Reason)Fixed : null;
+        return moderators && (Move is not null || (Audience is { } asked && asked != actual)) ? Fixed : null;
     }
 
     /// <summary>Moves <paramref name="tangent"/> one place among the Tangents in their order, the moderators' Tangent

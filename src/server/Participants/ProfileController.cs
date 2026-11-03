@@ -3,6 +3,7 @@ using Koan.Data.Abstractions;
 using Koan.Identity.Roles;
 using Koan.Web.Attributes;
 using Koan.Web.Auth.Infrastructure;
+using Koan.Web.Controllers;
 using Koan.Web.Hosting;
 using KoanPerson = Koan.Identity.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -44,8 +45,8 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
 
         RecentPosts.Cursor? cursor = null;
         if (before is not null && (cursor = RecentPosts.Cursor.Parse(before)) is null)
-            return new Problem(StatusCodes.Status400BadRequest, "Not a page of these posts",
-                $"The {Before} parameter is the cursor a page of this profile names as its older.").ToResult();
+            return new Problem(StatusCodes.Status400BadRequest,
+                $"The {Before} parameter is the cursor a page of this profile names as its older.") { Title = "Not a page of these posts" }.ToResult();
 
         var whole = await ViewableTangents.All(personId, ct);
         var tangents = whole.Tangents.ToDictionary(tangent => tangent.Id, StringComparer.Ordinal);

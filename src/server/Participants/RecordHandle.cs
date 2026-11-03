@@ -13,7 +13,7 @@ public sealed record RecordHandle(string PersonId, string Handle) : ICommand<Par
     public async Task<Outcome<Participant>> Run(CancellationToken ct)
     {
         if (await Participant.Get(PersonId, ct) is not { } participant)
-            return new Outcome<Participant>.Refused($"{PersonId} has not arrived.");
+            return new Outcome<Participant>.Refused(Reason.Invalid($"{PersonId} has not arrived."));
         if (participant.Verified(Handle)) await participant.Save(ct);
         await Handles.Release(participant.Handle, participant.Id, ct);
         await MemberRole.Join(participant, ct);

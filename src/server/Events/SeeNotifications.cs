@@ -15,7 +15,7 @@ namespace Tangent.Events;
 public sealed record SeeNotifications(string ParticipantId, long Through) : ICommand<Checkpoint>
 {
     public static readonly Reason NoPlace = CatchUp.NoPlace;
-    public const string NoNotification = "No notification of yours has this sequence.";
+    public static readonly Reason NoNotification = Reason.Invalid("No notification of yours has this sequence.");
 
     public async Task<Outcome<Checkpoint>> Run(CancellationToken ct)
     {

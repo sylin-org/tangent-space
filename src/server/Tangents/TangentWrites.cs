@@ -22,9 +22,9 @@ public static class TangentWrites
     /// Topic.</summary>
     public const string SettingsSegment = "settings";
 
-    public const string KindRule = "A Tangent’s default kind is topic or article.";
-    public const string AudienceRule = "A Tangent’s audience is public or private.";
-    public const string MoveRule = "A Tangent moves earlier or later.";
+    public static readonly Reason KindRule = Reason.Invalid("A Tangent’s default kind is topic or article.");
+    public static readonly Reason AudienceRule = Reason.Invalid("A Tangent’s audience is public or private.");
+    public static readonly Reason MoveRule = Reason.Invalid("A Tangent moves earlier or later.");
 
     /// <summary>The default kinds a Tangent may take, as words.</summary>
     public static readonly IReadOnlyList<string> Kinds = Enum.GetValues<PostKind>().Select(PostWrites.Word).ToList();
@@ -95,12 +95,10 @@ public static class TangentWrites
         return null;
     }
 
-    public static About Concerning(Reason reason) => reason.Kind == ReasonKind.Gated ? About.Gate : reason.Text switch
-    {
-        Tangent.NeedsName or Tangent.NameTooLong => About.Name,
-        Tangent.DescriptionTooLong => About.Description,
-        _ => About.Sent
-    };
+    public static About Concerning(Reason reason) => reason.Kind == ReasonKind.Gated ? About.Gate
+        : reason == Tangent.NeedsName || reason == Tangent.NameTooLong ? About.Name
+        : reason == Tangent.DescriptionTooLong ? About.Description
+        : About.Sent;
 
     /// <summary>A write that committed: a form is sent on to <paramref name="next"/>; a JSON request reads the Tangent as
     /// it now stands with the sender's <c>can</c> on it, created (<c>201</c>) or changed (<c>200</c>), with its address

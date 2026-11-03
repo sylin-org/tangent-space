@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Globalization;
 using Koan.Data.Core.Commands;
 using Koan.Web.Attributes;
+using Koan.Web.Controllers;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
@@ -49,8 +50,8 @@ public sealed class NotificationsController(KoanWebBaseUrl baseUrl, IDataProtect
 
         Notifications.Cursor? cursor = null;
         if (after is not null && (cursor = Notifications.Cursor.Open(after, protection)) is null)
-            return new Problem(StatusCodes.Status400BadRequest, "Not a page of your notifications",
-                $"The {After} parameter is the cursor a page of your notifications names as its next.").ToResult();
+            return new Problem(StatusCodes.Status400BadRequest,
+                $"The {After} parameter is the cursor a page of your notifications names as its next.") { Title = "Not a page of your notifications" }.ToResult();
 
         var seen = await Notifications.Seen(personId!, ct);
         var began = cursor?.From ?? (from is >= 0 ? from.Value : seen);
@@ -91,12 +92,14 @@ public sealed class NotificationsController(KoanWebBaseUrl baseUrl, IDataProtect
         var seen = await Notifications.Seen(personId!, ct);
         var newest = (await Notifications.CountPast(personId!, seen, "", ct)).Through;
         if (newest > seen && await new SeeNotifications(personId!, newest).Send() is not Outcome<Checkpoint>.Done and var outcome)
-            return PostWrites.Answer(HttpContext, outcome);
+            return Answers.NotDone(HttpContext, outcome);
 
         Response.Headers.Location = baseUrl.PathBase + Notifications.Path
             + (newest > seen ? "?" + From + "=" + seen.ToString(CultureInfo.InvariantCulture) : "");
         return StatusCode(StatusCodes.Status303SeeOther);
     }
+
+    private static readonly Reason SignInToRead = Reason.Gated(Capabilities.SignIn.Word!, "Notifications are a signed-in participant's.");
 
     /// <summary>What both ways ask first: a signed-in reader for whom the place exists.</summary>
     private async Task<(IActionResult? Refusal, string? PersonId, Capabilities? Place)> Reading(CancellationToken ct)
@@ -105,7 +108,7 @@ public sealed class NotificationsController(KoanWebBaseUrl baseUrl, IDataProtect
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return (DoorController.Gated(HttpContext, place.Gate(Bit.View) ?? Capabilities.Absent), null, null);
         if (personId is null)
-            return (PostWrites.Refused(HttpContext, Capabilities.SignIn, "Notifications are a signed-in participant's."), null, null);
+            return (Answers.Refused(HttpContext, SignInToRead), null, null);
         return (null, personId, place);
     }
 

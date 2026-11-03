@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Globalization;
 using Koan.Data.Core.Commands;
 using Koan.Web.Attributes;
+using Koan.Web.Controllers;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -58,7 +59,7 @@ public sealed class CheckpointController(KoanWebBaseUrl baseUrl) : ControllerBas
         var personId = PostWrites.PersonId(User);
         var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, topic, null, ct);
         if (found is null) return unseen!;
-        if (personId is null) return PostWrites.Refused(HttpContext, Capabilities.SignIn);
+        if (personId is null) return Answers.Refused(HttpContext, Capabilities.SignIn);
         if (input.Through is not (>= 0 and var through))
             return NotASequence($"The {ThroughField} field carries the sequence the Topic page names as shown through.");
 
@@ -68,7 +69,7 @@ public sealed class CheckpointController(KoanWebBaseUrl baseUrl) : ControllerBas
         {
             Outcome<Checkpoint>.Done { Result: var checkpoint } => Moved(checkpoint, PostWrites.TopicAddress(BaseAddress(), root.TangentId, root.Slug ?? root.Id)),
             Outcome<Checkpoint>.Refused { Reason: { Kind: ReasonKind.Invalid } reason } => NotASequence(reason.Text),
-            _ => PostWrites.Answer(HttpContext, outcome)
+            _ => Answers.NotDone(HttpContext, outcome)
         };
     }
 
@@ -89,15 +90,15 @@ public sealed class CheckpointController(KoanWebBaseUrl baseUrl) : ControllerBas
         var personId = PostWrites.PersonId(User);
         var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, topic, null, ct);
         if (found is null) return unseen!;
-        if (personId is null) return PostWrites.Refused(HttpContext, Capabilities.SignIn);
+        if (personId is null) return Answers.Refused(HttpContext, Capabilities.SignIn);
         if (input.Watch is not { } watch)
-            return new Problem(StatusCodes.Status400BadRequest, "Not a watch flag", $"The {WatchField} field is true or false.").ToResult();
+            return new Problem(StatusCodes.Status400BadRequest, $"The {WatchField} field is true or false.") { Title = "Not a watch flag" }.ToResult();
 
         var (scope, address) = found.Root is { } root
             ? (Scope.Topic(root.Id), PostWrites.TopicAddress(BaseAddress(), root.TangentId, root.Slug ?? root.Id))
             : (Scope.Tangent(found.Tangent.Id), PostWrites.TangentAddress(BaseAddress(), found.Tangent.Id));
         var outcome = await new SetWatch(personId, scope, watch).Send();
-        return outcome is Outcome<Checkpoint>.Done { Result: var checkpoint } ? Moved(checkpoint, address) : PostWrites.Answer(HttpContext, outcome);
+        return outcome is Outcome<Checkpoint>.Done { Result: var checkpoint } ? Moved(checkpoint, address) : Answers.NotDone(HttpContext, outcome);
     }
 
     /// <summary>A checkpoint as it stands after the command: a form is sent back to the page at
@@ -118,7 +119,7 @@ public sealed class CheckpointController(KoanWebBaseUrl baseUrl) : ControllerBas
     }
 
     private static IActionResult NotASequence(string detail)
-        => new Problem(StatusCodes.Status400BadRequest, "Not a sequence of this topic", detail).ToResult();
+        => new Problem(StatusCodes.Status400BadRequest, detail) { Title = "Not a sequence of this topic" }.ToResult();
 
     private string BaseAddress() => baseUrl.Resolve(HttpContext);
 }

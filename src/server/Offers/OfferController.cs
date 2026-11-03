@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Security.Claims;
 using Koan.Data.Core.Commands;
 using Koan.Web.Attributes;
+using Koan.Web.Controllers;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -56,9 +57,9 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, AddressOffers offers
             case Outcome<Offer>.Refused { Reason: var reason } when reason == Offer.NotOpen:
                 return (await Offer.Get(Offer.IdFor(OfferKind.Address, origin!), ct))?.State == OfferState.Accepted ? Landed() : NoLongerOpen();
             case Outcome<Offer>.Refused { Reason: { Kind: not ReasonKind.Absent } refused }:
-                return new Problem(StatusCodes.Status409Conflict, "Not used", refused.Text).ToResult();
+                return new Problem(StatusCodes.Status409Conflict, refused.Text) { Title = "Not used" }.ToResult();
             default:
-                return PostWrites.Answer(HttpContext, outcome);
+                return Answers.NotDone(HttpContext, outcome);
         }
     }
 
@@ -79,11 +80,13 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, AddressOffers offers
             case Outcome<Offer>.Refused { Reason: var reason } when reason == Offer.NotOpen:
                 return (await Offer.Get(Offer.IdFor(OfferKind.Address, origin!), ct))?.State == OfferState.Declined ? Door() : NoLongerOpen();
             case Outcome<Offer>.Refused { Reason: { Kind: not ReasonKind.Absent } refused }:
-                return new Problem(StatusCodes.Status409Conflict, "Not declined", refused.Text).ToResult();
+                return new Problem(StatusCodes.Status409Conflict, refused.Text) { Title = "Not declined" }.ToResult();
             default:
-                return PostWrites.Answer(HttpContext, outcome);
+                return Answers.NotDone(HttpContext, outcome);
         }
     }
+
+    private static readonly Reason SignInToDecide = Reason.Gated(Capabilities.SignIn.Word!, "Deciding an offer needs its decider signed in.");
 
     /// <summary>What every answer asks first: a signed-in poster who is the place's operator, and the origin its
     /// <see cref="Field"/> names, sent as a form or a JSON object, either decided before or open to them now.</summary>
@@ -91,7 +94,7 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, AddressOffers offers
     {
         Response.Headers.CacheControl = "no-store";
         if (PersonId(User) is not { } personId)
-            return (PostWrites.Refused(HttpContext, Capabilities.SignIn, "Deciding an offer needs its decider signed in."), null, null, null);
+            return (Answers.Refused(HttpContext, SignInToDecide), null, null, null);
         if (input.Origin is not { Length: > 0 } origin || await TangentSpace.Get(TangentSpace.SingleRow, ct) is not { } space || space.OperatorId != personId)
             return (Absent(), null, null, null);
         if (await Offer.Get(Offer.IdFor(OfferKind.Address, origin), ct) is { } decided) return (null, personId, origin, decided);
@@ -116,7 +119,7 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, AddressOffers offers
     private static IActionResult Absent() => PostWrites.Absent();
 
     private static IActionResult NoLongerOpen()
-        => new Problem(StatusCodes.Status409Conflict, "No longer open", Offer.NotOpen.Text).ToResult();
+        => new Problem(StatusCodes.Status409Conflict, Offer.NotOpen.Text) { Title = "No longer open" }.ToResult();
 
     private static string? PersonId(ClaimsPrincipal user)
         => user.Identity?.IsAuthenticated == true ? user.FindFirst(ClaimTypes.NameIdentifier)?.Value : null;

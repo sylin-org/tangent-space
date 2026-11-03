@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Koan.Web.Auth.Infrastructure;
+using Koan.Web.Controllers;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -44,7 +45,7 @@ public sealed class SignInController(KoanWebBaseUrl baseUrl) : ControllerBase
     public static IActionResult Answer(HttpContext http, KoanWebBaseUrl baseUrl, TangentSpace space)
     {
         http.Response.Headers.CacheControl = "no-store";
-        if (PostWrites.WantsJson(http.Request)) return PostWrites.Refused(http, Capabilities.SignIn);
+        if (PostWrites.WantsJson(http.Request)) return Answers.Refused(http, Capabilities.SignIn);
         var requested = HttpMethods.IsGet(http.Request.Method) || HttpMethods.IsHead(http.Request.Method)
             ? http.Request.PathBase + http.Request.Path + http.Request.QueryString
             : null;

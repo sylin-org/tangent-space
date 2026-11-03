@@ -151,7 +151,7 @@ public sealed class NewTangentTests
                 created.Json.GetProperty("audience").GetString(), created.Json.GetProperty("settings").GetString()));
         Assert.Contains("ManageTangent", Strings(created.Json.GetProperty("can")));
         var refused = await Json(leo, "/t/new", "/t/new", new { name = "Field guides", kind = "gallery" });
-        Assert.Equal((HttpStatusCode.BadRequest, TangentWrites.KindRule), (refused.Status, refused.Json.GetProperty("detail").GetString()));
+        Assert.Equal((HttpStatusCode.BadRequest, TangentWrites.KindRule.Text), (refused.Status, refused.Json.GetProperty("detail").GetString()));
     }
 
     private static List<string?> Slugs(JsonElement tangents) => tangents.EnumerateArray().Select(tangent => tangent.GetProperty("slug").GetString()).ToList();

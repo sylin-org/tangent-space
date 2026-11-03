@@ -77,7 +77,7 @@ public sealed class TangentSpaceSettingsTests
         var refused = await Form(leo, TangentSpaceSettingsController.Path, TangentSpaceSettingsController.Path, General("   ", "Still fired weekly."));
         Assert.Equal(HttpStatusCode.BadRequest, refused.Status);
         Assert.Contains("id=\"space-settings-name-failure\"", refused.Body);
-        Assert.Contains(TangentSpace.NameRule, refused.Body);
+        Assert.Contains(TangentSpace.NameRule.Text, refused.Body);
         Assert.Contains(">Still fired weekly.</textarea>", refused.Body);
         var tooLong = await Json(leo, TangentSpaceSettingsController.Path, TangentSpaceSettingsController.Path,
             new { description = new string('w', TangentSpace.DescriptionLimit + 1) });

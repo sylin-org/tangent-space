@@ -4,6 +4,7 @@ using Koan.Data.Core.Commands;
 using Koan.Data.Core.Sorting;
 using Koan.Web.Attributes;
 using Koan.Web.Auth.Infrastructure;
+using Koan.Web.Controllers;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -274,11 +275,11 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
     {
         Response.Headers.CacheControl = "no-store";
         if (PersonId(User) is not { } personId)
-            return PostWrites.Refused(HttpContext, Capabilities.SignIn, "Marking the door seen needs a signed-in participant.");
+            return Answers.Refused(HttpContext, SignInToMark);
 
         if (input.Through is not (>= 0 and var sequence))
-            return new Problem(StatusCodes.Status400BadRequest, "Not a sequence of the log",
-                $"The {Through} field carries the sequence the door names as read through.").ToResult();
+            return new Problem(StatusCodes.Status400BadRequest,
+                $"The {Through} field carries the sequence the door names as read through.") { Title = "Not a sequence of the log" }.ToResult();
 
         var outcome = await new CatchUp(personId, sequence).Send();
         switch (outcome)
@@ -287,20 +288,29 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
                 Response.Headers.Location = baseUrl.PathBase + "/";
                 return StatusCode(StatusCodes.Status303SeeOther);
             case Outcome<Checkpoint>.Refused { Reason: { Kind: ReasonKind.Invalid } reason }:
-                return new Problem(StatusCodes.Status400BadRequest, "Not a sequence of the log", reason.Text).ToResult();
+                return new Problem(StatusCodes.Status400BadRequest, reason.Text) { Title = "Not a sequence of the log" }.ToResult();
             default:
-                return PostWrites.Answer(HttpContext, outcome);
+                return Answers.NotDone(HttpContext, outcome);
         }
     }
 
     /// <summary>What a reader without <see cref="Bit.View"/> on the place receives: a missing resource's answer where
     /// the place is absent to them; otherwise the one step that stands between them and reading.</summary>
-    internal static IActionResult Gated(HttpContext http, Reason gate) =>
-        gate.Kind == ReasonKind.Absent ? PostWrites.Refused(http, gate)
-        : gate == Capabilities.SignIn ? PostWrites.Refused(http, gate, "This Tangent Space is read by its participants.", "Sign in to read")
-        : gate == Capabilities.Apply ? PostWrites.Refused(http, gate, "Your application is waiting: you can read here once someone admits you.")
-        : gate == Capabilities.Declined ? PostWrites.Refused(http, gate, "Your application was declined, so this Tangent Space is not open to you.")
-        : PostWrites.Refused(http, gate, "This Tangent Space is not open to you.", "Not readable");
+    internal static IActionResult Gated(HttpContext http, Reason gate) => Answers.Refused(http,
+        gate.Kind == ReasonKind.Absent ? gate
+        : gate == Capabilities.SignIn ? SignInToRead
+        : gate == Capabilities.Apply ? ApplyToRead
+        : gate == Capabilities.Declined ? DeclinedToRead
+        : Reason.Gated(gate.Word!, "This Tangent Space is not open to you."));
+
+    /// <summary>The gates that keep a reader from the place, worded for reading rather than writing.</summary>
+    private static readonly Reason SignInToRead = Reason.Gated(Capabilities.SignIn.Word!, "This Tangent Space is read by its participants.");
+
+    private static readonly Reason ApplyToRead = Reason.Gated(Capabilities.Apply.Word!, "Your application is waiting: you can read here once someone admits you.");
+
+    private static readonly Reason DeclinedToRead = Reason.Gated(Capabilities.Declined.Word!, "Your application was declined, so this Tangent Space is not open to you.");
+
+    private static readonly Reason SignInToMark = Reason.Gated(Capabilities.SignIn.Word!, "Marking the door seen needs a signed-in participant.");
 
     /// <summary>One group of new Posts: how many, whether that is a lower bound, and the newest few.</summary>
     private Door.Group Group(IReadOnlyList<Event> events, bool atLeast, IReadOnlyDictionary<string, Post> posts,

@@ -3,13 +3,13 @@ using System.Runtime.CompilerServices;
 using System.Security.Claims;
 using Koan.Data.Abstractions;
 using Koan.Data.Core.Sorting;
+using Koan.Web.Controllers;
 using Koan.Web.Hosting;
 using Koan.Web.Sse;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using Tangent.Access;
-using Tangent.Render;
 using Tangent.Space;
 
 namespace Tangent.Events;
@@ -66,14 +66,14 @@ public sealed class EventsController(KoanWebBaseUrl baseUrl, EventStream stream,
         var personId = User.Identity?.IsAuthenticated == true ? User.FindFirst(ClaimTypes.NameIdentifier)?.Value : null;
         var place = await Capabilities.Load(personId, null, null, ct);
         var streamed = Streamed(Request);
-        if (!place.Exists) return Refused(DoorController.Gated(HttpContext, place.Gate(Bit.View) ?? Capabilities.Absent), streamed);
+        if (!place.Exists) return DoorController.Gated(HttpContext, place.Gate(Bit.View) ?? Capabilities.Absent);
 
         var named = Request.Headers[LastEventId].FirstOrDefault() is { Length: > 0 } last ? last : since;
         long from;
         if (named is null) from = await Readable.Newest(personId, await stream.Head(ct), ct);
         else if (!long.TryParse(named, NumberStyles.None, CultureInfo.InvariantCulture, out from))
-            return Refused(new Problem(StatusCodes.Status400BadRequest, "Not a sequence of the log",
-                $"{Since} and {LastEventId} carry a sequence of the log, a whole number.").ToResult(), streamed);
+            return new Problem(StatusCodes.Status400BadRequest,
+                $"{Since} and {LastEventId} carry a sequence of the log, a whole number.") { Title = "Not a sequence of the log" }.ToResult();
 
         if (!streamed) return Ok(await Page(personId, from, ct));
 
@@ -82,8 +82,8 @@ public sealed class EventsController(KoanWebBaseUrl baseUrl, EventStream stream,
         if (stream.Open(reader) is not { } open)
         {
             Response.Headers.RetryAfter = ((int)Heartbeat.TotalSeconds).ToString(CultureInfo.InvariantCulture);
-            return Refused(new Problem(StatusCodes.Status429TooManyRequests, "Too many streams",
-                $"A reader holds at most {EventStream.PerReader} streams at once, and the place {EventStream.InAll} in all; poll {Path} instead, or close one.").ToResult(), streamed);
+            return new Problem(StatusCodes.Status429TooManyRequests,
+                $"A reader holds at most {EventStream.PerReader} streams at once, and the place {EventStream.InAll} in all; poll {Path} instead, or close one.") { Title = "Too many streams" }.ToResult();
         }
 
         // Given back when the response ends, whether or not the stream was ever read.
@@ -192,18 +192,6 @@ public sealed class EventsController(KoanWebBaseUrl baseUrl, EventStream stream,
     private static Task<IReadOnlyList<Event>> After(long after, long through, int limit, CancellationToken ct)
         => Event.Query(e => e.Seq > after && e.Seq <= through,
             new QueryDefinition { Page = 1, PageSize = limit }.WithSort<Event>(sort => sort.OrderBy(e => e.Seq)), ct);
-
-    /// <summary>A refusal as a stream's reader reads it: problem JSON, since a stream has no page to show it in.</summary>
-    private static IActionResult Refused(IActionResult refusal, bool streamed)
-    {
-        if (streamed && refusal is ObjectResult problem)
-        {
-            problem.ContentTypes.Clear();
-            problem.ContentTypes.Add("application/problem+json");
-        }
-
-        return refusal;
-    }
 
     private static bool Streamed(HttpRequest request)
         => request.GetTypedHeaders().Accept.Any(type => type.MediaType.Equals(StreamType, StringComparison.OrdinalIgnoreCase));

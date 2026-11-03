@@ -1,3 +1,4 @@
+using Koan.Web.Controllers;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 
@@ -9,8 +10,8 @@ public static class ProblemExceptionHandler
 {
     public static Task Answer(HttpContext http)
     {
-        var result = new Problem(StatusCodes.Status500InternalServerError, "Something went wrong",
-            "The Tangent Space could not answer this request.").ToResult();
+        var result = new Problem(StatusCodes.Status500InternalServerError,
+            "The Tangent Space could not answer this request.") { Title = "Something went wrong" }.ToResult();
         return result.ExecuteResultAsync(new ActionContext(http, new RouteData(), new ActionDescriptor()));
     }
 }
