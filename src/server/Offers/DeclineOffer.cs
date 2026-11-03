@@ -3,16 +3,15 @@ using Koan.Data.Core.Commands;
 
 namespace Tangent.Offers;
 
-/// <summary>Declines an Offer, once: what it offers is never offered again, since its Id stays taken. Judged here, at
-/// the moment it runs: the poster is still the place's operator (<see cref="Decision"/>) and the Offer is open.</summary>
-public sealed record DeclineOffer(string OfferId, string PosterId, DateTimeOffset? At = null) : ICommand<Offer>
+/// <summary>Declines the Offer of <see cref="Origin"/> as the place's address, once: the origin is never offered again,
+/// since the decision's Id stays taken. Judged here, at the moment it runs: the poster is still the place's operator
+/// and the origin was never decided (<see cref="Decision"/>).</summary>
+public sealed record DeclineOffer(string Origin, string PosterId, DateTimeOffset? At = null) : ICommand<Offer>
 {
     public async Task<Outcome<Offer>> Run(CancellationToken ct)
     {
-        var (offer, _) = await Decision.Load(OfferId, PosterId, ct);
-        if (offer is null) return new Outcome<Offer>.Refused(Decision.NoOffer);
-        offer.Decline(At ?? DateTimeOffset.UtcNow);
-        await offer.Save(ct);
-        return new Outcome<Offer>.Done(offer);
+        await Decision.Open(Origin, PosterId, ct);
+        var declined = await Offer.Decided(OfferKind.Address, Origin, OfferState.Declined, At ?? DateTimeOffset.UtcNow).Save(ct);
+        return new Outcome<Offer>.Done(declined);
     }
 }

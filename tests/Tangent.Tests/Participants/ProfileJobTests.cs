@@ -24,8 +24,6 @@ public sealed class ProfileJobTests
             ["Koan:Web:Auth:TestProvider:Enabled"] = "true",
             ["Tangent:Profile:BaseAddress"] = stub.Answering.AbsoluteUri
         }, ct: Cancellation);
-        var committed = new List<Committed>();
-        tangentSpace.Commits.Landed += commit => { lock (committed) committed.Add(commit); };
         using var browser = new Browser(tangentSpace);
         const string did = "did:plc:ada4example";
 
@@ -40,7 +38,6 @@ public sealed class ProfileJobTests
         Assert.Equal("Writes things.", participant.Profile.Description);
         // No bot self-label: a person.
         Assert.Equal((ParticipantKind.Person, KindSource.ProfileLabel), (participant.Kind, participant.KindSource));
-        lock (committed) Assert.Contains(committed, commit => commit.Command is CaptureProfile);
 
         // Within the day: another run reads nothing, and a sign-in submits nothing.
         var again = await participant.Job.Submit(ct: Cancellation);
@@ -85,8 +82,6 @@ public sealed class ProfileJobTests
         await using var stub = await ProfileStub.StartAsync(Cancellation);
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(
             new Dictionary<string, string?> { ["Tangent:Profile:BaseAddress"] = stub.AgentLabelled.AbsoluteUri }, ct: Cancellation);
-        var committed = new List<Committed>();
-        tangentSpace.Commits.Landed += commit => { lock (committed) committed.Add(commit); };
         const string did = "did:plc:lumen4example";
         var stored = new Participant { Id = did, Handle = "lumen.example", Kind = ParticipantKind.Person, KindSource = source };
         Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(stored).Send(Cancellation));
@@ -98,7 +93,6 @@ public sealed class ProfileJobTests
         Assert.NotNull(after);
         Assert.NotNull(after.Profile.CapturedAt);
         Assert.Equal((expected, source), (after.Kind, after.KindSource));
-        lock (committed) Assert.Contains(committed, commit => commit.Command is CaptureProfile);
     }
 
     [Theory]

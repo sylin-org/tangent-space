@@ -18,10 +18,9 @@ namespace Tangent.Capture;
 /// since, Lumen's reply, Lumen's Topic that mentions her, Mara's Topic taken on a tangent from hers into the workshop,
 /// Leo making her a moderator, Leo's rewrite of her Topic's opening and his removal of a reply of hers, Mara's report of
 /// Lumen's reply, which she now reads as one who may view the moderators'
-/// Tangent, and, once the place says apply, Wren's application, which she now decides.
-/// <c>notifications-unseen</c> puts her notifications checkpoint back at Mara's reply, or
-/// before everything where the place has no such reply, before every width and theme, since opening them moves it.
-/// Compiled only into the capture host, like <see cref="CaptureSeedController"/>; fixed names, words, times and TIDs.</summary>
+/// Tangent, and, once the place says apply, Wren's application, which she now decides; her notifications checkpoint
+/// stands at Mara's reply. Compiled only into the capture host, like <see cref="CaptureSeedController"/>; fixed names,
+/// words, times and TIDs.</summary>
 public sealed class NotificationsSeedController(RoleCollection roles) : ControllerBase
 {
     private const string Persona = "did:plc:capture4persona";
@@ -74,17 +73,10 @@ public sealed class NotificationsSeedController(RoleCollection roles) : Controll
         return NoContent();
     }
 
-    [HttpPost("/capture/seed/notifications-unseen")]
-    public async Task<IActionResult> Reseed(CancellationToken ct)
-    {
-        await Unseen(ct);
-        return NoContent();
-    }
-
     /// <summary>Mara's reply, the newest notification the persona saw.</summary>
     private static readonly string SeenReply = Tid(At(25, 9, 30), 2);
 
-    /// <summary>Puts the persona's notifications checkpoint at Mara's reply, or before everything.</summary>
+    /// <summary>Puts the persona's notifications checkpoint at Mara's reply.</summary>
     private async Task Unseen(CancellationToken ct)
     {
         var seen = await Event.Query(e => e.PostId == SeenReply, new QueryDefinition { Page = 1, PageSize = 1 }, ct);

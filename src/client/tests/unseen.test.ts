@@ -15,8 +15,9 @@ const reader = 'did:plc:ada'
 function render(count: number, atLeast: boolean, through: number, applications = false): HTMLElement {
   const props = JSON.stringify({ reader, count, atLeast, through, applications }).replaceAll('"', '&quot;')
   document.body.innerHTML =
-    `<a class="masthead-unseen" href="https://tangent.example/notifications"${count === 0 ? ' hidden' : ''} aria-label="${count} new notifications" ` +
-    `data-island="unseen" data-props="${props}"><span class="masthead-unseen-count">${badge(count, atLeast)}</span></a>`
+    `<form class="masthead-unseen-form" method="post" action="https://tangent.example/notifications">` +
+    `<button class="masthead-unseen"${count === 0 ? ' hidden' : ''} aria-label="${count} new notifications" ` +
+    `data-island="unseen" data-props="${props}"><span class="masthead-unseen-count">${badge(count, atLeast)}</span></button></form>`
   mountIslands(document)
   return document.querySelector<HTMLElement>('.masthead-unseen')!
 }

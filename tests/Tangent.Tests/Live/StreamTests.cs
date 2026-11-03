@@ -16,7 +16,8 @@ namespace Tangent.Events;
 /// <summary>The log for a reader, live and polled: a reply reaches an open stream with its sequence as the frame's id,
 /// and a reconnect names the last one and loses nothing; what a reader may not view never reaches them, and stops
 /// reaching them once they lose it; the poll answers the same rows a page at a time and says where to ask again, as the
-/// door does; a slow stream is closed at its queue's bound and a reader's streams are capped.</summary>
+/// door does; a burst of commits longer than one read reaches a stream whole and in order, and a reader's streams are
+/// capped.</summary>
 public sealed class StreamTests
 {
     private const string Leo = "did:plc:leo4live";
@@ -139,24 +140,23 @@ public sealed class StreamTests
     }
 
     [Fact]
-    public async Task A_slow_stream_is_closed_at_its_queue_bound_a_reader_resumes_by_since_and_a_readers_streams_are_capped()
+    public async Task A_stream_receives_every_row_a_burst_longer_than_one_read_commits_in_order_a_reader_resumes_by_since_and_a_readers_streams_are_capped()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
         using var ada = await SignedIn(tangentSpace, Ada);
         var streams = tangentSpace.Services.GetRequiredService<EventStream>();
+        var burst = await Started(Bea, "A long evening", "Count them.");
 
-        var aborted = false;
-        var slow = streams.Open("a slow reader", () => aborted = true)!;
-        var row = new Event { Id = Event.Key(1), Seq = 1, Kind = EventKind.PostCreated, TangentId = Workshop, At = DateTimeOffset.UtcNow };
-        for (var count = 0; count < EventStream.QueueBound; count++) streams.Publish(row);
-        Assert.Equal((false, false, 1), (slow.Slow, aborted, streams.Count("a slow reader").Reader));
-        streams.Publish(row);
-        Assert.Equal((true, true, 0), (slow.Slow, aborted, streams.Count("a slow reader").Reader));
-        var queued = 0;
-        while (slow.Queue.TryRead(out _)) queued++;
-        Assert.Equal(EventStream.QueueBound, queued);
-        Assert.True(slow.Queue.Completion.IsCompleted);
+        await using (var stream = await Streamed.Open(ada.Client, EventsController.Path))
+        {
+            Assert.Equal("open", (await stream.Any()).Comment);
+            var sent = new List<string>();
+            for (var count = 0; count <= EventsController.ReadLimit; count++) sent.Add((await Replied(burst, Bea, "Lantern " + count + ".")).Id);
+            var received = new List<string>();
+            while (received.Count < sent.Count) received.Add((await stream.Next()).Json.GetProperty("post").GetString()!);
+            Assert.Equal(sent, received);
+        }
 
         var root = await Started(Bea, "Where were we", "Here.");
         var reply = await Replied(root, Bea, "And here.");

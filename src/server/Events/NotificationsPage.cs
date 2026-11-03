@@ -5,10 +5,10 @@ namespace Tangent.Events;
 
 /// <summary>The reader's notifications, one resource both ways: a page of <see cref="Entries"/>, newest first, each new
 /// where it lies past <see cref="From"/>, the notifications checkpoint the reading began from; <see cref="Through"/>, where
-/// this page leaves that checkpoint: the newest it shows where the person's own opening marked them seen, else where it
-/// stood; <see cref="Next"/>, the address of the older page, null on the last,
-/// and <see cref="Continued"/> for a page that follows another, whose newest is at <see cref="Address"/>. <see cref="Who"/>
-/// is the signed-in reader and <see cref="Day"/> the UTC day the times are written for.</summary>
+/// that checkpoint stands; <see cref="Next"/>, the address of the older page, null on the last, and
+/// <see cref="Continued"/> for a page that follows another, whose newest is at <see cref="Address"/>. For the place's
+/// operator, <see cref="Offer"/> is the open Offer of an address, present while one is open. <see cref="Who"/> is the
+/// signed-in reader and <see cref="Day"/> the UTC day the times are written for.</summary>
 public sealed record NotificationsPage(
     string Place,
     string Door,
@@ -21,6 +21,9 @@ public sealed record NotificationsPage(
     Who? Who,
     DateOnly Day)
 {
+    /// <summary>The open Offer the reader decides: present only for the place's operator, and only while one is open.</summary>
+    public Space.Door.Offered? Offer { get; init; }
+
     /// <summary>What a notification says happened, as <see cref="Entry.Kind"/> writes it.</summary>
     public static class Kinds
     {
@@ -48,22 +51,18 @@ public sealed record NotificationsPage(
         /// <summary>A role someone gave the reader or took from them.</summary>
         public const string Role = "role";
 
-        /// <summary>An Offer the reader decides.</summary>
-        public const string Offer = "offer";
-
         /// <summary>An application that waits for whoever decides it, the reader among them.</summary>
         public const string Application = "application";
     }
 
     /// <summary>One notification: the event's sequence, what happened (one of <see cref="Kinds"/>), whether it is new to the
     /// reader, when, who did it where the page names them, and the one address it is about: the Post, the Topic, the
-    /// report in the moderators' Tangent, the door, the reader's profile, where the place answers, or the applications,
+    /// report in the moderators' Tangent, the door, the reader's profile, or the applications,
     /// for one who applied. A Post's carries its <see cref="Topic"/>, its <see cref="Tangent"/>, its opening words
     /// (<see cref="Line"/>), whether it is <see cref="Removed"/> and who other than its author last edited it
     /// (<see cref="Edited"/>), and a report's also the author of the Post it reports
     /// (<see cref="Reported"/>), only where the reader may view that Post; a standing's the standing it left and the one
-    /// before (<see cref="Was"/>); a role's the role and whether it was <see cref="Given"/>; an Offer's the Offer as it
-    /// stands.</summary>
+    /// before (<see cref="Was"/>); a role's the role and whether it was <see cref="Given"/>.</summary>
     public sealed record Entry(long Seq, string Kind, bool New, DateTimeOffset At, TangentPage.Author? Who, string? Address)
     {
         public string? Topic { get; init; }
@@ -85,18 +84,5 @@ public sealed record NotificationsPage(
         public string? Role { get; init; }
 
         public bool? Given { get; init; }
-
-        public Offered? Offer { get; init; }
-    }
-
-    /// <summary>An Offer as its decider reads it among their notifications: its Id, what it would do (<c>address</c>: use
-    /// <see cref="Subject"/>, an origin, as the place's address), where it stands (<c>open</c>, <c>accepted</c>,
-    /// <c>declined</c> or <c>lapsed</c>) and when it was decided; while it is open, its two answers, each a form carrying
-    /// the Id in its <c>offer</c> field.</summary>
-    public sealed record Offered(string Id, string Kind, string Subject, string State, DateTimeOffset? Decided)
-    {
-        public Form? Use { get; init; }
-
-        public Form? Decline { get; init; }
     }
 }

@@ -3,24 +3,23 @@ using Koan.Data.Core.Commands;
 
 namespace Tangent.Offers;
 
-/// <summary>Uses an Offer of an address: in one commit the Offer is accepted and <see cref="Address"/>, the origin
-/// it offers as Koan validated it, becomes the place's address. Judged here, at the moment it runs: the poster is still
-/// the place's operator (<see cref="Decision"/>), the Offer is open, and the address is the one it offers. Koan's accept
-/// sends it through <see cref="Space.PlaceAddress.Use"/>, and holds the origin only once it commits.</summary>
-public sealed record UseOffer(string OfferId, string PosterId, string Address, DateTimeOffset? At = null) : ICommand<Offer>
+/// <summary>Uses the Offer of <see cref="Origin"/>: in one commit the Offer is accepted and <see cref="Address"/>, the
+/// origin as Koan validated it, becomes the place's address. Judged here, at the moment it runs: the poster is still the
+/// place's operator and the origin was never decided (<see cref="Decision"/>), the place's address is still local, and
+/// the address is the origin offered. Koan's accept sends it through <see cref="Space.PlaceAddress.Use"/>, and holds the
+/// origin only once it commits.</summary>
+public sealed record UseOffer(string Origin, string PosterId, string Address, DateTimeOffset? At = null) : ICommand<Offer>
 {
     public static readonly Reason NotOffered = Reason.Conflict("This is not the address the offer offers.");
 
     public async Task<Outcome<Offer>> Run(CancellationToken ct)
     {
-        var (offer, space) = await Decision.Load(OfferId, PosterId, ct);
-        if (offer is null || space is null) return new Outcome<Offer>.Refused(Decision.NoOffer);
-        if (offer.Kind != OfferKind.Address || !string.Equals(offer.Subject, Address, StringComparison.OrdinalIgnoreCase))
-            return new Outcome<Offer>.Refused(NotOffered);
+        var space = await Decision.Open(Origin, PosterId, ct);
+        if (!space.AddressIsLocal()) return new Outcome<Offer>.Refused(Offer.NotOpen);
+        if (!string.Equals(Origin, Address, StringComparison.OrdinalIgnoreCase)) return new Outcome<Offer>.Refused(NotOffered);
 
-        offer.Accept(At ?? DateTimeOffset.UtcNow);
         if (space.TakeAddress(Address)) await space.Save(ct);
-        await offer.Save(ct);
-        return new Outcome<Offer>.Done(offer);
+        var accepted = await Offer.Decided(OfferKind.Address, Origin, OfferState.Accepted, At ?? DateTimeOffset.UtcNow).Save(ct);
+        return new Outcome<Offer>.Done(accepted);
     }
 }

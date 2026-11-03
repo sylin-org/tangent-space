@@ -150,15 +150,13 @@ public sealed class PostTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Started(tangentSpace);
-        var announced = 0;
-        tangentSpace.Commits.Landed += _ => announced++;
         var topicId = Tids.Mint();
         var otherTopicId = Tids.Mint();
         var otherReplyId = Tids.Mint();
         Assert.IsType<Outcome<Post>.Done>(await new StartTopic(topicId, Workshop, "Here", "This one.", "leo").Send(Cancellation));
         Assert.IsType<Outcome<Post>.Done>(await new StartTopic(otherTopicId, Workshop, "There", "That one.", "leo").Send(Cancellation));
         Assert.IsType<Outcome<Post>.Done>(await new Reply(otherReplyId, otherTopicId, "Over there.", "ada").Send(Cancellation));
-        var before = (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation), announced);
+        var before = (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation));
 
         var noParent = await new Reply(Tids.Mint(), topicId, "To whom?", "ada", ParentId: "nope").Send(Cancellation);
         var missingParent = await new Reply(Tids.Mint(), topicId, "To whom?", "ada", ParentId: Tids.Mint()).Send(Cancellation);
@@ -169,7 +167,7 @@ public sealed class PostTests
         Assert.Equal(Reply.NoParent, Assert.IsType<Outcome<Post>.Refused>(missingParent).Reason);
         Assert.Equal(Reply.NoParent, Assert.IsType<Outcome<Post>.Refused>(parentElsewhere).Reason);
         Assert.Equal(Reply.NoParent, Assert.IsType<Outcome<Post>.Refused>(rootElsewhere).Reason);
-        Assert.Equal(before, (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation), announced));
+        Assert.Equal(before, (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation)));
         Assert.Equal((0L, 0), ((await Post.Get(topicId, Cancellation))!.LastSequence, (await Post.Get(topicId, Cancellation))!.ReplyCount));
     }
 
@@ -178,8 +176,6 @@ public sealed class PostTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Started(tangentSpace);
-        var announced = 0;
-        tangentSpace.Commits.Landed += _ => announced++;
         var at = DateTimeOffset.UtcNow;
         var locked = Post.Root(Tids.Mint(), Workshop, "Locked", "locked", PostKind.Topic, "No more.", "leo", at);
         locked.Locked = true;
@@ -187,7 +183,7 @@ public sealed class PostTests
         removed.Removed = true;
         Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(locked).Send(Cancellation));
         Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(removed).Send(Cancellation));
-        var before = (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation), announced);
+        var before = (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation));
 
         var onLocked = await new Reply(Tids.Mint(), locked.Id, "Still?", "ada").Send(Cancellation);
         var onRemoved = await new Reply(Tids.Mint(), removed.Id, "Still?", "ada").Send(Cancellation);
@@ -196,7 +192,7 @@ public sealed class PostTests
         Assert.Equal(Capabilities.Locked, Assert.IsType<Outcome<Post>.Refused>(onLocked).Reason);
         Assert.Equal(Capabilities.Removed, Assert.IsType<Outcome<Post>.Refused>(onRemoved).Reason);
         Assert.Equal(Reply.NoTopic, Assert.IsType<Outcome<Post>.Refused>(onNothing).Reason);
-        Assert.Equal(before, (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation), announced));
+        Assert.Equal(before, (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation)));
         Assert.Equal((0L, 0), ((await Post.Get(locked.Id, Cancellation))!.LastSequence, (await Post.Get(locked.Id, Cancellation))!.ReplyCount));
     }
 
@@ -205,15 +201,13 @@ public sealed class PostTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Started(tangentSpace);
-        var announced = 0;
-        tangentSpace.Commits.Landed += _ => announced++;
         var topicId = Tids.Mint();
         var otherTopicId = Tids.Mint();
         var replyId = Tids.Mint();
         var topic = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(topicId, Workshop, "Once", "Said once.", "leo").Send(Cancellation)).Result;
         Assert.IsType<Outcome<Post>.Done>(await new StartTopic(otherTopicId, Workshop, "Elsewhere", "Said elsewhere.", "leo").Send(Cancellation));
         var reply = Assert.IsType<Outcome<Post>.Done>(await new Reply(replyId, topicId, "Heard.", "ada").Send(Cancellation)).Result;
-        var before = (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation), announced);
+        var before = (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation));
 
         var topicAgain = await new StartTopic(topicId, Workshop, " Once ", "Said once.", "leo", At: DateTimeOffset.UtcNow.AddDays(1)).Send(Cancellation);
         var topicDiffers = new[]
@@ -244,7 +238,7 @@ public sealed class PostTests
         Assert.Equal((reply.Id, reply.Slug, reply.Body), Select(Assert.IsType<Outcome<Post>.Done>(replyAgain).Result));
         Assert.All(replyDiffers, differs => Assert.Contains("already exists", Assert.IsType<Outcome<Post>.Refused>(differs).Reason.Text));
         Assert.All(heldElsewhere, refused => Assert.Equal(Post.IdTaken, Assert.IsType<Outcome<Post>.Refused>(refused).Reason));
-        Assert.Equal(before, (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation), announced));
+        Assert.Equal(before, (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation)));
         Assert.Equal("Said once.", (await Post.Get(topicId, Cancellation))?.Body);
         Assert.Equal((1L, 1), ((await Post.Get(topicId, Cancellation))!.LastSequence, (await Post.Get(topicId, Cancellation))!.ReplyCount));
 

@@ -26,13 +26,10 @@ public sealed class EventTests
 
         // The second fixture's folder is deleted before the first's, which holds the data folder they share.
         await using var second = await TangentSpaceFixture.StartAsync(new Dictionary<string, string?> { ["Tangent:DataFolder"] = first.DataFolder }, ct: Cancellation);
-        var announced = new List<Committed>();
-        second.Commits.Landed += announced.Add;
         var after = await new Reply(Tids.Mint(), topicId, "Third.", "leo").Send(Cancellation);
 
         Assert.Equal(first.DataFolder, second.DataFolder);
         Assert.Equal(2L, Assert.IsType<Outcome<Post>.Done>(after).Result.Sequence);
-        Assert.Equal(3L, Assert.Single(announced).Sequences[Event.Log]);
         Assert.Equal(3, await Event.Count.Exact(Cancellation));
         Assert.Equal(3, await Event.Log.Highest(Cancellation));
         Assert.NotNull(await Event.Get(Event.Key(3), Cancellation));

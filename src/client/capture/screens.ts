@@ -82,15 +82,13 @@ export const screens: Readonly<Record<string, Screen>> = {
   // mention of her, new articles and new Posts in each Tangent; and the same persona with her checkpoint at the
   // log's last sequence, quiet; and the persona as the one who set the place up, who administers it and is offered a
   // new Tangent, with her account open, where the place's settings are offered; and her first door after setup,
-  // holding the first Tangent and the moderators'. Then the persona as the operator of a place reached at a public
+  // holding the first Tangent and the moderators', with nothing new. Then the persona as the operator of a place reached at a public
   // origin while it has no address: the Offer on her door, with its evidence and its two answers; where Use it lands, first run's
   // pointers under the origin she used; and her door once she said Not this one. Last, the persona arriving at a place
   // whose admission says apply: her door says her application is waiting. And the persona as a moderator of a place of
   // sixty Tangents after its first: the first page of them, the moderators' Tangent after it, and the way to all of them.
   // Last, the persona timed out by the operator, whose door says until when; and lifted and made a moderator, whose door
-  // says she is back and what she was made. A first door welcomes its reader, and opening it begins their checkpoint, so
-  // each state that shows one is written again before every width and theme: the newcomer's, in a place with plenty in
-  // it, and the setter's, the Offer's, the applicant's and the moderator's in a place of sixty Tangents.
+  // says she is back and what she was made.
   door: {
     path: '/',
     states: [
@@ -100,13 +98,12 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'quiet', seed: 'door-quiet', signedIn: true },
       { name: 'administrator', place: 'persona', seed: 'door', signedIn: true },
       { name: 'administrator-account', place: 'persona', seed: 'door', signedIn: true, click: '.account-button' },
-      { name: 'newcomer', seed: 'door-newcomer', reseed: 'door-first', signedIn: true },
-      { name: 'first', place: 'persona', reseed: 'door-first', signedIn: true },
-      { name: 'offer', seed: 'offer', reseed: 'door-first', place: 'persona', signedIn: true, settings: offerSettings },
+      { name: 'first', place: 'persona', signedIn: true },
+      { name: 'offer', seed: 'offer', place: 'persona', signedIn: true, settings: offerSettings },
       { name: 'offer-used', seed: 'offer-used', place: 'persona', signedIn: true, settings: offerSettings, path: '/first-run' },
-      { name: 'offer-declined', seed: 'offer-declined', reseed: 'door-first', place: 'persona', signedIn: true, settings: offerSettings },
-      { name: 'applicant', seed: 'apply', reseed: 'door-first', signedIn: true },
-      { name: 'many-tangents', seed: 'many-tangents', reseed: 'door-first', signedIn: true },
+      { name: 'offer-declined', seed: 'offer-declined', place: 'persona', signedIn: true, settings: offerSettings },
+      { name: 'applicant', seed: 'apply', signedIn: true },
+      { name: 'many-tangents', seed: 'many-tangents', signedIn: true },
       { name: 'timed-out', seed: 'timed-out', signedIn: true },
       { name: 'lifted', seed: 'lifted', signedIn: true },
     ],
@@ -542,16 +539,16 @@ export const screens: Readonly<Record<string, Screen>> = {
   // The persona's notifications: none yet; with what the notifications seed holds, newest first, those since she last
   // opened them marked new, Leo's rewrite of her Topic and his removal of her reply, Mara's report of Lumen's reply, which she reads as a moderator, and Wren's application,
   // which she decides as one, among them; and, as the operator of a
-  // place reached at a public origin while it has no address, the Offer among them with its two answers. Last, the
-  // frame's count of what she has not seen, on the door, which says how many applications wait. Opening them moves her
-  // checkpoint, which the seed puts back before every width and theme.
+  // place reached at a public origin while it has no address, the Offer above them with its two answers. Last, the
+  // frame's count of what she has not seen, on the door, which says how many applications wait. Reading them moves
+  // nothing, so every width and theme reads the same.
   notifications: {
     path: '/notifications',
     states: [
       { name: 'empty', signedIn: true },
-      { name: 'with-entries', seed: 'notifications', reseed: 'notifications-unseen', signedIn: true },
-      { name: 'with-offer', seed: 'offer', reseed: 'notifications-unseen', place: 'persona', signedIn: true, settings: offerSettings },
-      { name: 'count', seed: 'notifications', reseed: 'notifications-unseen', signedIn: true, path: '/' },
+      { name: 'with-entries', seed: 'notifications', signedIn: true },
+      { name: 'with-offer', seed: 'offer', place: 'persona', signedIn: true, settings: offerSettings },
+      { name: 'count', seed: 'notifications', signedIn: true, path: '/' },
     ],
   },
   // A search of the Topic seed's words: found, read by the persona and by a visitor; words nothing here holds; the page

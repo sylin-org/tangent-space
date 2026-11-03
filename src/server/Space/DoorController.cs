@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.Security.Claims;
-using Koan.Data.Abstractions;
 using Koan.Data.Core.Commands;
 using Koan.Data.Core.Sorting;
 using Koan.Web.Attributes;
@@ -25,11 +24,8 @@ public sealed record SeenDoorInput([Description(Holds.DoorThrough)] long? Throug
 /// newest that name the reader as their target (<see cref="LogWindow"/>); how many of the reader's notifications they have
 /// not seen (<see cref="Notifications.Count"/>); the first Tangents by order; capability once
 /// per distinct Tangent among them and the events; the Posts and Topics the events name; the reader's checkpoints for
-/// those Topics and Tangents; and the people it shows. A reader with no place checkpoint is at their first door: nothing
-/// in the place counts as new to them, whatever it holds, so it says none of it, and what concerns them alone still
-/// shows. Their own opening of it begins their place checkpoint through what it read, tried and never
-/// waited on, and a later opening makes good one that did not land; it
-/// is the one thing the door's <c>GET</c> writes, and from then on the door reads past that checkpoint. An event is new to the reader when it is past their place
+/// those Topics and Tangents; and the people it shows. It writes nothing: a participant's place checkpoint begins at their
+/// arrival, or for an applicant at their admission, and moves when they mark the door seen. An event is new to the reader when it is past their place
 /// checkpoint, past their checkpoint for its Topic (in the Topic's own sequence) and for its Tangent where those exist,
 /// not their own, and in a Tangent they may view; an event in a Tangent they may not view does not exist for them. A
 /// mention is not judged by the Topic's checkpoint: that counts the Topic's Posts as they arrived, and an edit can
@@ -43,8 +39,8 @@ public sealed record SeenDoorInput([Description(Holds.DoorThrough)] long? Throug
 /// sentence.
 /// The front page comes from the same window: the Topics that gained a Post in it, newest first, pinned ones and
 /// articles <see cref="Door.Featured"/> and the rest <see cref="Door.Alive"/>, each new to the reader by the same
-/// rule, and its writers <see cref="Door.Around"/>. For the place's operator, while no URL is configured, it also reads
-/// the open Offers they decide, one bounded read, with the evidence Koan holds for each, and shows them first. For whoever
+/// rule, and its writers <see cref="Door.Around"/>. For the place's operator it also reads the open Offer of an address
+/// (<see cref="AddressOffers.Open"/>), one keyed read, with the evidence Koan holds for it, and shows it first. For whoever
 /// holds <see cref="Bit.ManageStanding"/> in the place, it reads how many applications wait, one bounded read of those
 /// that wait (<see cref="Applications.Waiting"/>), and says so, linked to where they are decided. A reader
 /// without <see cref="Bit.View"/> on the place receives its gate. Its <c>POST</c>
@@ -84,7 +80,6 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
 
         var checkpoint = reader is null ? null : await Checkpoint.Get(Checkpoint.Key(reader.Id, Scope.Place), ct);
         var since = checkpoint?.Seq ?? 0;
-        var first = reader is not null && checkpoint is null;
         var window = await LogWindow.Newest(ct);
         IReadOnlyList<Event> targeted = reader is null ? [] : await LogWindow.Targeting(reader.Id, since, ct);
 
@@ -134,8 +129,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
         var writers = created.Select(e => e.ActorId).OfType<string>().Distinct(StringComparer.Ordinal).ToList();
         var full = window.Count >= LogWindow.Size;
 
-        // At a first door everything the place holds is what it holds, not what is new.
-        var fresh = first ? [] : window.Where(e => e.Kind == EventKind.PostCreated && New(e)).ToList();
+        var fresh = window.Where(e => e.Kind == EventKind.PostCreated && New(e)).ToList();
         var freshIn = fresh.GroupBy(e => e.TopicId!, StringComparer.Ordinal).ToDictionary(topic => topic.Key, topic => topic.Count(), StringComparer.Ordinal);
         // A Topic taken on a tangent from the reader's Post targets them too; its root is not a reply, so it is a group of
         // its own.
@@ -206,17 +200,13 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
                     Roles.Word(e.Role!), e.Given!.Value)).ToList(),
                 Group(edited, targetedFull, posts, tangents, people),
                 Group(removed, targetedFull, posts, tangents, people));
-            // A door that carries a form is never stored, so a browser's Back after sign-out redisplays nothing of it, and a
-            // first door is read once; any other door of a signed-in reader is theirs alone to cache.
-            if (first) news = news with { First = true };
-            else if (!news.Quiet) news = news with { CaughtUp = CaughtUpForm(door, through) };
-            Response.Headers.CacheControl = news.CaughtUp is null && !first ? "private" : "no-cache, no-store";
-            // Their own arrival is on the log, so a place with nothing in it to read still has somewhere to begin.
-            if (first && HttpMethods.IsGet(Request.Method))
-                _ = new CatchUp(reader.Id, Math.Max(through, targeted.Where(e => e.TangentId is null).Select(e => e.Seq).DefaultIfEmpty(0).Max())).TrySend();
+            // A door that carries a form is never stored, so a browser's Back after sign-out redisplays nothing of it; any
+            // other door of a signed-in reader is theirs alone to cache.
+            if (!news.Quiet) news = news with { CaughtUp = CaughtUpForm(door, through) };
+            Response.Headers.CacheControl = news.CaughtUp is null ? "private" : "no-cache, no-store";
         }
 
-        var offered = reader is not null && reader.Id == space.OperatorId && !baseUrl.IsConfigured ? await Offered(reader.Id, baseAddress, ct) : null;
+        var offered = reader is not null && reader.Id == space.OperatorId ? await offers.Offered(space, baseAddress, ct) : null;
         if (offered is not null) Response.Headers.CacheControl = "no-cache, no-store";
 
         // The door names the reader's notifications, with how many they have not seen, while there are some.
@@ -254,7 +244,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             Description = space.Description,
             Intro = space.Slots.DoorIntro.Length > 0 ? Media.Placed(space.Slots.DoorIntro, baseAddress + "/") : null,
             Feeds = space.Audience == Audience.Public ? Feeds.ArticlesLinks(baseAddress, space.Name) : null,
-            Offers = offered,
+            Offer = offered,
             Applications = waiting.Count == 0
                 ? null
                 : new Door.Waiting(waiting.Count, waiting.Count > Notifications.CountLimit, baseAddress + ApplicationsController.Path),
@@ -262,21 +252,6 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             Gate = place.Gate(Bit.Post)?.Word,
             Until = reader is not null && reader.StandingAt(now) == Standing.TimedOut ? reader.StandingUntil : null
         });
-    }
-
-    /// <summary>The open Offers <paramref name="deciderId"/> decides, each with what Koan has seen of its subject and its
-    /// two answers under <paramref name="baseAddress"/>; null when none is open.</summary>
-    private async Task<IReadOnlyList<Door.Offered>?> Offered(string deciderId, string baseAddress, CancellationToken ct)
-    {
-        var open = await Offer.Query(offer => offer.State == OfferState.Open && offer.DeciderId == deciderId,
-            new QueryDefinition { Page = 1, PageSize = Offer.OpenLimit }, ct);
-        if (open.Count == 0) return null;
-        return open.Select(offer =>
-        {
-            var seen = offers.Evidence(offer.Subject);
-            return new Door.Offered(offer.Id, Offer.Word(offer.Kind), offer.Subject, seen?.Count, seen?.FirstSeen,
-                OfferController.UseForm(baseAddress, offer.Id), OfferController.DeclineForm(baseAddress, offer.Id));
-        }).ToList();
     }
 
     /// <summary>Where the reader asks again: the poll past the newest event the door read that they may view, or, where its

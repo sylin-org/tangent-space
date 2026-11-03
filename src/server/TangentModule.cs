@@ -2,7 +2,6 @@ using Koan.Core;
 using Koan.Core.Modules;
 using Koan.Data.Connector.Sqlite;
 using Koan.Data.Core;
-using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Koan.Media.Web.Routing;
 using Koan.Storage.Connector.Local;
@@ -23,8 +22,8 @@ using Tangent.Space;
 namespace Tangent;
 
 /// <summary>Composes the Tangent Space on Koan: what the operator configured, the one data folder, where the place
-/// keeps the address it accepts, the HTML projection, first run's gate, and what every start makes sure of: the roles,
-/// first run and the Offers of an address.</summary>
+/// keeps the address it accepts, the Offers of an address, the HTML projection, first run's gate, and what every start
+/// makes sure of: the tables, the roles and first run.</summary>
 public sealed class TangentModule : KoanModule
 {
     /// <summary>The key Koan reads a configured base URL from, which wins over the address the place accepted
@@ -40,7 +39,6 @@ public sealed class TangentModule : KoanModule
         // The address the place accepts lives on its row; Koan reads it before the host serves.
         services.AddSingleton<IApplicationUrlStore, PlaceAddress>();
         services.AddSingleton<Offers.AddressOffers>();
-        services.AddSingleton<ICommandWatcher>(provider => provider.GetRequiredService<Offers.AddressOffers>());
 
         services.AddOptions<SqliteOptions>()
             .PostConfigure<IOptions<TangentSpaceOptions>, IHostEnvironment>((sqlite, tangent, environment) =>
@@ -111,7 +109,6 @@ public sealed class TangentModule : KoanModule
         await TablesExist(services.GetRequiredService<IDataService>(), ct);
         await Roles.Seed(services.GetRequiredService<RoleCollection>(), ct);
         await FirstRunStart.Run(services, ct);
-        await services.GetRequiredService<Offers.AddressOffers>().Start(ct);
         services.GetRequiredService<IHostApplicationLifetime>().ApplicationStarted.Register(() => ReportStarted(services));
     }
 

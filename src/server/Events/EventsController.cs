@@ -18,20 +18,19 @@ namespace Tangent.Events;
 /// rows past <see cref="Since"/> — or past <c>Last-Event-ID</c> when a reconnecting stream sends it — that reach the
 /// reader (<see cref="Readable"/>), oldest first, one row to a frame with its sequence as the frame's id and its kind
 /// as the frame's name; first at most <see cref="ScanLimit"/> rows already in the log, read a bounded page at a time,
-/// then each row as Koan Communication delivers it once its commit has landed, a row the delivery skipped read from the
-/// log by its sequence. Where the log holds more than catching up reads, the stream ends there, to be resumed from its
-/// last frame; a catch-up whose whole scan held no row the reader may see first sends a frame with no data whose id is
-/// the scan's last sequence, so a stream never stalls behind hidden rows. A frame's id is otherwise always a row the
-/// reader may see, so the position a reader resumes from says nothing of the Tangents they may not view but that a
-/// whole scan of hidden rows passed. The stream sends a comment once <see cref="Heartbeat"/> has passed since it last
-/// wrote, whatever arrived meanwhile, ends after <see cref="Lifetime"/>, ends when its reader is too slow for its
-/// queue (<see cref="EventStream.QueueBound"/>) and when a refresh finds the place absent to them, and is refused
-/// beyond <see cref="EventStream.PerReader"/> streams of one reader or <see cref="EventStream.InAll"/> in all. Without
-/// that header it is the poll (<see cref="Poll"/>): one page of at most <see cref="PageSize"/> rows that reach the
-/// reader, from at most <see cref="ScanLimit"/> rows read, with the address to ask again by the same rule. Without a
-/// sequence both begin at the newest row the reader may see (<see cref="Readable.Newest"/>). A reader without
-/// <see cref="Bit.View"/> on the place receives the door's gate. Nothing here writes, and no request waits on anything
-/// but the store and its own stream's queue.</summary>
+/// then, each time a commit moves the log's head past what it read (<see cref="EventStream.Moved"/>), the rows from
+/// there, read from the log by their sequence, which has no gap. Where the log holds more than catching up reads, the
+/// stream ends there, to be resumed from its last frame; a catch-up whose whole scan held no row the reader may see first
+/// sends a frame with no data whose id is the scan's last sequence, so a stream never stalls behind hidden rows. A frame's
+/// id is otherwise always a row the reader may see, so the position a reader resumes from says nothing of the Tangents
+/// they may not view but that a whole scan of hidden rows passed. The stream sends a comment once
+/// <see cref="Heartbeat"/> has passed since it last wrote, whatever arrived meanwhile, ends after <see cref="Lifetime"/>
+/// and when a refresh finds the place absent to them, and is refused beyond <see cref="EventStream.PerReader"/> streams
+/// of one reader or <see cref="EventStream.InAll"/> in all. Without that header it is the poll (<see cref="Poll"/>): one
+/// page of at most <see cref="PageSize"/> rows that reach the reader, from at most <see cref="ScanLimit"/> rows read,
+/// with the address to ask again by the same rule. Without a sequence both begin at the newest row the reader may see
+/// (<see cref="Readable.Newest"/>). A reader without <see cref="Bit.View"/> on the place receives the door's gate.
+/// Nothing here writes, and no request waits on anything but the store and the log's head.</summary>
 public sealed class EventsController(KoanWebBaseUrl baseUrl, EventStream stream, IOptions<MvcNewtonsoftJsonOptions> json) : ControllerBase
 {
     public const string Path = "/events";
@@ -50,11 +49,8 @@ public sealed class EventsController(KoanWebBaseUrl baseUrl, EventStream stream,
     /// <summary>The most rows of the log one poll reads, and one stream reads catching up.</summary>
     public const int ScanLimit = Readable.ScanLimit;
 
-    /// <summary>The most rows a stream reads from the log at once, catching up or filling what its delivery skipped.</summary>
+    /// <summary>The most rows a stream reads from the log at once.</summary>
     public const int ReadLimit = 100;
-
-    /// <summary>The most rows a stream takes from its queue at once.</summary>
-    public const int Batch = 32;
 
     public static readonly TimeSpan Heartbeat = TimeSpan.FromSeconds(15);
 
@@ -83,7 +79,7 @@ public sealed class EventsController(KoanWebBaseUrl baseUrl, EventStream stream,
 
         var http = HttpContext;
         var reader = personId ?? "visitor " + http.Connection.RemoteIpAddress;
-        if (stream.Open(reader, http.Abort) is not { } connection)
+        if (stream.Open(reader) is not { } open)
         {
             Response.Headers.RetryAfter = ((int)Heartbeat.TotalSeconds).ToString(CultureInfo.InvariantCulture);
             return Refused(new Problem(StatusCodes.Status429TooManyRequests, "Too many streams",
@@ -91,8 +87,8 @@ public sealed class EventsController(KoanWebBaseUrl baseUrl, EventStream stream,
         }
 
         // Given back when the response ends, whether or not the stream was ever read.
-        Response.RegisterForDispose(connection);
-        return Sse.Stream(Frames(connection, personId, from));
+        Response.RegisterForDispose(open);
+        return Sse.Stream(Frames(open, personId, from));
     }
 
     /// <summary>The poll's page past <paramref name="from"/>.</summary>
@@ -110,11 +106,11 @@ public sealed class EventsController(KoanWebBaseUrl baseUrl, EventStream stream,
     }
 
     /// <summary>The stream's frames: an opening comment with the reconnect delay, the rows past <paramref name="from"/>
-    /// already in the log, then each row its queue receives, until it ends.</summary>
-    private async IAsyncEnumerable<SseEnvelope> Frames(EventStream.Connection connection, string? personId, long from,
+    /// already in the log, then the rows each commit adds, until it ends.</summary>
+    private async IAsyncEnumerable<SseEnvelope> Frames(IDisposable open, string? personId, long from,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        using (connection)
+        using (open)
         {
             var readable = new Readable(personId);
             var until = DateTimeOffset.UtcNow + Lifetime;
@@ -150,7 +146,6 @@ public sealed class EventsController(KoanWebBaseUrl baseUrl, EventStream stream,
                 yield break;
             }
 
-            var batch = new List<Event>(Batch);
             while (readable.Place && until - DateTimeOffset.UtcNow is var left && left > TimeSpan.Zero)
             {
                 var beat = Heartbeat - (DateTimeOffset.UtcNow - wrote);
@@ -162,23 +157,17 @@ public sealed class EventsController(KoanWebBaseUrl baseUrl, EventStream stream,
                 }
 
                 // A wait that passes comes round again: the heartbeat goes out if it is due, or the lifetime ends the stream.
-                var ready = await Ready(connection, Min(beat, left), ct);
-                if (ready is null) continue;
-
-                // Its queue completed: the stream was too slow, or is ending.
-                if (ready == false) yield break;
-                batch.Clear();
-                while (batch.Count < Batch && connection.Queue.TryRead(out var row))
+                if (!await stream.Moved(cursor, Min(beat, left), ct)) continue;
+                while (true)
                 {
-                    if (row.Seq > cursor) batch.Add(row);
+                    var rows = await After(cursor, long.MaxValue, ReadLimit, ct);
+                    if (rows.Count == 0) break;
+                    var frames = await Framed(rows, readable, ct);
+                    foreach (var frame in frames) yield return frame;
+                    if (frames.Count > 0) wrote = DateTimeOffset.UtcNow;
+                    cursor = rows[^1].Seq;
+                    if (rows.Count < ReadLimit) break;
                 }
-
-                if (batch.Count == 0) continue;
-                var rows = await Contiguous(cursor, batch, ct);
-                var frames = await Framed(rows, readable, ct);
-                foreach (var frame in frames) yield return frame;
-                if (frames.Count > 0) wrote = DateTimeOffset.UtcNow;
-                cursor = rows[^1].Seq;
             }
         }
     }
@@ -196,45 +185,6 @@ public sealed class EventsController(KoanWebBaseUrl baseUrl, EventStream stream,
             .Select(row => new SseEnvelope(row.Kind, JsonConvert.SerializeObject(Poll.Row.Of(row), settings),
                 row.Seq.ToString(CultureInfo.InvariantCulture)))
             .ToList();
-    }
-
-    /// <summary>The rows from the one after <paramref name="cursor"/> through the batch's last, in order: the batch, with
-    /// any row its delivery skipped read from the log, which has no gap in its sequence.</summary>
-    private static async Task<IReadOnlyList<Event>> Contiguous(long cursor, List<Event> batch, CancellationToken ct)
-    {
-        var rows = new List<Event>(batch.Count);
-        var expected = cursor + 1;
-        foreach (var row in batch)
-        {
-            while (row.Seq > expected)
-            {
-                var skipped = await After(expected - 1, row.Seq - 1, ReadLimit, ct);
-                if (skipped.Count == 0) break;
-                rows.AddRange(skipped);
-                expected = skipped[^1].Seq + 1;
-            }
-
-            rows.Add(row);
-            expected = row.Seq + 1;
-        }
-
-        return rows;
-    }
-
-    /// <summary>True when the queue holds a row, false when it has completed, null when <paramref name="wait"/> passed
-    /// first.</summary>
-    private static async Task<bool?> Ready(EventStream.Connection connection, TimeSpan wait, CancellationToken ct)
-    {
-        using var beat = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        beat.CancelAfter(wait);
-        try
-        {
-            return await connection.Queue.WaitToReadAsync(beat.Token);
-        }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-        {
-            return null;
-        }
     }
 
     /// <summary>The rows past <paramref name="after"/> through <paramref name="through"/>, oldest first, at most

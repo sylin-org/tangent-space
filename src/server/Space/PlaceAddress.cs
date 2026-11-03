@@ -26,7 +26,7 @@ public sealed class PlaceAddress : IApplicationUrlStore
         {
             use.Outcome = await (use.Command with { Address = applicationUrl }).Send();
             if (use.Outcome is not Outcome<Offer>.Done)
-                throw new InvalidOperationException($"Using the offer {use.Command.OfferId} kept nothing: {use.Outcome}.");
+                throw new InvalidOperationException($"Using the offer of {use.Command.Origin} kept nothing: {use.Outcome}.");
             return;
         }
 

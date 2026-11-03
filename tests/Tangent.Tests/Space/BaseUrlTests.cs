@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -108,18 +107,16 @@ public sealed class BaseUrlTests
             await using (var first = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(("Tangent:DataFolder", dataFolder)), ct: Cancellation))
             {
                 await Reached.APlace(first, Leo, address: null, Cancellation);
-                var committed = new ConcurrentQueue<object>();
-                first.Commits.Landed += commit => committed.Enqueue(commit.Command);
                 var baseUrl = first.Services.GetRequiredService<KoanWebBaseUrl>();
 
                 await baseUrl.Accept("HTTPS://Kept.Example:443/", Cancellation);
                 Assert.Equal("https://kept.example", baseUrl.Current);
-                Assert.Equal("https://kept.example", (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Address);
-                Assert.Equal(new KeepAddress("https://kept.example"), Assert.Single(committed));
+                var kept = (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!;
+                Assert.Equal("https://kept.example", kept.Address);
 
-                // Keeping the address the row holds writes nothing.
+                // Keeping the address the row holds writes nothing: the row's version stays.
                 await baseUrl.Accept("https://kept.example", Cancellation);
-                Assert.Single(committed);
+                Assert.Equal(kept.Version, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Version);
             }
 
             await using var restarted = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(("Tangent:DataFolder", dataFolder)), ct: Cancellation);
@@ -170,8 +167,7 @@ public sealed class BaseUrlTests
             {
                 Assert.Null(moved.Services.GetRequiredService<KoanWebBaseUrl>().Current);
                 await Reached.On(moved, "https://tangent.example.org", Cancellation);
-                await Reached.Settled(moved, Cancellation);
-                Assert.Equal("https://tangent.example.org", Assert.Single(await Offers.Offer.All(Cancellation)).Subject);
+                Assert.Equal("https://tangent.example.org", await Reached.Open(moved, Cancellation));
             }
 
             await using var configured = await TangentSpaceFixture.StartAsync(new Dictionary<string, string?>

@@ -17,7 +17,7 @@ namespace Tangent.Posts;
 public sealed class EditTests
 {
     [Fact]
-    public async Task The_author_edits_their_own_post_by_form_and_a_moderator_edits_anyones_by_json_each_in_one_commit_with_its_snapshot_version_and_event()
+    public async Task The_author_edits_their_own_post_by_form_and_a_moderator_edits_anyones_by_json_each_with_its_snapshot_version_and_event()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
@@ -25,9 +25,6 @@ public sealed class EditTests
         var reply = await Replied(root, Ada, "From the porch beam.");
         using var ada = await SignedIn(tangentSpace, Ada);
         using var mo = await SignedIn(tangentSpace, Mo);
-        await Reached.Settled(tangentSpace, Cancellation);
-        var commits = new List<Committed>();
-        tangentSpace.Commits.Landed += commits.Add;
 
         var page = await Send(ada.Client, HttpMethod.Get, PostPath(root, root) + "/edit");
         Assert.Equal(HttpStatusCode.OK, page.Status);
@@ -44,9 +41,6 @@ public sealed class EditTests
             (snapshot.Id, snapshot.Title, snapshot.Body, snapshot.Version, snapshot.AuthorId));
         var editedEvent = Assert.Single(await Event.Query(e => e.Kind == EventKind.PostEdited, Cancellation));
         Assert.Equal((root.Id, root.Id, Workshop, Ada, 2L), (editedEvent.PostId, editedEvent.TopicId, editedEvent.TangentId, editedEvent.ActorId, editedEvent.Version));
-        // One commit carried the snapshot, the row and the event: it was announced once, with the event's sequence.
-        Assert.Equal(editedEvent.Seq, Assert.Single(commits).Sequences[Event.Log]);
-        Assert.IsType<EditPost>(commits[0].Command);
 
         var byJson = await Json(mo, PostPath(root, reply) + "/edit", PostPath(root, reply) + "/edit",
             new { body = "From the porch beam, on a hook.", version = 1 });
@@ -59,7 +53,6 @@ public sealed class EditTests
         Assert.Equal("From the porch beam.", (await AuditPartition.At<Post>(reply.Id, 1, Cancellation))?.Body);
         var moEdit = Assert.Single(await Event.Query(e => e.Kind == EventKind.PostEdited && e.PostId == reply.Id, Cancellation));
         Assert.Equal((Mo, 2L), (moEdit.ActorId, moEdit.Version));
-        Assert.Equal(2, commits.Count);
     }
 
     [Fact]

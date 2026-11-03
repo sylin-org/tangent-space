@@ -177,7 +177,7 @@ public sealed class TangentPageTests
         Assert.Contains("<span class=\"new-label\">1 new</span>", html);
         // The reader's account opens in the page, with the way to sign out and come back here.
         Assert.Contains("<details class=\"account\">", html);
-        Assert.Contains($"<form method=\"post\" action=\"{BaseUrl}/auth/logout?return={Uri.EscapeDataString("/t/" + Workshop)}\"><button class=\"account-item account-sign-out\">", html);
+        Assert.Contains($"<form method=\"post\" action=\"{BaseUrl}/auth/logout?return={Uri.EscapeDataString("/t/" + Workshop)}\"><button class=\"account-item account-action\">", html);
         Assert.Contains("</svg>Sign out</button></form>", html);
 
         using (var json = await Json(tangentSpace.Client, "/t/" + Workshop))

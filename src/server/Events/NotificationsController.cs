@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using Koan.Data.Core.Commands;
 using Koan.Web.Attributes;
 using Koan.Web.Hosting;
@@ -15,70 +16,103 @@ using Tangent.Tangents;
 namespace Tangent.Events;
 
 /// <summary>The signed-in reader's notifications at <see cref="Notifications.Path"/>, one resource both ways
-/// (<see cref="NotificationsPage"/>): a page of them newest first (<see cref="Notifications.Read"/>), continued from a
-/// sealed cursor that is refused with 400 when it does not open, each one line about one thing — the Post, the Topic, the
-/// report in the moderators' Tangent, naming the reported Post's author where the reader may view that Post, the door,
-/// the reader's profile, where the place answers, or, for an application that waits, the applications — with an open
-/// Offer's two answers inline. Opening them moves the reader's notifications checkpoint
-/// through the newest the page shows (<see cref="SeeNotifications"/>), so the count every page's frame shows reads past
-/// it; it never moves backwards, and it decides no Offer and no application. The mark is tried and never waited on: the page answers
-/// whatever becomes of it, and a later opening makes good one that did not land. The page is never stored. A visitor is asked to sign in, and a reader without <see cref="Bit.View"/> on the
-/// place receives its gate.</summary>
-public sealed class NotificationsController(KoanWebBaseUrl baseUrl, IDataProtectionProvider protection,
+/// (<see cref="NotificationsPage"/>). Its <c>GET</c> reads a page of them newest first (<see cref="Notifications.Read"/>),
+/// continued from a sealed cursor that is refused with 400 when it does not open, each one line about one thing — the
+/// Post, the Topic, the report in the moderators' Tangent, naming the reported Post's author where the reader may view
+/// that Post, the door, the reader's profile, or, for an application that waits, the applications — new where it lies
+/// past their notifications checkpoint, or past <see cref="From"/> where the address names where the reading began; for
+/// the place's operator, the open Offer of an address with its two answers comes first. It writes nothing. Its
+/// <c>POST</c>, which every way to the notifications sends, opens them: it moves the reader's notifications checkpoint
+/// through the newest they have (<see cref="SeeNotifications"/>), so the count every page's frame shows reads past it,
+/// never backwards and deciding no application, and lands on the page with what was new still marked. The page is never
+/// stored. A visitor is asked to sign in, and a reader without <see cref="Bit.View"/> on the place receives its
+/// gate.</summary>
+public sealed class NotificationsController(KoanWebBaseUrl baseUrl, IDataProtectionProvider protection, AddressOffers offers,
     [FromKeyedServices(Readable.Clock)] TimeProvider clock) : ControllerBase
 {
     /// <summary>The query parameter that carries the cursor of the page to continue from.</summary>
     public const string After = "after";
 
+    /// <summary>The query parameter that names the notifications checkpoint the reading began from, where opening them
+    /// moved it.</summary>
+    public const string From = "from";
+
     [HttpGet(Notifications.Path)]
     [Tool(Name = "read_notifications")]
-    [Description("Read what is for you, newest first, a page at a time: replies to you, mentions of you, and what a role of yours decides. Follow with read_topic or read_post on what an entry's address names, /t/{tangent}/{topic}/{post}, or use_offer or decline_offer with an open Offer's id.")]
-    public async Task<IActionResult> Get([FromQuery(Name = After), Description(Holds.After)] string? after, CancellationToken ct)
+    [Description("Read what is for you, newest first, a page at a time: replies to you, mentions of you, and what a role of yours decides. Follow with read_topic or read_post on what an entry's address names, /t/{tangent}/{topic}/{post}, and seen_notifications once you have seen them.")]
+    public async Task<IActionResult> Get([FromQuery(Name = After), Description(Holds.After)] string? after,
+        [FromQuery(Name = From), Description(Holds.NotificationsFrom)] long? from, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
-        var personId = PostWrites.PersonId(User);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return DoorController.Gated(HttpContext, place.Gate(Bit.View) ?? Capabilities.Absent);
-        if (personId is null)
-            return PostWrites.Refused(HttpContext, Capabilities.SignIn, "Notifications are a signed-in participant's.");
+        var (refusal, personId, place) = await Reading(ct);
+        if (refusal is not null) return refusal;
 
         Notifications.Cursor? cursor = null;
         if (after is not null && (cursor = Notifications.Cursor.Open(after, protection)) is null)
             return new Problem(StatusCodes.Status400BadRequest, "Not a page of your notifications",
                 $"The {After} parameter is the cursor a page of your notifications names as its next.").ToResult();
 
-        var seen = await Notifications.Seen(personId, ct);
-        var from = cursor?.From ?? seen;
-        var page = await Notifications.Read(personId, cursor?.Before, ct, clock);
-        var newest = page.Events.Count > 0 ? page.Events[0].Seq : 0;
-        // Opening them marks them seen, and it never waits for that to land.
-        var marked = newest > seen && new SeeNotifications(personId, newest).TrySend() is not null;
-        var through = marked ? newest : seen;
+        var seen = await Notifications.Seen(personId!, ct);
+        var began = cursor?.From ?? (from is >= 0 ? from.Value : seen);
+        var page = await Notifications.Read(personId!, cursor?.Before, ct, clock);
 
         var baseAddress = baseUrl.Resolve(HttpContext);
         var address = baseAddress + Notifications.Path;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
-        var reader = await PostWrites.Reader(personId, place, baseAddress, baseUrl.PathBase + Notifications.Path, ct);
-        // The frame counts past the mark this page tried, whether or not it has landed yet.
-        if (marked && reader is not null) reader = reader with { Notifications = await Notifications.CountPast(personId, through, baseAddress, ct) };
-        var entries = await Entries(page.Events, from, reader, space, baseAddress, ct);
+        var reader = await PostWrites.Reader(personId!, place!, baseAddress, baseUrl.PathBase + Notifications.Path, ct);
+        var entries = await Entries(page.Events, began, reader, baseAddress, ct);
         return Ok(new NotificationsPage(
             space.Name,
             baseAddress + "/",
             address,
-            from,
-            through,
+            began,
+            seen,
             entries,
-            page.Next is { } next ? address + "?" + After + "=" + Uri.EscapeDataString(new Notifications.Cursor(next, from).Seal(protection)) : null,
+            page.Next is { } next ? address + "?" + After + "=" + Uri.EscapeDataString(new Notifications.Cursor(next, began).Seal(protection)) : null,
             cursor is not null,
             reader,
-            DateOnly.FromDateTime(DateTime.UtcNow)));
+            DateOnly.FromDateTime(DateTime.UtcNow))
+        {
+            Offer = personId == space.OperatorId ? await offers.Offered(space, baseAddress, ct) : null
+        });
+    }
+
+    /// <summary>Opens the reader's notifications: moves their notifications checkpoint through the newest they have,
+    /// never backwards, and sends them to the page, which marks new what lay past where it stood.</summary>
+    [HttpPost(Notifications.Path)]
+    [Tool(Name = "seen_notifications", Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Call this after read_notifications, once you have seen them: your notifications are marked seen through the newest, so arrive and read_notifications count none of them as new until something else arrives. It never moves back.")]
+    public async Task<IActionResult> Open(CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-store";
+        var (refusal, personId, _) = await Reading(ct);
+        if (refusal is not null) return refusal;
+
+        var seen = await Notifications.Seen(personId!, ct);
+        var newest = (await Notifications.CountPast(personId!, seen, "", ct)).Through;
+        if (newest > seen && await new SeeNotifications(personId!, newest).Send() is not Outcome<Checkpoint>.Done and var outcome)
+            return PostWrites.Answer(HttpContext, outcome);
+
+        Response.Headers.Location = baseUrl.PathBase + Notifications.Path
+            + (newest > seen ? "?" + From + "=" + seen.ToString(CultureInfo.InvariantCulture) : "");
+        return StatusCode(StatusCodes.Status303SeeOther);
+    }
+
+    /// <summary>What both ways ask first: a signed-in reader for whom the place exists.</summary>
+    private async Task<(IActionResult? Refusal, string? PersonId, Capabilities? Place)> Reading(CancellationToken ct)
+    {
+        var personId = PostWrites.PersonId(User);
+        var place = await Capabilities.Load(personId, null, null, ct);
+        if (!place.Exists) return (DoorController.Gated(HttpContext, place.Gate(Bit.View) ?? Capabilities.Absent), null, null);
+        if (personId is null)
+            return (PostWrites.Refused(HttpContext, Capabilities.SignIn, "Notifications are a signed-in participant's."), null, null);
+        return (null, personId, place);
     }
 
     /// <summary>Each notification as the page shows it, from keyed reads of what the events name: their Posts and the
-    /// roots of their Topics, their Tangents, the Offers, the Posts the reports report (<see cref="ReportedBy"/>) and the
+    /// roots of their Topics, their Tangents, the Posts the reports report (<see cref="ReportedBy"/>) and the
     /// people.</summary>
-    private async Task<IReadOnlyList<NotificationsPage.Entry>> Entries(IReadOnlyList<Event> events, long from, Who? reader, TangentSpace space,
+    private static async Task<IReadOnlyList<NotificationsPage.Entry>> Entries(IReadOnlyList<Event> events, long from, Who? reader,
         string baseAddress, CancellationToken ct)
     {
         if (events.Count == 0) return [];
@@ -91,10 +125,6 @@ public sealed class NotificationsController(KoanWebBaseUrl baseUrl, IDataProtect
         var tangents = tangentIds.Count == 0
             ? new Dictionary<string, Tangents.Tangent>()
             : (await Tangents.Tangent.Get(tangentIds, ct)).OfType<Tangents.Tangent>().ToDictionary(tangent => tangent.Id, StringComparer.Ordinal);
-        var offerIds = events.Select(e => e.OfferId).OfType<string>().Distinct(StringComparer.Ordinal).ToList();
-        var offers = offerIds.Count == 0
-            ? new Dictionary<string, Offer>()
-            : (await Offer.Get(offerIds, ct)).OfType<Offer>().ToDictionary(offer => offer.Id, StringComparer.Ordinal);
         var reported = await ReportedBy(events, posts, reader?.Id, ct);
         var people = await People(baseAddress,
             events.Select(e => e.ActorId).Concat(events.Where(e => e.PostId is not null)
@@ -104,7 +134,6 @@ public sealed class NotificationsController(KoanWebBaseUrl baseUrl, IDataProtect
 
         var door = baseAddress + "/";
         var profile = reader is null ? door : ProfilePage.AddressOf(baseAddress, reader.Handle);
-        var answers = !baseUrl.IsConfigured && reader?.Id == space.OperatorId;
         return events.Select(e =>
         {
             var isNew = e.Seq > from;
@@ -163,18 +192,6 @@ public sealed class NotificationsController(KoanWebBaseUrl baseUrl, IDataProtect
                     {
                         Role = e.Role is { } role ? Roles.Word(role) : null,
                         Given = e.Given
-                    };
-                case EventKind.OfferMade when offers.TryGetValue(e.OfferId ?? "", out var offer):
-                    var open = offer.State == OfferState.Open && answers && offer.DeciderId == reader?.Id;
-                    return new NotificationsPage.Entry(e.Seq, NotificationsPage.Kinds.Offer, isNew, e.At, null,
-                        open ? null : baseAddress + FirstRunController.Path)
-                    {
-                        Offer = new NotificationsPage.Offered(offer.Id, Offer.Word(offer.Kind), offer.Subject,
-                            offer.State.ToString().ToLowerInvariant(), offer.DecidedAt)
-                        {
-                            Use = open ? OfferController.UseForm(baseAddress, offer.Id) : null,
-                            Decline = open ? OfferController.DeclineForm(baseAddress, offer.Id) : null
-                        }
                     };
                 default:
                     return new NotificationsPage.Entry(e.Seq, e.Kind, isNew, e.At, who, null);

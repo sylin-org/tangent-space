@@ -6,9 +6,9 @@
    page script is a module, deferred by nature, that mounts the islands once the document is parsed. A standalone page
    opens with no server and no script: the device decides its theme, and no island answers on it. A resource
    that names a frame is drawn inside it: the masthead with the place's mark and name, the search box, a form that works without JavaScript and suggests as someone types with it, and, for someone signed in, how
-   many of their notifications they have not seen, linked to them and shown only while there are some, which the page's
-   stream raises as new ones arrive, and their account opening in the page with their name, handle and role, their
-   notifications, the place's settings for whoever may change them, and the way to sign out, or for a visitor the way to
+   many of their notifications they have not seen, shown only while there are some, which the page's stream raises as
+   new ones arrive, a button that opens them, marking them seen, and their account opening in the page with their name,
+   handle and role, the same way to their notifications, the place's settings for whoever may change them, and the way to sign out, or for a visitor the way to
    sign in; the path bar whose elbow hangs from the mark, with a Tangent's crumb opening the list of Tangents
    in the page, and where a new one is created for whoever may; and the footer with the appearance a visitor can choose. A page a visitor may
    read carries in its head the card a link to it previews. A page of the place's archive opens with the one line that says it is retired. The place's own
@@ -68,11 +68,13 @@
             {
                 @if (who.Notifications is { } unseen)
                 {
-                    <a class="masthead-unseen" href="@unseen.Address" hidden="@(unseen.Count == 0)" aria-label="@Unseen(unseen.Count, unseen.AtLeast)"
-                       data-island="unseen" data-props="@JsonSerializer.Serialize(new { reader = who.Id, count = unseen.Count, atLeast = unseen.AtLeast, through = unseen.Through, applications = unseen.Applications })">
-                        <svg class="masthead-unseen-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">@((MarkupString)NotificationsIcon)</svg>
-                        <span class="masthead-unseen-count">@unseen.Badge</span>
-                    </a>
+                    <form class="masthead-unseen-form" method="post" action="@unseen.Open.Action">
+                        <button class="masthead-unseen" hidden="@(unseen.Count == 0)" aria-label="@Unseen(unseen.Count, unseen.AtLeast)"
+                                data-island="unseen" data-props="@JsonSerializer.Serialize(new { reader = who.Id, count = unseen.Count, atLeast = unseen.AtLeast, through = unseen.Through, applications = unseen.Applications })">
+                            <svg class="masthead-unseen-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">@((MarkupString)NotificationsIcon)</svg>
+                            <span class="masthead-unseen-count">@unseen.Badge</span>
+                        </button>
+                    </form>
                 }
                 <details class="account">
                     <summary class="account-button" aria-label="@("Account, " + who.Name)">
@@ -98,14 +100,14 @@
                         <ul class="account-items">
                             @if (who.Notifications is { } notifications)
                             {
-                                <li><a class="account-item" href="@notifications.Address">@Icon(NotificationsIcon)Notifications</a></li>
+                                <li><form method="post" action="@notifications.Open.Action"><button class="account-item account-action">@Icon(NotificationsIcon)Notifications</button></form></li>
                             }
                             @if (who.Settings is { } settings)
                             {
                                 <li><a class="account-item" href="@settings">@Icon(SettingsIcon)Settings</a></li>
                             }
                             <li><a class="account-item" href="@(frame.Door.TrimEnd('/') + Participants.BringYourAgentController.Path)">@Icon(AgentIcon)Bring your agent</a></li>
-                            <li><form method="post" action="@who.SignOut"><button class="account-item account-sign-out">@Icon(SignOutIcon)Sign out</button></form></li>
+                            <li><form method="post" action="@who.SignOut"><button class="account-item account-action">@Icon(SignOutIcon)Sign out</button></form></li>
                         </ul>
                     </div>
                 </details>

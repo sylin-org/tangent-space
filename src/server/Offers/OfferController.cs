@@ -12,50 +12,49 @@ using Tangent.Space;
 namespace Tangent.Offers;
 
 /// <summary>What answering an Offer sends, as a form or one JSON object.</summary>
-public sealed record OfferInput([Description(Holds.Offer)] string? Offer = null);
+public sealed record OfferInput([Description(Holds.Origin)] string? Origin = null);
 
-/// <summary>An Offer's two answers, each a form its decider posts from the door, carrying the Offer in
-/// <see cref="Field"/>. <b>Use it</b> uses the address (<see cref="PlaceAddress.Use"/>)
+/// <summary>An Offer's two answers, each a form its decider posts from the door or their notifications, carrying the
+/// origin it offers in <see cref="Field"/>. <b>Use it</b> uses the address (<see cref="PlaceAddress.Use"/>)
 /// and lands on first run's pointers, which say in one line where the place now answers, with the link to it, and
 /// carry the address the site's pointers must now name; the person signs in again there. <b>Not this one</b> declines it
-/// and lands on the door, offering the next origin seen where there is one. To anyone but the place's operator an
-/// Offer does not exist, and the answer is a missing resource's. A second post of the same answer changes nothing
-/// and lands where the first did. A use of an origin Koan will not take says why, keeps nothing and leaves the Offer open
-/// to decline.</summary>
+/// and lands on the door, which offers the next origin seen where there is one. To anyone but the place's operator an
+/// Offer does not exist, nor does an origin that is not open to them (<see cref="AddressOffers.Open"/>), and the answer is
+/// a missing resource's. A second post of the same answer changes nothing and lands where the first did. A use of an
+/// origin Koan will not take says why, keeps nothing and leaves the Offer open to decline.</summary>
 public sealed class OfferController(KoanWebBaseUrl baseUrl, AddressOffers offers) : ControllerBase
 {
     public const string UsePath = "/offers/use";
 
     public const string DeclinePath = "/offers/decline";
 
-    /// <summary>The form field that carries the Offer's Id.</summary>
-    public const string Field = "offer";
+    /// <summary>The form field that carries the origin the Offer offers.</summary>
+    public const string Field = "origin";
 
-    /// <summary>The form that uses the Offer <paramref name="offer"/>, under <paramref name="baseAddress"/>.</summary>
-    public static Form UseForm(string baseAddress, string offer) => Form.Posting(baseAddress + UsePath, Named(offer));
+    /// <summary>The form that uses the Offer of <paramref name="origin"/>, under <paramref name="baseAddress"/>.</summary>
+    public static Form UseForm(string baseAddress, string origin) => Form.Posting(baseAddress + UsePath, Named(origin));
 
-    /// <summary>The form that declines the Offer <paramref name="offer"/>, under <paramref name="baseAddress"/>.</summary>
-    public static Form DeclineForm(string baseAddress, string offer) => Form.Posting(baseAddress + DeclinePath, Named(offer));
+    /// <summary>The form that declines the Offer of <paramref name="origin"/>, under <paramref name="baseAddress"/>.</summary>
+    public static Form DeclineForm(string baseAddress, string origin) => Form.Posting(baseAddress + DeclinePath, Named(origin));
 
-    private static Form.Field Named(string offer) => new(Field, Holds.Offer, offer);
+    private static Form.Field Named(string origin) => new(Field, Holds.Origin, origin);
 
     [HttpPost(UsePath)]
     [Tool(Name = "use_offer", Destructive = true, Idempotent = true, OpenWorld = false)]
-    [Description("Use what an open Offer from read_notifications proposes, for the one who decides it: an origin the place is reached at becomes its address, and whoever is signed in signs in again there.")]
+    [Description("Use the address an open Offer from arrive proposes, for the one who decides it: an origin the place is reached at becomes its address, and whoever is signed in signs in again there.")]
     public async Task<IActionResult> Use(OfferInput input, CancellationToken ct)
     {
-        var (refusal, personId, row) = await Posted(input, ct);
+        var (refusal, personId, origin, decided) = await Posted(input, ct);
         if (refusal is not null) return refusal;
-        if (row!.State == OfferState.Accepted) return Landed();
-        if (row.State != OfferState.Open || baseUrl.IsConfigured) return NoLongerOpen();
+        if (decided is not null) return decided.State == OfferState.Accepted ? Landed() : NoLongerOpen();
 
-        var outcome = await PlaceAddress.Use(baseUrl, new UseOffer(row.Id, personId!, row.Subject));
+        var outcome = await PlaceAddress.Use(baseUrl, new UseOffer(origin!, personId!, origin!));
         switch (outcome)
         {
             case Outcome<Offer>.Done:
                 return Landed();
             case Outcome<Offer>.Refused { Reason: var reason } when reason == Offer.NotOpen:
-                return (await Offer.Get(row.Id, ct))?.State == OfferState.Accepted ? Landed() : NoLongerOpen();
+                return (await Offer.Get(Offer.IdFor(OfferKind.Address, origin!), ct))?.State == OfferState.Accepted ? Landed() : NoLongerOpen();
             case Outcome<Offer>.Refused { Reason: { Kind: not ReasonKind.Absent } refused }:
                 return new Problem(StatusCodes.Status409Conflict, "Not used", refused.Text).ToResult();
             default:
@@ -65,22 +64,20 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, AddressOffers offers
 
     [HttpPost(DeclinePath)]
     [Tool(Name = "decline_offer", Destructive = true, Idempotent = true, OpenWorld = false)]
-    [Description("Decline an open Offer from read_notifications, for the one who decides it; the place never offers it again.")]
+    [Description("Decline the address an open Offer from arrive proposes, for the one who decides it; the place never offers it again, and arrive shows the next.")]
     public async Task<IActionResult> Decline(OfferInput input, CancellationToken ct)
     {
-        var (refusal, personId, row) = await Posted(input, ct);
+        var (refusal, personId, origin, decided) = await Posted(input, ct);
         if (refusal is not null) return refusal;
-        if (row!.State == OfferState.Declined) return Door();
-        if (row.State != OfferState.Open) return NoLongerOpen();
+        if (decided is not null) return decided.State == OfferState.Declined ? Door() : NoLongerOpen();
 
-        var outcome = await new DeclineOffer(row.Id, personId!).Send();
+        var outcome = await new DeclineOffer(origin!, personId!).Send();
         switch (outcome)
         {
             case Outcome<Offer>.Done:
-                await offers.OfferNext(ct);
                 return Door();
             case Outcome<Offer>.Refused { Reason: var reason } when reason == Offer.NotOpen:
-                return (await Offer.Get(row.Id, ct))?.State == OfferState.Declined ? Door() : NoLongerOpen();
+                return (await Offer.Get(Offer.IdFor(OfferKind.Address, origin!), ct))?.State == OfferState.Declined ? Door() : NoLongerOpen();
             case Outcome<Offer>.Refused { Reason: { Kind: not ReasonKind.Absent } refused }:
                 return new Problem(StatusCodes.Status409Conflict, "Not declined", refused.Text).ToResult();
             default:
@@ -88,17 +85,18 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, AddressOffers offers
         }
     }
 
-    /// <summary>What every answer asks first: a signed-in poster and the Offer its <see cref="Field"/>
-    /// names, sent as a form or a JSON object, that exists for them, which only the place's operator has.</summary>
-    private async Task<(IActionResult? Refusal, string? PersonId, Offer? Row)> Posted(OfferInput input, CancellationToken ct)
+    /// <summary>What every answer asks first: a signed-in poster who is the place's operator, and the origin its
+    /// <see cref="Field"/> names, sent as a form or a JSON object, either decided before or open to them now.</summary>
+    private async Task<(IActionResult? Refusal, string? PersonId, string? Origin, Offer? Decided)> Posted(OfferInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         if (PersonId(User) is not { } personId)
-            return (PostWrites.Refused(HttpContext, Capabilities.SignIn, "Deciding an offer needs its decider signed in."), null, null);
-        if (input.Offer is not { Length: > 0 } offer || await Offer.Get(offer, ct) is not { } row
-            || (await TangentSpace.Get(TangentSpace.SingleRow, ct))?.OperatorId != personId)
-            return (Absent(), null, null);
-        return (null, personId, row);
+            return (PostWrites.Refused(HttpContext, Capabilities.SignIn, "Deciding an offer needs its decider signed in."), null, null, null);
+        if (input.Origin is not { Length: > 0 } origin || await TangentSpace.Get(TangentSpace.SingleRow, ct) is not { } space || space.OperatorId != personId)
+            return (Absent(), null, null, null);
+        if (await Offer.Get(Offer.IdFor(OfferKind.Address, origin), ct) is { } decided) return (null, personId, origin, decided);
+        if (!string.Equals((await offers.Open(space, ct))?.Origin, origin, StringComparison.Ordinal)) return (Absent(), null, null, null);
+        return (null, personId, origin, null);
     }
 
     /// <summary>Where Use it lands: first run's pointers, on the address the request came on.</summary>

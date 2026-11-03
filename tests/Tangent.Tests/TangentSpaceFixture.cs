@@ -1,6 +1,5 @@
 using Koan.Core;
 using Koan.Core.Hosting.App;
-using Koan.Data.Core.Commands;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -55,9 +54,6 @@ public sealed class TangentSpaceFixture : IAsyncDisposable
 
     public string DatabasePath => Options.DatabasePath(Folder);
 
-    /// <summary>What this Tangent Space's commands have committed, as they commit.</summary>
-    public Commits Commits => Services.GetRequiredService<Commits>();
-
     /// <summary>Builds and starts a Tangent Space. <paramref name="settings"/> override the server's
     /// appsettings.json (<c>Koan:Web:ApplicationUrl</c> above all); <paramref name="services"/> adds registrations
     /// after the application's own; <paramref name="environment"/> is the host's environment. Not an async method, so the
@@ -104,9 +100,6 @@ public sealed class TangentSpaceFixture : IAsyncDisposable
         // Registered before Koan's own startup filter, so the binding wraps the whole pipeline.
         builder.Services.AddSingleton<IStartupFilter, RequestBinding>();
         builder.Services.AddKoan();
-        var commits = new Commits();
-        builder.Services.AddSingleton(commits);
-        builder.Services.AddSingleton<ICommandWatcher>(commits);
         services?.Invoke(builder.Services);
         return builder.Build();
     }
@@ -156,34 +149,7 @@ public sealed class TangentSpaceFixture : IAsyncDisposable
     {
         if (_stopped) return;
         _stopped = true;
-        // What a page tried beside its answer is not awaited by a stopping host: it has its turn first, so nothing is left
-        // on the folder.
-        await Settled(ct);
         await _application.StopAsync(ct);
-    }
-
-    /// <summary>Waits for everything sent so far to have run. A try starts beside its sender and reaches the store's turn
-    /// when the thread pool gets to it, so no command sent now is sure to stand behind it; Koan counts a try from the moment
-    /// it is made until its hold begins (<see cref="CommandExtensions.TriesWaiting"/>). Once it reads zero every
-    /// try has its turn or has been told it never ran, and one command behind them answers once they have run. The count is
-    /// the process's, so another Tangent Space's tries can lengthen this wait; it ends within the store's busy timeout, and
-    /// answers false where it did not.</summary>
-    public async Task<bool> Settled(CancellationToken ct = default)
-    {
-        var clock = System.Diagnostics.Stopwatch.StartNew();
-        while (CommandExtensions.TriesWaiting > 0)
-        {
-            if (clock.Elapsed > TimeSpan.FromSeconds(30)) return false;
-            await Task.Delay(5, ct);
-        }
-
-        using (AppHost.PushScope(Services)) return await new Settle().Send(ct) is Outcome<bool>.Done;
-    }
-
-    /// <summary>Writes nothing, behind everything sent so far at the store's turn.</summary>
-    private sealed record Settle : ICommand<bool>
-    {
-        public Task<Outcome<bool>> Run(CancellationToken ct) => Task.FromResult<Outcome<bool>>(new Outcome<bool>.Done(true));
     }
 
     public async ValueTask DisposeAsync()
@@ -215,15 +181,4 @@ public sealed class TangentSpaceFixture : IAsyncDisposable
             next(app);
         };
     }
-}
-
-/// <summary>One commit a watcher was told of: the command, and the last number it took from each sequence.</summary>
-public sealed record Committed(object Command, IReadOnlyDictionary<Sequence, long> Sequences);
-
-/// <summary>Tells a proof of each commit, as Koan tells a watcher.</summary>
-public sealed class Commits : ICommandWatcher
-{
-    public event Action<Committed>? Landed;
-
-    void ICommandWatcher.Committed(object command, IReadOnlyDictionary<Sequence, long> sequences) => Landed?.Invoke(new Committed(command, sequences));
 }

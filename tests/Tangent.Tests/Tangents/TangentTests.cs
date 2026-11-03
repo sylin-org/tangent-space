@@ -34,8 +34,6 @@ public sealed class TangentTests(ITestOutputHelper output)
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Given.AParticipant(tangentSpace, "leo", [Roles.Administrator], ct: Cancellation);
-        var announced = new List<Committed>();
-        tangentSpace.Commits.Landed += announced.Add;
         var at = new DateTimeOffset(2026, 10, 29, 12, 0, 0, TimeSpan.Zero);
 
         var outcome = await new CreateTangent("the-workshop", "The workshop", "Where things get made", PostKind.Topic, 2, Audience.Private, "leo", at).Send(Cancellation);
@@ -55,8 +53,7 @@ public sealed class TangentTests(ITestOutputHelper output)
         var logged = Assert.Single(await Event.All(Cancellation));
         Assert.Equal((1L, EventKind.TangentChanged, "the-workshop", "leo", Audience.Private, at), (logged.Seq, logged.Kind, logged.TangentId, logged.ActorId, logged.Audience, logged.At));
         Assert.Equal(Event.Key(1), logged.Id);
-        var commit = Assert.Single(announced);
-        Assert.Equal(1L, commit.Sequences[Event.Log]);
+        Assert.Equal(1, await Event.Log.Highest(Cancellation));
     }
 
     [Fact]

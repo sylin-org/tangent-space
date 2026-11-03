@@ -44,12 +44,10 @@ public static class Given
         return participant;
     }
 
-    /// <summary>A participant who was at the door before anything the log holds, so everything in it is new to them and
-    /// their door is not their first. A first door their sign-in opened tries its checkpoint beside its answer, so that has
-    /// landed first and cannot overtake this one.</summary>
+    /// <summary>A participant who was at the door before anything the log holds, so everything in it is new to them,
+    /// whatever their arrival began their checkpoint at.</summary>
     public static async Task BeenAtTheDoor(TangentSpaceFixture tangentSpace, string id, CancellationToken ct = default)
     {
-        Assert.True(await tangentSpace.Settled(ct));
         Assert.IsType<Outcome<Events.Checkpoint>.Done>(await new Store<Events.Checkpoint>(Events.Checkpoint.At(id, Events.Scope.Place, 0)).Send(ct));
     }
 }

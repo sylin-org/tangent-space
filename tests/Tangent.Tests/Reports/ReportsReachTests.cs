@@ -104,10 +104,10 @@ public sealed class ReportsReachTests
         using var mo = await SignedIn(tangentSpace, Mo);
         Assert.Equal(1, Count(await Send(mo.Client, HttpMethod.Get, "/", json: true)));
 
-        var opened = await Send(mo.Client, HttpMethod.Get, Notifications.Path);
+        var marked = await Form(mo, "/", Notifications.Path, []);
+        var opened = await Send(mo.Client, HttpMethod.Get, marked.Location!);
         Assert.Equal(HttpStatusCode.OK, opened.Status);
-        Assert.Contains($"<a class=\"masthead-unseen\" href=\"{BaseUrl}/notifications\" hidden", opened.Body);
-        await Reached.Settled(tangentSpace, Cancellation);
+        Assert.Contains("<button class=\"masthead-unseen\" hidden", opened.Body);
         Assert.Equal(created.Seq, (await Checkpoint.Get(Checkpoint.Key(Mo, Scope.Notifications), Cancellation))!.Seq);
 
         // Seen, it counts no more and is listed, no longer new; a new report counts past it.
@@ -200,14 +200,14 @@ public sealed class ReportsReachTests
         var created = Assert.Single(await Event.Query(e => e.PostId == report.Id, Cancellation));
         using var mo = await SignedIn(tangentSpace, Mo);
 
-        var page = (await Send(mo.Client, HttpMethod.Get, Notifications.Path, json: true)).Json;
+        var marked = await Form(mo, "/", Notifications.Path, []);
+        var page = (await Send(mo.Client, HttpMethod.Get, marked.Location!, json: true)).Json;
 
         var entries = page.GetProperty("entries").EnumerateArray().ToList();
         Assert.Equal(["report", "reply"], entries.Select(entry => entry.GetProperty("kind").GetString()));
         Assert.Equal(AddressOf(mine, reply), entries[1].GetProperty("address").GetString());
         Assert.False(page.TryGetProperty("next", out var next) && next.ValueKind != System.Text.Json.JsonValueKind.Null);
-        // Opening them sees through the newest shown, which every notification below it was shown beside.
-        await Reached.Settled(tangentSpace, Cancellation);
+        // Opening them sees through the newest, which every notification below it was shown beside.
         Assert.Equal(created.Seq, (await Checkpoint.Get(Checkpoint.Key(Mo, Scope.Notifications), Cancellation))!.Seq);
     }
 

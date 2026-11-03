@@ -109,96 +109,64 @@ public sealed class DoorTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task A_newcomers_first_door_welcomes_them_with_nothing_counted_as_new_and_their_second_reads_past_it()
+    public async Task A_newcomers_checkpoint_begins_at_their_arrival_so_what_the_place_held_is_not_new_and_what_follows_is()
     {
+        const string newcomer = "did:plc:newcomer";
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
         await Place(tangentSpace);
         var topic = await Started(Workshop, "What should we build?", "ada");
         await Replied(topic, "leo");
         await Started(Articles, "On lanterns", "leo", PostKind.Article);
-        var through = await Event.Log.Highest(Cancellation);
 
-        // Signing in at a page of the place leaves the door unopened.
         using var browser = new Browser(tangentSpace);
-        (await browser.SignIn("reader", Reader, Cancellation, handle: "reader.example", comeBack: "/t")).Dispose();
-        await Reached.Settled(tangentSpace, Cancellation);
-        Assert.Null(await Checkpoint.Get(Checkpoint.Key(Reader, Scope.Place), Cancellation));
+        (await browser.SignIn("newcomer", newcomer, Cancellation, handle: "newcomer.example", comeBack: "/t")).Dispose();
+        var arrival = Assert.Single(await Event.Query(e => e.Kind == EventKind.StandingChanged && e.TargetId == newcomer, Cancellation));
+        Assert.Equal(arrival.Seq, (await Checkpoint.Get(Checkpoint.Key(newcomer, Scope.Place), Cancellation))?.Seq);
 
         var first = WebUtility.HtmlDecode(await Html(browser.Client, "/"));
-        Assert.Contains("Welcome to Lantern Works.", first);
+        Assert.Contains("Nothing new since you were here.", first);
         Assert.Contains("What should we build?", first);
-        Assert.DoesNotContain("Since you were here", first);
-        Assert.DoesNotContain("Nothing new since", first);
         Assert.DoesNotContain("Mark all seen", first);
-        Assert.DoesNotContain("new post", first);
         Assert.DoesNotContain("class=\"new-dot\"", first);
 
-        // Opening it began their checkpoint, past everything it showed.
-        await Reached.Settled(tangentSpace, Cancellation);
-        Assert.True((await Checkpoint.Get(Checkpoint.Key(Reader, Scope.Place), Cancellation))!.Seq >= through);
-        var second = WebUtility.HtmlDecode(await Html(browser.Client, "/"));
-        Assert.Contains("Nothing new since you were here.", second);
-        Assert.DoesNotContain("Welcome to", second);
-
         await Replied(topic, "ada");
-        var third = WebUtility.HtmlDecode(await Html(browser.Client, "/"));
-        Assert.Contains("Since you were here: 1 new post in The workshop.", third);
-        Assert.Contains("Mark all seen", third);
-        Assert.DoesNotContain("Welcome to", third);
+        var next = WebUtility.HtmlDecode(await Html(browser.Client, "/"));
+        Assert.Contains("Since you were here: 1 new post in The workshop.", next);
+        Assert.Contains("Mark all seen", next);
     }
 
     [Fact]
-    public async Task A_first_door_as_json_says_it_is_first_with_nothing_new_and_a_head_leaves_it_first()
+    public async Task A_get_or_head_of_the_door_the_notifications_and_any_page_writes_nothing()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
         await Place(tangentSpace);
-        var topic = await Started(Workshop, "What should we build?", "ada");
-        await Replied(topic, "leo");
-        using var browser = new Browser(tangentSpace);
-        (await browser.SignIn("reader", Reader, Cancellation, handle: "reader.example", comeBack: "/t")).Dispose();
-
-        using (var head = new HttpRequestMessage(HttpMethod.Head, "/"))
-            (await browser.Client.SendAsync(head, Cancellation)).Dispose();
-        await Reached.Settled(tangentSpace, Cancellation);
+        // The reader arrived before any checkpoint was kept, and has a notification they have not seen.
+        var mine = await Started(Workshop, "My question", Reader);
+        await Replied(mine, "ada");
+        using var browser = await SignedIn(tangentSpace);
         Assert.Null(await Checkpoint.Get(Checkpoint.Key(Reader, Scope.Place), Cancellation));
+        var before = await Written();
 
-        using (var json = await Json(browser.Client, "/"))
+        foreach (var path in new[] { "/", Notifications.Path, "/t", "/t/" + Workshop, "/t/" + Workshop + "/" + mine.Slug, "/events?since=0", "/search?q=question" })
+        foreach (var method in new[] { HttpMethod.Get, HttpMethod.Head })
         {
-            var root = json.RootElement;
-            var news = root.GetProperty("news");
-            Assert.True(news.GetProperty("first").GetBoolean());
-            Assert.True(news.GetProperty("quiet").GetBoolean());
-            Assert.Equal(0, news.GetProperty("perTangent").GetArrayLength());
-            Assert.False(news.TryGetProperty("caughtUp", out _));
-            Assert.False(root.GetProperty("alive")[0].GetProperty("topic").GetProperty("new").GetBoolean());
-            Assert.All(root.GetProperty("tangents").EnumerateArray(), tangent => Assert.Equal(0, tangent.GetProperty("new").GetInt32()));
+            using var request = new HttpRequestMessage(method, path);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
+            using var response = await browser.Client.SendAsync(request, Cancellation);
+            output.WriteLine($"{method} {path}: {(int)response.StatusCode}");
+            Assert.True(method == HttpMethod.Head || response.IsSuccessStatusCode, $"{method} {path} answered {response.StatusCode}");
         }
 
-        await Reached.Settled(tangentSpace, Cancellation);
-        using (var json = await Json(browser.Client, "/"))
-            Assert.False(json.RootElement.GetProperty("news").GetProperty("first").GetBoolean());
+        Assert.Equal(before, await Written());
     }
 
-    [Fact]
-    public async Task A_first_door_keeps_what_concerns_the_reader_under_the_welcome_with_no_catching_up_and_shows_it_once()
+    /// <summary>What a read could write: the log, every checkpoint and every Offer decided.</summary>
+    private static async Task<string> Written()
     {
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
-        await Place(tangentSpace);
-        using var browser = new Browser(tangentSpace);
-        (await browser.SignIn("reader", Reader, Cancellation, handle: "reader.example", comeBack: "/t")).Dispose();
-        var mine = await Started(Workshop, "My question", Reader);
-        var reply = await Replied(mine, "ada");
-
-        var first = WebUtility.HtmlDecode(await Html(browser.Client, "/"));
-        Assert.Contains("Welcome to Lantern Works", first);
-        Assert.Contains("Replies to you", first);
-        Assert.Contains($"href=\"{BaseUrl}/t/{Workshop}/my-question/{reply.Id}\"", first);
-        Assert.DoesNotContain("Since you were here", first);
-        Assert.DoesNotContain("New in each Tangent", first);
-        Assert.DoesNotContain("Mark all seen", first);
-
-        await Reached.Settled(tangentSpace, Cancellation);
-        Assert.Contains("Nothing new since you were here.", WebUtility.HtmlDecode(await Html(browser.Client, "/")));
+        var checkpoints = (await Checkpoint.All(Cancellation)).OrderBy(checkpoint => checkpoint.Id, StringComparer.Ordinal)
+            .Select(checkpoint => $"{checkpoint.Id}={checkpoint.Seq}{(checkpoint.Watch ? "w" : "")}");
+        return $"{await Event.Log.Highest(Cancellation)}/{await Event.Count.Exact(Cancellation)}/{await Offers.Offer.Count.Exact(Cancellation)}: "
+               + string.Join(", ", checkpoints);
     }
 
     [Fact]

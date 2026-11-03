@@ -1,4 +1,3 @@
-using Koan.Data.Abstractions.Annotations;
 using Koan.Data.Core.Commands;
 using Koan.Data.Core.Model;
 
@@ -11,26 +10,19 @@ public enum OfferKind
     Address
 }
 
-/// <summary>Where an Offer stands: open until its decider accepts or declines it, once, or until it lapses because
-/// what it would do no longer can be done.</summary>
+/// <summary>How the one who decides an Offer decided it.</summary>
 public enum OfferState
 {
-    Open,
     Accepted,
-    Declined,
-    Lapsed
+    Declined
 }
 
-/// <summary>Something the place learned and offers to do for the one who decides it: a prepared action of a
-/// <see cref="OfferKind"/> on one <see cref="Subject"/>, decided once by <see cref="DeciderId"/>. Its Id derives from
-/// what it offers (<see cref="IdFor"/>), so the same Offer is never made twice, whatever became of the first. Making one
-/// appends <c>offer.made</c>, targeted at its decider; reading that event decides nothing, and the Offer stays open
-/// until it is decided.</summary>
+/// <summary>An Offer as its decider decided it: something the place learned and offered to do, a prepared action of an
+/// <see cref="OfferKind"/> on one <see cref="Subject"/>, accepted or declined once. An open Offer is never stored; it is
+/// computed from what the place sees (<see cref="AddressOffers"/>), and this row is what deciding it writes. Its Id
+/// derives from what it offers (<see cref="IdFor"/>), so a decided Offer is never offered again.</summary>
 public sealed class Offer : Entity<Offer>
 {
-    /// <summary>The most open Offers one read takes.</summary>
-    public const int OpenLimit = 8;
-
     public static readonly Reason NotOpen = Reason.Conflict("This offer is no longer open; nothing changed.");
 
     /// <summary>The Id of the Offer of <paramref name="kind"/> on <paramref name="subject"/>: its kind's word and the
@@ -40,15 +32,15 @@ public sealed class Offer : Entity<Offer>
     /// <summary>A kind as the Id and the wire write it.</summary>
     public static string Word(OfferKind kind) => kind.ToString().ToLowerInvariant();
 
-    /// <summary>A new open Offer, made at <paramref name="at"/>.</summary>
-    public static Offer Make(OfferKind kind, string subject, string deciderId, DateTimeOffset at) => new()
+    /// <summary>The Offer of <paramref name="kind"/> on <paramref name="subject"/>, decided <paramref name="state"/> at
+    /// <paramref name="at"/>.</summary>
+    public static Offer Decided(OfferKind kind, string subject, OfferState state, DateTimeOffset at) => new()
     {
         Id = IdFor(kind, subject),
         Kind = kind,
         Subject = subject,
-        DeciderId = deciderId,
-        State = OfferState.Open,
-        MadeAt = at
+        State = state,
+        DecidedAt = at
     };
 
     public OfferKind Kind { get; set; }
@@ -56,28 +48,7 @@ public sealed class Offer : Entity<Offer>
     /// <summary>What it would act on: for <see cref="OfferKind.Address"/>, an origin.</summary>
     public string Subject { get; set; } = "";
 
-    /// <summary>Who decides it: the operator, for every kind there is.</summary>
-    [Index(Name = "ix_offer_open", Order = 1)]
-    public string DeciderId { get; set; } = "";
-
-    [Index(Name = "ix_offer_open", Order = 0)]
     public OfferState State { get; set; }
 
-    public DateTimeOffset MadeAt { get; set; }
-
-    /// <summary>When it was accepted, declined or lapsed; null while it is open.</summary>
-    public DateTimeOffset? DecidedAt { get; set; }
-
-    public void Accept(DateTimeOffset at) => Decide(OfferState.Accepted, at);
-
-    public void Decline(DateTimeOffset at) => Decide(OfferState.Declined, at);
-
-    public void Lapse(DateTimeOffset at) => Decide(OfferState.Lapsed, at);
-
-    private void Decide(OfferState state, DateTimeOffset at)
-    {
-        if (State != OfferState.Open) throw new Refusal(NotOpen);
-        State = state;
-        DecidedAt = at;
-    }
+    public DateTimeOffset DecidedAt { get; set; }
 }

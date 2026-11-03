@@ -9,7 +9,8 @@ namespace Tangent.Participants;
 /// standing the place's admission gives (before first run, the admission the place will be established with), and appends
 /// <see cref="EventKind.StandingChanged"/> for it, carrying that standing; an applicant's application waits at that
 /// event's sequence (<see cref="Participant.WaitingSeq"/>), and that is all it writes, however many may decide it; anyone
-/// admitted joins the member role (<see cref="MemberRole"/>). Idempotent by the person's id: a person who already arrived
+/// admitted joins the member role (<see cref="MemberRole"/>) and begins reading the door there, their place checkpoint at
+/// their arrival, so what the place held before is not news to them. Idempotent by the person's id: a person who already arrived
 /// gets their participant back and nothing is written. The handle is taken from any other participant who still keeps it
 /// (<see cref="Handles.Release"/>).</summary>
 public sealed record FirstArrival(string PersonId, string Handle, DateTimeOffset? At = null) : ICommand<Participant>
@@ -27,6 +28,7 @@ public sealed record FirstArrival(string PersonId, string Handle, DateTimeOffset
         await participant.Save(ct);
         await Handles.Release(participant.Handle, participant.Id, ct);
         await MemberRole.Join(participant, ct);
+        if (participant.Standing == Standing.Admitted) await Checkpoint.At(participant.Id, Scope.Place, arrival.Seq).Save(ct);
         return new Outcome<Participant>.Done(participant);
     }
 }
