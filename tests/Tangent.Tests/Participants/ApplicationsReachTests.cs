@@ -143,7 +143,7 @@ public sealed class ApplicationsReachTests
         using var mo = await SignedIn(tangentSpace, Mo);
         Assert.Equal(1, Count(await Send(mo.Client, HttpMethod.Get, "/", json: true)));
 
-        var marked = await Form(mo, "/", Notifications.Path, []);
+        var marked = await Opened(mo, "/");
         var opened = await Send(mo.Client, HttpMethod.Get, marked.Location!);
         Assert.Equal(HttpStatusCode.OK, opened.Status);
         Assert.Contains("<button class=\"masthead-unseen\" hidden", opened.Body);
@@ -201,7 +201,7 @@ public sealed class ApplicationsReachTests
         await Applying(tangentSpace);
         await Started(Ada, "Before Grace", "Posted before she applied.");
         using var grace = await SignedIn(tangentSpace, Grace);
-        Assert.Null(await Checkpoint.Get(Checkpoint.Key(Grace, Scope.Place), Cancellation));
+        Assert.Equal((await Participant.Get(Grace, Cancellation))!.WaitingSeq, (await Checkpoint.Get(Checkpoint.Key(Grace, Scope.Place), Cancellation))?.Seq);
         var waited = await Started(Ada, "While Grace waited", "Posted while she waited.");
 
         Assert.IsType<Outcome<Participant>.Done>(await new Admit(Mo, Grace).Send(Cancellation));

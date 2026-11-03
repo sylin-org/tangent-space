@@ -48,8 +48,8 @@ public sealed class NotificationsTests
         {
             var page = await Send(ada.Client, HttpMethod.Get, path);
             Assert.Equal(HttpStatusCode.OK, page.Status);
-            Assert.Contains($"<form class=\"masthead-unseen-form\" method=\"post\" action=\"{BaseUrl}/notifications\"><button class=\"masthead-unseen\" aria-label=\"2 new notifications\"",
-                Collapsed(page.Body));
+            Assert.Contains($"<form class=\"masthead-unseen-form\" method=\"post\" action=\"{BaseUrl}/notifications\"><input type=\"hidden\" name=\"through\"", page.Body);
+            Assert.Contains("<button class=\"masthead-unseen\" aria-label=\"2 new notifications\"", Collapsed(page.Body));
             Assert.Contains("<span class=\"masthead-unseen-count\">2</span>", page.Body);
             Assert.Contains(AccountItem, page.Body);
         }
@@ -84,8 +84,9 @@ public sealed class NotificationsTests
         Assert.Equal(2, door.GetProperty("news").GetProperty("replies").GetProperty("count").GetInt32());
         Assert.Equal((2, BaseUrl + Notifications.Path), (door.GetProperty("news").GetProperty("notifications").GetProperty("count").GetInt32(),
             door.GetProperty("news").GetProperty("notifications").GetProperty("address").GetString()));
-        Assert.Contains($"<form class=\"door-notifications\" method=\"post\" action=\"{BaseUrl}/notifications\"><button class=\"watch-button\">2 new notifications</button></form>",
-            (await Send(ada.Client, HttpMethod.Get, "/")).Body);
+        var doorHtml = (await Send(ada.Client, HttpMethod.Get, "/")).Body;
+        Assert.Contains($"<form class=\"door-notifications\" method=\"post\" action=\"{BaseUrl}/notifications\"><input type=\"hidden\" name=\"through\" value=\"{(await Created(newest)).Seq}\" /><button class=\"watch-button\">2 new notifications</button></form>",
+            doorHtml);
 
         // Reading them marks nothing: both stay new, and the frame still counts them.
         var read = await Send(ada.Client, HttpMethod.Get, Notifications.Path);
@@ -95,7 +96,7 @@ public sealed class NotificationsTests
         Assert.Null(await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Notifications), Cancellation));
 
         // Opening them posts the mark and lands on them, the replies still marked new and the page's own frame past them.
-        var marked = await Form(ada, "/", Notifications.Path, []);
+        var marked = await Opened(ada, "/");
         Assert.Equal((HttpStatusCode.SeeOther, Notifications.Path + "?from=0"), (marked.Status, marked.Location));
         var through = (await Created(newest)).Seq;
         Assert.Equal(through, (await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Notifications), Cancellation))!.Seq);
@@ -118,12 +119,12 @@ public sealed class NotificationsTests
         // and lands on them.
         await Replied(mine, Bea, "Then the harbour.");
         Assert.Equal(1, Count(await Send(ada.Client, HttpMethod.Get, "/t/" + Workshop, json: true)));
-        var again = await Form(ada, "/t/" + Workshop, Notifications.Path, []);
+        var again = await Opened(ada, "/t/" + Workshop);
         var json = (await Send(ada.Client, HttpMethod.Get, again.Location!, json: true)).Json;
         Assert.Equal((through, through + 1), (json.GetProperty("from").GetInt64(), json.GetProperty("through").GetInt64()));
         Assert.Equal(new[] { true, false, false }, json.GetProperty("entries").EnumerateArray().Select(entry => entry.GetProperty("new").GetBoolean()));
         Assert.Equal(through + 1, (await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Notifications), Cancellation))!.Seq);
-        var still = await Form(ada, "/", Notifications.Path, []);
+        var still = await Opened(ada, "/");
         Assert.Equal((HttpStatusCode.SeeOther, Notifications.Path), (still.Status, still.Location));
         Assert.Equal(through + 1, Assert.IsType<Outcome<Checkpoint>.Done>(await new SeeNotifications(Ada, through).Send(Cancellation)).Result.Seq);
         Assert.Equal(0, Count(await Send(ada.Client, HttpMethod.Get, "/", json: true)));
@@ -133,6 +134,32 @@ public sealed class NotificationsTests
             await new SeeNotifications(Bea, through + 1).Send(Cancellation));
         var visitor = await Send(Agent(tangentSpace), HttpMethod.Post, Notifications.Path, json: true);
         Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (visitor.Status, visitor.Gate));
+    }
+
+    [Fact]
+    public async Task Opening_them_marks_them_seen_through_what_the_reading_reached_so_what_arrived_after_stays_new()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        var mine = await Started(Ada, "Lanterns", "Who lights theirs first?");
+        var read = await Replied(mine, Bea, "I do, at six.");
+        using var ada = await SignedIn(tangentSpace, Ada);
+
+        var page = (await Send(ada.Client, HttpMethod.Get, Notifications.Path, json: true)).Json;
+        var through = Valued(page.GetProperty("who").GetProperty("notifications").GetProperty("open"), Notifications.ThroughField);
+        Assert.Equal((await Created(read)).Seq.ToString(System.Globalization.CultureInfo.InvariantCulture), through);
+
+        // A reply arrives between the reading and the call; marking what was read leaves it new.
+        await Replied(mine, Mo, "At dusk, always.");
+        var marked = await Json(ada, Notifications.Path, Notifications.Path, new { through = long.Parse(through!, System.Globalization.CultureInfo.InvariantCulture) });
+        Assert.Equal(HttpStatusCode.SeeOther, marked.Status);
+        Assert.Equal((await Created(read)).Seq, (await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Notifications), Cancellation))!.Seq);
+        Assert.Equal(1, Count(await Send(ada.Client, HttpMethod.Get, Notifications.Path, json: true)));
+
+        // A call that says nothing of what it read marks nothing.
+        var unsaid = await Json(ada, Notifications.Path, Notifications.Path, new { });
+        Assert.Equal(HttpStatusCode.BadRequest, unsaid.Status);
+        Assert.Equal((await Created(read)).Seq, (await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Notifications), Cancellation))!.Seq);
     }
 
     [Fact]
@@ -182,7 +209,8 @@ public sealed class NotificationsTests
         // The door names them in the same words.
         var news = (await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news");
         Assert.True(news.GetProperty("notifications").GetProperty("atLeast").GetBoolean());
-        Assert.Contains($"<form class=\"door-notifications\" method=\"post\" action=\"{BaseUrl}/notifications\"><button class=\"watch-button\">At least {Notifications.CountLimit + 1} new notifications</button></form>", html);
+        Assert.Contains($"<form class=\"door-notifications\" method=\"post\" action=\"{BaseUrl}/notifications\"><input type=\"hidden\" name=\"through\"", html);
+        Assert.Contains($"<button class=\"watch-button\">At least {Notifications.CountLimit + 1} new notifications</button></form>", html);
     }
 
     [Fact]
@@ -195,7 +223,7 @@ public sealed class NotificationsTests
         for (var index = 0; index < Notifications.PageSize + 5; index++) replies.Add(await Replied(mine, Bea, $"Reply number {index}."));
         using var ada = await SignedIn(tangentSpace, Ada);
 
-        var opened = await Form(ada, "/", Notifications.Path, []);
+        var opened = await Opened(ada, "/");
         var first = (await Send(ada.Client, HttpMethod.Get, opened.Location!, json: true)).Json;
         var shown = Posts(first);
         Assert.Equal(replies.AsEnumerable().Reverse().Take(Notifications.PageSize).Select(reply => AddressOf(mine, reply)), shown);
@@ -398,7 +426,7 @@ public sealed class NotificationsTests
     private const string Origin = "https://tangent.example.org";
 
     /// <summary>The account menu's way to the notifications: a form that opens them.</summary>
-    private const string AccountItem = $"<form method=\"post\" action=\"{BaseUrl}/notifications\"><button class=\"account-item account-action\">";
+    private const string AccountItem = $"<form method=\"post\" action=\"{BaseUrl}/notifications\"><input type=\"hidden\" name=\"through\"";
 
     /// <summary>The page's markup with each run of whitespace between tags taken out, so a tag spread over lines reads as
     /// one.</summary>

@@ -301,9 +301,10 @@ public sealed class TheToolsTests
         // read_notifications and arrive, then what an address names, and seen_notifications once it is seen.
         var replied = (await Post.Get(replyId, Cancellation))!;
         Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), replied.TopicId, "So you say.", Bea, replyId).Send(Cancellation));
-        var entry = (await Worked(mine, "read_notifications", new { })).GetProperty("entries").EnumerateArray().First();
+        var notifications = await Worked(mine, "read_notifications", new { });
+        var entry = notifications.GetProperty("entries").EnumerateArray().First();
         await FollowAddress(mine, entry.GetProperty("address").GetString()!);
-        await Worked(mine, "seen_notifications", new { });
+        await Worked(mine, "seen_notifications", new { through = notifications.GetProperty("who").GetProperty("notifications").GetProperty("through").GetInt64() });
         var door = await Worked(mine, "arrive", new { });
         var news = door.GetProperty("news");
         await FollowAddress(mine, news.GetProperty("replies").GetProperty("posts")[0].GetProperty("address").GetString()!);

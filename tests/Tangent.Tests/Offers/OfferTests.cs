@@ -121,7 +121,7 @@ public sealed class OfferTests
     }
 
     [Fact]
-    public async Task Loopback_private_unspecified_and_http_origins_are_not_offered_and_the_most_seen_public_one_is()
+    public async Task Loopback_private_unspecified_and_http_origins_are_not_offered_and_the_public_one_seen_first_is()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(), ct: Cancellation);
         await Reached.APlace(tangentSpace, Leo, address: null, Cancellation);
@@ -132,8 +132,33 @@ public sealed class OfferTests
 
         await Reached.On(tangentSpace, Other, Cancellation);
         await Reached.On(tangentSpace, Public, Cancellation, times: 2);
-        Assert.Equal(Public, await Reached.Open(tangentSpace, Cancellation));
+        Assert.Equal(Other, await Reached.Open(tangentSpace, Cancellation));
         Assert.Empty(await Offer.All(Cancellation));
+    }
+
+    [Fact]
+    public async Task The_open_offer_stays_put_however_many_requests_arrive_on_others_and_an_answer_lands_for_any_origin_offerable()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(), ct: Cancellation);
+        await APlaceWithNews(tangentSpace);
+        await Reached.On(tangentSpace, Public, Cancellation);
+        using var leo = await SignedIn(tangentSpace, "leo", Leo);
+        using (var door = await Json(leo.Client, "/"))
+            Assert.Equal(Public, door.RootElement.GetProperty("offer").GetProperty("subject").GetString());
+
+        // A burst on another host, forged or not, takes nothing from the line the operator read.
+        await Reached.On(tangentSpace, Other, Cancellation, times: 20);
+        Assert.Equal(Public, await Reached.Open(tangentSpace, Cancellation));
+
+        // The operator may still answer the other, which is seen, offerable and undecided; the line stays where it was.
+        using (var declined = await Answer(leo, OfferController.DeclinePath, Other))
+            Assert.Equal(HttpStatusCode.SeeOther, declined.StatusCode);
+        Assert.Equal((Other, OfferState.Declined), (Assert.Single(await Offer.All(Cancellation)).Subject, Assert.Single(await Offer.All(Cancellation)).State));
+        Assert.Equal(Public, await Reached.Open(tangentSpace, Cancellation));
+
+        // An origin never seen is no answer of the operator's.
+        using (var unseen = await Answer(leo, OfferController.DeclinePath, "https://never.example.org"))
+            Assert.Equal(HttpStatusCode.NotFound, unseen.StatusCode);
     }
 
     [Fact]
@@ -284,7 +309,7 @@ public sealed class OfferTests
             await using (var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(("Tangent:DataFolder", dataFolder)), ct: Cancellation))
             {
                 await APlaceWithNews(tangentSpace);
-                // One address is offered at a time, the one seen most: the other waits.
+                // One address is offered at a time, the one seen first: the other waits.
                 await Reached.On(tangentSpace, Public, Cancellation, times: 3);
                 await Reached.On(tangentSpace, Other, Cancellation, times: 2);
                 Assert.Equal(Public, await Reached.Open(tangentSpace, Cancellation));

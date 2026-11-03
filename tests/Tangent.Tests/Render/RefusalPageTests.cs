@@ -53,11 +53,16 @@ public sealed class RefusalPageTests
 
         var fields = new Dictionary<string, string>();
         fields["body"] = new string('x', (int)PostWrites.RequestLimit * 2);
-        var large = await Send(ada.Client, HttpMethod.Post, TopicPath(root), FormBody(fields));
-        Assert.Equal((HttpStatusCode.RequestEntityTooLarge, "text/html"), (large.Status, large.MediaType));
-        Assert.Contains(Masthead, large.Body);
-        Assert.Contains(">Not accepted</h1>", large.Body);
-        Assert.Contains("more than this address takes", large.Body);
+        // The body waits for the server's go-ahead, so the refusal is read before an unread body closes the connection.
+        using var oversized = new HttpRequestMessage(HttpMethod.Post, TopicPath(root)) { Content = FormBody(fields) };
+        oversized.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
+        oversized.Headers.ExpectContinue = true;
+        using var refused = await ada.Client.SendAsync(oversized, Cancellation);
+        var large = await refused.Content.ReadAsStringAsync(Cancellation);
+        Assert.Equal((HttpStatusCode.RequestEntityTooLarge, "text/html"), (refused.StatusCode, refused.Content.Headers.ContentType?.MediaType));
+        Assert.Contains(Masthead, large);
+        Assert.Contains(">Too large</h1>", large);
+        Assert.Contains("more than this address takes", large);
 
         // The place's own: nothing at an address, and a gate, each with the way to sign in for a visitor.
         var nothing = await Send(visitor, HttpMethod.Get, "/t/" + Workshop + "/nothing-here");

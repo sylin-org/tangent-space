@@ -16,6 +16,9 @@ using Tangent.Tangents;
 
 namespace Tangent.Events;
 
+/// <summary>What opening the notifications sends, as a form or one JSON object.</summary>
+public sealed record SeenNotificationsInput([Description(Holds.NotificationsThrough)] long? Through = null);
+
 /// <summary>The signed-in reader's notifications at <see cref="Notifications.Path"/>, one resource both ways
 /// (<see cref="NotificationsPage"/>). Its <c>GET</c> reads a page of them newest first (<see cref="Notifications.Read"/>),
 /// continued from a sealed cursor that is refused with 400 when it does not open, each one line about one thing — the
@@ -24,7 +27,7 @@ namespace Tangent.Events;
 /// past their notifications checkpoint, or past <see cref="From"/> where the address names where the reading began; for
 /// the place's operator, the open Offer of an address with its two answers comes first. It writes nothing. Its
 /// <c>POST</c>, which every way to the notifications sends, opens them: it moves the reader's notifications checkpoint
-/// through the newest they have (<see cref="SeeNotifications"/>), so the count every page's frame shows reads past it,
+/// through the sequence the page that sent it read (<see cref="SeeNotifications"/>), never past it, so the count every page's frame shows reads past it,
 /// never backwards and deciding no application, and lands on the page with what was new still marked. The page is never
 /// stored. A visitor is asked to sign in, and a reader without <see cref="Bit.View"/> on the place receives its
 /// gate.</summary>
@@ -78,24 +81,37 @@ public sealed class NotificationsController(KoanWebBaseUrl baseUrl, IDataProtect
         });
     }
 
-    /// <summary>Opens the reader's notifications: moves their notifications checkpoint through the newest they have,
-    /// never backwards, and sends them to the page, which marks new what lay past where it stood.</summary>
+    /// <summary>Opens the reader's notifications: moves their notifications checkpoint through the sequence the reading
+    /// that sent it reached (<see cref="Notifications.ThroughField"/>), never past it nor backwards, and sends them to the
+    /// page, which marks new what lay past where it stood.</summary>
     [HttpPost(Notifications.Path)]
     [Tool(Name = "seen_notifications", Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Call this after read_notifications, once you have seen them: your notifications are marked seen through the newest, so arrive and read_notifications count none of them as new until something else arrives. It never moves back.")]
-    public async Task<IActionResult> Open(CancellationToken ct)
+    [Description("Call this after read_notifications, once you have seen them, with the through its who.notifications.open form gives: your notifications are marked seen through it, so arrive and read_notifications count none of them as new until something else arrives. What arrived after your reading stays new. It never moves back.")]
+    public async Task<IActionResult> Open(SeenNotificationsInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var (refusal, personId, _) = await Reading(ct);
         if (refusal is not null) return refusal;
+        if (input.Through is not (>= 0 and var through))
+            return new Problem(StatusCodes.Status400BadRequest,
+                $"The {Notifications.ThroughField} field carries the sequence your reading of the notifications reached.") { Title = "Not a sequence of your notifications" }.ToResult();
 
         var seen = await Notifications.Seen(personId!, ct);
-        var newest = (await Notifications.CountPast(personId!, seen, "", ct)).Through;
-        if (newest > seen && await new SeeNotifications(personId!, newest).Send() is not Outcome<Checkpoint>.Done and var outcome)
-            return Answers.NotDone(HttpContext, outcome);
+        if (through > seen)
+        {
+            switch (await new SeeNotifications(personId!, through).Send())
+            {
+                case Outcome<Checkpoint>.Done:
+                    break;
+                case Outcome<Checkpoint>.Refused { Reason: { Kind: ReasonKind.Invalid } reason }:
+                    return new Problem(StatusCodes.Status400BadRequest, reason.Text) { Title = "Not a sequence of your notifications" }.ToResult();
+                case var outcome:
+                    return Answers.NotDone(HttpContext, outcome);
+            }
+        }
 
         Response.Headers.Location = baseUrl.PathBase + Notifications.Path
-            + (newest > seen ? "?" + From + "=" + seen.ToString(CultureInfo.InvariantCulture) : "");
+            + (through > seen ? "?" + From + "=" + seen.ToString(CultureInfo.InvariantCulture) : "");
         return StatusCode(StatusCodes.Status303SeeOther);
     }
 

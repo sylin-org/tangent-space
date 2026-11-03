@@ -26,7 +26,9 @@ public sealed record SeenDoorInput([Description(Holds.DoorThrough)] long? Throug
 /// not seen (<see cref="Notifications.Count"/>); the first Tangents by order; capability once
 /// per distinct Tangent among them and the events; the Posts and Topics the events name; the reader's checkpoints for
 /// those Topics and Tangents; and the people it shows. It writes nothing: a participant's place checkpoint begins at their
-/// arrival, or for an applicant at their admission, and moves when they mark the door seen. An event is new to the reader when it is past their place
+/// arrival, moves to just before their admission for an applicant admitted, and moves when they mark the door seen; a
+/// reader whose checkpoint still stands at their own arrival, one keyed read of that event, is at their first door and is
+/// welcomed. An event is new to the reader when it is past their place
 /// checkpoint, past their checkpoint for its Topic (in the Topic's own sequence) and for its Tangent where those exist,
 /// not their own, and in a Tangent they may view; an event in a Tangent they may not view does not exist for them. A
 /// mention is not judged by the Topic's checkpoint: that counts the Topic's Posts as they arrived, and an edit can
@@ -81,6 +83,8 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
 
         var checkpoint = reader is null ? null : await Checkpoint.Get(Checkpoint.Key(reader.Id, Scope.Place), ct);
         var since = checkpoint?.Seq ?? 0;
+        var first = checkpoint is not null && await Event.Get(Event.Key(checkpoint.Seq), ct) is { Kind: EventKind.StandingChanged } arrival
+                    && arrival.ActorId == reader!.Id && arrival.TargetId == reader.Id;
         var window = await LogWindow.Newest(ct);
         IReadOnlyList<Event> targeted = reader is null ? [] : await LogWindow.Targeting(reader.Id, since, ct);
 
@@ -203,6 +207,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
                 Group(removed, targetedFull, posts, tangents, people));
             // A door that carries a form is never stored, so a browser's Back after sign-out redisplays nothing of it; any
             // other door of a signed-in reader is theirs alone to cache.
+            if (first) news = news with { First = true };
             if (!news.Quiet) news = news with { CaughtUp = CaughtUpForm(door, through) };
             Response.Headers.CacheControl = news.CaughtUp is null ? "private" : "no-cache, no-store";
         }
@@ -296,12 +301,16 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
 
     /// <summary>What a reader without <see cref="Bit.View"/> on the place receives: a missing resource's answer where
     /// the place is absent to them; otherwise the one step that stands between them and reading.</summary>
-    internal static IActionResult Gated(HttpContext http, Reason gate) => Answers.Refused(http,
-        gate.Kind == ReasonKind.Absent ? gate
-        : gate == Capabilities.SignIn ? SignInToRead
-        : gate == Capabilities.Apply ? ApplyToRead
-        : gate == Capabilities.Declined ? DeclinedToRead
-        : Reason.Gated(gate.Word!, "This Tangent Space is not open to you."));
+    internal static IActionResult Gated(HttpContext http, Reason gate)
+        => gate.Kind == ReasonKind.Absent ? Answers.Refused(http, gate)
+        : gate == Capabilities.SignIn ? Read(http, SignInToRead, "Sign in to read")
+        : gate == Capabilities.Apply ? Answers.Refused(http, ApplyToRead)
+        : gate == Capabilities.Declined ? Answers.Refused(http, DeclinedToRead)
+        : Read(http, Reason.Gated(gate.Word!, "This Tangent Space is not open to you."), "Not readable");
+
+    /// <summary>A gate on reading the place, titled for reading: its status and its word are the one mapping's.</summary>
+    private static IActionResult Read(HttpContext http, Reason gate, string heading)
+        => new Problem(Answers.Status(http, gate), gate.Text, gate.Word) { Title = heading }.ToResult();
 
     /// <summary>The gates that keep a reader from the place, worded for reading rather than writing.</summary>
     private static readonly Reason SignInToRead = Reason.Gated(Capabilities.SignIn.Word!, "This Tangent Space is read by its participants.");

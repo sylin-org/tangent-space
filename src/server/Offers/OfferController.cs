@@ -89,7 +89,7 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, AddressOffers offers
     private static readonly Reason SignInToDecide = Reason.Gated(Capabilities.SignIn.Word!, "Deciding an offer needs its decider signed in.");
 
     /// <summary>What every answer asks first: a signed-in poster who is the place's operator, and the origin its
-    /// <see cref="Field"/> names, sent as a form or a JSON object, either decided before or open to them now.</summary>
+    /// <see cref="Field"/> names, sent as a form or a JSON object, either decided before or one they may answer now.</summary>
     private async Task<(IActionResult? Refusal, string? PersonId, string? Origin, Offer? Decided)> Posted(OfferInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
@@ -98,7 +98,7 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, AddressOffers offers
         if (input.Origin is not { Length: > 0 } origin || await TangentSpace.Get(TangentSpace.SingleRow, ct) is not { } space || space.OperatorId != personId)
             return (Absent(), null, null, null);
         if (await Offer.Get(Offer.IdFor(OfferKind.Address, origin), ct) is { } decided) return (null, personId, origin, decided);
-        if (!string.Equals((await offers.Open(space, ct))?.Origin, origin, StringComparison.Ordinal)) return (Absent(), null, null, null);
+        if (!offers.Answerable(space, origin)) return (Absent(), null, null, null);
         return (null, personId, origin, null);
     }
 

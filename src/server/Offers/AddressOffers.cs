@@ -5,11 +5,12 @@ namespace Tangent.Offers;
 
 /// <summary>The open Offer of an address, computed and never stored: Koan's record of the origins requests arrive on
 /// (<see cref="KoanWebOrigins"/>), which writes nothing per request and starts again with the process, less the origins
-/// already decided. While no URL is configured and the place's address is local, the origin seen most often, then most
-/// recently, among those the public reaches and Koan would take that its operator never decided is open
-/// (<see cref="Open"/>): one keyed read of their Offers, taking no lock. Only a decision writes (<see cref="UseOffer"/>,
-/// <see cref="DeclineOffer"/>), so a request on a forged <c>Host</c> writes nothing, and declining one opens the
-/// next.</summary>
+/// already decided. While no URL is configured and the place's address is local, the origin seen first among those the
+/// public reaches and Koan would take that its operator never decided is open (<see cref="Open"/>), so the line stays put
+/// until it is decided, however many requests arrive on others: one keyed read of their Offers, taking no lock. An answer
+/// lands for any such origin (<see cref="Answerable"/>), so one the operator read is still theirs to decide. Only a
+/// decision writes (<see cref="UseOffer"/>, <see cref="DeclineOffer"/>), so a request on a forged <c>Host</c> writes
+/// nothing, and declining one opens the next.</summary>
 public sealed class AddressOffers(KoanWebBaseUrl baseUrl, KoanWebOrigins origins)
 {
     /// <summary>The origin open to <paramref name="space"/>'s operator to use as its address, with what Koan has seen of
@@ -18,12 +19,19 @@ public sealed class AddressOffers(KoanWebBaseUrl baseUrl, KoanWebOrigins origins
     {
         if (baseUrl.IsConfigured || !space.AddressIsLocal()) return null;
         var candidates = origins.Seen().Where(Offerable)
-            .OrderByDescending(seen => seen.Count).ThenByDescending(seen => seen.LastSeen).ToList();
+            .OrderBy(seen => seen.FirstSeen).ThenBy(seen => seen.Origin, StringComparer.Ordinal).ToList();
         if (candidates.Count == 0) return null;
         var decided = (await Offer.Get(candidates.Select(seen => Offer.IdFor(OfferKind.Address, seen.Origin)).ToList(), ct))
             .OfType<Offer>().Select(offer => offer.Subject).ToHashSet(StringComparer.Ordinal);
         return candidates.FirstOrDefault(seen => !decided.Contains(seen.Origin));
     }
+
+    /// <summary>Whether <paramref name="origin"/> is one <paramref name="space"/>'s operator may answer: Koan has seen it,
+    /// the public reaches it and Koan would take it, while no URL is configured and the place's address is local. Whether
+    /// it was decided is the answer's own read.</summary>
+    public bool Answerable(TangentSpace space, string origin)
+        => !baseUrl.IsConfigured && space.AddressIsLocal()
+           && origins.Seen().Any(seen => string.Equals(seen.Origin, origin, StringComparison.Ordinal) && Offerable(seen));
 
     /// <summary>The open Offer as its decider reads it, with its two answers under <paramref name="baseAddress"/>, or
     /// null.</summary>

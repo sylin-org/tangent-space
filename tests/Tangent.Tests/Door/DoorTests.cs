@@ -109,6 +109,31 @@ public sealed class DoorTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task A_waiting_applicants_checkpoint_begins_at_their_arrival_so_what_the_place_held_is_not_new_to_them()
+    {
+        const string applicant = "did:plc:applicant4door";
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
+        await Place(tangentSpace);
+        var space = (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!;
+        space.Admission = Admission.Apply;
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(Cancellation));
+        var topic = await Started(Workshop, "What should we build?", "ada");
+        await Replied(topic, "leo");
+
+        using var browser = new Browser(tangentSpace);
+        (await browser.SignIn("applicant", applicant, Cancellation, handle: "applicant.example", comeBack: "/t")).Dispose();
+        var arrival = Assert.Single(await Event.Query(e => e.Kind == EventKind.StandingChanged && e.TargetId == applicant, Cancellation));
+        Assert.Equal(arrival.Seq, (await Checkpoint.Get(Checkpoint.Key(applicant, Scope.Place), Cancellation))?.Seq);
+
+        using var json = await Json(browser.Client, "/");
+        var news = json.RootElement.GetProperty("news");
+        Assert.True(news.GetProperty("quiet").GetBoolean());
+        Assert.Empty(news.GetProperty("perTangent").EnumerateArray());
+        Assert.Equal(Capabilities.Apply.Word, json.RootElement.GetProperty("gate").GetString());
+        Assert.Contains("Welcome to Lantern Works.", WebUtility.HtmlDecode(await Html(browser.Client, "/")));
+    }
+
+    [Fact]
     public async Task A_newcomers_checkpoint_begins_at_their_arrival_so_what_the_place_held_is_not_new_and_what_follows_is()
     {
         const string newcomer = "did:plc:newcomer";
@@ -124,7 +149,10 @@ public sealed class DoorTests(ITestOutputHelper output)
         Assert.Equal(arrival.Seq, (await Checkpoint.Get(Checkpoint.Key(newcomer, Scope.Place), Cancellation))?.Seq);
 
         var first = WebUtility.HtmlDecode(await Html(browser.Client, "/"));
-        Assert.Contains("Nothing new since you were here.", first);
+        Assert.Contains("Welcome to Lantern Works.", first);
+        Assert.DoesNotContain("Nothing new since you were here.", first);
+        using (var json = await Json(browser.Client, "/"))
+            Assert.True(json.RootElement.GetProperty("news").GetProperty("first").GetBoolean());
         Assert.Contains("What should we build?", first);
         Assert.DoesNotContain("Mark all seen", first);
         Assert.DoesNotContain("class=\"new-dot\"", first);

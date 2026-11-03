@@ -104,7 +104,7 @@ public sealed class ReportsReachTests
         using var mo = await SignedIn(tangentSpace, Mo);
         Assert.Equal(1, Count(await Send(mo.Client, HttpMethod.Get, "/", json: true)));
 
-        var marked = await Form(mo, "/", Notifications.Path, []);
+        var marked = await Opened(mo, "/");
         var opened = await Send(mo.Client, HttpMethod.Get, marked.Location!);
         Assert.Equal(HttpStatusCode.OK, opened.Status);
         Assert.Contains("<button class=\"masthead-unseen\" hidden", opened.Body);
@@ -200,7 +200,7 @@ public sealed class ReportsReachTests
         var created = Assert.Single(await Event.Query(e => e.PostId == report.Id, Cancellation));
         using var mo = await SignedIn(tangentSpace, Mo);
 
-        var marked = await Form(mo, "/", Notifications.Path, []);
+        var marked = await Opened(mo, "/");
         var page = (await Send(mo.Client, HttpMethod.Get, marked.Location!, json: true)).Json;
 
         var entries = page.GetProperty("entries").EnumerateArray().ToList();

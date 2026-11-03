@@ -28,6 +28,9 @@ public static class Notifications
     /// <summary>The address of a participant's notifications under the base URL.</summary>
     public const string Path = "/notifications";
 
+    /// <summary>The field that carries the sequence a reading of the notifications reached, which opening them marks seen.</summary>
+    public const string ThroughField = "through";
+
     /// <summary>The most notifications one page holds.</summary>
     public const int PageSize = 20;
 
@@ -46,12 +49,14 @@ public static class Notifications
     /// newest notification the count found, or the checkpoint where it found none, past which a row the page's stream
     /// delivers that is a notification for the reader adds one; and whether the applications that wait count among them
     /// (<see cref="Applications"/>), as they do for whoever decides them, so an application the stream delivers adds one
-    /// too. <see cref="Open"/> is the form that opens them, marking them seen.</summary>
+    /// too. <see cref="Open"/> is the form that opens them, marking them seen through <see cref="Through"/> and no
+    /// further.</summary>
     public sealed record Unseen(int Count, bool AtLeast, string Address, long Through, bool Applications = false)
     {
-        /// <summary>The form that opens them: it posts to <see cref="Address"/>, which marks them seen through the newest
-        /// and lands on them.</summary>
-        public Form Open => Form.Posting(Address);
+        /// <summary>The form that opens them: it posts <see cref="Through"/> to <see cref="Address"/>, which marks them
+        /// seen through it and lands on them.</summary>
+        public Form Open => Form.Posting(Address,
+            new Form.Field(ThroughField, Holds.NotificationsThrough, Through.ToString(CultureInfo.InvariantCulture)));
 
         /// <summary>The count as the frame shows it: the number, with a plus where it is a lower bound, and
         /// <c>99+</c> past <see cref="CountLimit"/>.</summary>

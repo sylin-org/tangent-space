@@ -68,7 +68,7 @@
             {
                 @if (who.Notifications is { } unseen)
                 {
-                    <form class="masthead-unseen-form" method="post" action="@unseen.Open.Action">
+                    <form class="masthead-unseen-form" method="post" action="@unseen.Open.Action"><input type="hidden" name="@Events.Notifications.ThroughField" value="@unseen.Open.Value(Events.Notifications.ThroughField)">
                         <button class="masthead-unseen" hidden="@(unseen.Count == 0)" aria-label="@Unseen(unseen.Count, unseen.AtLeast)"
                                 data-island="unseen" data-props="@JsonSerializer.Serialize(new { reader = who.Id, count = unseen.Count, atLeast = unseen.AtLeast, through = unseen.Through, applications = unseen.Applications })">
                             <svg class="masthead-unseen-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">@((MarkupString)NotificationsIcon)</svg>
@@ -100,7 +100,7 @@
                         <ul class="account-items">
                             @if (who.Notifications is { } notifications)
                             {
-                                <li><form method="post" action="@notifications.Open.Action"><button class="account-item account-action">@Icon(NotificationsIcon)Notifications</button></form></li>
+                                <li><form method="post" action="@notifications.Open.Action"><input type="hidden" name="@Events.Notifications.ThroughField" value="@notifications.Open.Value(Events.Notifications.ThroughField)"><button class="account-item account-action">@Icon(NotificationsIcon)Notifications</button></form></li>
                             }
                             @if (who.Settings is { } settings)
                             {

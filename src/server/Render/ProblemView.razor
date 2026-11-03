@@ -31,21 +31,23 @@
     /// <summary>Where signing in starts and comes back from, for a refusal whose gate is signing in.</summary>
     [Parameter] public string? SignIn { get; set; }
 
-    /// <summary>What a person reads of each kind of refusal whose title is only its kind's name.</summary>
-    private static readonly IReadOnlyDictionary<string, string> Kinds = new Dictionary<string, string>(StringComparer.Ordinal)
-    {
-        ["invalid"] = "Not accepted",
-        ["absent"] = "Not found",
-        ["gated"] = "Not open to you",
-        ["conflict"] = "Nothing changed",
-        ["failed"] = "Not done"
-    };
-
-    /// <summary>The heading of a refusal: its gate's, where it names one; the place's own title, where it gave one; its
-    /// kind's otherwise.</summary>
-    public static string Heading(Problem problem) => problem.Gate is { } gate ? Capabilities.Heading(gate)
-        : string.Equals(problem.Title, problem.Kind, StringComparison.OrdinalIgnoreCase) ? Kinds.GetValueOrDefault(problem.Kind, problem.Title)
-        : problem.Title;
+    /// <summary>The heading of a refusal: the place's own title, where it gave one; its gate's, where it names one; and
+    /// otherwise what a person reads of its kind and status: a value that could not bind is not accepted, a body past its
+    /// limit too large, any other invalid write or one that failed not written, and one that never ran is to try
+    /// again.</summary>
+    public static string Heading(Problem problem) => !string.Equals(problem.Title, problem.Kind, StringComparison.OrdinalIgnoreCase) ? problem.Title
+        : problem.Gate is { } gate ? Capabilities.Heading(gate)
+        : problem switch
+        {
+            { Errors.Count: > 0 } => "Not accepted",
+            { Status: StatusCodes.Status413PayloadTooLarge } => "Too large",
+            { Status: StatusCodes.Status401Unauthorized } => "Sign in first",
+            { Kind: "gated" } => "Not open to you",
+            { Kind: "absent" } => "Not found",
+            { Kind: "conflict" } => "Nothing changed",
+            { Status: StatusCodes.Status503ServiceUnavailable } => "Try again",
+            _ => "Not written"
+        };
 
     /// <summary>The frame the shell draws around a refusal: the place at <paramref name="door"/>, the refusal as the one crumb,
     /// and for a visitor the way to sign in. Who is signed in is not read again for it, so their account does not show.</summary>
