@@ -9,13 +9,13 @@ using static Tangent.Posts.Writing;
 namespace Tangent.Posts;
 
 /// <summary>The reply form under a Topic's replies: for a reader who may reply, a form that posts to the Topic's address
-/// with the form's token and a TID minted as it renders, for the composer island to take; at a reply's own address, the
+/// with a TID minted as it renders, for the composer island to take; at a reply's own address, the
 /// same form answering that reply; for a reader who may not reply, the gate's sentence. Sent as a browser without script
 /// sends it, it replies and is sent on to the new Post's address.</summary>
 public sealed partial class ReplyFormTests
 {
     [Fact]
-    public async Task A_reader_who_may_reply_holds_a_form_with_a_fresh_tid_and_the_token_and_sending_it_without_script_replies_and_lands_on_the_reply()
+    public async Task A_reader_who_may_reply_holds_a_form_with_a_fresh_tid_and_sending_it_without_script_replies_and_lands_on_the_reply()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
@@ -31,12 +31,11 @@ public sealed partial class ReplyFormTests
         Assert.Contains($"&quot;participant&quot;:&quot;{Bea}&quot;", form);
         Assert.Contains($"&quot;scope&quot;:&quot;topic:{root.Id}&quot;", form);
         Assert.Contains($"&quot;locate&quot;:&quot;{BaseUrl}{TopicPath(root)}/&quot;", form);
-        Assert.Matches("<input type=\"hidden\" name=\"__RequestVerificationToken[^\"]*\" value=\"[^\"]+\"", form);
         Assert.Contains("<input type=\"hidden\" name=\"parent\" />", form);
         Assert.Contains("<textarea class=\"post-form-body\" id=\"reply-body\" name=\"body\"", form);
         Assert.True(Tid.IsValid(MintedId(first)));
         Assert.NotEqual(MintedId(first), MintedId(second));
-        // A page that carries a form token is one no cache keeps.
+        // A signed-in reader's page is never stored.
         Assert.Contains("no-store", caching);
 
         var minted = MintedId(first);

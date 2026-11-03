@@ -41,65 +41,6 @@
                 </div>
             </section>
         }
-        @if (Model.Delegates is { } delegates)
-        {
-            <section class="profile-delegates" aria-labelledby="profile-delegates-title">
-                <div class="topic-list-head">
-                    <h2 id="profile-delegates-title" class="topic-list-title">Agents acting as you</h2>
-                    <span class="topic-list-order">only you see these</span>
-                </div>
-                @if (delegates.Agents.Count == 0)
-                {
-                    <div class="topic-empty">
-                        <p class="topic-empty-title">No agent acts as you here.</p>
-                    </div>
-                }
-                else
-                {
-                    <ul class="profile-delegate-list">
-                        @foreach (var agent in delegates.Agents)
-                        {
-                            <li class="profile-delegate" @key="agent.Id">
-                                <span class="profile-delegate-text">
-                                    <span class="profile-delegate-name">@agent.Client</span>
-                                    @if (agent.SelfNamed)
-                                    {
-                                        <span class="profile-delegate-when">the name it gave itself</span>
-                                    }
-                                    @if (agent.Approved is { } approved)
-                                    {
-                                        <span class="profile-delegate-when">Approved <time datetime="@Iso(approved)" title="@Full(approved)">@TopicRow.When(approved, Model.Day)</time></span>
-                                    }
-                                </span>
-                                <details class="post-remove profile-revoke">
-                                    <summary class="post-remove-toggle">Revoke</summary>
-                                    <div class="post-remove-confirm">
-                                        <p class="post-remove-note">It can’t renew its access, the access it holds now ends within @Minutes(delegates.Lasting), and it asks you again before it acts as you.</p>
-                                        <form method="post" action="@agent.Revoke.Action">
-                                            <FormTokenField Token="@agent.Revoke.Token" />
-                                            <button type="submit" class="post-remove-submit">Revoke</button>
-                                        </form>
-                                    </div>
-                                </details>
-                            </li>
-                        }
-                    </ul>
-                }
-                @if (delegates.More is not null || delegates.First is not null)
-                {
-                    <nav class="topic-pages" aria-label="More agents">
-                        @if (delegates.First is { } first)
-                        {
-                            <a href="@first">Newest agents</a>
-                        }
-                        @if (delegates.More is { } more)
-                        {
-                            <a class="topic-pages-next" href="@more">More agents →</a>
-                        }
-                    </nav>
-                }
-            </section>
-        }
         <section aria-labelledby="profile-posts-title">
             <div class="topic-list-head">
                 <h2 id="profile-posts-title" class="topic-list-title">@(Model.Continued ? "Older posts" : "Recent posts")</h2>
@@ -181,12 +122,6 @@
     private static string Standing(PeoplePage.Listed listed) => listed.Until is { } until
         ? "is timed out here until " + PeopleView.Until(until)
         : "is " + listed.Standing + " here";
-
-    private static string Minutes(TimeSpan lasting)
-    {
-        var minutes = Math.Max(1, (int)Math.Ceiling(lasting.TotalMinutes));
-        return minutes.ToString(CultureInfo.InvariantCulture) + (minutes == 1 ? " minute" : " minutes");
-    }
 
     private static string Iso(DateTimeOffset at) => at.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
 

@@ -16,14 +16,14 @@ function page(body = '', cover = '') {
   const composerProps = attribute({ participant, scope, locate: 'https://tangent.example/t/field-notes/', noun: 'article' })
   document.body.innerHTML =
     `<form method="post" action="https://tangent.example/t/field-notes/new" data-island="composer" data-props="${composerProps}">` +
-    '<input type="hidden" name="__RequestVerificationToken" value="token"><input type="hidden" name="id" value="3mwccccccccc2">' +
+    '<input type="hidden" name="id" value="3mwccccccccc2">' +
     `<input type="hidden" name="cover" value="${cover}">` +
     '<div data-article-cover></div><textarea name="title" required></textarea><span data-article-minutes>1 min read</span>' +
     `<div class="host"><label>Article</label><textarea name="body" required>${body}</textarea></div>` +
     '<button type="submit">Publish</button></form>'
   mountIslands(document)
   const host = document.querySelector<HTMLElement>('.host')!
-  const stop = writeArticle({ host, door: '/', bring: 'https://tangent.example/t/field-notes/media', token: '__RequestVerificationToken', participant, edit: null })
+  const stop = writeArticle({ host, door: '/', bring: 'https://tangent.example/t/field-notes/media', participant, edit: null })
   stops.push(stop)
   return {
     host,
@@ -139,7 +139,6 @@ test('a cover comes in the page: it shows at once, the form waits for it, and th
   expect(submit.disabled).toBe(true)
   const [url, init] = fetched.mock.calls[0] as [string, RequestInit]
   expect(url).toBe('https://tangent.example/t/field-notes/media')
-  expect((init.body as FormData).get('__RequestVerificationToken')).toBe('token')
   expect((init.body as FormData).get('file')).toBeInstanceOf(File)
 
   answer(new Response(JSON.stringify({ id: 'abc', reference: '/media/abc', address: 'https://tangent.example/media/abc' }), { status: 201 }))
@@ -199,7 +198,7 @@ test('an edit keeps its own draft by the version it was made from, and drops tho
     '<textarea name="title">Lanterns</textarea><div class="host"><label>Article</label><textarea name="body">First words.</textarea></div>' +
     '<button type="submit">Save</button></form>'
   const open = () => {
-    const stop = writeArticle({ host: document.querySelector<HTMLElement>('.host')!, door: '/', bring: null, token: null, participant, edit: 'edit:post:2' })
+    const stop = writeArticle({ host: document.querySelector<HTMLElement>('.host')!, door: '/', bring: null, participant, edit: 'edit:post:2' })
     stops.push(stop)
   }
   open()
@@ -349,7 +348,7 @@ test('words set aside with Cancel do not come back on the next edit', () => {
     '<form method="post" action="https://tangent.example/edit"><input type="hidden" name="cover" value="">' +
     '<textarea name="title">Lanterns</textarea><div class="host"><label>Article</label><textarea name="body">First words.</textarea></div>' +
     '<a class="post-form-cancel" href="#read">Cancel</a><button type="submit">Save</button></form>'
-  stops.push(writeArticle({ host: document.querySelector<HTMLElement>('.host')!, door: '/', bring: null, token: null, participant, edit: 'edit:post:2' }))
+  stops.push(writeArticle({ host: document.querySelector<HTMLElement>('.host')!, door: '/', bring: null, participant, edit: 'edit:post:2' }))
   const source = document.querySelector<HTMLTextAreaElement>('textarea[name="body"]')!
   source.value = 'Words to set aside.'
   source.dispatchEvent(new Event('input', { bubbles: true }))

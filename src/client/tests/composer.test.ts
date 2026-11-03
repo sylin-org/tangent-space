@@ -22,7 +22,6 @@ function replyPage(id = servedId, who = participant) {
     `<article id="${rootId}" class="post post-root"><div class="post-main"><span class="post-author">Ada</span></div></article>` +
     `<article id="${replyId}" class="post"><div class="post-main"><span class="post-author">Leo</span></div></article>` +
     `<form class="reply-form" method="post" action="${topic}" data-island="composer" data-props="${props}">` +
-    '<input type="hidden" name="__RequestVerificationToken" value="token">' +
     `<input type="hidden" name="id" value="${id}"><input type="hidden" name="parent">` +
     '<p class="reply-form-to" data-reply-to hidden>Replying to <a href="#" data-reply-to-post></a> · ' +
     `<a href="${topic}#reply" data-reply-to-topic>reply to the topic instead</a></p>` +
@@ -36,7 +35,7 @@ function newTopicPage() {
   const props = attribute({ participant, scope: 'tangent:workshop', locate: 'https://tangent.example/t/workshop/', noun: 'topic' })
   document.body.innerHTML =
     `<form method="post" action="https://tangent.example/t/workshop/new" data-island="composer" data-props="${props}">` +
-    `<input type="hidden" name="__RequestVerificationToken" value="token"><input type="hidden" name="id" value="${servedId}">` +
+    `<input type="hidden" name="id" value="${servedId}">` +
     '<input name="title"><textarea name="body"></textarea><button type="submit" data-busy-label="Posting…">Post</button></form>'
   mountIslands(document)
   return elements()
@@ -162,7 +161,7 @@ test('a submit sends the form as JSON is answered, and clears the draft only onc
   expect(init.method).toBe('POST')
   expect(url).toBe(topic)
   expect(new Headers(init.headers).get('Accept')).toBe('application/json')
-  expect(sentFields(fetched.mock.calls[0])).toEqual({ __RequestVerificationToken: 'token', id: servedId, parent: '', body: 'I light mine at six.' })
+  expect(sentFields(fetched.mock.calls[0])).toEqual({ id: servedId, parent: '', body: 'I light mine at six.' })
   expect(page.form.getAttribute('aria-busy')).toBe('true')
   expect(page.body.readOnly).toBe(true)
   expect(page.button.textContent).toBe('Posting…')

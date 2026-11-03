@@ -1,12 +1,11 @@
 using System.Net;
 using System.Net.Http.Headers;
-using System.Text.RegularExpressions;
 
 namespace Tangent.Participants;
 
 /// <summary>A browser for one Tangent Space: it keeps cookies and follows redirects one at a time, so a test can sign in
 /// through Koan's test connector the way a person does and see every answer on the way.</summary>
-public sealed partial class Browser : IDisposable
+public sealed class Browser : IDisposable
 {
     /// <summary>The Koan test connector's persona cookie: the persona's name and its subject, which the connector's
     /// userinfo answers as <c>sub</c>.</summary>
@@ -41,20 +40,6 @@ public sealed partial class Browser : IDisposable
                 : target);
     }
 
-    /// <summary>The token field of the form the page at <paramref name="path"/> holds, as a form a browser keeps open
-    /// carries it.</summary>
-    public async Task<Dictionary<string, string>> Token(string path, CancellationToken ct)
-    {
-        using var page = await Follow(HttpMethod.Get, path, ct);
-        var html = await page.Content.ReadAsStringAsync(ct);
-        var token = TokenField().Match(html);
-        if (!token.Success) throw new InvalidOperationException($"The page at {path} holds no form.");
-        return new Dictionary<string, string>
-        {
-            [WebUtility.HtmlDecode(token.Groups["field"].Value)] = WebUtility.HtmlDecode(token.Groups["value"].Value)
-        };
-    }
-
     /// <summary>Sends a request and follows its redirects as a browser does, answering with the last response.</summary>
     public async Task<HttpResponseMessage> Follow(HttpMethod method, string path, CancellationToken ct, HttpContent? content = null,
         Func<Uri, Uri>? rewrite = null)
@@ -77,6 +62,4 @@ public sealed partial class Browser : IDisposable
 
     public void Dispose() => Client.Dispose();
 
-    [GeneratedRegex("<input type=\"hidden\" name=\"(?<field>__RequestVerificationToken[^\"]*)\" value=\"(?<value>[^\"]+)\"")]
-    private static partial Regex TokenField();
 }

@@ -6,7 +6,6 @@ using Koan.Identity.Roles;
 using Koan.Web.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
-using Tangent.Delegates;
 using Tangent.Posts;
 using Tangent.Space;
 using Xunit;
@@ -60,7 +59,6 @@ public sealed class ProfileTests
         Assert.Equal(AddressOf(open, reply), profile.GetProperty("posts")[0].GetProperty("address").GetString());
         Assert.Equal("Lanterns at dusk", profile.GetProperty("posts")[0].GetProperty("topic").GetString());
         Assert.DoesNotContain("count", profile.EnumerateObject().Select(member => member.Name), StringComparer.OrdinalIgnoreCase);
-        Assert.True(Missing(profile, "delegates"));
 
         var html = await Send(ada.Client, HttpMethod.Get, "/p/" + LeoHandle);
         Assert.Contains("Builds places to talk.", html.Body);
@@ -169,82 +167,6 @@ public sealed class ProfileTests
     }
 
     [Fact]
-    public async Task Your_own_profile_lists_the_agents_you_approved_revoke_removes_one_through_koan_and_nobody_else_sees_them()
-    {
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        await Place(tangentSpace);
-        using var ada = await SignedIn(tangentSpace, Ada);
-        using var bea = await SignedIn(tangentSpace, Bea);
-        // Koan keeps grants that expired; more of them than the profile reads, stored before the live one, leave it listed.
-        for (var index = 0; index < Approved.PageSize + 10; index++)
-            await new AgentGrant
-            {
-                Subject = Ada, Capability = "mcp:grant:expired:" + index, Resource = BaseUrl, ExpiresAt = DateTimeOffset.UtcNow.AddDays(-1),
-                IssuedAt = DateTimeOffset.UtcNow.AddDays(-31), ClientId = DelegateClient.Id
-            }.Save(Cancellation);
-        var bearer = await Delegate(tangentSpace, ada);
-        const string own = "/p/" + AdaHandle;
-
-        var grant = Assert.Single(await AgentGrant.Query(row => row.Subject == Ada && row.ExpiresAt > DateTimeOffset.UtcNow, Cancellation));
-
-        var mine = await Send(ada.Client, HttpMethod.Get, own, json: true);
-        var agents = mine.Json.GetProperty("delegates").GetProperty("agents");
-        Assert.Equal(1, agents.GetArrayLength());
-        Assert.Equal(grant.Id, agents[0].GetProperty("id").GetString());
-        Assert.Equal(grant.IssuedAt, agents[0].GetProperty("approved").GetDateTimeOffset());
-        Assert.Equal((DelegateClient.Name, false), (agents[0].GetProperty("client").GetString(), agents[0].GetProperty("selfNamed").GetBoolean()));
-        var revoke = new Uri(agents[0].GetProperty("revoke").GetProperty("action").GetString()!).AbsolutePath;
-        Assert.Equal($"{own}/delegates/{grant.Id}/revoke", revoke);
-        var page = await Send(ada.Client, HttpMethod.Get, own);
-        Assert.Contains("Agents acting as you", page.Body);
-        Assert.Contains($"<span class=\"profile-delegate-name\">{DelegateClient.Name}</span>", page.Body);
-        Assert.Contains("<summary class=\"post-remove-toggle\">Revoke</summary>", page.Body);
-
-        // Nobody else sees them: another participant, a visitor, nor Ada's own delegate reading as her.
-        Assert.True(Missing((await Send(bea.Client, HttpMethod.Get, own, json: true)).Json, "delegates"));
-        using var visitor = Agent(tangentSpace);
-        Assert.True(Missing((await Send(visitor, HttpMethod.Get, own, json: true)).Json, "delegates"));
-        var asDelegate = await Send(visitor, HttpMethod.Get, own, json: true, bearer: bearer);
-        Assert.Equal((HttpStatusCode.OK, true), (asDelegate.Status, Missing(asDelegate.Json, "delegates")));
-        Assert.DoesNotContain("Agents acting as you", (await Send(bea.Client, HttpMethod.Get, own)).Body);
-
-        // Neither someone else nor the delegate revokes it.
-        var byBea = await Form(bea, "/t/" + Workshop + "/new", revoke, new Dictionary<string, string>());
-        Assert.Equal(HttpStatusCode.NotFound, byBea.Status);
-        var byBearer = await Send(visitor, HttpMethod.Post, revoke, FormBody(new Dictionary<string, string>()), bearer: bearer);
-        Assert.Equal(HttpStatusCode.Forbidden, byBearer.Status);
-        Assert.NotNull(await AgentGrant.Get(grant.Id, Cancellation));
-
-        var revoked = await Form(ada, own, revoke, new Dictionary<string, string>());
-        Assert.Equal((HttpStatusCode.SeeOther, own), (revoked.Status, revoked.Location));
-        Assert.Null(await AgentGrant.Get(grant.Id, Cancellation));
-        Assert.Equal(0, (await Send(ada.Client, HttpMethod.Get, own, json: true)).Json.GetProperty("delegates").GetProperty("agents").GetArrayLength());
-        Assert.Contains("No agent acts as you here.", (await Send(ada.Client, HttpMethod.Get, own)).Body);
-    }
-
-    [Fact]
-    public async Task Each_approval_of_the_same_client_is_its_own_row_and_revokes_alone()
-    {
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        await Place(tangentSpace);
-        using var ada = await SignedIn(tangentSpace, Ada);
-        await Delegate(tangentSpace, ada);
-        await Delegate(tangentSpace, ada);
-        const string own = "/p/" + AdaHandle;
-
-        var agents = (await Send(ada.Client, HttpMethod.Get, own, json: true)).Json.GetProperty("delegates").GetProperty("agents");
-        Assert.Equal(2, agents.GetArrayLength());
-        Assert.True(agents[0].GetProperty("approved").GetDateTimeOffset() >= agents[1].GetProperty("approved").GetDateTimeOffset());
-        var newest = agents[0].GetProperty("id").GetString()!;
-
-        Assert.Equal(HttpStatusCode.SeeOther, (await Form(ada, own, new Uri(agents[0].GetProperty("revoke").GetProperty("action").GetString()!).AbsolutePath, new Dictionary<string, string>())).Status);
-
-        var left = (await Send(ada.Client, HttpMethod.Get, own, json: true)).Json.GetProperty("delegates").GetProperty("agents");
-        Assert.Equal(1, left.GetArrayLength());
-        Assert.NotEqual(newest, left[0].GetProperty("id").GetString());
-    }
-
-    [Fact]
     public async Task The_json_carries_can_gate_and_a_cursor_through_the_posts()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
@@ -303,37 +225,6 @@ public sealed class ProfileTests
     }
 
     /// <summary>Your own approvals page: past one page of them, the rest are a link away, and nothing is left out.</summary>
-    [Fact]
-    public async Task Your_approvals_page_past_the_first_page()
-    {
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        await Place(tangentSpace);
-        using var ada = await SignedIn(tangentSpace, Ada);
-        var issued = DateTimeOffset.UtcNow.AddDays(-1);
-        for (var index = 0; index < Approved.PageSize + 5; index++)
-            await new AgentGrant
-            {
-                Subject = Ada, Capability = "mcp:grant:live:" + index, Resource = BaseUrl, ExpiresAt = DateTimeOffset.UtcNow.AddDays(1),
-                IssuedAt = issued.AddMinutes(index), ClientId = DelegateClient.Id
-            }.Save(Cancellation);
-        const string own = "/p/" + AdaHandle;
-
-        var first = (await Send(ada.Client, HttpMethod.Get, own, json: true)).Json.GetProperty("delegates");
-        Assert.Equal(Approved.PageSize, first.GetProperty("agents").GetArrayLength());
-        var more = new Uri(first.GetProperty("more").GetString()!);
-        var second = (await Send(ada.Client, HttpMethod.Get, more.PathAndQuery, json: true)).Json.GetProperty("delegates");
-        Assert.Equal(5, second.GetProperty("agents").GetArrayLength());
-        Assert.True(Missing(second, "more"));
-        var ids = first.GetProperty("agents").EnumerateArray().Concat(second.GetProperty("agents").EnumerateArray())
-            .Select(agent => agent.GetProperty("id").GetString()).ToList();
-        Assert.Equal(Approved.PageSize + 5, ids.Distinct().Count());
-        Assert.Contains("More agents", (await Send(ada.Client, HttpMethod.Get, own)).Body);
-        Assert.Equal(HttpStatusCode.BadRequest, (await Send(ada.Client, HttpMethod.Get, own + "?agents=0", json: true)).Status);
-    }
-
-    /// <summary>Whatever the store answers — as when a Tangent changed while the Tangents the reader may view were read
-    /// and the store was not told to leave it out — a page keeps only Posts in the Tangents the reader may view and
-    /// continues from the last of those, so it never names another; it can be short.</summary>
     [Fact]
     public async Task A_page_keeps_only_viewable_posts_and_continues_from_the_last_it_keeps()
     {

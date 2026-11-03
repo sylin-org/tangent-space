@@ -9,8 +9,7 @@ namespace Tangent.Participants;
 
 /// <summary>What participants need composed: the profile reader with its bounds; the data-protection key ring, through
 /// Koan's <c>Koan:Web:KeyRingDirectory</c>, inside the data folder, so cookies and the atproto sessions Koan keeps as rows
-/// in the store survive a new binary or container and a backup of the folder carries them; and antiforgery for the
-/// forms a page posts.</summary>
+/// in the store survive a new binary or container and a backup of the folder carries them.</summary>
 public static class ParticipantsComposition
 {
     /// <summary>The data-protection key ring's folder inside the data folder.</summary>
@@ -38,7 +37,6 @@ public static class ParticipantsComposition
             .PostConfigure<IOptions<TangentSpaceOptions>, IHostEnvironment>((web, tangent, environment) =>
                 web.KeyRingDirectory = Path.Combine(tangent.Value.DataFolderPath(environment.ContentRootPath), KeyFolder));
 
-        services.AddAntiforgery();
         return services;
     }
 }

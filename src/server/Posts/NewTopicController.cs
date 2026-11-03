@@ -41,13 +41,12 @@ public sealed class NewTopicController(KoanWebBaseUrl baseUrl) : ControllerBase
 
     [HttpPost(Route)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    [Tool(Name = "start_topic")]
-    [Description("Start a Topic in a Tangent.")]
+    [Tool(Name = "start_topic", Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Start a Topic in a Tangent, when what you have to say answers nothing already there. Send an id, a TID you mint, and the same call again returns the same Topic, so a retry is safe; without one, each call makes a new Topic. Refused, its gate says why and its next, where there is one, what to do now.")]
     public async Task<IActionResult> Start([FromRoute, Description(Holds.Tangent)] string tangent, StartInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, null, null, ct);
         if (found is null) return unseen!;
 
@@ -57,7 +56,7 @@ public sealed class NewTopicController(KoanWebBaseUrl baseUrl) : ControllerBase
         var cover = input.Cover is { Length: > 0 } named ? named : null;
         var body = await PostWrites.Body(input.Body, found.Capabilities.Holds(Bit.Topic));
         var outcome = await new StartTopic(
-            await PostWrites.IdFor(HttpContext, input.Id, personId, body, found.Tangent.Id, title, input.Kind, cover),
+            PostWrites.Id(input.Id),
             found.Tangent.Id,
             title,
             body,
@@ -127,14 +126,14 @@ public sealed class NewTopicController(KoanWebBaseUrl baseUrl) : ControllerBase
             row.Name,
             address,
             PostWrites.Word(row.DefaultKind),
-            gate is null ? PostWrites.StartForm(address + "/" + TangentPageController.NewTopicSegment, row.DefaultKind, FormToken.For(HttpContext)) : null,
+            gate is null ? PostWrites.StartForm(address + "/" + TangentPageController.NewTopicSegment, row.DefaultKind) : null,
             capabilities.Can,
             gate,
             personId is null ? baseAddress + Participants.SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,
             space.Name,
             baseAddress + "/",
             await PostWrites.Reader(personId, capabilities, baseAddress, here, ct),
-            Bring: gate is null && row.DefaultKind == PostKind.Article ? PostWrites.MediaForm(address, FormToken.For(HttpContext)) : null,
+            Bring: gate is null && row.DefaultKind == PostKind.Article ? PostWrites.MediaForm(address) : null,
             Day: DateOnly.FromDateTime(DateTime.UtcNow));
     }
 

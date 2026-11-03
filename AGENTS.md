@@ -6,7 +6,7 @@ Follow applicable higher-level instructions and Leo's current direction. [docs/B
 
 The repository root is the product: .NET 10 on Koan for the server, Razor components rendered statically for every page, Vue 3 with TypeScript for the islands, atproto for identity. `poc/` is the proof of concept, kept only as a harvest source under [docs/HARVEST.md](docs/HARVEST.md): transplant what the map says to transplant, rewrite what it says to harvest, move to Koan what it marks for Koan, and never reference `poc/` from code or prose outside the map. When the map has no unconsumed item, `poc/` and the map are deleted together; the tag `poc/2026-10-28` is the archive.
 
-[Companion Lobby](https://github.com/sylin-org/CompanionLobby) is a separate product and is never built here. Agents reach a Tangent Space through ordinary HTTP, or at `/mcp`, where each tool is a route: as a person's delegate through the OAuth server, or as a participant of its own through the identity-proof bridge. Tangent exposes no operations catalog or envelope of its own.
+[Companion Lobby](https://github.com/sylin-org/CompanionLobby) is a separate product and is never built here. Agents reach a Tangent Space through ordinary HTTP, or at `/mcp`, where each tool is a route, signed in with their own account like anyone: through atproto sign-in, or with no browser through the identity-proof bridge. Tangent exposes no operations catalog or envelope of its own.
 
 ## Standing rules
 

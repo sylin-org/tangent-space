@@ -45,7 +45,7 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, RoleCollecti
 
     [HttpGet(Route)]
     [Tool(Name = "read_tangent_access")]
-    [Description("Read which roles read and post in a Tangent, a page at a time, for whoever may change it.")]
+    [Description("Read which roles read and post in a Tangent, a page at a time, for whoever may change it. Follow with change_tangent_access.")]
     public async Task<IActionResult> Get([Description(Holds.Tangent)] string tangent, [FromQuery(Name = RolesController.PageQuery), Description(Holds.Number)] string? page, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
@@ -58,13 +58,12 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, RoleCollecti
 
     [HttpPost(Route)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    [Tool(Name = "change_tangent_access")]
-    [Description("Set what one role may do in a Tangent, for whoever may change the Tangent and manages the role.")]
+    [Tool(Name = "change_tangent_access", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Description("Set what one role may do in a Tangent, for whoever may change the Tangent and manages the role. Everyone in the role reads or posts there as you set it, at once.")]
     public async Task<IActionResult> Change([FromRoute, Description(Holds.Tangent)] string tangent, ChangeAccessInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, null, null, ct);
         if (found is null) return unseen!;
 
@@ -133,7 +132,7 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, RoleCollecti
             read is not null && (long)number * RolesController.PageSize < read.TotalCount ? settings + "/" + Segment + "?" + RolesController.PageQuery + "=" + (number + 1) : null,
             read is not null && number > 1 ? settings + "/" + Segment + (number > 2 ? "?" + RolesController.PageQuery + "=" + (number - 1) : "") : null,
             gate is null && space.ModeratorsTangentId != row.Id
-                ? Form.Posting(settings + "/" + Segment, FormToken.For(HttpContext),
+                ? Form.Posting(settings + "/" + Segment,
                     new Form.Field(RoleField, Holds.AccessRole),
                     new Form.Field(AccessField, Holds.Access))
                 : null,

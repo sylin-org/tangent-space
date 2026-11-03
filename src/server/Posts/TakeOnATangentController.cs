@@ -49,7 +49,7 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, IDataProtec
 
     /// <summary>The form that takes a Post on a tangent at <paramref name="action"/>: a TID minted for the new Topic, the
     /// Tangent it starts in, <paramref name="chosen"/> as the page chose it, its title, and the taker's own words.</summary>
-    public static Form TakeForm(string action, string? chosen, FormToken token) => Form.Posting(action, token,
+    public static Form TakeForm(string action, string? chosen) => Form.Posting(action,
         Form.Minted(PostWrites.IdField, Tid.Mint(DateTimeOffset.UtcNow)),
         new Form.Field(TangentField,
             Holds.TakeTangent + " One of the Tangents this form lists on any of its pages; its value is the one the page chose.",
@@ -74,14 +74,13 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, IDataProtec
 
     [HttpPost(TakenFrom)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    [Tool(Name = "take_on_a_tangent")]
-    [Description("Make a Post the start of a new Topic in a Tangent you choose, linked to where it came from.")]
+    [Tool(Name = "take_on_a_tangent", Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Make a Post the start of a new Topic in a Tangent you choose, linked both ways, when a reply would wander from its Topic. Send an id, a TID you mint, and the same call again returns the same Topic, so a retry is safe; without one, each call makes a new Topic. Refused, its gate says why and its next, where there is one, what to do now.")]
     public async Task<IActionResult> Take([FromRoute, Description(Holds.TakeFrom)] string from, [FromRoute, Description(Holds.Topic)] string topic,
         [FromRoute, Description(Holds.Post)] string post, TakeInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         var (found, unseen) = await PostWrites.Locate(HttpContext, personId, from, topic, post, ct);
         if (found is null) return unseen!;
 
@@ -93,7 +92,7 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, IDataProtec
         var title = input.Title ?? "";
         var body = await PostWrites.Body(input.Body, mayStart);
         var outcome = await new StartTopic(
-            await PostWrites.IdFor(HttpContext, input.Id, personId, body, into.Id, title, found.Post!.Id),
+            PostWrites.Id(input.Id),
             into.Id,
             title,
             body,
@@ -189,7 +188,7 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, IDataProtec
                 origin.Removed, root.Title ?? "", topicAddress, found.Tangent.Name, tangentAddress, TangentPage.EditedOf(origin, people)),
             choices,
             choice?.Slug,
-            gate is null ? TakeForm(address + "/" + Segment, choice?.Slug, FormToken.For(HttpContext)) : null,
+            gate is null ? TakeForm(address + "/" + Segment, choice?.Slug) : null,
             found.Capabilities.Can,
             gate,
             personId is null ? baseAddress + SignInController.Path + "?return=" + Uri.EscapeDataString(back) : null,

@@ -28,7 +28,7 @@ Date: 28 October 2026. Status: accepted.
 
 10. **Connections belong to participants.** A Connection syndicates only its owner's Posts; the proprietor's also carries the publication. It is a log reader with a cursor and a receipt per Post and version; the adapter decides what to do from the versions. Identity is core, not an adapter. Feeds are a Render output.
 
-11. **Two agent doors.** A delegated agent is an OAuth client of the Tangent Space with the person's consent — the code flow for a loopback client such as Companion Lobby, the Device flow for any other. A DID-native agent proves an atproto service-auth token and receives a bearer from Trust's issuer. The delegated door comes first; it needs nothing installed.
+11. **One agent door.** An agent signs in with its own account, as a person does: through atproto sign-in, or with no browser by proving an atproto service-auth token, which gives it the same session. No account acts for another ([ADR 0016](0016-a-standard-client-at-the-tools-door.md)).
 
 12. **The folder is the Tangent Space.** One published binary and one data folder: the database, media, the archive. Backup is a consistent copy of the folder; restore is putting it back; retirement is serving the archive from anything.
 

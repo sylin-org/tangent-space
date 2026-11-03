@@ -14,7 +14,7 @@ public static class Holds
     public const string Handle = "A participant's handle, or their DID.";
 
     /// <summary>A write's Id where its sender need not mint one.</summary>
-    public const string Id = "A TID, atproto's timestamp identifier, that names this Post; the same TID sent again never makes a second one. Left out, the words themselves name it for a few minutes: sent again by then, they are the one Post, and sent later, a new one.";
+    public const string Id = "A TID, atproto's timestamp identifier, that names this Post; the same TID sent again never makes a second one. Left out, each send makes a new Post.";
 
     public const string ReplyBody = "The reply" + Markdown;
     public const string Parent = "The Id of the Post of this Topic the reply answers; empty, it answers the Topic.";
@@ -48,7 +48,6 @@ public static class Holds
     public const string WindowBefore = "The sequence a window of this Topic names as its older.";
     public const string WindowAfter = "The sequence a window of this Topic names as its newer.";
     public const string PostsBefore = "The cursor a page of this profile names as its older; left out, the newest.";
-    public const string AgentsPage = "The number of a page of the agents acting as you, from one, on your own profile.";
     public const string HandleStart = "The start of a handle, to narrow the people to those it begins; left out, everyone.";
 
     public const string Offer = "The Offer's Id.";

@@ -49,20 +49,19 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl) : ControllerBase
 
     [HttpPost(Route)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    [Tool(Name = "report")]
-    [Description("Tell the moderators about someone else's Post, in a sentence or two.")]
+    [Tool(Name = "report", Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Tell the moderators about someone else's Post, in a sentence or two, when it needs them rather than a reply; its author is never told. Send an id, a TID you mint, and the same call again returns the same report, so a retry is safe; without one, each call is another word to them.")]
     public async Task<IActionResult> Report([FromRoute, Description(Holds.Tangent)] string tangent, [FromRoute, Description(Holds.Topic)] string topic,
         [FromRoute, Description(Holds.Post)] string post, ReportInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, topic, post, ct);
         if (found is null) return unseen!;
 
         var mayReport = found.Rows.Participant is not null && !found.Post!.Removed;
         var body = await PostWrites.Body(input.Body, mayReport);
-        var outcome = await new ReportPost(await PostWrites.IdFor(HttpContext, input.Id, personId, body, found.Post!.Id), found.Post!.Id, body, personId ?? "").Send();
+        var outcome = await new ReportPost(PostWrites.Id(input.Id), found.Post!.Id, body, personId ?? "").Send();
         switch (outcome)
         {
             case Outcome<Post>.Done { Result: var report }:
@@ -128,7 +127,7 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl) : ControllerBase
                 reported.Removed ? null : TangentPage.Opening(reported, people), reported.Removed, root.Title ?? "", topicAddress,
                 found.Tangent.Name, tangentAddress, TangentPage.EditedOf(reported, people)),
             received,
-            received || inModerators || gate is not null ? null : PostWrites.ReportForm(address + "/" + Segment, Tid.Mint(DateTimeOffset.UtcNow), FormToken.For(HttpContext)),
+            received || inModerators || gate is not null ? null : PostWrites.ReportForm(address + "/" + Segment, Tid.Mint(DateTimeOffset.UtcNow)),
             gate,
             personId is null ? baseAddress + SignInController.Path + "?return=" + Uri.EscapeDataString(back) : null,
             found.Rows.Space.Name,

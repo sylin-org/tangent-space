@@ -74,9 +74,8 @@
 
     [Parameter, EditorRequired] public PeopleForms Forms { get; set; } = default!;
 
-    /// <summary>What every form carries: its token, the participant, and the page it returns to.</summary>
+    /// <summary>What every form carries: the participant, and the page it returns to.</summary>
     private RenderFragment Fields(Form form) => @<text>
-        <FormTokenField Token="@form.Token" />
         <input type="hidden" name="@PeopleController.ParticipantField" value="@Person.Id">
         <input type="hidden" name="@PeopleController.BackField" value="@form.Value(PeopleController.BackField)">
     </text>;

@@ -36,7 +36,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
     [HttpGet("/t/{tangent}")]
     [HttpHead("/t/{tangent}")]
     [Tool(Name = "read_tangent")]
-    [Description("Read a Tangent: its Topics a page at a time, what is new to you marked.")]
+    [Description("Read a Tangent: its Topics a page at a time, what is new to you marked. Follow with read_topic on a Topic's slug, or start_topic to begin one.")]
     public async Task<IActionResult> Get([Description(Holds.Tangent)] string tangent, [FromQuery(Name = After), Description(Holds.After)] string? after, CancellationToken ct)
     {
         var personId = User.Identity?.IsAuthenticated == true ? User.FindFirst(ClaimTypes.NameIdentifier)?.Value : null;
@@ -66,9 +66,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
         var baseAddress = BaseAddress();
         var address = Address(row.Id);
         var back = Uri.EscapeDataString(baseUrl.PathBase + "/t/" + row.Id);
-        // A signed-in reader's page carries the watch form with a fresh antiforgery token, so it is never stored or
-        // revalidated.
-        var token = reader is null ? null : FormToken.For(HttpContext);
+        // A signed-in reader's page is never stored, so a browser's Back after sign-out redisplays nothing of it.
         if (reader is not null) Response.Headers.CacheControl = "no-cache, no-store";
         var place = reader is null ? null : await Capabilities.Load(personId, null, null, ct);
         var creates = place is not null && place.Holds(Bit.ManageSpace);
@@ -84,7 +82,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
             page.Next is { } next ? address + "?" + After + "=" + Uri.EscapeDataString(next.ToString()) : null,
             cursor is not null,
             capabilities.Holds(Bit.Topic) ? address + "/" + NewTopicSegment : null,
-            token is null ? null : CheckpointController.WatchingOf(address, watched, token),
+            reader is null ? null : CheckpointController.WatchingOf(address, watched),
             reader is null ? baseAddress + SignInController.Path + "?return=" + back : null,
             await Viewable(personId, row, ct),
             space.Name,

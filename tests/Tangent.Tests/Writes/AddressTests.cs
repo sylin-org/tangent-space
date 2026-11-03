@@ -22,12 +22,11 @@ public sealed class AddressTests
         var hidden = Post.Root(Tids.Mint(), Studio, "Plans", "plans", PostKind.Topic, "Not for everyone.", Mo, DateTimeOffset.UtcNow);
         Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(hidden).Send(Cancellation));
         using var ada = await SignedIn(tangentSpace, Ada);
-        var token = (await ada.Token("/t/" + Workshop + "/new", Cancellation)).Values.Single();
         var before = await Counted();
 
         async Task<(HttpStatusCode, string?, string?)> Asked(string path, HttpContent content)
         {
-            var answered = await Send(ada.Client, HttpMethod.Post, path, content, json: true, token: token);
+            var answered = await Send(ada.Client, HttpMethod.Post, path, content, json: true);
             return (answered.Status, answered.Title, answered.Gate);
         }
 
@@ -99,7 +98,7 @@ public sealed class AddressTests
         await Place(tangentSpace);
         var root = await Started(Ada, "Lanterns", "How do you hang yours?");
         using var ada = await SignedIn(tangentSpace, Ada);
-        var fields = await ada.Token(PostPath(root, root) + "/edit", Cancellation);
+        var fields = new Dictionary<string, string>();
         fields["padding"] = new string('x', 3 * 1024 * 1024);
 
         var answered = await Send(ada.Client, HttpMethod.Post, PostPath(root, root) + "/remove", FormBody(fields), json: true);

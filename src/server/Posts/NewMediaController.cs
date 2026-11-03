@@ -34,13 +34,12 @@ public sealed class NewMediaController(KoanWebBaseUrl baseUrl) : ControllerBase
     [HttpPost("/t/{tangent}/" + Segment)]
     [RequestSizeLimit(RequestLimit)]
     [RequestFormLimits(MultipartBodyLengthLimit = RequestLimit, ValueLengthLimit = RequestLimit)]
-    [Tool(Name = "bring_in")]
-    [Description("Bring an image into a Tangent, for a Post to show or an article to lead with.")]
+    [Tool(Name = "bring_in", Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Bring an image into a Tangent, before the Post that shows it. Follow with reply, start_topic or edit: the answer's reference goes in the body, and its id in an article's cover. The same image brought again is the same one.")]
     public async Task<IActionResult> Bring([FromRoute, Description(Holds.Tangent)] string tangent, BringInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, null, null, ct);
         if (found is null) return unseen!;
         var here = found.Capabilities;

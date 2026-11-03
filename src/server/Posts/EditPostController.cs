@@ -45,14 +45,13 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl) : ControllerBase
 
     [HttpPost(Route + "/" + EditSegment)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    [Tool(Name = "edit")]
-    [Description("Change a Post's words, and a Topic's title on its root, from the version read.")]
+    [Tool(Name = "edit", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Description("Replace a Post's words, and a Topic's title on its root, with the version read_topic or read_post gave you. What it said before is gone from the page, and an edit of someone else's Post says who made it. An edit from another version changes nothing and answers with the Post as it stands: read that and try again.")]
     public async Task<IActionResult> Edit([FromRoute, Description(Holds.Tangent)] string tangent, [FromRoute, Description(Holds.Topic)] string topic,
         [FromRoute, Description(Holds.Post)] string post, EditInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, topic, post, ct);
         if (found is null) return unseen!;
         var (root, row) = (found.Root!, found.Post!);
@@ -78,14 +77,13 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl) : ControllerBase
 
     [HttpPost(Route + "/" + RemoveSegment)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    [Tool(Name = "remove")]
-    [Description("Remove a Post, which stays in its place as a tombstone.")]
+    [Tool(Name = "remove", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Description("Remove a Post: its words go, and it stays in its place as a tombstone saying who removed it. Removing it again changes nothing.")]
     public async Task<IActionResult> Remove([FromRoute, Description(Holds.Tangent)] string tangent, [FromRoute, Description(Holds.Topic)] string topic,
         [FromRoute, Description(Holds.Post)] string post, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, topic, post, ct);
         if (found is null) return unseen!;
         var (root, row) = (found.Root!, found.Post!);
@@ -171,7 +169,6 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl) : ControllerBase
         var tangent = await Tangents.Tangent.Get(root.TangentId, ct);
         var editable = capabilities.Holds(Bit.EditOwn) || capabilities.Holds(Bit.Moderate);
         var removable = capabilities.Holds(Bit.RemoveOwn) || capabilities.Holds(Bit.Moderate);
-        var token = editable || removable ? FormToken.For(HttpContext) : null;
         var bodyOptional = row.ParentId is null && row.OriginId is not null;
         var article = row.ParentId is null && row.Kind == PostKind.Article;
         var author = await Participants.Participant.Get(row.AuthorId, ct);
@@ -188,8 +185,8 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl) : ControllerBase
             row.Body,
             row.Version,
             row.Removed,
-            editable ? PostWrites.EditForm(address + "/" + EditSegment, row.Version, row.ParentId is null, bodyOptional, token!, row.CoverId, article) : null,
-            removable ? PostWrites.RemoveForm(address + "/" + RemoveSegment, token!) : null,
+            editable ? PostWrites.EditForm(address + "/" + EditSegment, row.Version, row.ParentId is null, bodyOptional, row.CoverId, article) : null,
+            removable ? PostWrites.RemoveForm(address + "/" + RemoveSegment) : null,
             capabilities.Can,
             editable ? null : capabilities.Gate(Bit.EditOwn)?.Word,
             removable ? null : capabilities.Gate(Bit.RemoveOwn)?.Word,
@@ -201,7 +198,7 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl) : ControllerBase
             Edited: row.EditedBy is null ? null : Tangents.TangentPage.EditedOf(row, await TakeOnATangentController.People(row, ct)),
             Kind: PostWrites.Word(row.ParentId is null ? row.Kind : PostKind.Topic),
             CoverId: row.CoverId,
-            Bring: article && editable ? PostWrites.MediaForm(PostWrites.TangentAddress(baseAddress, root.TangentId), token!) : null,
+            Bring: article && editable ? PostWrites.MediaForm(PostWrites.TangentAddress(baseAddress, root.TangentId)) : null,
             Author: article ? new Tangents.TangentPage.Author(row.AuthorId, author?.Handle ?? row.AuthorId, author?.Profile.DisplayName is { Length: > 0 } name ? name : author?.Handle ?? row.AuthorId,
                 author?.Kind.ToString().ToLowerInvariant() ?? "person", author?.Profile.Avatar) : null,
             CreatedAt: row.CreatedAt);

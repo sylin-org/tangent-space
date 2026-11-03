@@ -17,7 +17,7 @@ namespace Tangent.Participants;
 
 /// <summary>An agent with an atproto identity of its own passes a service-auth token, signed with a real key and read against
 /// the document a loopback directory serves, and is signed in exactly as a browser's sign-in ends: a session cookie, under
-/// the same admission and roles as anyone, with no browser and no consent page.</summary>
+/// the same admission and roles as anyone, with no browser.</summary>
 public sealed class ProofDoorTests
 {
     private const string Addressed = "did:web:tangent.test#tangent";
@@ -143,93 +143,19 @@ public sealed class ProofDoorTests
     }
 
     [Fact]
-    public async Task The_token_address_answers_a_bearer_good_at_the_edge_and_on_a_page_as_the_same_participant_and_a_cookie_as_well()
+    public async Task An_agent_signed_in_at_the_exchange_replies_through_the_tools_with_its_cookie()
     {
         await using var directory = await AgentDirectory.Start(Scout);
         await using var tangentSpace = await Start(directory);
         await Place(tangentSpace);
         var root = await Started(Ada, "Lanterns at dusk", "Who lights theirs first?");
-        using var session = new Browser(tangentSpace);
-        var proved = await Send(session.Client, HttpMethod.Post, ProofDoor.TokenPath, json: true, bearer: Proof(Scout));
+        using var session = await SignedInByProof(tangentSpace, Scout);
 
-        Assert.Equal(HttpStatusCode.OK, proved.Status);
-        var bearer = proved.Json.GetProperty("access_token").GetString()!;
-        Assert.Equal("Bearer", proved.Json.GetProperty("token_type").GetString());
-        Assert.True(proved.Json.GetProperty("expires_in").GetInt32() > 0);
-
-        using var bare = Agent(tangentSpace);
-        var page = await Send(bare, HttpMethod.Get, "/", json: true, bearer: bearer);
-        Assert.Equal((HttpStatusCode.OK, Scout.Did), (page.Status, page.Json.GetProperty("who").GetProperty("id").GetString()));
-        Assert.Equal(Scout.Did, (await Read(session, "/")).GetProperty("who").GetProperty("id").GetString());
-
-        using var tools = await Tools.ToolClient.Connect(tangentSpace, bearer);
+        using var tools = await Tools.ToolClient.Connect(tangentSpace, session);
         var door = await tools.Call("arrive");
         Assert.Equal((200, Scout.Did), (door.Status, door.Structured!.Value.GetProperty("who").GetProperty("id").GetString()));
         var reply = await tools.Call("reply", new { tangent = Workshop, topic = root.Slug, body = "Whoever is first home." });
         Assert.Equal((201, Scout.Did), (reply.Status, reply.Structured!.Value.GetProperty("authorId").GetString()));
-    }
-
-    [Fact]
-    public async Task The_token_address_runs_admission_as_any_sign_in_does()
-    {
-        await using var directory = await AgentDirectory.Start(Scout);
-        await using var tangentSpace = await Start(directory);
-        await Given.AnEstablishedTangentSpace(tangentSpace, "Field notes", admission: Admission.Apply, ct: Cancellation);
-        using var agent = Agent(tangentSpace);
-
-        var proved = await Send(agent, HttpMethod.Post, ProofDoor.TokenPath, json: true, bearer: Proof(Scout));
-
-        Assert.Equal(HttpStatusCode.OK, proved.Status);
-        Assert.Equal(Standing.Applied, (await Participant.Get(Scout.Did, Cancellation))?.Standing);
-        var door = await Send(agent, HttpMethod.Get, "/", json: true, bearer: proved.Json.GetProperty("access_token").GetString());
-        Assert.Equal(Capabilities.Apply.Word, door.Json.GetProperty("gate").GetString());
-    }
-
-    [Fact]
-    public async Task A_subject_who_may_not_act_gets_no_bearer_and_is_told_so_and_never_sent_elsewhere()
-    {
-        await using var directory = await AgentDirectory.Start(Scout);
-        await using var tangentSpace = await Start(directory);
-        await Place(tangentSpace);
-        using (await SignedInByProof(tangentSpace, Scout)) { }
-        using (var scope = tangentSpace.Services.CreateScope())
-            await scope.ServiceProvider.GetRequiredService<Koan.Identity.Management.IdentityLifecycleService>().SuspendAsync([Scout.Did], Cancellation);
-
-        using var agent = Agent(tangentSpace);
-        var refused = await Send(agent, HttpMethod.Post, ProofDoor.TokenPath, json: true, bearer: Proof(Scout));
-
-        Assert.Equal(HttpStatusCode.Forbidden, refused.Status);
-        Assert.Null(refused.Location);
-        Assert.False(refused.Json.TryGetProperty("access_token", out _));
-        Assert.Equal(ProofController.MayNotAct, refused.Json.GetProperty("message").GetString());
-    }
-
-    [Fact]
-    public async Task The_token_address_refuses_a_proof_as_the_exchange_does()
-    {
-        await using var directory = await AgentDirectory.Start(Scout);
-        await using var waiting = await Start(directory);
-        using var agent = Agent(waiting);
-
-        async Task Alike(string? proof)
-        {
-            var exchange = await Send(agent, HttpMethod.Post, Exchange, json: true, bearer: proof);
-            var token = await Send(agent, HttpMethod.Post, ProofDoor.TokenPath, json: true, bearer: proof);
-            Assert.True(exchange.Status != HttpStatusCode.NoContent, exchange.Body);
-            Assert.Equal((exchange.Status, exchange.Body), (token.Status, token.Body));
-        }
-
-        // Nobody has set the place up.
-        await Alike(Proof(Scout));
-        await Given.AnEstablishedTangentSpace(waiting, "Field notes", ct: Cancellation);
-
-        await Alike(null);
-        await Alike("not-a-token");
-        await Alike(new AgentAccount(Scout.Did, Scout.Handle).Token(Addressed, ProofDoor.Method));
-        await Alike(Scout.Token("did:web:elsewhere.example#tangent", ProofDoor.Method));
-        await Alike(Scout.Token(Addressed, "com.atproto.server.getSession"));
-        await Alike(Scout.Token(Addressed, ProofDoor.Method, TimeSpan.FromMinutes(2)));
-        Assert.Null(await Participant.Get(Scout.Did, Cancellation));
     }
 
     [Theory]
@@ -334,13 +260,13 @@ public sealed class ProofDoorTests
 
         var descriptor = (await Send(agent, HttpMethod.Get, "/tangent.json", json: true)).Json;
         Assert.False(descriptor.TryGetProperty("proof", out _));
-        Assert.False(descriptor.TryGetProperty("tools", out _));
+        var tools = descriptor.GetProperty("address").GetString() + ToolDoor.Path;
+        Assert.Equal(tools, descriptor.GetProperty("tools").GetString());
         var llms = await agent.GetStringAsync("/llms.txt", Cancellation);
         Assert.Contains("This place has none yet", llms);
         Assert.Contains("signing in through atproto gives it one", llms);
         Assert.DoesNotContain(ProofDoor.Method, llms);
-        Assert.Contains("`no_application_url`", llms);
-        Assert.DoesNotContain("A standard MCP client needs that address alone", llms);
+        Assert.Contains("Use " + tools, llms);
     }
 
     [Fact]
@@ -424,16 +350,13 @@ public sealed class ProofDoorTests
         var descriptor = (await Send(agent, HttpMethod.Get, "/tangent.json", json: true)).Json.GetProperty("proof");
         Assert.Equal((BaseUrl + ProofDoor.StatementPath, BaseUrl + Exchange, Addressed, ProofDoor.Method),
             (descriptor.GetProperty("statement").GetString(), descriptor.GetProperty("exchange").GetString(), descriptor.GetProperty("audience").GetString(), descriptor.GetProperty("method").GetString()));
-        Assert.Equal(BaseUrl + ProofDoor.TokenPath, descriptor.GetProperty("token").GetString());
 
         var llms = await agent.GetStringAsync("/llms.txt", Cancellation);
         Assert.Contains("com.atproto.server.getServiceAuth", llms);
         Assert.Contains("aud=" + Addressed, llms);
         Assert.Contains("lxm=" + ProofDoor.Method, llms);
         Assert.Contains(BaseUrl + Exchange, llms);
-        Assert.Contains("keep the cookie", llms);
-        Assert.Contains("`" + TokenHeader + "`", llms);
-        Assert.Contains(BaseUrl + ProofDoor.TokenPath, llms);
+        Assert.Contains("sets the session's cookie", llms);
     }
 
     [Theory]

@@ -23,8 +23,8 @@ using Tangent.Space;
 namespace Tangent;
 
 /// <summary>Composes the Tangent Space on Koan: what the operator configured, the one data folder, where the place
-/// keeps the address it accepts, the HTML projection, first run's gate, the delegated agent door, and what every start
-/// makes sure of: the roles, first run, the pre-registered client and the Offers of an address.</summary>
+/// keeps the address it accepts, the HTML projection, first run's gate, and what every start makes sure of: the roles,
+/// first run and the Offers of an address.</summary>
 public sealed class TangentModule : KoanModule
 {
     /// <summary>The key Koan reads a configured base URL from, which wins over the address the place accepted
@@ -59,7 +59,6 @@ public sealed class TangentModule : KoanModule
         // The controllers of this assembly, whichever assembly hosts the composition.
         services.AddKoanControllersFrom<TangentModule>();
         Participants.ParticipantsComposition.AddParticipants(services);
-        Delegates.DelegatesComposition.AddDelegates(services);
         LiveComposition.AddLive(services);
 
         // The HTML projection: each resource type names its component; the formatter goes first so a request
@@ -91,8 +90,7 @@ public sealed class TangentModule : KoanModule
             .Add<Lifecycle.ExportSettingsPage, Lifecycle.ExportSettingsView>(page => "Export · " + page.Place, frame: Lifecycle.ExportSettingsView.Frame)
             .Add<NotificationsPage, NotificationsView>(page => "Notifications · " + page.Place, frame: NotificationsView.Frame)
             .Add<Posts.SearchPage, Posts.SearchView>(page => (page.Text is { } text ? text + " · Search · " : "Search · ") + page.Place, frame: Posts.SearchView.Frame)
-            .Add<Delegates.Consent, Delegates.ConsentView>(consent => "Approve an agent · " + consent.Place, frame: Delegates.ConsentView.Frame)
-            .Add<Delegates.BringYourAgent, Delegates.BringYourAgentView>(page => "Bring your agent · " + page.Place, frame: Delegates.BringYourAgentView.Frame));
+            .Add<Participants.BringYourAgent, Participants.BringYourAgentView>(page => "Bring your agent · " + page.Place, frame: Participants.BringYourAgentView.Frame));
         services.AddSingleton<HtmlFormatter>();
         services.AddSingleton<Koan.Web.Controllers.IProblemView, ProblemFrame>();
         services.AddOptions<MvcOptions>().Configure<HtmlFormatter>((mvc, html) =>
@@ -113,7 +111,6 @@ public sealed class TangentModule : KoanModule
         await TablesExist(services.GetRequiredService<IDataService>(), ct);
         await Roles.Seed(services.GetRequiredService<RoleCollection>(), ct);
         await FirstRunStart.Run(services, ct);
-        await Delegates.DelegateClient.Seed(services, ct);
         await services.GetRequiredService<Offers.AddressOffers>().Start(ct);
         services.GetRequiredService<IHostApplicationLifetime>().ApplicationStarted.Register(() => ReportStarted(services));
     }

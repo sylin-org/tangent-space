@@ -105,7 +105,7 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
         => user.Identity?.IsAuthenticated == true ? user.FindFirst(ClaimTypes.NameIdentifier)?.Value : null;
 
     /// <summary>The handle the atproto connector verified for the signed-in account: at this sign-in, or, for a request
-    /// that carries no sign-in's claims, such as a delegate's, at the sign-in that last recorded it on their
+    /// that carries no sign-in's claims, at the sign-in that last recorded it on their
     /// participant; empty where none was verified.</summary>
     private static async Task<string> HandleOf(ClaimsPrincipal user, string personId, CancellationToken ct)
         => Claimed(user) is { Length: > 0 } claimed ? claimed : (await Participant.Get(personId, ct))?.Handle ?? "";

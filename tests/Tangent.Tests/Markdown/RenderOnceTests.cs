@@ -65,7 +65,6 @@ public sealed class RenderOnceTests
         Assert.True(MarkdownHtml.Tractable(heavy));
         using var visitor = Agent(tangentSpace);
         using var bea = await SignedIn(tangentSpace, Bea);
-        var token = await bea.Token("/t/" + Workshop + "/new", Cancellation);
         var before = await Counted();
 
         // A visitor may start, reply and edit nothing; Bea may not edit Ada's Post. Each is answered with its gate, and
@@ -74,8 +73,7 @@ public sealed class RenderOnceTests
         var started = await Send(visitor, HttpMethod.Post, "/t/" + Workshop + "/new", JsonBody(new { id = Tids.Mint(), title = "Heavy", body = heavy }), json: true);
         var replied = await Send(visitor, HttpMethod.Post, TopicPath(root), JsonBody(new { id = Tids.Mint(), body = heavy }), json: true);
         var edited = await Send(visitor, HttpMethod.Post, PostPath(root, root) + "/edit", JsonBody(new { body = heavy, version = 1 }), json: true);
-        var notYours = await Send(bea.Client, HttpMethod.Post, PostPath(root, root) + "/edit", JsonBody(new { body = heavy, version = 1 }), json: true,
-            token: token.Values.Single());
+        var notYours = await Send(bea.Client, HttpMethod.Post, PostPath(root, root) + "/edit", JsonBody(new { body = heavy, version = 1 }), json: true);
         Assert.Equal(parses, MarkdownHtml.Parses);
 
         Assert.Equal([Capabilities.SignIn.Word, Capabilities.SignIn.Word, Capabilities.SignIn.Word, Capabilities.NotYours.Word],

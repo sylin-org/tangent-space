@@ -1,16 +1,12 @@
 using System.ComponentModel;
-using System.Globalization;
 using Koan.Data.Abstractions;
 using Koan.Identity.Roles;
 using Koan.Web.Attributes;
 using Koan.Web.Auth.Infrastructure;
-using Koan.Web.Auth.Server.Options;
 using Koan.Web.Hosting;
 using KoanPerson = Koan.Identity.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
 using Tangent.Access;
-using Tangent.Delegates;
 using Tangent.Posts;
 using Tangent.Render;
 using Tangent.Space;
@@ -26,29 +22,19 @@ namespace Tangent.Participants;
 /// capability's rows for the place; the participant by handle or Id; Koan's roles of theirs and their person's row; the
 /// Tangents the reader may view (<see cref="ViewableTangents.All"/>), every Tangent judged from Koan's compiled state, so
 /// as many as the place holds; one page of their Posts in those (<see cref="RecentPosts"/>); the roots of the replies
-/// among them; the participants those Posts mention; and, on the reader's own profile in their own session, a page of
-/// their approvals. A revoke posts back here and is the reader's alone. For a reader who holds <see cref="Bit.ManageStanding"/>
+/// among them; and the participants those Posts mention. For a reader who holds <see cref="Bit.ManageStanding"/>
 /// or <see cref="Bit.ManageRoles"/>, it also reads the participant as the place's people list them, with what the reader
 /// may change of them and the forms that do, which post to <see cref="PeopleController"/> and come back here.</summary>
-public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection roles, IOptions<AuthServerOptions> server) : ControllerBase
+public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection roles) : ControllerBase
 {
     /// <summary>The query parameter that carries the cursor of the page of Posts to continue from.</summary>
     public const string Before = "before";
 
-    /// <summary>The query parameter that carries the page of the reader's own approvals, from one.</summary>
-    public const string AgentsPage = "agents";
-
-    /// <summary>The segment under the reader's own profile where an approval is revoked: <c>…/delegates/{id}/revoke</c>.</summary>
-    public const string DelegatesSegment = "delegates";
-
-    public const string RevokeSegment = "revoke";
-
     [HttpGet(ProfilePage.Segment + "{handle}")]
     [HttpHead(ProfilePage.Segment + "{handle}")]
     [Tool(Name = "read_profile")]
-    [Description("Read a participant's profile: who they are, their kind, their roles here and their recent Posts in the Tangents you may read.")]
-    public async Task<IActionResult> Get([Description(Holds.Handle)] string handle, [FromQuery(Name = Before), Description(Holds.PostsBefore)] string? before,
-        [FromQuery(Name = AgentsPage), Description(Holds.AgentsPage)] string? agents, CancellationToken ct)
+    [Description("Read a participant's profile, by handle or DID: who they are, their kind, their roles here and their recent Posts in the Tangents you may read. Call this to know who you are talking with.")]
+    public async Task<IActionResult> Get([Description(Holds.Handle)] string handle, [FromQuery(Name = Before), Description(Holds.PostsBefore)] string? before, CancellationToken ct)
     {
         var personId = PostWrites.PersonId(User);
         var rows = await Capabilities.LoadRows(personId, null, ct);
@@ -60,11 +46,6 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
         if (before is not null && (cursor = RecentPosts.Cursor.Parse(before)) is null)
             return new Problem(StatusCodes.Status400BadRequest, "Not a page of these posts",
                 $"The {Before} parameter is the cursor a page of this profile names as its older.").ToResult();
-        var agentsPage = 1;
-        if (agents is not null && (!int.TryParse(agents, NumberStyles.None, CultureInfo.InvariantCulture, out agentsPage)
-                                   || agentsPage is < 1 or > Approved.LastPage))
-            return new Problem(StatusCodes.Status400BadRequest, "Not a page of these agents",
-                $"The {AgentsPage} parameter is the number of a page of the agents acting as you, from 1.").ToResult();
 
         var whole = await ViewableTangents.All(personId, ct);
         var tangents = whole.Tangents.ToDictionary(tangent => tangent.Id, StringComparer.Ordinal);
@@ -79,35 +60,18 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
         var (name, shownHandle) = Named(subject);
         var address = ProfilePage.AddressOf(baseAddress, shownHandle);
         var reader = rows.Participant;
-        var own = reader is not null && reader.Id == subject.Id && !DelegateIdentity.Delegated(HttpContext);
-        ProfilePage.Approvals? approvals = null;
-        if (own)
-        {
-            var (grants, more) = await Approved.Of(reader!.Id, agentsPage, ct);
-            var token = FormToken.For(HttpContext);
-            approvals = new ProfilePage.Approvals(
-                grants.Select(grant => new ProfilePage.Approval(grant.Id, Approved.Client(grant), grant.ClientId != DelegateClient.Id, grant.IssuedAt,
-                    Form.Posting(address + "/" + DelegatesSegment + "/" + Uri.EscapeDataString(grant.Id) + "/" + RevokeSegment, token))).ToList(),
-                server.Value.AccessTokenLifetime,
-                more ? address + "?" + AgentsPage + "=" + (agentsPage + 1).ToString(CultureInfo.InvariantCulture) : null,
-                agentsPage > 1 ? address : null);
-            // The reader's own profile carries the revoke forms with a fresh antiforgery token, so it is never stored or
-            // revalidated; anyone else's, read signed in, is theirs alone to cache.
-            Response.Headers.CacheControl = "no-cache, no-store";
-        }
-        else if (reader is not null)
-        {
-            Response.Headers.CacheControl = "private";
-        }
+        // The reader's own profile, and one carrying forms that change someone, is never stored, so a browser's Back after
+        // sign-out redisplays nothing of it; anyone else's, read signed in, is theirs alone to cache.
+        if (reader is not null) Response.Headers.CacheControl = reader.Id == subject.Id ? "no-cache, no-store" : "private";
 
         // Whoever may change the participant's standing or roles reads them as the people list them, with the forms that
-        // change them, coming back here; those forms carry a fresh antiforgery token, so the page is never stored.
+        // change them, coming back here.
         PeoplePage.Listed? listed = null;
         PeopleForms? forms = null;
         if (reader is not null && PeopleController.ReadGate(place) is null)
         {
             listed = await (await PeopleController.Lister.Load(roles, place, reader.Id, baseAddress, ct)).Row(subject, ct);
-            forms = PeopleController.Forms(HttpContext, place, baseAddress, baseUrl.PathBase + ProfilePage.Segment + Uri.EscapeDataString(shownHandle));
+            forms = PeopleController.Forms(place, baseAddress, baseUrl.PathBase + ProfilePage.Segment + Uri.EscapeDataString(shownHandle));
             Response.Headers.CacheControl = "no-cache, no-store";
         }
 
@@ -128,7 +92,6 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
             page.Posts.Select(post => Written(post, roots, tangents, people, baseAddress)).ToList(),
             page.Next is { } next ? address + "?" + Before + "=" + Uri.EscapeDataString(next.ToString()) : null,
             cursor is not null,
-            approvals,
             rows.Space.Name,
             baseAddress + "/",
             reader is null ? baseAddress + SignInController.Path + "?return=" + back : null,
@@ -136,28 +99,6 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
             DateOnly.FromDateTime(DateTime.UtcNow),
             listed,
             forms));
-    }
-
-    /// <summary>Revokes one of the reader's own approvals and sends them back to their profile, or answers <c>204</c> as
-    /// JSON. Only the person does it, in their own session with the form's token: a delegate's bearer is refused, and
-    /// a profile that is not the reader's own, or an approval that is not theirs or no longer stands, is answered as the
-    /// revoke is, with nothing changed.</summary>
-    [HttpPost(ProfilePage.Segment + "{handle}/" + DelegatesSegment + "/{grant}/" + RevokeSegment)]
-    public async Task<IActionResult> Revoke(string handle, string grant, CancellationToken ct)
-    {
-        Response.Headers.CacheControl = "no-store";
-        if (DelegateIdentity.Delegated(HttpContext))
-            return new Problem(StatusCodes.Status403Forbidden, "Only the person revokes",
-                "A request made with a bearer token can’t revoke an agent; the person signs in and revokes it on their profile.").ToResult();
-        if (PostWrites.PersonId(User) is not { } personId)
-            return PostWrites.Refused(HttpContext, Capabilities.SignIn, "Revoking an agent needs the person who approved it, signed in.");
-        if (!await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
-        if (await Holder(handle, ct) is not { } subject || subject.Id != personId) return PostWrites.Absent();
-
-        await Approved.Revoke(personId, grant, ct);
-        if (PostWrites.WantsJson(Request)) return NoContent();
-        Response.Headers.Location = baseUrl.PathBase + ProfilePage.Segment + Uri.EscapeDataString(Named(subject).Handle);
-        return StatusCode(StatusCodes.Status303SeeOther);
     }
 
     /// <summary>The participant the address names: by Id where it is a DID; otherwise the one participant whose row keeps

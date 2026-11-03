@@ -20,7 +20,7 @@ public sealed class SendingTests
         using var ada = await SignedIn(tangentSpace, Ada);
         var root = await Started(Ada, "Lanterns", "How do you hang yours?");
         var id = Tids.Mint();
-        using var request = await Reply(ada, root, id, "From the porch beam.");
+        using var request = Reply(root, id, "From the porch beam.");
 
         var release = new TaskCompletionSource();
         var running = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -64,7 +64,7 @@ public sealed class SendingTests
         var running = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var held = new Holding(release.Task, running).Send(Cancellation);
         await running.Task.WaitAsync(Bound, Cancellation);
-        using var busy = await ada.Client.SendAsync(await Reply(ada, root, id, "From the porch beam."), Cancellation);
+        using var busy = await ada.Client.SendAsync(Reply(root, id, "From the porch beam."), Cancellation);
         release.SetResult();
         await held.WaitAsync(Bound, Cancellation);
 
@@ -72,17 +72,16 @@ public sealed class SendingTests
         Assert.Equal("1", busy.Headers.RetryAfter?.ToString());
         Assert.Null(await Post.Get(id, Cancellation));
 
-        using var again = await ada.Client.SendAsync(await Reply(ada, root, id, "From the porch beam."), Cancellation);
+        using var again = await ada.Client.SendAsync(Reply(root, id, "From the porch beam."), Cancellation);
         Assert.Equal(HttpStatusCode.Created, again.StatusCode);
         Assert.Equal("From the porch beam.", (await Post.Get(id, Cancellation))?.Body);
     }
 
-    /// <summary>The request a composer sends for a reply, as JSON, with the page's token.</summary>
-    private static async Task<HttpRequestMessage> Reply(Participants.Browser browser, Post root, string id, string body)
+    /// <summary>The request a composer sends for a reply, as JSON.</summary>
+    private static HttpRequestMessage Reply(Post root, string id, string body)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, TopicPath(root)) { Content = JsonBody(new { id, body }) };
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        request.Headers.Add(TokenHeader, (await browser.Token(TopicPath(root), Cancellation)).Values.Single());
         return request;
     }
 

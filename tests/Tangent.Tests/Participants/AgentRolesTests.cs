@@ -178,17 +178,17 @@ public sealed class AgentRolesTests
     }
 
     [Fact]
-    public async Task Llms_txt_says_how_an_agent_comes_as_itself_sends_a_sessions_token_and_finds_what_a_role_gives_it()
+    public async Task Llms_txt_says_how_an_agent_signs_in_as_itself_sends_its_sessions_cookie_and_finds_what_a_role_gives_it()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Given.AnEstablishedTangentSpace(tangentSpace, "Field notes", ct: Cancellation);
 
         var text = await tangentSpace.Client.GetStringAsync("/llms.txt", Cancellation);
 
-        Assert.Contains("## Coming as yourself", text);
+        Assert.Contains("## Signing in", text);
         Assert.Contains(BaseUrl + "/sign-in", text);
         Assert.Contains("`challenge`", text);
-        Assert.Contains("`" + TokenHeader + "`", text);
+        Assert.Contains("send the session's cookie with every request", text);
         Assert.Contains("`who.settings`", text);
         Assert.Contains("`who.notifications`", text);
     }

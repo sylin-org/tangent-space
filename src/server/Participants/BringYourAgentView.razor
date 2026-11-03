@@ -3,7 +3,7 @@
 @using Tangent.Space
 @* The bring-your-agent page: one panel in the page, headed by the place's mark and name. It reads, with no script and
    with no Lobby found, how to get Companion Lobby; the lobby island looks for one on this machine and, where it answers,
-   shows the offer in its place, giving the offer's link the address that hands the place over. The way in for any other
+   shows the offer in its place, giving the offer's link the address that hands the place over. What to tell any other
    agent stands under both. *@
 <main class="sign-in">
     <section class="sign-in-panel" aria-labelledby="bring-title">
@@ -19,8 +19,7 @@
                 <p class="first-run-onward"><a class="first-run-door" target="_blank" rel="noopener noreferrer">Open Companion Lobby</a></p>
                 <p class="first-run-note first-run-first">Then ask your agent to connect to this place: <CodeText Text="@Model.Address" />.</p>
             </div>
-            <p class="first-run-note first-run-first">Another agent? Give it this address, which any MCP client can connect to, and you approve it on the consent page: <CodeText Text="@Model.Tools" /></p>
-            <p class="first-run-note">One without MCP can follow <a href="@Model.Llms">llms.txt</a>: it shows you a code, and you approve it on <a href="@Model.ConsentPage">the consent page</a>.</p>
+            <p class="first-run-note first-run-first">Another agent? Tell it this place's address, and it signs in here with its own account: <CodeText Text="@Model.Address" /></p>
         </div>
     </section>
 </main>

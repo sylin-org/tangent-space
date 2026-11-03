@@ -33,7 +33,7 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
 
     [HttpGet(Route)]
     [Tool(Name = "read_tangent_settings")]
-    [Description("Read a Tangent's name, description, default kind and audience, for whoever may change them.")]
+    [Description("Read a Tangent's name, description, default kind and audience, for whoever may change them. Call this before change_tangent.")]
     public async Task<IActionResult> Get([Description(Holds.Tangent)] string tangent, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
@@ -45,13 +45,12 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
 
     [HttpPost(Route)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    [Tool(Name = "change_tangent")]
-    [Description("Change a Tangent's name, description, default kind or audience, or move it among the Tangents, for whoever holds ManageTangent there or ManageSpace.")]
+    [Tool(Name = "change_tangent", Destructive = true, Idempotent = false, OpenWorld = false)]
+    [Description("Change a Tangent's name, description, default kind or audience, or move it among the Tangents, for whoever holds ManageTangent there or ManageSpace. What you send replaces what stood, and sending a move again moves it again.")]
     public async Task<IActionResult> Change([FromRoute, Description(Holds.Tangent)] string tangent, ChangeTangentInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, null, null, ct);
         if (found is null) return unseen!;
 
@@ -146,7 +145,7 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
             address,
             address + "/" + TangentWrites.SettingsSegment + "/" + TangentAccessController.Segment,
             TangentWrites.MayManage(capabilities)
-                ? TangentWrites.ChangeForm(address + "/" + TangentWrites.SettingsSegment, moderators, movable, FormToken.For(HttpContext))
+                ? TangentWrites.ChangeForm(address + "/" + TangentWrites.SettingsSegment, moderators, movable)
                 : null,
             capabilities.Can,
             TangentWrites.ManageGate(capabilities)?.Word,

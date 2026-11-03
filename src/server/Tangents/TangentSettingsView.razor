@@ -32,7 +32,6 @@
             <form class="sign-in-form" method="post" action="@Model.Change?.Action" data-island="@(Mutable ? "submitting" : null)">
                 @if (Model.Change is { } change)
                 {
-                    <FormTokenField Token="@change.Token" />
                 }
                 <div class="field">
                     <label class="field-label" for="settings-name">Name</label>
@@ -102,7 +101,6 @@
     private RenderFragment Moved(Move move, string label, bool possible) => @<form method="post" action="@Model.Change?.Action">
         @if (Model.Change is { } change)
         {
-            <FormTokenField Token="@change.Token" />
         }
         <button type="submit" class="post-form-move" name="@TangentWrites.MoveField" value="@TangentWrites.Word(move)" disabled="@(!possible)">@label</button>
     </form>;

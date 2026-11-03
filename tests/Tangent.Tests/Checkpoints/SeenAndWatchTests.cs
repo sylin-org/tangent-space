@@ -17,7 +17,7 @@ public sealed class SeenAndWatchTests
     private const string Leo = "did:plc:leo4checkpoints";
 
     [Fact]
-    public async Task The_seen_post_moves_the_topic_checkpoint_to_the_sequence_shown_never_backwards_a_get_moves_nothing_a_tokenless_session_post_is_refused_and_a_delegates_bearer_moves_its_persons()
+    public async Task The_seen_post_moves_the_topic_checkpoint_to_the_sequence_shown_never_backwards_a_get_moves_nothing_and_a_program_with_a_session_moves_its_own()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
@@ -32,9 +32,6 @@ public sealed class SeenAndWatchTests
         Assert.Equal((BaseUrl + seenPath, "POST", "3"), (seen.GetProperty("action").GetString(), seen.GetProperty("method").GetString(), Valued(seen, "through")));
         Assert.Contains("Mark seen", (await Send(bea.Client, HttpMethod.Get, TopicPath(root))).Body);
         Assert.Null(await SeenThrough(Bea, root));
-
-        var tokenless = await Send(bea.Client, HttpMethod.Post, seenPath, FormBody(new Dictionary<string, string> { ["through"] = "3" }));
-        Assert.Equal((HttpStatusCode.BadRequest, (long?)null), (tokenless.Status, await SeenThrough(Bea, root)));
 
         var two = await Form(bea, TopicPath(root), seenPath, new Dictionary<string, string> { ["through"] = "2" });
         Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + TopicPath(root), (long?)2), (two.Status, two.Location, await SeenThrough(Bea, root)));
@@ -51,11 +48,9 @@ public sealed class SeenAndWatchTests
         Assert.Null(await SeenThrough(Ada, root));
 
         using var ada = await SignedIn(tangentSpace, Ada);
-        var token = await Delegate(tangentSpace, ada);
-        using var agent = Agent(tangentSpace);
-        var delegated = await Send(agent, HttpMethod.Post, seenPath, JsonBody(new { through = 2 }), json: true, bearer: token);
-        Assert.Equal((HttpStatusCode.OK, "topic:" + root.Id, 2L), (delegated.Status, delegated.Json.GetProperty("scope").GetString(),
-            delegated.Json.GetProperty("seq").GetInt64()));
+        var sent = await Send(ada.Client, HttpMethod.Post, seenPath, JsonBody(new { through = 2 }), json: true);
+        Assert.Equal((HttpStatusCode.OK, "topic:" + root.Id, 2L), (sent.Status, sent.Json.GetProperty("scope").GetString(),
+            sent.Json.GetProperty("seq").GetInt64()));
         Assert.Equal(((long?)2, (long?)3), (await SeenThrough(Ada, root), await SeenThrough(Bea, root)));
     }
 
@@ -179,10 +174,8 @@ public sealed class SeenAndWatchTests
         Assert.False((await Send(bea.Client, HttpMethod.Get, "/t/" + Workshop, json: true)).Json.GetProperty("topics")[0].GetProperty("new").GetBoolean());
 
         using var ada = await SignedIn(tangentSpace, Ada);
-        var token = await Delegate(tangentSpace, ada);
-        using var agent = Agent(tangentSpace);
-        var delegated = await Send(agent, HttpMethod.Post, topicWatch, JsonBody(new { watch = true }), json: true, bearer: token);
-        Assert.Equal((HttpStatusCode.OK, true), (delegated.Status, delegated.Json.GetProperty("watch").GetBoolean()));
+        var sent = await Send(ada.Client, HttpMethod.Post, topicWatch, JsonBody(new { watch = true }), json: true);
+        Assert.Equal((HttpStatusCode.OK, true), (sent.Status, sent.Json.GetProperty("watch").GetBoolean()));
         Assert.Equal((Checkpoint.Nothing, true), await Flag(Ada, Scope.Topic(root.Id)));
 
         foreach (var path in new[] { TopicPath(hidden) + "/" + CheckpointController.WatchSegment, "/t/" + Studio + "/" + CheckpointController.WatchSegment })

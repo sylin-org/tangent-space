@@ -17,7 +17,7 @@ type Phase = 'ready' | 'sending' | 'checking' | 'missing' | 'uncertain' | 'refus
 // The composer: a form that posts a reply or starts a Topic, and that never loses its words, never posts twice and
 // never posts by itself. Its words are kept as a draft, by participant and scope — the Topic, a Post of it a reply
 // answers, or the Tangent — from every keystroke until the server confirms the Post, and come back when the person
-// does. Only the person's own submit sends it, as JSON to the form's action with the form's token and its TID. A
+// does. Only the person's own submit sends it, as JSON to the form's action with its TID. A
 // refusal is said inline above the fields.
 //
 // A send's words are kept beside the scope's draft, by their TID, from the moment they leave until they are settled,

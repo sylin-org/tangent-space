@@ -37,12 +37,12 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
     public const string After = "after";
 
     /// <summary>The form that decides an application at <paramref name="action"/>: admit or decline, by the applicant's id.</summary>
-    private static Form Deciding(string action, FormToken token) => Form.Posting(action, token,
+    private static Form Deciding(string action) => Form.Posting(action,
         new Form.Field(ParticipantField, Holds.Applicant));
 
     [HttpGet(Path)]
     [Tool(Name = "read_applications")]
-    [Description("Read who waits to be admitted and who was declined, a page at a time, for whoever holds ManageStanding.")]
+    [Description("Read who waits to be admitted and who was declined, a page at a time, for whoever holds ManageStanding. Follow with admit or decline on an applicant's id.")]
     public async Task<IActionResult> Get([FromQuery(Name = After), Description(Holds.After)] string? after, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
@@ -61,21 +61,20 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
 
     [HttpPost(AdmitPath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    [Tool(Name = "admit")]
-    [Description("Admit an applicant, who becomes a member, for whoever holds ManageStanding.")]
+    [Tool(Name = "admit", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Description("Admit an applicant from read_applications, who becomes a member, for whoever holds ManageStanding. It reverses a decline.")]
     public Task<IActionResult> Admit(DecideInput input, CancellationToken ct) => Decide(input, true, ct);
 
     [HttpPost(DeclinePath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    [Tool(Name = "decline")]
-    [Description("Decline an applicant, who goes on reading what a visitor reads, for whoever holds ManageStanding.")]
+    [Tool(Name = "decline", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Description("Decline an applicant from read_applications, who goes on reading what a visitor reads and is told, for whoever holds ManageStanding. A later admit reverses it.")]
     public Task<IActionResult> Decline(DecideInput input, CancellationToken ct) => Decide(input, false, ct);
 
     private async Task<IActionResult> Decide(DecideInput input, bool admitting, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
 
@@ -136,7 +135,6 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
         var gate = place.Gate(Bit.ManageStanding)?.Word;
         var read = gate is null ? await Applications.Read(cursor, ct) : new Applications.Page([], null);
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
-        var token = gate is null ? FormToken.For(HttpContext) : null;
         return new ApplicationsPage(
             TangentSpaceSettingsController.Sections(place, baseAddress, TangentSpaceSettingsController.ApplicationsSection),
             read.Applicants.Select(applicant =>
@@ -149,8 +147,8 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
             read.Next is { } next ? applications + "?" + After + "=" + Uri.EscapeDataString(next.ToString()) : null,
             cursor is not null,
             applications,
-            token is null ? null : Deciding(baseAddress + AdmitPath, token),
-            token is null ? null : Deciding(baseAddress + DeclinePath, token),
+            gate is null ? Deciding(baseAddress + AdmitPath) : null,
+            gate is null ? Deciding(baseAddress + DeclinePath) : null,
             place.Can,
             gate,
             personId is null ? baseAddress + SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,

@@ -20,7 +20,6 @@ export interface ArticleProps {
   host: HTMLElement
   door: string
   bring: string | null
-  token: string | null
   participant: string | null
   edit: string | null
 }
@@ -133,8 +132,6 @@ export function writeArticle(props: ArticleProps): () => void {
   const coverSlot = form.querySelector<HTMLElement>('[data-article-cover]')
   const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')
   const minutes = form.querySelector<HTMLElement>('[data-article-minutes]')
-  const tokenInput = props.token ? (form.elements.namedItem(props.token) as HTMLInputElement | null) : null
-  const token = props.token && tokenInput ? { field: props.token, value: tokenInput.value } : null
   const uploads = new AbortController()
   const cleanups: (() => void)[] = [() => uploads.abort()]
   let coming = 0
@@ -251,7 +248,7 @@ export function writeArticle(props: ArticleProps): () => void {
     say('')
     editor.view.dispatch(editor.state.tr.setMeta(comingKey, { add: { id, at, preview } } satisfies Coming))
     try {
-      const brought = await bring(props.bring, file, token, uploads.signal)
+      const brought = await bring(props.bring, file, uploads.signal)
       if (editor.isDestroyed) return
       const place = comingAt(editor.view, id)
       if (place === null) return
@@ -543,7 +540,7 @@ export function writeArticle(props: ArticleProps): () => void {
     say('')
     renderCover(true)
     try {
-      const brought: Brought = await bring(props.bring, file, token, uploads.signal)
+      const brought: Brought = await bring(props.bring, file, uploads.signal)
       if (serial === coverSerial) {
         coverPreview = null
         setCover(brought.id)

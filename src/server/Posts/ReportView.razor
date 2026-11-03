@@ -52,7 +52,6 @@
                 <form class="sign-in-form" method="post" action="@Model.Report?.Action">
                     @if (Model.Report is { } report)
                     {
-                        <FormTokenField Token="@report.Token" />
                         <input type="hidden" name="@PostWrites.IdField" value="@report.Value(PostWrites.IdField)">
                     }
                     <div class="field">

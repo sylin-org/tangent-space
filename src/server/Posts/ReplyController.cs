@@ -23,21 +23,20 @@ public sealed class ReplyController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
     [HttpPost("/t/{tangent}/{topic}")]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    [Tool(Name = "reply")]
-    [Description("Reply in a Topic, or to one of its Posts.")]
+    [Tool(Name = "reply", Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Reply in a Topic you have read. parent is the id of the Post you answer; left out, you answer the Topic. Send an id, a TID you mint, and the same call again returns the same Post, so a retry is safe; without one, each call makes a new Post. Refused, its gate says why and its next, where there is one, what to do now.")]
     public async Task<IActionResult> Write([FromRoute, Description(Holds.Tangent)] string tangent, [FromRoute, Description(Holds.Topic)] string topic,
         ReplyInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, topic, null, ct);
         if (found is null) return unseen!;
         var root = found.Root!;
 
         var body = await PostWrites.Body(input.Body, found.Rows.For(root).Holds(Bit.Post));
         var parent = input.Parent is { Length: > 0 } named ? named : null;
-        var outcome = await new Reply(await PostWrites.IdFor(HttpContext, input.Id, personId, body, root.Id, parent), root.Id, body, personId ?? "", parent).Send();
+        var outcome = await new Reply(PostWrites.Id(input.Id), root.Id, body, personId ?? "", parent).Send();
         return outcome is Outcome<Post>.Done { Result: var reply }
             ? await PostWrites.Written(HttpContext, reply, root, PostWrites.Address(BaseAddress(), root.TangentId, root.Slug ?? root.Id, reply.Id), personId, created: true, ct)
             : PostWrites.Answer(HttpContext, outcome);

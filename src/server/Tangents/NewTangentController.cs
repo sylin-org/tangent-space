@@ -49,13 +49,12 @@ public sealed class NewTangentController(KoanWebBaseUrl baseUrl) : ControllerBas
 
     [HttpPost(Route)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    [Tool(Name = "create_tangent")]
-    [Description("Create a Tangent by naming it, for whoever holds ManageSpace.")]
+    [Tool(Name = "create_tangent", Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Description("Create a Tangent by naming it, for whoever holds ManageSpace. Sending it again makes a second one. Follow with start_topic.")]
     public async Task<IActionResult> Create(CreateTangentInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        if (personId is not null && !await FormToken.Validate(HttpContext)) return PostWrites.TokenRefused();
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
 
@@ -123,7 +122,7 @@ public sealed class NewTangentController(KoanWebBaseUrl baseUrl) : ControllerBas
         var here = baseUrl.PathBase + Route;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
         return new NewTangentPage(
-            place.Gate(Bit.ManageSpace) is null ? TangentWrites.CreateForm(baseAddress + Route, FormToken.For(HttpContext)) : null,
+            place.Gate(Bit.ManageSpace) is null ? TangentWrites.CreateForm(baseAddress + Route) : null,
             place.Can,
             place.Gate(Bit.ManageSpace)?.Word,
             "",

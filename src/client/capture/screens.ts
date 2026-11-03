@@ -65,9 +65,6 @@ export interface Screen {
   states: readonly State[]
 }
 
-// The consent screen's Tangent Space: Koan's server lets its code look-ups through as often as a capture asks.
-const consentSettings = { 'Koan:Web:Auth:Server:UserCodeVerificationRateLimitPerMinute': '1000' } as const
-
 // A Tangent Space with no URL configured, in Production, behind the capture's loopback proxy, which it believes as it
 // believes any proxy on its own machine: it answers at the base URL the proxy names, and offers its operator the
 // public origin it is also reached at.
@@ -247,21 +244,6 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'found', place: 'persona', seed: 'people', signedIn: true, query: { handle: 'ma' } },
       { name: 'moderator', seed: 'many-tangents', signedIn: true },
       { name: 'refused', signedIn: true },
-    ],
-  },
-  // The page a person decides on for an agent, signed in as the persona: asking for the code a device shows; the
-  // request the shared client waits with under the seeded code; a code no request waits under, said under its field;
-  // a code a self-registered client asked for, refused under its field; and the done page reached without a decision
-  // of the persona's to show. Every look-up of a code counts against the rate limit, raised so every width and theme
-  // reaches the page.
-  consent: {
-    path: '/consent',
-    states: [
-      { name: 'code', seed: 'consent', signedIn: true, settings: consentSettings },
-      { name: 'request', seed: 'consent', signedIn: true, settings: consentSettings, query: { user_code: 'BCDF-GHJK' } },
-      { name: 'code-error', seed: 'consent', signedIn: true, settings: consentSettings, query: { user_code: 'ZZZZ-ZZZZ' } },
-      { name: 'code-refused', seed: 'consent', signedIn: true, settings: consentSettings, query: { user_code: 'CDFG-HJKM' } },
-      { name: 'done', seed: 'consent', signedIn: true, settings: consentSettings, path: '/consent/done' },
     ],
   },
   // The page with no Companion Lobby on the machine, which says how to get one, and with one answering, which offers
@@ -534,22 +516,14 @@ export const screens: Readonly<Record<string, Screen>> = {
     ],
   },
   // A participant's profile: Leo's, an administrator who wrote in the discussions, the workshop and the studio, read
-  // by the persona, a member, without the studio's Topic; the same as a visitor reads it; the persona's own, listing
-  // the two agents she approved, and with the first one's revoke opened, confirmed in the page; and a handle no participant holds.
+  // by the persona, a member, without the studio's Topic; the same as a visitor reads it; the persona's own; and a handle
+  // no participant holds.
   profile: {
     path: '/p/leo.sylin.org',
     states: [
       { name: 'populated', seed: 'profile', signedIn: true },
       { name: 'visitor', seed: 'profile' },
-      { name: 'own-with-delegate', seed: 'profile', signedIn: true, path: '/p/ada.bsky.social' },
-      {
-        name: 'revoke-open',
-        seed: 'profile',
-        signedIn: true,
-        path: '/p/ada.bsky.social',
-        click: '.profile-delegate:first-child .profile-revoke > summary',
-        waitFor: '.profile-revoke[open]',
-      },
+      { name: 'own', seed: 'profile', signedIn: true, path: '/p/ada.bsky.social' },
       { name: 'absent', seed: 'profile', path: '/p/nobody.example' },
       // Mara's profile read by the persona as the operator of the place, who may change her standing and roles: where
       // she stands, with what the persona may change inline, and the ban opened, confirmed in the page.
@@ -614,8 +588,8 @@ export const screens: Readonly<Record<string, Screen>> = {
 }
 
 // The reference's screens by width, as file names under its screens/ folder. Each is drawn at one size
-// and switches theme by its ?theme= query. The door, take this on a tangent, bring your agent, consent
-// and connections have no reference screen; their target is the mock Leo approves.
+// and switches theme by its ?theme= query. The door, take this on a tangent, bring your agent and
+// connections have no reference screen; their target is the mock Leo approves.
 export const references: Readonly<Record<string, Partial<Record<Width, string>>>> = {
   'tangent-discussions': { 1440: '03-tangent-discussions.html', 390: '21-phone-discussions.html' },
   'tangent-articles': { 1440: '02-tangent-articles.html' },

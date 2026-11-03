@@ -18,7 +18,6 @@
             <p class="sign-in-failure" id="article-failure" role="alert" data-gate="@FailureGate">@Failure</p>
         }
         <form class="article-form" method="post" action="@Action" data-island="@Island" data-props="@IslandProps">
-            <FormTokenField Token="@Token" />
             @Hidden
             <input type="hidden" name="@PostWrites.CoverField" value="@CoverId">
             <article class="article">
@@ -48,7 +47,6 @@
     [Parameter, EditorRequired] public string TangentName { get; set; } = "";
     [Parameter, EditorRequired] public string TangentAddress { get; set; } = "";
     [Parameter, EditorRequired] public string Action { get; set; } = "";
-    [Parameter, EditorRequired] public FormToken Token { get; set; } = default!;
     [Parameter, EditorRequired] public TangentPage.Author Author { get; set; } = default!;
     [Parameter, EditorRequired] public DateTimeOffset At { get; set; }
 
@@ -77,7 +75,7 @@
     [Parameter] public string? TitleFailure { get; set; }
     [Parameter] public string? BodyFailure { get; set; }
 
-    /// <summary>The hidden fields of this form beside its token.</summary>
+    /// <summary>The hidden fields of this form.</summary>
     [Parameter] public RenderFragment? Hidden { get; set; }
 
     /// <summary>What stands under the article inside the form, what its actions are, and what stands after the form.</summary>
@@ -89,7 +87,7 @@
     private string? CoverAddress => CoverId is { } cover ? Door + Media.Reference(cover).TrimStart('/') : null;
 
     private string? EditorProps => Bring is { } bring
-        ? System.Text.Json.JsonSerializer.Serialize(new { door = Door, bring = bring.Action, token = Token.Field, participant = Participant, edit = EditScope })
+        ? System.Text.Json.JsonSerializer.Serialize(new { door = Door, bring = bring.Action, participant = Participant, edit = EditScope })
         : null;
 
     private RenderFragment CoverField => @<div class="article-cover-field" data-article-cover>

@@ -6,8 +6,10 @@ using Xunit;
 
 namespace Tangent.Tools;
 
-/// <summary>A standard MCP client over Streamable HTTP, as a real host's <c>/mcp</c> takes one: it initializes with a bearer, says it is
-/// initialized, and then lists and calls. It keeps no cookie and follows no redirect.</summary>
+/// <summary>A standard MCP client over Streamable HTTP, as a real host's <c>/mcp</c> takes one: it initializes, says it is
+/// initialized, and then lists and calls, each request standing alone. Given a session, it sends that session's cookie with
+/// every request, as a client signed in with its own account does; given none, it is a visitor. It follows no
+/// redirect.</summary>
 internal sealed class ToolClient : IDisposable
 {
     public const string Path = "/mcp";
@@ -15,30 +17,31 @@ internal sealed class ToolClient : IDisposable
     private const string Version = "2025-06-18";
 
     private readonly HttpClient _http;
-    private readonly string _bearer;
-    private string? _session;
+    private readonly bool _owned;
     private int _next;
 
-    private ToolClient(TangentSpaceFixture tangentSpace, string bearer)
+    private ToolClient(HttpClient http, bool owned)
     {
-        _http = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false }) { BaseAddress = tangentSpace.Client.BaseAddress };
-        _bearer = bearer;
+        _http = http;
+        _owned = owned;
     }
 
     /// <summary>What <c>initialize</c> answered.</summary>
     public JsonElement Initialized { get; private set; }
 
-    /// <summary>A client connected as whoever <paramref name="bearer"/> names.</summary>
-    public static async Task<ToolClient> Connect(TangentSpaceFixture tangentSpace, string bearer)
+    /// <summary>A client connected with the cookie of <paramref name="session"/>, or as a visitor where there is none.</summary>
+    public static async Task<ToolClient> Connect(TangentSpaceFixture tangentSpace, Participants.Browser? session = null)
     {
-        var client = new ToolClient(tangentSpace, bearer);
+        var client = session is null
+            ? new ToolClient(new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false }) { BaseAddress = tangentSpace.Client.BaseAddress }, owned: true)
+            : new ToolClient(session.Client, owned: false);
         client.Initialized = await client.Rpc("initialize", new
         {
             protocolVersion = Version,
             capabilities = new { },
             clientInfo = new { name = "tangent-tests", version = "1.0.0" }
         });
-        using var said = Request(new { jsonrpc = "2.0", method = "notifications/initialized" }, bearer, client._session);
+        using var said = Request(new { jsonrpc = "2.0", method = "notifications/initialized" });
         using var answered = await client._http.SendAsync(said, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Accepted, answered.StatusCode);
         return client;
@@ -65,24 +68,26 @@ internal sealed class ToolClient : IDisposable
             meta.TryGetProperty("errorCode", out var code) ? code.GetString() : null);
     }
 
-    public void Dispose() => _http.Dispose();
+    public void Dispose()
+    {
+        if (_owned) _http.Dispose();
+    }
 
     private async Task<JsonElement> Rpc(string method, object parameters)
     {
-        using var asked = Request(new { jsonrpc = "2.0", id = ++_next, method, @params = parameters }, _bearer, _session);
+        using var asked = Request(new { jsonrpc = "2.0", id = ++_next, method, @params = parameters });
         using var answered = await _http.SendAsync(asked, TestContext.Current.CancellationToken);
         var text = await answered.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.True(answered.StatusCode == HttpStatusCode.OK, $"{method} answered {(int)answered.StatusCode}: {text}");
-        if (answered.Headers.TryGetValues("Mcp-Session-Id", out var session)) _session = session.Single();
-        var data = text.ReplaceLineEndings("\n").Split('\n').First(line => line.StartsWith("data:", StringComparison.Ordinal))["data:".Length..];
-        var answer = JsonDocument.Parse(data).RootElement;
+        var answer = JsonDocument.Parse(text).RootElement;
         Assert.False(answer.TryGetProperty("error", out var error), $"{method} failed: {error}");
         return answer.GetProperty("result").Clone();
     }
 
-    /// <summary>A message to <c>/mcp</c>, on the https the edge requires outside Development, as the reverse proxy of a
-    /// loopback address says it.</summary>
-    public static HttpRequestMessage Request(object message, string? bearer, string? session = null)
+    /// <summary>A message to <c>/mcp</c>, as a program sends it: no browser's headers, and the cookie, where there is one,
+    /// from the client's own jar; on the https the edge requires outside Development, as the reverse proxy of a loopback
+    /// address says it.</summary>
+    public static HttpRequestMessage Request(object message)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, Path)
         {
@@ -92,8 +97,6 @@ internal sealed class ToolClient : IDisposable
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
         request.Headers.Add("X-Forwarded-Proto", "https");
         request.Headers.Add("MCP-Protocol-Version", Version);
-        if (bearer is not null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
-        if (session is not null) request.Headers.Add("Mcp-Session-Id", session);
         return request;
     }
 }

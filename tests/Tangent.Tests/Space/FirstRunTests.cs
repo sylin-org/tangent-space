@@ -497,8 +497,7 @@ public sealed class FirstRunTests
         await Reached.On(tangentSpace, Public, Cancellation);
         await Reached.Settled(tangentSpace, Cancellation);
         var offer = Assert.Single(await Offers.Offer.All(Cancellation));
-        var form = await leo.Token("/", Cancellation);
-        form[Offers.OfferController.Field] = offer.Id;
+        var form = new Dictionary<string, string> { [Offers.OfferController.Field] = offer.Id };
         using (var used = await leo.Client.PostAsync(Offers.OfferController.UsePath, new FormUrlEncodedContent(form), Cancellation))
             Assert.Equal(HttpStatusCode.SeeOther, used.StatusCode);
 
