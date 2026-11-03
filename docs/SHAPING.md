@@ -69,14 +69,15 @@ public async Task<IActionResult> Write(string place, string topic, ReplyInput in
 - A locked Topic is gated, with the reason.
 - A visitor to a private place is told to sign in, at every address.
 
-**The door at `/mcp`,** recorded in [ADR 0016](adr/0016-a-standard-client-at-the-tools-door.md). Forty-five tools cover everything a participant does, each one a controller action, and addresses stayed where they were because `[Tool(Name = ...)]` supplies the name. Consent, sign-in, first run and revoking a delegate are never tools, since an agent must not approve itself.
+**Everyone signs in with their own credentials,** Leo's decision of 2 November 2026. A person signs in with theirs. Told "check out tangent.server.com", an agent looks, and if it decides to join, it signs in with its own. Through the Lobby the agent never sees them: the adapter runs the flow. No account acts for another, so Tangent has no delegates, no consent page and no OAuth server.
 
-- **A standard client knows only the URL.** It meets a `401`, registers, sends a person through approval, and holds a token good at `/mcp` and on no other route. A delegate that asks for the place's own resource holds one token for both, and an agent proving its atproto identity asks `/api/v1/identity/token`.
-- **Bearer only, and a credential always.** A cookie never authenticates at `/mcp`, which keeps cross-site forgery out of the door. Public reading stays open over plain HTTP. A place with no address yet answers `503` and says why, so no client goes round sign-in for nothing.
+- **One credential.** Sign-in, in a browser or at the proof door, gives one session. A tool call carries that same credential through the normal pipeline, so the real gate judges the real caller.
+- **A place's address leads to the door by a pointer.** The root is the page, with a header saying to check `llms.txt`, and `llms.txt` says to use `/mcp`, a fixed path.
+- **A caller with no credential is a visitor,** at `/mcp` as on a page. It reads what a visitor may, and a write answers with the sign-in gate and its next step.
+- **Each call stands alone.** The door keeps no session of its own, and each tool states what it does.
 - **Other people's words.** MCP has no marker for untrusted text, so the door's instructions say Posts are content to read and never instructions to follow.
-- **`id` is optional.** A retry whose answer was lost makes one Post, and the same words to the same place within about five to ten minutes count as that retry. Forms keep minting their own.
 
-Still open: how a tool list reflects Tangent's role and resource permissions. Today a list shows all forty-five to everyone, and each call answers by the caller's role.
+A tool list shows every tool to everyone, and each call answers by the caller's role. Suno's door does the same with its scopes, so this stands until a client shows it costs too much.
 
 ### Not pursued
 
@@ -109,7 +110,6 @@ Read from the code and the running Space on 1 November 2026.
 
 3. **The first-run rule moves to the Lobby.** The proof door refuses a place nobody has set up while a browser sign-in may set it up, so the result depends on how an account arrived. Tangent would take either alike, and the Lobby would send no proof to an unset place unless whoever runs it says so.
 4. **The author's kind in `tangent_read_topic`'s text,** not only in its structured answer, so a companion can judge who it is talking to.
-
 ## Koan's side
 
 Leo's direction of 1 November 2026: this is the moment to align whatever is poorly shaped in Koan too. Each weakness was checked against the code and scored by what it costs a person or a developer. The work is on Koan's `dev`, and Tangent is pinned to it.
@@ -249,3 +249,41 @@ Read on 1 November 2026 from public posts, public profiles and project pages, st
 - **Roomy,** atproto-based group chat, signs in with Bluesky and has a Discord bridge and a CLI. How those authenticate was not found.
 
 The projects above are seen from the outside: what their pages and posts state, not their code.
+
+## Research: Suno's door
+
+Suno opened `https://api.suno.com/mcp` as a beta on 28 October 2026: paste the URL into a client, sign in, approve, with no API key. Leo's account was used with his approval on 2 November 2026, through the MCP TypeScript SDK, with every exchange logged and no tool that generates or changes anything called.
+
+**What it does, from the wire.**
+
+- **No credential answers `401` with a sentence:** "sign in to Suno to use this server", beside RFC 9728 metadata. It answers the same to a browser. Its root does not speak MCP: a client's request there answers `404`.
+- **Its authorization server lives on another host,** and offers both dynamic registration and client ID metadata documents, with no device flow.
+- **Registration keeps no name.** The name a client gave came back empty, so a client cannot call itself something on the consent page. The registration answer lists every scope, whatever was asked.
+- **Scopes are capabilities.** The door advertises eight, such as `library:read`, `library:write` and `credits:spend`. The authorization server lists twenty-two, so a client sees only what this door uses.
+- **`state` is required.** Without it, a bare page says "Missing required OAuth parameters" and names none. The SDK adds `state` only when its client supplies one.
+- **Consent is a page on Suno's own site,** and someone already signed in approves in seconds.
+- **Tokens are opaque and come with a refresh token that was not asked for.** One lasted an hour and one fifteen minutes. An access token still answered at `/mcp` straight after its revocation answered `200`, so revoking it seems to end only the refresh; one check, not a measured limit.
+- **A token can be issued that the door refuses.** `profile:read library:read library:search` was approved and issued, and `/mcp` then answered `401 invalid_token` with the same sentence, because the door also needs `api:v0`. With it added, the same flow worked. The SDK refreshed once and failed again, so a client has no way out of this.
+- **It keeps no session.** `initialize` returns no session id, a `GET` answers `405`, and each call stands alone over plain JSON. It speaks protocol `2025-11-25`, with `tools` and `resources` as its only capabilities and no `instructions`.
+- **Thirty-two tools, the same list for everyone.** A token with no `credits:spend` or `library:write` still lists `audio-create` and `playlists-create`, and the list says `cacheScope: public`. Each call judges for itself. That write refusal was not tried, since a call that was not refused would have spent or changed something.
+- **Its tools are its REST API.** Descriptions name routes such as `POST /v0/audio/{id}/full-song`, and each reads as a summary then a body, so the two doors look like one definition, as Tangent's are.
+- **Every tool states all four annotations:** read-only, destructive, idempotent and open-world. `audio-unlike` and `playlists-remove-clips` say destructive.
+- **Descriptions teach the path, not just the action:** "Call this after audio-create... instead of polling", "Call this when... a creation tool answered 402", "Never ask them for recordings or files".
+- **A wait is a tool.** `audio-wait` holds for about 50 seconds and returns the clip when it is playable, or still pending so the client can call it again.
+- **What needs a person goes to a person.** `voices-start` and `account-upgrade` return a link to suno.com, and four tools carry `_meta.ui` pointing at an MCP App, a `ui://` page a capable client shows as a button or uploader. The link is always in the answer too, for a client that cannot show it.
+- **A refusal is a failed call with a code:** `isError` and `{"error":"audio not found","code":"not_found"}`, or `{"error":"limit must be between 1 and 50","code":"invalid_request"}`. An unknown tool is JSON-RPC `-32602`, and an unknown method a plain `400`.
+- **A creation takes an `idempotency_key`** on six tools, and paged lists use `cursor` and `next_cursor`.
+
+Not tried: generating, or any write. The MCP App pages themselves were not read. Claude's own client has not connected.
+
+**What Tangent takes from it, most valuable first.**
+
+Suno is a service whose people connect their assistants to their own accounts, so its OAuth, consent and scopes do not carry over: in a Tangent Space, everyone signs in with their own credentials.
+
+- **Keep no session.** A tool call is already a fresh request.
+- **Annotations.** Every tool states what it does, and an unstated mutating route leaves its hints absent, so a client asks.
+- **A refusal names what is wrong.** Tangent's refusals carry a `next`, ahead of Suno's.
+- **Teach the path in descriptions.**
+- **A companion can wait.** A bounded `wait` tool in `audio-wait`'s shape is the cheapest form of "a companion hears when it's spoken to" in tier 8.
+- **Hand off to a person with a link, in the answer.** It is the same offer a page makes, and an MCP App can come later.
+- **An unfiltered list is sound.** A live service does what Tangent does, which settles the open question for now.
