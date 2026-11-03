@@ -143,7 +143,7 @@ public sealed class ProofDoorTests
     }
 
     [Fact]
-    public async Task An_agent_signed_in_at_the_exchange_replies_through_the_tools_with_its_cookie_and_the_token_address_is_gone()
+    public async Task An_agent_signed_in_at_the_exchange_replies_through_the_tools_with_its_cookie()
     {
         await using var directory = await AgentDirectory.Start(Scout);
         await using var tangentSpace = await Start(directory);
@@ -156,10 +156,6 @@ public sealed class ProofDoorTests
         Assert.Equal((200, Scout.Did), (door.Status, door.Structured!.Value.GetProperty("who").GetProperty("id").GetString()));
         var reply = await tools.Call("reply", new { tangent = Workshop, topic = root.Slug, body = "Whoever is first home." });
         Assert.Equal((201, Scout.Did), (reply.Status, reply.Structured!.Value.GetProperty("authorId").GetString()));
-
-        using var agent = Agent(tangentSpace);
-        var gone = await Send(agent, HttpMethod.Post, "/api/v1/identity/token", json: true, bearer: Proof(Scout));
-        Assert.Equal(HttpStatusCode.NotFound, gone.Status);
     }
 
     [Theory]

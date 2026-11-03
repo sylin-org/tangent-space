@@ -115,14 +115,14 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
         var back = Uri.EscapeDataString(baseUrl.PathBase + "/t/" + tangentRow.Id + "/" + (root.Slug ?? root.Id) + (anchor is null ? "" : "/" + anchor.Id));
         var space = rows.Space;
         var takeOn = reader is not null && (place.Holds(Bit.Topic) || (await Origins.Destinations(personId, null, 1, ct)).Tangents.Count > 0);
-        // A signed-in reader's page is theirs alone to cache. The page shows the root and the window's replies through its last, the root alone when it holds
+        // A signed-in reader's page is never stored, so a browser's Back after sign-out redisplays nothing of it. The page shows the root and the window's replies through its last, the root alone when it holds
         // none. The seen form is offered only for a window that continues from what the reader has seen — its first
         // reply at most one past their checkpoint, or past the root it shows — so the page never offers to skip a reply
         // it did not show.
         var seenSeq = seen?.Seq ?? Checkpoint.Nothing;
         var shownThrough = window.Replies.Count == 0 ? 0 : window.High;
         var continues = window.Low <= Math.Max(seenSeq, 0) + 1;
-        if (reader is not null) Response.Headers.CacheControl = "private";
+        if (reader is not null) Response.Headers.CacheControl = "no-cache, no-store";
         return Ok(new TopicPage(
             root.Id,
             root.Slug ?? root.Id,

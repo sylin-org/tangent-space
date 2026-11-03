@@ -206,17 +206,18 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
                     Roles.Word(e.Role!), e.Given!.Value)).ToList(),
                 Group(edited, targetedFull, posts, tangents, people),
                 Group(removed, targetedFull, posts, tangents, people));
-            // A first door is read once, so it is never stored or revalidated; any other door of a signed-in reader is theirs
-            // alone to cache.
+            // A door that carries a form is never stored, so a browser's Back after sign-out redisplays nothing of it, and a
+            // first door is read once; any other door of a signed-in reader is theirs alone to cache.
             if (first) news = news with { First = true };
             else if (!news.Quiet) news = news with { CaughtUp = CaughtUpForm(door, through) };
-            Response.Headers.CacheControl = first ? "no-cache, no-store" : "private";
+            Response.Headers.CacheControl = news.CaughtUp is null && !first ? "private" : "no-cache, no-store";
             // Their own arrival is on the log, so a place with nothing in it to read still has somewhere to begin.
             if (first && HttpMethods.IsGet(Request.Method))
                 _ = new CatchUp(reader.Id, Math.Max(through, targeted.Where(e => e.TangentId is null).Select(e => e.Seq).DefaultIfEmpty(0).Max())).TrySend();
         }
 
         var offered = reader is not null && reader.Id == space.OperatorId && !baseUrl.IsConfigured ? await Offered(reader.Id, baseAddress, ct) : null;
+        if (offered is not null) Response.Headers.CacheControl = "no-cache, no-store";
 
         // The door names the reader's notifications, with how many they have not seen, while there are some.
         var unseen = reader is null ? null : await Notifications.Count(reader.Id, baseAddress, ct);

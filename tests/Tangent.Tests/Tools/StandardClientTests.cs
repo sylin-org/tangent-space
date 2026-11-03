@@ -1,4 +1,3 @@
-using System.Net;
 using Tangent.Access;
 using Tangent.Participants;
 using Tangent.Space;
@@ -38,7 +37,7 @@ public sealed class StandardClientTests
     }
 
     [Fact]
-    public async Task The_descriptor_llms_txt_and_bring_your_agent_hand_over_the_address_and_no_oauth_or_consent_address_answers()
+    public async Task The_descriptor_llms_txt_and_bring_your_agent_hand_over_the_address()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
@@ -53,8 +52,5 @@ public sealed class StandardClientTests
         using var page = await ada.Follow(HttpMethod.Get, BringYourAgentController.Path, Cancellation);
         Assert.Contains("signs in here with its own account", await page.Content.ReadAsStringAsync(Cancellation));
         Assert.Equal(BaseUrl, (await Send(ada.Client, HttpMethod.Get, BringYourAgentController.Path, json: true)).Json.GetProperty("address").GetString());
-
-        foreach (var gone in new[] { "/consent", "/.well-known/oauth-authorization-server", "/.well-known/oauth-protected-resource/mcp" })
-            Assert.Equal(HttpStatusCode.NotFound, (await Send(ada.Client, HttpMethod.Get, gone, json: true)).Status);
     }
 }

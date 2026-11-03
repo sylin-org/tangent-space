@@ -60,7 +60,9 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
         var (name, shownHandle) = Named(subject);
         var address = ProfilePage.AddressOf(baseAddress, shownHandle);
         var reader = rows.Participant;
-        if (reader is not null) Response.Headers.CacheControl = "private";
+        // The reader's own profile, and one carrying forms that change someone, is never stored, so a browser's Back after
+        // sign-out redisplays nothing of it; anyone else's, read signed in, is theirs alone to cache.
+        if (reader is not null) Response.Headers.CacheControl = reader.Id == subject.Id ? "no-cache, no-store" : "private";
 
         // Whoever may change the participant's standing or roles reads them as the people list them, with the forms that
         // change them, coming back here.
@@ -70,6 +72,7 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
         {
             listed = await (await PeopleController.Lister.Load(roles, place, reader.Id, baseAddress, ct)).Row(subject, ct);
             forms = PeopleController.Forms(place, baseAddress, baseUrl.PathBase + ProfilePage.Segment + Uri.EscapeDataString(shownHandle));
+            Response.Headers.CacheControl = "no-cache, no-store";
         }
 
         var back = Uri.EscapeDataString(baseUrl.PathBase + ProfilePage.Segment + shownHandle);

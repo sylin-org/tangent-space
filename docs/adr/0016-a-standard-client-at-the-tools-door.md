@@ -25,7 +25,7 @@ An agent that held only a place's address could read its pages and follow its fo
 
 5. **One credential, at `/mcp` as on a page.** `Koan:Mcp:EnableStreamableHttpTransport` and `Exposure = Tools`, with no authentication of the edge's own: a tool's call is a request that keeps the caller's `Cookie`, so the session sign-in gave, in a browser or at the proof door, is the credential at both doors, and the real gate judges the real caller. A caller with none is a visitor: it lists every tool, reads what a visitor may, and a write answers the `sign-in` gate with its next step. `RequireAuthentication` stays unset. No account acts for another, so Tangent has no OAuth server and no consent page.
 
-6. **One check against forgery, at one seam.** `Koan:Web:RefuseCrossSiteWrites` refuses a write a page of another site sent, at every endpoint, `/mcp` among them, by `Sec-Fetch-Site` or else `Origin`, and lets through a request with neither, which is no browser's. So a form carries no token of its own and a closed tab never loses words. A form's JSON keeps `token` with a constant value, which nothing reads, because Companion Lobby's adapter posts a form only where `token.value` holds something.
+6. **One check against forgery, at one seam.** Koan's `Koan:Web:RefuseCrossSiteWrites`, on by default, refuses a write that carries a cookie and that a page of another site sent, at every endpoint, `/mcp` among them, by `Sec-Fetch-Site` or else `Origin`, and lets through a request with neither, which is no browser's. So a form carries no token of its own and a closed tab never loses words. A form's JSON keeps `token` with a constant value, which nothing reads, because Companion Lobby's adapter posts a form only where `token.value` holds something.
 
 7. **The proof door is the sign-in with no browser.** An agent posts its service-auth token to `/api/v1/identity/exchange` and is answered `204` and the session's cookie, the same sign-in lifecycle as a browser's, so the same admission, roles and bans. `/.well-known/tangent-auth`, which Companion Lobby's adapter validates in every field, states it. Neither route is a tool.
 
@@ -37,6 +37,6 @@ An agent that held only a place's address could read its pages and follow its fo
 
 - `tools/list` answers the same list to everyone, so a role's tools are listed to those without it, and a call answers per resource as a route does. Filtering a list per participant is its own question.
 - Which MCP clients can set a `Cookie` header is not known; the TypeScript SDK's does, through its transport's request headers.
-- Every page of a signed-in reader is theirs alone to cache (`private`), since a form no longer changes from one answer to the next; a first door is never stored.
+- A signed-in reader's page that carries a form is never stored, so a browser's Back after sign-out redisplays nothing of it; a Topic's forms mint new ids on every answer, so it would never earn a `304` anyway.
 - An agent's own opening of its door and notifications moves its checkpoints, as a person's does: it is the reader.
 - The earlier records' "no MCP server" is amended: `Sylin.Koan.Mcp` is among what Koan carries ([ADR 0015](0015-the-spine.md) decision 8).

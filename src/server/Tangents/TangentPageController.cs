@@ -66,8 +66,8 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
         var baseAddress = BaseAddress();
         var address = Address(row.Id);
         var back = Uri.EscapeDataString(baseUrl.PathBase + "/t/" + row.Id);
-        // A signed-in reader's page is theirs alone to cache.
-        if (reader is not null) Response.Headers.CacheControl = "private";
+        // A signed-in reader's page is never stored, so a browser's Back after sign-out redisplays nothing of it.
+        if (reader is not null) Response.Headers.CacheControl = "no-cache, no-store";
         var place = reader is null ? null : await Capabilities.Load(personId, null, null, ct);
         var creates = place is not null && place.Holds(Bit.ManageSpace);
         return Ok(new TangentPage(

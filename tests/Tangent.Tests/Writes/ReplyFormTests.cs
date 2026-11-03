@@ -35,8 +35,8 @@ public sealed partial class ReplyFormTests
         Assert.Contains("<textarea class=\"post-form-body\" id=\"reply-body\" name=\"body\"", form);
         Assert.True(Tid.IsValid(MintedId(first)));
         Assert.NotEqual(MintedId(first), MintedId(second));
-        // A signed-in reader's page is theirs alone to cache.
-        Assert.Equal("private", caching);
+        // A signed-in reader's page is never stored.
+        Assert.Contains("no-store", caching);
 
         var minted = MintedId(first);
         var fields = new Dictionary<string, string> { ["id"] = minted, ["parent"] = "", ["body"] = "I do, at six." };

@@ -281,9 +281,10 @@ public sealed class DoorTests(ITestOutputHelper output)
 
         using (var json = await Json(browser.Client, "/"))
             Assert.True(json.RootElement.GetProperty("alive")[0].GetProperty("topic").GetProperty("new").GetBoolean());
-        // The door with the form is the reader's alone to cache, and answers unchanged while nothing changes.
+        // The door with the form is never stored, and answers unchanged while nothing changes.
         var (status, busy, through, _, caching) = await Read(browser.Client, null);
-        Assert.Equal((HttpStatusCode.OK, "private"), (status, caching));
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Contains("no-store", caching);
         Assert.Equal(HttpStatusCode.NotModified, (await Read(browser.Client, busy)).Status);
         Assert.Equal(await Event.Log.Highest(Cancellation), through);
         Assert.Equal(0, (await Checkpoint.Get(Checkpoint.Key(Reader, Scope.Place), Cancellation))!.Seq);
