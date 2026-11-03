@@ -15,7 +15,8 @@ namespace Tangent.Participants;
 /// and their row, whoever holds ManageStanding; whoever holds it when they read finds the application in their count, on
 /// <c>/notifications</c> linked to the applications, on their stream, and on their door, which says how many wait; a
 /// member finds none of it; a decision by one decider ends it for every other; a decider made after it arrived learns of
-/// it; opening the notifications sees it, and it waits until someone decides it.</summary>
+/// it; opening the notifications sees it, and it waits until someone decides it; admitted, the applicant's door begins
+/// at their admission.</summary>
 public sealed class ApplicationsReachTests
 {
     private const string Leo = "did:plc:leo4reach";
@@ -142,10 +143,10 @@ public sealed class ApplicationsReachTests
         using var mo = await SignedIn(tangentSpace, Mo);
         Assert.Equal(1, Count(await Send(mo.Client, HttpMethod.Get, "/", json: true)));
 
-        var opened = await Send(mo.Client, HttpMethod.Get, Notifications.Path);
+        var marked = await Opened(mo, "/");
+        var opened = await Send(mo.Client, HttpMethod.Get, marked.Location!);
         Assert.Equal(HttpStatusCode.OK, opened.Status);
-        Assert.Contains($"<a class=\"masthead-unseen\" href=\"{BaseUrl}/notifications\" hidden", opened.Body);
-        await Reached.Settled(tangentSpace, Cancellation);
+        Assert.Contains("<button class=\"masthead-unseen\" hidden", opened.Body);
         Assert.Equal(applicant.WaitingSeq, (await Checkpoint.Get(Checkpoint.Key(Mo, Scope.Notifications), Cancellation))!.Seq);
 
         // Seen, it counts no more, and the door still says it waits; it is listed, no longer new.
@@ -193,6 +194,30 @@ public sealed class ApplicationsReachTests
     }
 
     /// <summary>The writing place, whose admission says apply.</summary>
+    [Fact]
+    public async Task An_applicants_checkpoint_begins_at_their_admission_so_their_door_tells_it_and_nothing_posted_while_they_waited()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Applying(tangentSpace);
+        await Started(Ada, "Before Grace", "Posted before she applied.");
+        using var grace = await SignedIn(tangentSpace, Grace);
+        Assert.Equal((await Participant.Get(Grace, Cancellation))!.WaitingSeq, (await Checkpoint.Get(Checkpoint.Key(Grace, Scope.Place), Cancellation))?.Seq);
+        var waited = await Started(Ada, "While Grace waited", "Posted while she waited.");
+
+        Assert.IsType<Outcome<Participant>.Done>(await new Admit(Mo, Grace).Send(Cancellation));
+        var admission = Assert.Single(await Event.All(Cancellation), e => e is { Kind: EventKind.StandingChanged, ActorId: Mo, TargetId: Grace });
+        Assert.Equal(admission.Seq - 1, (await Checkpoint.Get(Checkpoint.Key(Grace, Scope.Place), Cancellation))?.Seq);
+
+        var door = (await Send(grace.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news");
+        Assert.Equal(Mo, door.GetProperty("admitted").GetProperty("who").GetProperty("id").GetString());
+        Assert.Equal(0, door.GetProperty("perTangent").GetArrayLength());
+        Assert.DoesNotContain(waited.Id, door.GetRawText());
+
+        await Replied(waited, Ada, "And one after.");
+        door = (await Send(grace.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news");
+        Assert.Equal(1, Assert.Single(door.GetProperty("perTangent").EnumerateArray()).GetProperty("replies").GetInt32());
+    }
+
     private static async Task Applying(TangentSpaceFixture tangentSpace)
     {
         await Place(tangentSpace);

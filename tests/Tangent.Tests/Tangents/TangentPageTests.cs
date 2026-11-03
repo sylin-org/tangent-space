@@ -177,7 +177,7 @@ public sealed class TangentPageTests
         Assert.Contains("<span class=\"new-label\">1 new</span>", html);
         // The reader's account opens in the page, with the way to sign out and come back here.
         Assert.Contains("<details class=\"account\">", html);
-        Assert.Contains($"<form method=\"post\" action=\"{BaseUrl}/auth/logout?return={Uri.EscapeDataString("/t/" + Workshop)}\"><button class=\"account-item account-sign-out\">", html);
+        Assert.Contains($"<form method=\"post\" action=\"{BaseUrl}/auth/logout?return={Uri.EscapeDataString("/t/" + Workshop)}\"><button class=\"account-item account-action\">", html);
         Assert.Contains("</svg>Sign out</button></form>", html);
 
         using (var json = await Json(tangentSpace.Client, "/t/" + Workshop))
@@ -197,7 +197,7 @@ public sealed class TangentPageTests
         var tangent = await Problem(tangentSpace.Client, "/t/" + segment);
         var topic = await Problem(tangentSpace.Client, "/t/" + segment + "/some-topic");
 
-        Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent.Text), (tangent.Status, tangent.Gate));
+        Assert.Equal((HttpStatusCode.NotFound, "absent"), (tangent.Status, tangent.Kind));
         Assert.Equal(tangent, topic);
         Assert.Equal(await Problem(tangentSpace.Client, "/t/nowhere"), tangent);
     }
@@ -216,7 +216,7 @@ public sealed class TangentPageTests
         // in the answer an address without a Tangent gets.
         var absent = await Problem(browser.Client, "/t/studio");
         var missing = await Problem(browser.Client, "/t/nowhere");
-        Assert.Equal((HttpStatusCode.NotFound, "application/problem+json", Capabilities.Absent.Text), (absent.Status, absent.MediaType, absent.Gate));
+        Assert.Equal((HttpStatusCode.NotFound, "application/problem+json", "absent"), (absent.Status, absent.MediaType, absent.Kind));
         Assert.Equal(missing, absent);
         // A visitor on the private Tangent of a public place: absent too, by the order access resolves in.
         Assert.Equal(missing, await Problem(tangentSpace.Client, "/t/studio"));
@@ -393,7 +393,7 @@ public sealed class TangentPageTests
         return await response.Content.ReadAsStringAsync(Cancellation);
     }
 
-    private sealed record Answer(HttpStatusCode Status, string? MediaType, string? Title, string? Detail, string? Gate);
+    private sealed record Answer(HttpStatusCode Status, string? MediaType, string? Title, string? Detail, string? Gate, string? Kind);
 
     private static async Task<Answer> Problem(HttpClient client, string path)
     {
@@ -402,7 +402,7 @@ public sealed class TangentPageTests
         using var response = await client.SendAsync(request, Cancellation);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Cancellation));
         string? Text(string name) => json.RootElement.TryGetProperty(name, out var value) ? value.GetString() : null;
-        return new Answer(response.StatusCode, response.Content.Headers.ContentType?.MediaType, Text("title"), Text("detail"), Text("gate"));
+        return new Answer(response.StatusCode, response.Content.Headers.ContentType?.MediaType, Text("title"), Text("detail"), Text("gate"), Text("kind"));
     }
 
     private static async Task<(HttpStatusCode Status, EntityTagHeaderValue? ETag)> Tag(HttpClient client, EntityTagHeaderValue? held)

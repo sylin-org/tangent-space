@@ -175,7 +175,7 @@ public sealed class FirstRunTests
         // The way out is the frame's account: its menu signs this person out and comes back to first run.
         var signOut = json.RootElement.GetProperty("reader").GetProperty("signOut").GetString();
         Assert.EndsWith("?return=" + Uri.EscapeDataString("/first-run"), signOut);
-        Assert.Contains($"<form method=\"post\" action=\"{WebUtility.HtmlEncode(signOut)}\"><button class=\"account-item account-sign-out\">", html);
+        Assert.Contains($"<form method=\"post\" action=\"{WebUtility.HtmlEncode(signOut)}\"><button class=\"account-item account-action\">", html);
         Assert.Contains($"<form method=\"post\" action=\"{WebUtility.HtmlEncode(signOut)}\"><button class=\"first-run-switch\">Use another account</button></form>", html);
         Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
         Assert.DoesNotContain(Ada, await Administrators(tangentSpace.Services));
@@ -495,9 +495,8 @@ public sealed class FirstRunTests
 
         // Reached at its public address, the place offers it on the operator's door; used, the pointers show under it.
         await Reached.On(tangentSpace, Public, Cancellation);
-        await Reached.Settled(tangentSpace, Cancellation);
-        var offer = Assert.Single(await Offers.Offer.All(Cancellation));
-        var form = new Dictionary<string, string> { [Offers.OfferController.Field] = offer.Id };
+        Assert.Equal(Public, await Reached.Open(tangentSpace, Cancellation));
+        var form = new Dictionary<string, string> { [Offers.OfferController.Field] = Public };
         using (var used = await leo.Client.PostAsync(Offers.OfferController.UsePath, new FormUrlEncodedContent(form), Cancellation))
             Assert.Equal(HttpStatusCode.SeeOther, used.StatusCode);
 

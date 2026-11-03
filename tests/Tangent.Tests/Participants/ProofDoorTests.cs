@@ -111,10 +111,10 @@ public sealed class ProofDoorTests
         using var held = await SignedInByProof(tangentSpace, Scout);
         Assert.IsType<Outcome<Participant>.Done>(await new Ban(Mo, Scout.Did).Send(Cancellation));
 
-        Assert.Equal(Capabilities.Absent.Text, (await Send(held.Client, HttpMethod.Get, "/", json: true)).Gate);
+        Assert.Equal("absent", (await Send(held.Client, HttpMethod.Get, "/", json: true)).Kind);
 
         using var again = await SignedInByProof(tangentSpace, Scout);
-        Assert.Equal(Capabilities.Absent.Text, (await Send(again.Client, HttpMethod.Get, "/", json: true)).Gate);
+        Assert.Equal("absent", (await Send(again.Client, HttpMethod.Get, "/", json: true)).Kind);
         Assert.Equal(Standing.Banned, (await Participant.Get(Scout.Did, Cancellation))?.Standing);
     }
 

@@ -2,6 +2,7 @@ using Koan.Core.Hosting.App;
 using Koan.Data.Core.Commands;
 using Koan.Identity.Access;
 using Koan.Identity.Roles;
+using Koan.Web.Controllers;
 using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
@@ -19,29 +20,42 @@ namespace Tangent.Access;
 /// few small rows; nothing stores it.</summary>
 public sealed class Capabilities
 {
-    public static readonly Reason SignIn = Reason.Gated("sign-in", "Sign in to write here.", next: SignInController.Path, heading: "Sign in first");
-    public static readonly Reason Apply = Reason.Gated("apply", "Your application is waiting: you can write here once someone admits you.", heading: "Waiting to be admitted");
+    public static readonly Reason SignIn = Reason.Gated("sign-in", "Sign in to write here.");
+    public static readonly Reason Apply = Reason.Gated("apply", "Your application is waiting: you can write here once someone admits you.");
 
     /// <summary>The participant's application was declined: they read what a visitor reads, and nothing more.</summary>
-    public static readonly Reason Declined = Reason.Gated("declined", "Your application was declined, so you read here and don’t write.", heading: "Not admitted");
-    public static readonly Reason TimedOut = Reason.Gated("timed-out", "You’re timed out: you can read and report here, and post again once it ends.", heading: "Timed out");
+    public static readonly Reason Declined = Reason.Gated("declined", "Your application was declined, so you read here and don’t write.");
+    public static readonly Reason TimedOut = Reason.Gated("timed-out", "You’re timed out: you can read and report here, and post again once it ends.");
 
     /// <summary>The resource does not exist for this reader: banned, or without <see cref="Bit.View"/> where they
-    /// stand. Every verb carries this one reason, and a command answers what it answers for a missing resource. Its text
-    /// is the word <c>gate</c> carries on the wire; what it says is <see cref="Reason.Said"/>.</summary>
+    /// stand. Every verb carries this one reason, and a command answers what it answers for a missing resource, which
+    /// says <see cref="Answers.Nothing"/>.</summary>
     public static readonly Reason Absent = Reason.Absent("absent");
-    public static readonly Reason Locked = Reason.Gated("locked", "This topic is locked, so no one replies in it.", heading: "Locked");
-    public static readonly Reason Removed = Reason.Gated("removed", "This post is removed, so nothing changes it now.", heading: "Removed");
+    public static readonly Reason Locked = Reason.Gated("locked", "This topic is locked, so no one replies in it.");
+    public static readonly Reason Removed = Reason.Gated("removed", "This post is removed, so nothing changes it now.");
 
     /// <summary>The reason <see cref="Bit.EditOwn"/> and <see cref="Bit.RemoveOwn"/> are missing on a Post that is
     /// not the participant's own, or where no Post is in question.</summary>
-    public static readonly Reason NotYours = Reason.Gated("not yours", "Only its author, or a moderator, can change this post.", heading: "Not yours");
+    public static readonly Reason NotYours = Reason.Gated("not yours", "Only its author, or a moderator, can change this post.");
 
     /// <summary>What a gate says that a role or an overwrite decided.</summary>
     private const string NotOpen = "This isn’t open to you here.";
 
-    private static readonly IReadOnlyDictionary<string, string> Sentences =
-        new[] { SignIn, Apply, Declined, TimedOut, Locked, Removed, NotYours }.ToDictionary(gate => gate.Word!, gate => gate.Text, StringComparer.Ordinal);
+    /// <summary>What a person reads above a gate that a role or an overwrite decided, or that this table does not name.</summary>
+    private const string NotOpenHeading = "Not open to you";
+
+    /// <summary>What a person reads of each gate standing, audience or state decides, by its word: its sentence, and the
+    /// heading above it where it is the whole page.</summary>
+    private static readonly IReadOnlyDictionary<string, (string Sentence, string Heading)> Words = new (Reason Gate, string Heading)[]
+    {
+        (SignIn, "Sign in first"),
+        (Apply, "Waiting to be admitted"),
+        (Declined, "Not admitted"),
+        (TimedOut, "Timed out"),
+        (Locked, "Locked"),
+        (Removed, "Removed"),
+        (NotYours, "Not yours")
+    }.ToDictionary(worded => worded.Gate.Word!, worded => (worded.Gate.Text, worded.Heading), StringComparer.Ordinal);
 
     /// <summary>The resource resolution names where no Tangent is in question: the place, which has no overwrites. The
     /// bag alone decides there.</summary>
@@ -95,7 +109,10 @@ public sealed class Capabilities
     public static Reason NoRoleGrants(Bit verb) => Reason.Gated($"no role grants {verb}", NotOpen);
 
     /// <summary>The one sentence a person reads for a gate's word, where a page carries the word.</summary>
-    public static string Sentence(string gate) => Sentences.GetValueOrDefault(gate, NotOpen);
+    public static string Sentence(string gate) => Words.TryGetValue(gate, out var words) ? words.Sentence : NotOpen;
+
+    /// <summary>The heading a person reads above a refusal of a gate's word, where the refusal is the whole page.</summary>
+    public static string Heading(string gate) => Words.TryGetValue(gate, out var words) ? words.Heading : NotOpenHeading;
 
     /// <summary>One pure function over its inputs. <paramref name="participant"/> is null for a visitor.
     /// <paramref name="tokens"/> are Koan's bag for the participant (<see cref="RoleBag.Tokens"/>), the anonymous bag for

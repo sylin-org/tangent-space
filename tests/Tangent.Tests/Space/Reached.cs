@@ -7,7 +7,7 @@ namespace Tangent.Space;
 
 /// <summary>What a proof of the place's address starts from: a Tangent Space with no URL configured, which believes a
 /// proxy on loopback as it does by default, so a request says which origin it arrived on through the proxy's forwarded
-/// scheme and host; a request on an origin; and the store settled, so whatever a request tried has run.</summary>
+/// scheme and host; a request on an origin; and the place set up with an address.</summary>
 public static class Reached
 {
     /// <summary>No base URL configured, Koan's test connector on, and no profile job reaching the network; with
@@ -47,8 +47,12 @@ public static class Reached
         return body;
     }
 
-    /// <summary>Waits for everything sent so far to run, tries among it.</summary>
-    public static async Task Settled(TangentSpaceFixture tangentSpace, CancellationToken ct) => Assert.True(await tangentSpace.Settled(ct));
+    /// <summary>The origin open to the place's operator to use as its address, as the door reads it; null when none is,
+    /// or the place is not set up.</summary>
+    public static async Task<string?> Open(TangentSpaceFixture tangentSpace, CancellationToken ct)
+        => await TangentSpace.Get(TangentSpace.SingleRow, ct) is { } space
+            ? (await tangentSpace.Services.GetRequiredService<Offers.AddressOffers>().Open(space, ct))?.Origin
+            : null;
 
     /// <summary>The place's row, set up by <paramref name="operatorId"/>, with <paramref name="address"/> as its address.</summary>
     public static async Task<TangentSpace> APlace(TangentSpaceFixture tangentSpace, string operatorId, string? address, CancellationToken ct)

@@ -24,7 +24,7 @@ public sealed class Slip : Entity<Slip>
         return new Slip { Id = id, Sender = sender, Ordinal = ordinal, Body = body, Sequence = sequence };
     }
 
-    public const string NeedsBody = "A slip needs a body.";
+    public static readonly Reason NeedsBody = Reason.Invalid("A slip needs a body.");
 }
 
 /// <summary>A second entity type the atomic proof saves beside a <see cref="Slip"/>. It exists only here.</summary>

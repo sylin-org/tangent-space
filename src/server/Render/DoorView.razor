@@ -6,13 +6,13 @@
 @using Tangent.Space
 @using Tangent.Tangents
 @* The door: the place's name, the line that describes it, whose place this is, in the head with what it holds; the proprietor's door intro under it, where they wrote one; the first page of the Tangents the reader may view, the moderators' Tangent after them for whoever may view it, and all of them a link away, where a new one is
-   created for whoever may, and who is around in the rail, each name linked to their profile; and in the column, first, for the operator, each open Offer as one line with its evidence and its two
+   created for whoever may, and who is around in the rail, each name linked to their profile; and in the column, first, for the operator, the open Offer as one line with its evidence and its two
    answers; for whoever decides applications, how many wait, in an Offer's line, with the way to them; for an applicant, in one sentence, that their application is waiting, or was declined; for a participant timed
-   out, until when; for a reader at their first door, a welcome, with only what concerns them under it and no form; for a signed-in reader with news, what is new since they were here — one sentence, then who admitted
+   out, until when; for a reader at their first door, a welcome, with what concerns them under it; for a signed-in reader with news, what is new since they were here — one sentence, then who admitted
    them, who lifted their timeout or ban, and who gave them a role or took one, where someone did, their Posts someone else edited or removed, with who did, replies to them, mentions of them, the Topics taken on a tangent from their Posts, the new articles and what is new in each Tangent, with the form that marks
-   it seen and, while they have notifications they have not seen, how many, linked to them — and then the front page:
+   it seen and, while they have notifications they have not seen, how many, a button that opens them — and then the front page:
    the featured Topics and the ones alive now. A reader with nothing new reads that in one sentence above the front
-   page, with how many notifications they have not seen, linked to them, while there are some. A count the door could not finish reads "at least". The whole door is the
+   page, with how many notifications they have not seen, a button that opens them, while there are some. A count the door could not finish reads "at least". The whole door is the
    fragment island's host, so it refreshes itself from its own address, unless it stands alone, with nothing to refresh from. *@
 <main data-island="@(Standalone ? null : "fragment")" data-props="@(Standalone ? null : JsonSerializer.Serialize(new { url = Model.Address }))">
     <section class="tangent-head" aria-labelledby="door-title">
@@ -101,25 +101,10 @@
                     </div>
                 </section>
             }
-            @if (Model.Offers is { Count: > 0 } offers)
+            @if (Model.Offer is { } offer)
             {
                 <section class="door-offers" aria-label="Offers">
-                    @foreach (var offer in offers)
-                    {
-                        <div class="door-offer" @key="offer.Offer">
-                            <p class="door-offer-line">This place is being reached at <strong>@offer.Subject</strong>@Evidence(offer). Use it as its address?</p>
-                            <div class="door-offer-answers">
-                                <form method="post" action="@offer.Use.Action">
-                                    <input type="hidden" name="@OfferController.Field" value="@offer.Use.Value(OfferController.Field)">
-                                    <button type="submit" class="tangent-new">Use it</button>
-                                </form>
-                                <form method="post" action="@offer.Decline.Action">
-                                    <input type="hidden" name="@OfferController.Field" value="@offer.Decline.Value(OfferController.Field)">
-                                    <button type="submit" class="watch-button">Not this one</button>
-                                </form>
-                            </div>
-                        </div>
-                    }
+                    <OfferLine Model="@offer" Today="@Model.Day" />
                 </section>
             }
             @if (Model.Applications is { } applications)
@@ -141,7 +126,7 @@
                         <p class="topic-empty-title">@(news.First ? $"Welcome to {Model.Name}." : "Nothing new since you were here.")</p>
                         @if (news.Notifications is { } notifications)
                         {
-                            <p class="tangent-description"><a href="@notifications.Address">@Shell.Unseen(notifications.Count, notifications.AtLeast)</a></p>
+                            <form class="tangent-description" method="post" action="@notifications.Open.Action"><input type="hidden" name="@Events.Notifications.ThroughField" value="@notifications.Open.Value(Events.Notifications.ThroughField)"><button class="watch-button">@Shell.Unseen(notifications.Count, notifications.AtLeast)</button></form>
                         }
                     </div>
                 }
@@ -152,7 +137,7 @@
                             <h2 id="door-news-title" class="topic-list-title">@(news.First ? $"Welcome to {Model.Name}" : "Since you were here")</h2>
                             @if (news.Notifications is { } notifications)
                             {
-                                <a class="watch-button door-notifications" href="@notifications.Address">@Shell.Unseen(notifications.Count, notifications.AtLeast)</a>
+                                <form class="door-notifications" method="post" action="@notifications.Open.Action"><input type="hidden" name="@Events.Notifications.ThroughField" value="@notifications.Open.Value(Events.Notifications.ThroughField)"><button class="watch-button">@Shell.Unseen(notifications.Count, notifications.AtLeast)</button></form>
                             }
                             @if (news.CaughtUp is { } caughtUp)
                             {
@@ -162,10 +147,7 @@
                                 </form>
                             }
                         </div>
-                        @if (!news.First)
-                        {
-                            <p class="tangent-description">@Sentence(news)</p>
-                        }
+                        <p class="tangent-description">@Sentence(news)</p>
                         @if (news.Admitted is { } admitted)
                         {
                             <p class="tangent-description door-admitted">@admitted.Who.Name admitted you: you can start topics and reply here.</p>
@@ -235,13 +217,6 @@
         }</text>;
 
     private string Initial => Model.Name.Length > 0 ? char.ToUpperInvariant(Model.Name[0]).ToString() : "T";
-
-    /// <summary>What Koan has seen of an Offer's origin, after a dash: how many requests since when; nothing after a
-    /// restart, until the origin is seen again.</summary>
-    private string Evidence(Door.Offered offer)
-        => offer is { Count: { } count, Since: { } since }
-            ? " — " + count.ToString(CultureInfo.InvariantCulture) + (count == 1 ? " request" : " requests") + " since " + TopicRow.When(since, Model.Day)
-            : "";
 
     /// <summary>How many applications wait, in a sentence; "at least" where the door could not finish counting.</summary>
     private static string Waiting(Door.Waiting waiting)

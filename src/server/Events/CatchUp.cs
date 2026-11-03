@@ -13,7 +13,7 @@ namespace Tangent.Events;
 public sealed record CatchUp(string ParticipantId, long Through) : ICommand<Checkpoint>
 {
     public static readonly Reason NoPlace = Reason.Absent("No Tangent Space is here.");
-    public const string NoEvent = "No event has this sequence.";
+    public static readonly Reason NoEvent = Reason.Invalid("No event has this sequence.");
 
     public async Task<Outcome<Checkpoint>> Run(CancellationToken ct)
     {

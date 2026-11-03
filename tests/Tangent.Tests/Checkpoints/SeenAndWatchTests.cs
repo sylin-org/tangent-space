@@ -183,7 +183,7 @@ public sealed class SeenAndWatchTests
             var absent = await Form(bea, TopicPath(root), path, new Dictionary<string, string> { ["watch"] = "true" });
             Assert.Equal(HttpStatusCode.NotFound, absent.Status);
             var absentJson = await Json(bea, TopicPath(root), path, new { watch = true });
-            Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent.Text), (absentJson.Status, absentJson.Gate));
+            Assert.Equal((HttpStatusCode.NotFound, "absent"), (absentJson.Status, absentJson.Kind));
         }
 
         var hiddenSeen = await Form(bea, TopicPath(root), TopicPath(hidden) + "/" + CheckpointController.SeenSegment, new Dictionary<string, string> { ["through"] = "0" });

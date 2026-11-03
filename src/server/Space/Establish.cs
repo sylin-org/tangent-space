@@ -11,7 +11,7 @@ namespace Tangent.Space;
 /// <summary>First run: writes the one <see cref="TangentSpace"/> row with its name, and whoever sends it as both its
 /// proprietor and its operator, in the administrator role, and appends <see cref="EventKind.SpaceChanged"/>. One whose
 /// first sign-in left no participant arrives here, with <see cref="EventKind.StandingChanged"/>, taking their handle from
-/// any other participant who still keeps it. The moderators' Tangent is created with the row and recorded on it
+/// any other participant who still keeps it, and begins reading the door at that arrival. The moderators' Tangent is created with the row and recorded on it
 /// (<see cref="ModeratorsTangent"/>), and so is the first Tangent, public, where the place is talked in from its first
 /// minute (<see cref="FirstTangent"/>). A place that already has its row refuses with <see cref="AlreadyEstablished"/> and
 /// nothing is written. Who may send it is the sender's question.</summary>
@@ -21,7 +21,7 @@ public sealed record Establish(
     string Name,
     DateTimeOffset? At = null) : ICommand<TangentSpace>
 {
-    public const string AlreadyEstablished = "This Tangent Space is already set up.";
+    public static readonly Reason AlreadyEstablished = Reason.Invalid("This Tangent Space is already set up.");
 
     public async Task<Outcome<TangentSpace>> Run(CancellationToken ct)
     {
@@ -37,8 +37,9 @@ public sealed record Establish(
             var arrived = await Participant.Arrive(OperatorId, OperatorHandle, space.Admission).Save(ct);
             await Handles.Release(OperatorHandle, OperatorId, ct);
             await MemberRole.Join(arrived, ct);
-            await Event.Append(EventKind.StandingChanged, at, ct, actorId: OperatorId, targetId: OperatorId,
+            var arrival = await Event.Append(EventKind.StandingChanged, at, ct, actorId: OperatorId, targetId: OperatorId,
                 standing: arrived.Standing);
+            await Checkpoint.At(OperatorId, Scope.Place, arrival.Seq).Save(ct);
         }
 
         if (first is not null) await FirstTangent.Create(first, OperatorId, at, ct);

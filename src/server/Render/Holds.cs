@@ -39,18 +39,20 @@ public static class Holds
     public const string BroughtImage = "A PNG, JPEG or WebP image, at most 20 MiB: a file of a multipart form, or its bytes in base64 in one JSON object. The answer's id is a cover's value, and its reference is what a body's Markdown names it by: ![what it shows](reference).";
 
     public const string TopicThrough = "The sequence of this Topic the reader has seen through: the last the page shows, or any other of the Topic. The checkpoint never moves back.";
+    public const string NotificationsThrough = "The sequence a reading of your notifications reached, as its who.notifications.open form gives it; your notifications checkpoint moves there and never past it, nor back.";
     public const string DoorThrough = "The sequence of the log the door read through; the reader's place checkpoint moves there and never back.";
     public const string Watch = "true to watch it, false to stop.";
 
     public const string Words = "The words to look for, at most 200 characters; left out, nothing is searched.";
     public const string Number = "The number of the page, from one; left out, the first.";
     public const string After = "The cursor a page of this list names as its next; left out, the first.";
+    public const string NotificationsFrom = "The notifications checkpoint the reading began from, which marks new what lies past it; left out, where it stands.";
     public const string WindowBefore = "The sequence a window of this Topic names as its older.";
     public const string WindowAfter = "The sequence a window of this Topic names as its newer.";
     public const string PostsBefore = "The cursor a page of this profile names as its older; left out, the newest.";
     public const string HandleStart = "The start of a handle, to narrow the people to those it begins; left out, everyone.";
 
-    public const string Offer = "The Offer's Id.";
+    public const string Origin = "The origin an open Offer offers as the place's address, as the Offer names it.";
 
     public const string TangentName = "The Tangent's name, 1 to 80 characters; its address derives from it and never changes.";
     public const string TangentDescription = "What it is for, at most 1000 characters; left out, none.";

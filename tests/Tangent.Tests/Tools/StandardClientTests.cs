@@ -27,7 +27,6 @@ public sealed class StandardClientTests
 
         var reply = await visitor.Call("reply", new { tangent = Workshop, topic = root.Slug, body = "Anyone?" });
         Assert.Equal((401, true, Capabilities.SignIn.Word), (reply.Status, reply.Failed, reply.Structured!.Value.GetProperty("gate").GetString()));
-        Assert.Equal(BaseUrl + SignInController.Path, reply.Structured!.Value.GetProperty("next").GetString());
         Assert.Equal(0, (await Posts.Post.Get(root.Id, Cancellation))!.ReplyCount);
 
         using var ada = await SignedIn(tangentSpace, Ada);

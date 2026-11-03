@@ -101,8 +101,6 @@ public sealed class ProfileTests
         var held = await Send(visitor, HttpMethod.Get, "/p/" + AdaHandle, json: true);
         var unheld = await Send(visitor, HttpMethod.Get, "/p/nobody.example", json: true);
         Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (held.Status, held.Gate));
-        Assert.Equal(BaseUrl + "/sign-in?return=%2Fp%2F" + AdaHandle, held.Json.GetProperty("next").GetString());
-        Assert.Equal(BaseUrl + "/sign-in?return=%2Fp%2Fnobody.example", unheld.Json.GetProperty("next").GetString());
         Assert.Equal((held.Status, held.Title, held.Gate), (unheld.Status, unheld.Title, unheld.Gate));
         Assert.DoesNotContain("Wicks", (await Send(visitor, HttpMethod.Get, "/p/" + AdaHandle)).Body);
     }
@@ -116,7 +114,7 @@ public sealed class ProfileTests
         using var visitor = Agent(tangentSpace);
 
         var unknown = await Send(visitor, HttpMethod.Get, "/p/nobody.example", json: true);
-        Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent.Text), (unknown.Status, unknown.Gate));
+        Assert.Equal((HttpStatusCode.NotFound, "absent"), (unknown.Status, unknown.Kind));
         Assert.Equal(HttpStatusCode.NotFound, (await Send(ada.Client, HttpMethod.Get, "/p/did%3Aplc%3Anobody")).Status);
 
         // Ada signs in again under a new handle: the row keeps the new one, and the old one is no one's here.

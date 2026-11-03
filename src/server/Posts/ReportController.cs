@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Koan.Data.Core.Commands;
 using Koan.Web.Attributes;
+using Koan.Web.Controllers;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -44,7 +45,7 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl) : ControllerBase
         var theirs = personId is not null && Tid.IsValid(received) && found.Rows.Space.ModeratorsTangentId is { } moderators
                      && await Post.Get(received!, ct) is { } report && await ReportPost.IsReport(report, moderators, personId, found.Post!.Id, ct);
         var page = await Page(found, personId, theirs, ct);
-        return page.Failure == ReportPost.InModerators ? new ObjectResult(page) { StatusCode = StatusCodes.Status400BadRequest } : Ok(page);
+        return page.Failure == ReportPost.InModerators.Text ? new ObjectResult(page) { StatusCode = StatusCodes.Status400BadRequest } : Ok(page);
     }
 
     [HttpPost(Route)]
@@ -71,7 +72,7 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl) : ControllerBase
             case Outcome<Post>.Refused { Reason: { Kind: not ReasonKind.Absent } reason }:
                 return await Refused(found, personId, input, reason, ct);
             default:
-                return PostWrites.Answer(HttpContext, outcome);
+                return Answers.NotDone(HttpContext, outcome);
         }
     }
 
@@ -81,9 +82,9 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl) : ControllerBase
     {
         var unsent = reason == ReportPost.NoModerators;
         if (PostWrites.WantsJson(Request))
-            return unsent ? new Problem(StatusCodes.Status503ServiceUnavailable, "Not sent", reason.Text).ToResult() : PostWrites.Refused(HttpContext, reason);
+            return unsent ? new Problem(StatusCodes.Status503ServiceUnavailable, reason.Text) { Title = "Not sent" }.ToResult() : Answers.Refused(HttpContext, reason);
 
-        return await Again(found, personId, input, unsent ? StatusCodes.Status503ServiceUnavailable : PostWrites.Status(reason), keepId: reason.Kind != ReasonKind.Conflict,
+        return await Again(found, personId, input, unsent ? StatusCodes.Status503ServiceUnavailable : Answers.Status(HttpContext, reason), keepId: reason.Kind != ReasonKind.Conflict,
             page => reason == ReportPost.NeedsReason || PostWrites.Concerning(reason) == PostWrites.About.Body ? page with { BodyFailure = reason.Text }
                 : reason.Kind == ReasonKind.Gated ? page with { Gate = reason.Word, Report = null }
                 : page with { Failure = reason.Text }, ct);
@@ -133,7 +134,7 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl) : ControllerBase
             found.Rows.Space.Name,
             baseAddress + "/",
             await PostWrites.Reader(personId, found.Rows.For(null), baseAddress, back, ct),
-            Failure: inModerators ? ReportPost.InModerators : null);
+            Failure: inModerators ? ReportPost.InModerators.Text : null);
     }
 
     /// <summary>The reported Post's address.</summary>

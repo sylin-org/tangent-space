@@ -34,6 +34,7 @@ public sealed class TheToolsTests
         ["read_post"] = Action<TopicPageController>(nameof(TopicPageController.AtPost)),
         ["search"] = Action<SearchController>(nameof(SearchController.Get)),
         ["read_notifications"] = Action<NotificationsController>(nameof(NotificationsController.Get)),
+        ["seen_notifications"] = Action<NotificationsController>(nameof(NotificationsController.Open)),
         ["read_profile"] = Action<ProfileController>(nameof(ProfileController.Get)),
         ["reply"] = Action<ReplyController>(nameof(ReplyController.Write)),
         ["start_topic"] = Action<NewTopicController>(nameof(NewTopicController.Start)),
@@ -105,6 +106,7 @@ public sealed class TheToolsTests
     private static readonly IReadOnlyDictionary<string, (bool Destructive, bool Idempotent)> Writes = new Dictionary<string, (bool, bool)>
     {
         ["caught_up"] = (false, true),
+        ["seen_notifications"] = (false, true),
         ["caught_up_in_topic"] = (false, true),
         ["watch_topic"] = (false, true),
         ["watch_tangent"] = (false, true),
@@ -296,11 +298,13 @@ public sealed class TheToolsTests
         foreach (var hit in (await Worked(mine, "search", new { q = "lanterns" })).GetProperty("hits").EnumerateArray().Concat((await Worked(mine, "search", new { q = "home" })).GetProperty("hits").EnumerateArray()))
             await Worked(mine, "read_post", new { tangent = hit.GetProperty("tangentSlug").GetString(), topic = hit.GetProperty("topicSlug").GetString(), post = hit.GetProperty("id").GetString() });
 
-        // read_notifications and arrive, then what an address names.
+        // read_notifications and arrive, then what an address names, and seen_notifications once it is seen.
         var replied = (await Post.Get(replyId, Cancellation))!;
         Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), replied.TopicId, "So you say.", Bea, replyId).Send(Cancellation));
-        var entry = (await Worked(mine, "read_notifications", new { })).GetProperty("entries").EnumerateArray().First();
+        var notifications = await Worked(mine, "read_notifications", new { });
+        var entry = notifications.GetProperty("entries").EnumerateArray().First();
         await FollowAddress(mine, entry.GetProperty("address").GetString()!);
+        await Worked(mine, "seen_notifications", new { through = notifications.GetProperty("who").GetProperty("notifications").GetProperty("through").GetInt64() });
         var door = await Worked(mine, "arrive", new { });
         var news = door.GetProperty("news");
         await FollowAddress(mine, news.GetProperty("replies").GetProperty("posts")[0].GetProperty("address").GetString()!);

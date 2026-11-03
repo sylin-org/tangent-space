@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Koan.Web.Attributes;
+using Koan.Web.Controllers;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
@@ -36,8 +37,8 @@ public sealed class TangentsController(KoanWebBaseUrl baseUrl, IDataProtectionPr
 
         ViewableTangents.Cursor? cursor = null;
         if (after is not null && (cursor = ViewableTangents.Cursor.Open(after, protection)) is null)
-            return new Problem(StatusCodes.Status400BadRequest, "Not a page of these Tangents",
-                $"The {After} parameter is the cursor a page of the Tangents names as its next.").ToResult();
+            return new Problem(StatusCodes.Status400BadRequest,
+                $"The {After} parameter is the cursor a page of the Tangents names as its next.") { Title = "Not a page of these Tangents" }.ToResult();
 
         var page = await ViewableTangents.Read(personId, ViewableTangents.Views, cursor, PageSize, ct);
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();

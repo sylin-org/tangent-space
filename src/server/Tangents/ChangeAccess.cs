@@ -17,7 +17,7 @@ namespace Tangent.Tangents;
 public sealed record ChangeAccess(string Slug, string ActorId, string RoleKey, RoleAccess Access) : ICommand<Tangent>
 {
     /// <summary>The answer to a change of the access of a role that administers, or of everyone.</summary>
-    public const string Administers = "An administrator reads and posts in every Tangent, and everyone reads what its audience says; set the access of another role.";
+    public static readonly Reason Administers = Reason.Invalid("An administrator reads and posts in every Tangent, and everyone reads what its audience says; set the access of another role.");
 
     public async Task<Outcome<Tangent>> Run(CancellationToken ct)
     {

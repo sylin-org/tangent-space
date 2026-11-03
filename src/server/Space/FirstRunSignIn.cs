@@ -4,7 +4,6 @@ using Koan.Web.Auth.Contributors;
 using Koan.Web.Auth.Flow;
 using Koan.Web.Hosting;
 using Microsoft.Extensions.Options;
-using Tangent.Offers;
 
 namespace Tangent.Space;
 
@@ -12,12 +11,11 @@ namespace Tangent.Space;
 /// <c>Tangent:Operator</c> names by handle or DID or, with none named, as anyone, sends <see cref="Establish"/> under the
 /// name the verified handle gives (<see cref="TangentSpace.NameFor"/>), and once it commits, unless a URL is configured,
 /// takes the origin the sign-in completed on as the place's address (<see cref="KoanWebBaseUrl.Accept"/>, kept by <see cref="PlaceAddress"/>): loopback on a local install, the
-/// public origin on a production one. Where that address is local, the public origin seen most often before setup is
-/// offered to the setter at once (<see cref="AddressOffers.OfferNext"/>). Anyone else's sign-in sets nothing up. Of two
+/// public origin on a production one; where that address is local, the door offers the setter the public origin seen
+/// most often (<see cref="Offers.AddressOffers"/>). Anyone else's sign-in sets nothing up. Of two
 /// sign-ins at once the first establishes it and the second is refused, and lands where first run sends it. No
 /// step fails the sign-in: each is logged and the next sign-in tries again.</summary>
-public sealed class FirstRunSignIn(KoanWebBaseUrl baseUrl, AddressOffers offers,
-    IOptions<TangentSpaceOptions> options, ILogger<FirstRunSignIn> logger) : IKoanAuthFlowHandler
+public sealed class FirstRunSignIn(KoanWebBaseUrl baseUrl, IOptions<TangentSpaceOptions> options, ILogger<FirstRunSignIn> logger) : IKoanAuthFlowHandler
 {
     /// <summary>After the participant's own sign-in step, which runs at 1100 and records their arrival.</summary>
     public int Priority => 1200;
@@ -36,7 +34,6 @@ public sealed class FirstRunSignIn(KoanWebBaseUrl baseUrl, AddressOffers offers,
                 case Outcome<TangentSpace>.Done { Result: var space }:
                     logger.LogInformation("{Person} set up this Tangent Space as {Name} at sign-in", ctx.UserId, space.Name);
                     await TakeAddress(ctx.HttpContext, ct);
-                    await offers.OfferNext(ct);
                     break;
                 case Outcome<TangentSpace>.Refused { Reason: var refused } when refused == Establish.AlreadyEstablished:
                     break;

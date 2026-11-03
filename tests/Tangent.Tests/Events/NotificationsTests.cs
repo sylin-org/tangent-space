@@ -14,11 +14,10 @@ using static Tangent.Posts.Writing;
 namespace Tangent.Events;
 
 /// <summary>Notifications both ways: the count every page's frame shows holds only what targets the reader, that
-/// someone else did and that they may view; it reads past the checkpoint opening them moves, a stream past it carries
-/// what raises it, and past its bound it reads "at least". The page lists them newest first a page at a time from a
-/// sealed cursor, never one in a Tangent the reader may not view, as a page and as JSON; an Offer among them keeps its
-/// answers while open, stays open when merely seen, is decided once from there and then says how.</summary>
-[Collection(nameof(Commands.Tries))]
+/// someone else did and that they may view; it reads past the checkpoint opening them moves, which only their post
+/// does, a stream past it carries what raises it, and past its bound it reads "at least". The page lists them newest
+/// first a page at a time from a sealed cursor, never one in a Tangent the reader may not view, as a page and as JSON;
+/// above them the operator reads the open Offer, computed and never stored, decided once from there.</summary>
 public sealed class NotificationsTests
 {
     private const string Leo = "did:plc:leo4notifications";
@@ -44,21 +43,22 @@ public sealed class NotificationsTests
         Assert.Equal((2, false, BaseUrl + Notifications.Path),
             (unseen.GetProperty("count").GetInt32(), unseen.GetProperty("atLeast").GetBoolean(), unseen.GetProperty("address").GetString()));
 
-        // Every page's frame shows it, linked, and every signed-in page carries it both ways.
+        // Every page's frame shows it, as the button that opens them, and every signed-in page carries it both ways.
         foreach (var path in new[] { "/", TopicPath(mine), "/t/" + Workshop, "/t", "/p/ada4writes.example" })
         {
             var page = await Send(ada.Client, HttpMethod.Get, path);
             Assert.Equal(HttpStatusCode.OK, page.Status);
-            Assert.Contains($"<a class=\"masthead-unseen\" href=\"{BaseUrl}/notifications\" aria-label=\"2 new notifications\"", page.Body);
+            Assert.Contains($"<form class=\"masthead-unseen-form\" method=\"post\" action=\"{BaseUrl}/notifications\"><input type=\"hidden\" name=\"through\"", page.Body);
+            Assert.Contains("<button class=\"masthead-unseen\" aria-label=\"2 new notifications\"", Collapsed(page.Body));
             Assert.Contains("<span class=\"masthead-unseen-count\">2</span>", page.Body);
-            Assert.Contains($"<a class=\"account-item\" href=\"{BaseUrl}/notifications\">", page.Body);
+            Assert.Contains(AccountItem, page.Body);
         }
 
         // Someone with nothing for them reads no count, and the way to their notifications stays in the account menu.
         using var mo = await SignedIn(tangentSpace, Mo);
         var quiet = await Send(mo.Client, HttpMethod.Get, "/");
-        Assert.Contains($"<a class=\"masthead-unseen\" href=\"{BaseUrl}/notifications\" hidden aria-label=\"0 new notifications\"", quiet.Body);
-        Assert.Contains($"<a class=\"account-item\" href=\"{BaseUrl}/notifications\">", quiet.Body);
+        Assert.Contains("<button class=\"masthead-unseen\" hidden aria-label=\"0 new notifications\"", quiet.Body);
+        Assert.Contains(AccountItem, quiet.Body);
         using var bea = await SignedIn(tangentSpace, Bea);
         Assert.Equal(1, Count(await Send(bea.Client, HttpMethod.Get, "/", json: true)));
         var visitor = await Send(Agent(tangentSpace), HttpMethod.Get, "/");
@@ -66,7 +66,7 @@ public sealed class NotificationsTests
     }
 
     [Fact]
-    public async Task Opening_the_notifications_moves_their_checkpoint_through_what_they_showed_and_the_count_reads_past_it()
+    public async Task Opening_the_notifications_posts_the_mark_through_the_newest_and_lands_on_them_with_what_was_new_marked_and_reading_them_marks_nothing()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
@@ -77,22 +77,35 @@ public sealed class NotificationsTests
         await Given.BeenAtTheDoor(tangentSpace, Ada, Cancellation);
         var door = (await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json;
         Assert.Equal(2, door.GetProperty("who").GetProperty("notifications").GetProperty("count").GetInt32());
+        // The JSON carries the form that opens them, as every page's HTML does.
+        var open = door.GetProperty("who").GetProperty("notifications").GetProperty("open");
+        Assert.Equal((BaseUrl + Notifications.Path, "POST"), (open.GetProperty("action").GetString(), open.GetProperty("method").GetString()));
         // The door names them with how many while there are some, though it lists both replies itself.
         Assert.Equal(2, door.GetProperty("news").GetProperty("replies").GetProperty("count").GetInt32());
         Assert.Equal((2, BaseUrl + Notifications.Path), (door.GetProperty("news").GetProperty("notifications").GetProperty("count").GetInt32(),
             door.GetProperty("news").GetProperty("notifications").GetProperty("address").GetString()));
-        Assert.Contains($"<a class=\"watch-button door-notifications\" href=\"{BaseUrl}/notifications\">2 new notifications</a>",
-            (await Send(ada.Client, HttpMethod.Get, "/")).Body);
+        var doorHtml = (await Send(ada.Client, HttpMethod.Get, "/")).Body;
+        Assert.Contains($"<form class=\"door-notifications\" method=\"post\" action=\"{BaseUrl}/notifications\"><input type=\"hidden\" name=\"through\" value=\"{(await Created(newest)).Seq}\" /><button class=\"watch-button\">2 new notifications</button></form>",
+            doorHtml);
 
-        var opened = await Send(ada.Client, HttpMethod.Get, Notifications.Path);
-        Assert.Equal(HttpStatusCode.OK, opened.Status);
-        // The page's own frame already reads past what it showed.
-        Assert.Contains($"<a class=\"masthead-unseen\" href=\"{BaseUrl}/notifications\" hidden", opened.Body);
+        // Reading them marks nothing: both stay new, and the frame still counts them.
+        var read = await Send(ada.Client, HttpMethod.Get, Notifications.Path);
+        Assert.Equal(HttpStatusCode.OK, read.Status);
+        Assert.Contains("<span class=\"masthead-unseen-count\">2</span>", read.Body);
         Assert.Contains("no-store", await CacheControl(ada.Client, Notifications.Path));
-        await Reached.Settled(tangentSpace, Cancellation);
+        Assert.Null(await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Notifications), Cancellation));
+
+        // Opening them posts the mark and lands on them, the replies still marked new and the page's own frame past them.
+        var marked = await Opened(ada, "/");
+        Assert.Equal((HttpStatusCode.SeeOther, Notifications.Path + "?from=0"), (marked.Status, marked.Location));
         var through = (await Created(newest)).Seq;
         Assert.Equal(through, (await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Notifications), Cancellation))!.Seq);
         Assert.Equal(0, (await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Place), Cancellation))!.Seq);
+        var landed = await Send(ada.Client, HttpMethod.Get, marked.Location!, json: true);
+        Assert.Equal((0L, through), (landed.Json.GetProperty("from").GetInt64(), landed.Json.GetProperty("through").GetInt64()));
+        Assert.All(landed.Json.GetProperty("entries").EnumerateArray(), entry => Assert.True(entry.GetProperty("new").GetBoolean()));
+        Assert.Equal(0, Count(landed));
+        Assert.Contains("<button class=\"masthead-unseen\" hidden", (await Send(ada.Client, HttpMethod.Get, marked.Location!)).Body);
 
         // The count drops on every page, the masthead shows nothing, and the door, which still lists the replies past its
         // own checkpoint, names no notifications.
@@ -100,22 +113,53 @@ public sealed class NotificationsTests
         Assert.Equal(0, door.GetProperty("who").GetProperty("notifications").GetProperty("count").GetInt32());
         Assert.Equal(2, door.GetProperty("news").GetProperty("replies").GetProperty("count").GetInt32());
         Assert.False(door.GetProperty("news").TryGetProperty("notifications", out _));
-        Assert.Contains($"<a class=\"masthead-unseen\" href=\"{BaseUrl}/notifications\" hidden", (await Send(ada.Client, HttpMethod.Get, "/")).Body);
+        Assert.Contains("<button class=\"masthead-unseen\" hidden", (await Send(ada.Client, HttpMethod.Get, "/")).Body);
 
-        // A new reply counts past it, and opening them again moves it on, never back.
+        // A new reply counts past it, and opening them again moves it on, never back; with nothing new it moves nothing
+        // and lands on them.
         await Replied(mine, Bea, "Then the harbour.");
         Assert.Equal(1, Count(await Send(ada.Client, HttpMethod.Get, "/t/" + Workshop, json: true)));
-        var json = (await Send(ada.Client, HttpMethod.Get, Notifications.Path, json: true)).Json;
+        var again = await Opened(ada, "/t/" + Workshop);
+        var json = (await Send(ada.Client, HttpMethod.Get, again.Location!, json: true)).Json;
         Assert.Equal((through, through + 1), (json.GetProperty("from").GetInt64(), json.GetProperty("through").GetInt64()));
         Assert.Equal(new[] { true, false, false }, json.GetProperty("entries").EnumerateArray().Select(entry => entry.GetProperty("new").GetBoolean()));
-        await Reached.Settled(tangentSpace, Cancellation);
         Assert.Equal(through + 1, (await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Notifications), Cancellation))!.Seq);
+        var still = await Opened(ada, "/");
+        Assert.Equal((HttpStatusCode.SeeOther, Notifications.Path), (still.Status, still.Location));
         Assert.Equal(through + 1, Assert.IsType<Outcome<Checkpoint>.Done>(await new SeeNotifications(Ada, through).Send(Cancellation)).Result.Seq);
         Assert.Equal(0, Count(await Send(ada.Client, HttpMethod.Get, "/", json: true)));
 
-        // Only a notification of the reader's moves it.
+        // Only a notification of the reader's moves it, and only a signed-in reader opens them.
         Assert.Equal(new Outcome<Checkpoint>.Refused(SeeNotifications.NoNotification),
             await new SeeNotifications(Bea, through + 1).Send(Cancellation));
+        var visitor = await Send(Agent(tangentSpace), HttpMethod.Post, Notifications.Path, json: true);
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (visitor.Status, visitor.Gate));
+    }
+
+    [Fact]
+    public async Task Opening_them_marks_them_seen_through_what_the_reading_reached_so_what_arrived_after_stays_new()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        var mine = await Started(Ada, "Lanterns", "Who lights theirs first?");
+        var read = await Replied(mine, Bea, "I do, at six.");
+        using var ada = await SignedIn(tangentSpace, Ada);
+
+        var page = (await Send(ada.Client, HttpMethod.Get, Notifications.Path, json: true)).Json;
+        var through = Valued(page.GetProperty("who").GetProperty("notifications").GetProperty("open"), Notifications.ThroughField);
+        Assert.Equal((await Created(read)).Seq.ToString(System.Globalization.CultureInfo.InvariantCulture), through);
+
+        // A reply arrives between the reading and the call; marking what was read leaves it new.
+        await Replied(mine, Mo, "At dusk, always.");
+        var marked = await Json(ada, Notifications.Path, Notifications.Path, new { through = long.Parse(through!, System.Globalization.CultureInfo.InvariantCulture) });
+        Assert.Equal(HttpStatusCode.SeeOther, marked.Status);
+        Assert.Equal((await Created(read)).Seq, (await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Notifications), Cancellation))!.Seq);
+        Assert.Equal(1, Count(await Send(ada.Client, HttpMethod.Get, Notifications.Path, json: true)));
+
+        // A call that says nothing of what it read marks nothing.
+        var unsaid = await Json(ada, Notifications.Path, Notifications.Path, new { });
+        Assert.Equal(HttpStatusCode.BadRequest, unsaid.Status);
+        Assert.Equal((await Created(read)).Seq, (await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Notifications), Cancellation))!.Seq);
     }
 
     [Fact]
@@ -165,7 +209,8 @@ public sealed class NotificationsTests
         // The door names them in the same words.
         var news = (await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news");
         Assert.True(news.GetProperty("notifications").GetProperty("atLeast").GetBoolean());
-        Assert.Contains($"<a class=\"watch-button door-notifications\" href=\"{BaseUrl}/notifications\">At least {Notifications.CountLimit + 1} new notifications</a>", html);
+        Assert.Contains($"<form class=\"door-notifications\" method=\"post\" action=\"{BaseUrl}/notifications\"><input type=\"hidden\" name=\"through\"", html);
+        Assert.Contains($"<button class=\"watch-button\">At least {Notifications.CountLimit + 1} new notifications</button></form>", html);
     }
 
     [Fact]
@@ -178,7 +223,8 @@ public sealed class NotificationsTests
         for (var index = 0; index < Notifications.PageSize + 5; index++) replies.Add(await Replied(mine, Bea, $"Reply number {index}."));
         using var ada = await SignedIn(tangentSpace, Ada);
 
-        var first = (await Send(ada.Client, HttpMethod.Get, Notifications.Path, json: true)).Json;
+        var opened = await Opened(ada, "/");
+        var first = (await Send(ada.Client, HttpMethod.Get, opened.Location!, json: true)).Json;
         var shown = Posts(first);
         Assert.Equal(replies.AsEnumerable().Reverse().Take(Notifications.PageSize).Select(reply => AddressOf(mine, reply)), shown);
         Assert.False(first.GetProperty("continued").GetBoolean());
@@ -189,10 +235,9 @@ public sealed class NotificationsTests
         Assert.Equal(replies.Take(5).Reverse().Select(reply => AddressOf(mine, reply)), Posts(second));
         Assert.True(second.GetProperty("continued").GetBoolean());
         Assert.False(second.TryGetProperty("next", out _));
-        // What was new when the reader opened them stays new on the pages after, and the checkpoint stays where the first
-        // page put it.
+        // What was new when the reader opened them stays new on the pages after, and the checkpoint stays where opening
+        // them put it.
         Assert.All(second.GetProperty("entries").EnumerateArray(), entry => Assert.True(entry.GetProperty("new").GetBoolean()));
-        await Reached.Settled(tangentSpace, Cancellation);
         Assert.Equal((await Created(replies[^1])).Seq, (await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Notifications), Cancellation))!.Seq);
         Assert.Contains("Newest notifications", (await Send(ada.Client, HttpMethod.Get, next[BaseUrl.Length..])).Body);
 
@@ -258,56 +303,43 @@ public sealed class NotificationsTests
     }
 
     [Fact]
-    public async Task An_offer_merely_seen_stays_open_answered_from_the_notifications_is_decided_once_and_then_says_how()
+    public async Task The_open_offer_is_computed_above_the_notifications_with_its_answers_and_once_decided_from_there_is_gone()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(), ct: Cancellation);
         await Reached.APlace(tangentSpace, Leo, address: null, Cancellation);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
-        await Reached.On(tangentSpace, "https://tangent.example.org", Cancellation, times: 3);
-        await Reached.Settled(tangentSpace, Cancellation);
-        var offer = Assert.Single(await Offer.All(Cancellation));
-        var made = Assert.Single(await Event.All(Cancellation), e => e.Kind == EventKind.OfferMade);
+        await Reached.On(tangentSpace, Origin, Cancellation, times: 3);
         var loopback = tangentSpace.Client.BaseAddress!.GetLeftPart(UriPartial.Authority);
         using var leo = new Browser(tangentSpace);
         (await leo.SignIn("leo", Leo, Cancellation, handle: "leo.example")).Dispose();
 
-        // Seen, both ways: its answers are there, the checkpoint moves past it, and it stays open.
+        // Read, both ways: the Offer is above the notifications with its evidence and its answers, and nothing is stored.
         var json = (await Send(leo.Client, HttpMethod.Get, Notifications.Path, json: true)).Json;
-        var entry = Assert.Single(json.GetProperty("entries").EnumerateArray());
-        var offered = entry.GetProperty("offer");
-        Assert.Equal(("offer", offer.Id, "address", "https://tangent.example.org", "open", $"{loopback}/offers/use", $"{loopback}/offers/decline"),
-            (entry.GetProperty("kind").GetString(), offered.GetProperty("id").GetString(), offered.GetProperty("kind").GetString(),
-                offered.GetProperty("subject").GetString(), offered.GetProperty("state").GetString(), offered.GetProperty("use").GetProperty("action").GetString(),
-                offered.GetProperty("decline").GetProperty("action").GetString()));
-        Assert.Equal((offer.Id, offer.Id), (Valued(offered.GetProperty("use"), OfferController.Field), Valued(offered.GetProperty("decline"), OfferController.Field)));
+        Assert.Empty(json.GetProperty("entries").EnumerateArray());
+        var offered = json.GetProperty("offer");
+        Assert.Equal(("address", Origin, 3L, $"{loopback}/offers/use", $"{loopback}/offers/decline"),
+            (offered.GetProperty("kind").GetString(), offered.GetProperty("subject").GetString(), offered.GetProperty("count").GetInt64(),
+                offered.GetProperty("use").GetProperty("action").GetString(), offered.GetProperty("decline").GetProperty("action").GetString()));
+        Assert.Equal((Origin, Origin), (Valued(offered.GetProperty("use"), OfferController.Field), Valued(offered.GetProperty("decline"), OfferController.Field)));
         Assert.NotEmpty(offered.GetProperty("use").GetProperty("token").GetProperty("value").GetString()!);
-        await Reached.Settled(tangentSpace, Cancellation);
-        Assert.Equal(made.Seq, (await Checkpoint.Get(Checkpoint.Key(Leo, Scope.Notifications), Cancellation))!.Seq);
-        Assert.Equal(OfferState.Open, (await Offer.Get(offer.Id, Cancellation))!.State);
         var html = WebUtility.HtmlDecode((await Send(leo.Client, HttpMethod.Get, Notifications.Path)).Body);
-        Assert.Contains("This place is being reached at <strong>https://tangent.example.org</strong>. Use it as its address?", html);
+        Assert.Contains($"This place is being reached at <strong>{Origin}</strong> — 3 requests since", html);
         Assert.Contains($"<form method=\"post\" action=\"{loopback}/offers/decline\">", html);
-        Assert.Contains($"<input type=\"hidden\" name=\"offer\" value=\"{offer.Id}\" />", html);
-        Assert.Equal(OfferState.Open, (await Offer.Get(offer.Id, Cancellation))!.State);
+        Assert.Contains($"<input type=\"hidden\" name=\"origin\" value=\"{Origin}\" />", html);
+        Assert.Empty(await Offer.All(Cancellation));
 
         // Answered from there, once: a second answer changes nothing, and the other one is refused.
-        var declined = await Answer(leo, OfferController.DeclinePath, offer.Id);
+        var declined = await Answer(leo, OfferController.DeclinePath, Origin);
         Assert.Equal((HttpStatusCode.SeeOther, "/"), (declined.Status, declined.Location));
-        var decidedAt = (await Offer.Get(offer.Id, Cancellation))!.DecidedAt;
-        Assert.Equal(OfferState.Declined, (await Offer.Get(offer.Id, Cancellation))!.State);
-        Assert.Equal(HttpStatusCode.SeeOther, (await Answer(leo, OfferController.DeclinePath, offer.Id)).Status);
-        Assert.Equal(HttpStatusCode.Conflict, (await Answer(leo, OfferController.UsePath, offer.Id)).Status);
-        Assert.Equal((OfferState.Declined, decidedAt), ((await Offer.Get(offer.Id, Cancellation))!.State, (await Offer.Get(offer.Id, Cancellation))!.DecidedAt));
+        var decided = Assert.Single(await Offer.All(Cancellation));
+        Assert.Equal((Offer.IdFor(OfferKind.Address, Origin), OfferState.Declined), (decided.Id, decided.State));
+        Assert.Equal(HttpStatusCode.SeeOther, (await Answer(leo, OfferController.DeclinePath, Origin)).Status);
+        Assert.Equal(HttpStatusCode.Conflict, (await Answer(leo, OfferController.UsePath, Origin)).Status);
+        Assert.Equal((OfferState.Declined, decided.DecidedAt), ((await Offer.Get(decided.Id, Cancellation))!.State, (await Offer.Get(decided.Id, Cancellation))!.DecidedAt));
 
-        // Decided, it says how, with no answers.
-        json = (await Send(leo.Client, HttpMethod.Get, Notifications.Path, json: true)).Json;
-        offered = Assert.Single(json.GetProperty("entries").EnumerateArray()).GetProperty("offer");
-        Assert.Equal("declined", offered.GetProperty("state").GetString());
-        Assert.False(offered.TryGetProperty("use", out _));
-        Assert.False(offered.TryGetProperty("decline", out _));
-        html = WebUtility.HtmlDecode((await Send(leo.Client, HttpMethod.Get, Notifications.Path)).Body);
-        Assert.Contains($"You declined <a class=\"notification-link\" href=\"{loopback}/first-run\">https://tangent.example.org</a> as this place’s address.", html);
-        Assert.DoesNotContain("/offers/use", html);
+        // Decided, it is gone from there.
+        Assert.False((await Send(leo.Client, HttpMethod.Get, Notifications.Path, json: true)).Json.TryGetProperty("offer", out _));
+        Assert.DoesNotContain("/offers/use", (await Send(leo.Client, HttpMethod.Get, Notifications.Path)).Body);
     }
 
     [Fact]
@@ -339,8 +371,8 @@ public sealed class NotificationsTests
         Assert.Equal((0, false, 0L), Unseen(door));
         Assert.False(door.GetProperty("news").TryGetProperty("notifications", out _));
 
-        // The newest page holds none she may see: it says so, offers the older page and marks nothing; the older page
-        // shows her reply, and marks it seen.
+        // The newest page holds none she may see: it says so and offers the older page, which shows her reply; neither
+        // marks anything.
         var newest = await Send(ada.Client, HttpMethod.Get, Notifications.Path, json: true);
         Assert.Empty(newest.Json.GetProperty("entries").EnumerateArray());
         var next = newest.Json.GetProperty("next").GetString()!;
@@ -349,52 +381,12 @@ public sealed class NotificationsTests
         Assert.Contains("Nothing to show among the newest; older notifications follow.", html);
         Assert.DoesNotContain("Nothing for you yet", html);
         Assert.Contains("Older notifications →", html);
-        await Reached.Settled(tangentSpace, Cancellation);
-        Assert.Null(await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Notifications), Cancellation));
 
         var older = (await Send(ada.Client, HttpMethod.Get, next[BaseUrl.Length..], json: true)).Json;
         Assert.Equal([AddressOf(mine, visible)], Posts(older));
-        Assert.Equal(shownThrough, older.GetProperty("through").GetInt64());
-        await Reached.Settled(tangentSpace, Cancellation);
-        Assert.Equal(shownThrough, (await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Notifications), Cancellation))!.Seq);
-        Assert.DoesNotContain("Studio notes", newest.Body + older.GetRawText());
-    }
-
-    [Fact]
-    public async Task The_page_answers_its_list_without_waiting_when_the_writers_queue_is_full()
-    {
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        await Place(tangentSpace);
-        var mine = await Started(Ada, "Lanterns", "Who lights theirs first?");
-        var reply = await Replied(mine, Bea, "I do, at six.");
-        using var ada = await SignedIn(tangentSpace, Ada);
-
-        var release = new TaskCompletionSource();
-        var running = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var held = new Hold(release.Task, running).Send(Cancellation);
-        await running.Task.WaitAsync(TimeSpan.FromSeconds(10), Cancellation);
-        var queued = new List<Task<Outcome<bool>>>();
-        while (queued.Count < 4096 && new Hold(Task.CompletedTask).TrySend() is { } sent) queued.Add(sent);
-        Assert.InRange(queued.Count, 1, 4095);
-        try
-        {
-            var page = await Send(ada.Client, HttpMethod.Get, Notifications.Path, json: true).WaitAsync(TimeSpan.FromSeconds(10), Cancellation);
-            Assert.Equal(HttpStatusCode.OK, page.Status);
-            Assert.Equal([AddressOf(mine, reply)], Posts(page.Json));
-            Assert.Equal(0L, page.Json.GetProperty("through").GetInt64());
-        }
-        finally
-        {
-            release.SetResult();
-            await held;
-            await Task.WhenAll(queued);
-        }
-
-        // Nothing was marked; the next opening marks it.
+        Assert.Equal(0L, older.GetProperty("through").GetInt64());
         Assert.Null(await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Notifications), Cancellation));
-        Assert.Equal(HttpStatusCode.OK, (await Send(ada.Client, HttpMethod.Get, Notifications.Path)).Status);
-        await Reached.Settled(tangentSpace, Cancellation);
-        Assert.Equal((await Created(reply)).Seq, (await Checkpoint.Get(Checkpoint.Key(Ada, Scope.Notifications), Cancellation))!.Seq);
+        Assert.DoesNotContain("Studio notes", newest.Body + older.GetRawText());
     }
 
     /// <summary>The name a participant written by <see cref="Given.AParticipant"/> shows until they sign in: the handle it
@@ -427,8 +419,18 @@ public sealed class NotificationsTests
         return response.Headers.CacheControl?.ToString() ?? "";
     }
 
-    private static Task<Answered> Answer(Browser browser, string path, string offerId)
-        => Form(browser, Notifications.Path, path, new Dictionary<string, string> { [OfferController.Field] = offerId });
+    private static Task<Answered> Answer(Browser browser, string path, string origin)
+        => Form(browser, Notifications.Path, path, new Dictionary<string, string> { [OfferController.Field] = origin });
+
+    /// <summary>The public origin the Offer proofs reach the place at.</summary>
+    private const string Origin = "https://tangent.example.org";
+
+    /// <summary>The account menu's way to the notifications: a form that opens them.</summary>
+    private const string AccountItem = $"<form method=\"post\" action=\"{BaseUrl}/notifications\"><input type=\"hidden\" name=\"through\"";
+
+    /// <summary>The page's markup with each run of whitespace between tags taken out, so a tag spread over lines reads as
+    /// one.</summary>
+    private static string Collapsed(string html) => System.Text.RegularExpressions.Regex.Replace(html, @">\s+<", "><");
 
     /// <summary>Appends one event of <paramref name="Kind"/> by <paramref name="ActorId"/> targeting
     /// <paramref name="TargetId"/>, about <paramref name="Post"/> where one is named: for a proof
@@ -439,18 +441,6 @@ public sealed class NotificationsTests
         {
             return new Outcome<Event>.Done(await Event.Append(Kind, DateTimeOffset.UtcNow, ct, tangentId: Post?.TangentId, topicId: Post?.TopicId, postId: Post?.Id,
                 actorId: ActorId, targetId: TargetId));
-        }
-    }
-
-    /// <summary>Keeps the store until <paramref name="Until"/> completes, saying when it began through
-    /// <paramref name="Running"/>; writes nothing.</summary>
-    private sealed record Hold(Task Until, TaskCompletionSource? Running = null) : ICommand<bool>
-    {
-        public async Task<Outcome<bool>> Run(CancellationToken ct)
-        {
-            Running?.TrySetResult();
-            await Until;
-            return new Outcome<bool>.Done(true);
         }
     }
 

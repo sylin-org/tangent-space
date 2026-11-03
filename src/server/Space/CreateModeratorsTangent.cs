@@ -11,10 +11,10 @@ namespace Tangent.Space;
 /// <see cref="NoPlace"/>.</summary>
 public sealed record CreateModeratorsTangent(DateTimeOffset? At = null) : ICommand<Tangents.Tangent>
 {
-    public const string NoPlace = "This Tangent Space is not set up yet.";
+    public static readonly Reason NoPlace = Reason.Invalid("This Tangent Space is not set up yet.");
 
     /// <summary>The answer for a row that records a moderators' Tangent no row holds.</summary>
-    public const string Missing = "The moderators' Tangent this Tangent Space records is missing.";
+    public static readonly Reason Missing = Reason.Invalid("The moderators' Tangent this Tangent Space records is missing.");
 
     public async Task<Outcome<Tangents.Tangent>> Run(CancellationToken ct)
     {

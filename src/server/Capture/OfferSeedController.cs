@@ -8,7 +8,7 @@ using Tangent.Space;
 
 namespace Tangent.Capture;
 
-/// <summary>An Offer of an address, made the way every one is made, for the captures of the operator's door: fourteen
+/// <summary>An Offer of an address, open the way every one is, for the captures of the operator's door: fourteen
 /// requests arrive on <see cref="Origin"/> through the capture's loopback proxy, which the place believes, and the
 /// place, with no URL configured and no address yet, offers it to its operator. For <c>offer-used</c> the operator
 /// then uses it, and for <c>offer-declined</c> declines it, as their answers do. Compiled only into the capture host,
@@ -23,15 +23,15 @@ public sealed class OfferSeedController(KoanWebBaseUrl baseUrl, IServer server) 
     [HttpPost("/capture/seed/offer")]
     public async Task<IActionResult> Open(CancellationToken ct)
     {
-        await Offered(ct);
+        await Reached(ct);
         return NoContent();
     }
 
     [HttpPost("/capture/seed/offer-used")]
     public async Task<IActionResult> Used(CancellationToken ct)
     {
-        var offer = await Offered(ct);
-        var outcome = await PlaceAddress.Use(baseUrl, new UseOffer(offer.Id, offer.DeciderId, offer.Subject));
+        var operatorId = await Reached(ct);
+        var outcome = await PlaceAddress.Use(baseUrl, new UseOffer(Origin, operatorId, Origin));
         if (outcome is not Outcome<Offer>.Done) throw new InvalidOperationException($"The capture's offer was not used: {outcome}.");
         return NoContent();
     }
@@ -39,15 +39,15 @@ public sealed class OfferSeedController(KoanWebBaseUrl baseUrl, IServer server) 
     [HttpPost("/capture/seed/offer-declined")]
     public async Task<IActionResult> Declined(CancellationToken ct)
     {
-        var offer = await Offered(ct);
-        var outcome = await new DeclineOffer(offer.Id, offer.DeciderId).Send();
+        var operatorId = await Reached(ct);
+        var outcome = await new DeclineOffer(Origin, operatorId).Send();
         if (outcome is not Outcome<Offer>.Done) throw new InvalidOperationException($"The capture's offer was not declined: {outcome}.");
         return NoContent();
     }
 
-    /// <summary>Sends the requests through the loopback proxy, then waits, at most ten seconds, for the Offer the first
-    /// of them made.</summary>
-    private async Task<Offer> Offered(CancellationToken ct)
+    /// <summary>Sends the requests through the loopback proxy, and answers the place's operator, who decides the Offer
+    /// they open.</summary>
+    private async Task<string> Reached(CancellationToken ct)
     {
         var listening = server.Features.Get<IServerAddressesFeature>()?.Addresses.FirstOrDefault(address => address.StartsWith("http://", StringComparison.Ordinal))
             ?? throw new InvalidOperationException("The capture host reports no http address it listens on.");
@@ -65,13 +65,7 @@ public sealed class OfferSeedController(KoanWebBaseUrl baseUrl, IServer server) 
             }
         }
 
-        var id = Offer.IdFor(OfferKind.Address, Origin);
-        for (var wait = 0; wait < 100; wait++)
-        {
-            if (await Offer.Get(id, ct) is { } offer) return offer;
-            await Task.Delay(TimeSpan.FromMilliseconds(100), ct);
-        }
-
-        throw new InvalidOperationException($"No offer of {Origin} was made; the state's settings must leave the URL unconfigured.");
+        return (await TangentSpace.Get(TangentSpace.SingleRow, ct))?.OperatorId
+            ?? throw new InvalidOperationException("The capture's place is not set up, so no offer is open to anyone.");
     }
 }

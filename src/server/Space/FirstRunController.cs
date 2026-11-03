@@ -69,8 +69,7 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
         => PersonId(User) is { } personId && (personId == space.OperatorId || personId == space.ProprietorId);
 
     /// <summary>What first run answers anyone else once the place is established: a missing resource's answer.</summary>
-    private static IActionResult NotHere()
-        => new Problem(StatusCodes.Status404NotFound, "Not found", "Nothing answers at this address.").ToResult();
+    private static IActionResult NotHere() => Posts.PostWrites.Absent();
 
     /// <summary>Whoever is signed in, as the account menu shows them: their participant's display name, else their
     /// handle; the highest seeded role they hold; Koan's sign-out under <paramref name="address"/>, coming back here; and,

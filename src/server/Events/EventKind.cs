@@ -12,5 +12,4 @@ public static class EventKind
     public const string RoleChanged = "role.changed";
     public const string TangentChanged = "tangent.changed";
     public const string SpaceChanged = "space.changed";
-    public const string OfferMade = "offer.made";
 }

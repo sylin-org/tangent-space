@@ -110,10 +110,6 @@
   "directReferences": [
     {
       "kind": "project",
-      "id": "Koan.Communication"
-    },
-    {
-      "kind": "project",
       "id": "Koan.Data.Connector.Sqlite"
     },
     {

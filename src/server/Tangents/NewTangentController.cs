@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Koan.Data.Core.Commands;
 using Koan.Web.Attributes;
+using Koan.Web.Controllers;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -29,7 +30,7 @@ public sealed class NewTangentController(KoanWebBaseUrl baseUrl) : ControllerBas
     public const string Route = "/t/" + Tangent.NewSegment;
 
     /// <summary>The answer when every slug the name yields belongs to another Tangent.</summary>
-    public const string NoSlug = "Every address this name gives belongs to another Tangent; choose another name.";
+    public static readonly Reason NoSlug = Reason.Invalid("Every address this name gives belongs to another Tangent; choose another name.");
 
     /// <summary>The slug of a name with no letter or digit.</summary>
     public const string Unnamed = "tangent";
@@ -83,7 +84,7 @@ public sealed class NewTangentController(KoanWebBaseUrl baseUrl) : ControllerBas
                 case Outcome<Tangent>.Refused { Reason: { Kind: not ReasonKind.Absent } reason }:
                     return await Refused(place, personId, input, reason, ct);
                 default:
-                    return PostWrites.Answer(HttpContext, outcome);
+                    return Answers.NotDone(HttpContext, outcome);
             }
         }
 
@@ -94,7 +95,7 @@ public sealed class NewTangentController(KoanWebBaseUrl baseUrl) : ControllerBas
     /// was sent, with the reason where it belongs.</summary>
     private async Task<IActionResult> Refused(Capabilities place, string? personId, CreateTangentInput input, Reason reason, CancellationToken ct)
     {
-        if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
+        if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
         var page = await Page(place, personId, ct) with
         {
             Name = input.Name ?? "",
@@ -109,7 +110,7 @@ public sealed class NewTangentController(KoanWebBaseUrl baseUrl) : ControllerBas
             TangentWrites.About.Sent => page with { Failure = reason.Text },
             _ => page with { Gate = reason.Word, Create = null }
         };
-        return new ObjectResult(page) { StatusCode = PostWrites.Status(reason) };
+        return new ObjectResult(page) { StatusCode = Answers.Status(HttpContext, reason) };
     }
 
     /// <summary>The word a field sent where it is one of <paramref name="words"/>, else <paramref name="otherwise"/>.</summary>

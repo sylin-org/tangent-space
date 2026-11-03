@@ -38,11 +38,11 @@ public sealed partial record Slots
     public const int ArticleHeaderLimit = 8000;
     public const int FooterLimit = 2000;
 
-    public const string HeadRule = "The head holds at most 4000 characters.";
-    public const string MastheadRule = "The masthead holds at most 2000 characters.";
-    public const string DoorIntroRule = "The door intro holds at most 8000 characters.";
-    public const string ArticleHeaderRule = "The article header holds at most 8000 characters.";
-    public const string FooterRule = "The footer holds at most 2000 characters.";
+    public static readonly Reason HeadRule = Reason.Invalid("The head holds at most 4000 characters.");
+    public static readonly Reason MastheadRule = Reason.Invalid("The masthead holds at most 2000 characters.");
+    public static readonly Reason DoorIntroRule = Reason.Invalid("The door intro holds at most 8000 characters.");
+    public static readonly Reason ArticleHeaderRule = Reason.Invalid("The article header holds at most 8000 characters.");
+    public static readonly Reason FooterRule = Reason.Invalid("The footer holds at most 2000 characters.");
 
     /// <summary>A masthead and a footer are a line: a logo, a few words and some links, with no heading to compete with the
     /// page's own.</summary>
@@ -120,7 +120,7 @@ public sealed partial record Slots
         Footer = Kept(footer, Footer, html => Bar.Sanitize(html), FooterLimit, FooterRule)
     };
 
-    private static string Kept(string? written, string held, Func<string, string> sanitized, int limit, string rule)
+    private static string Kept(string? written, string held, Func<string, string> sanitized, int limit, Reason rule)
     {
         if (written is null) return held;
         var kept = sanitized(written).Trim();

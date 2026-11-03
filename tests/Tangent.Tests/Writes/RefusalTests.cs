@@ -94,7 +94,7 @@ public sealed class RefusalTests
         var onForm = await Form(ada, "/t/" + Workshop + "/new", TopicPath(locked), new Dictionary<string, string> { ["id"] = Tids.Mint(), ["body"] = "Still?" });
 
         Assert.Equal((HttpStatusCode.Forbidden, "application/problem+json", Capabilities.Locked.Word), (asJson.Status, asJson.MediaType, asJson.Gate));
-        Assert.Equal("Locked", asJson.Title);
+        Assert.Equal("gated", asJson.Kind);
         Assert.Equal(("text/html", HttpStatusCode.Forbidden), (onForm.MediaType, onForm.Status));
         Assert.Contains("data-gate=\"locked\"", onForm.Body);
         Assert.Contains("This topic is locked, so no one replies in it.", onForm.Body);
@@ -112,7 +112,6 @@ public sealed class RefusalTests
 
         var asJson = await Send(visitor, HttpMethod.Get, Events.Notifications.Path, json: true);
         Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (asJson.Status, asJson.Gate));
-        Assert.Equal(BaseUrl + "/sign-in?return=%2Fnotifications", asJson.Json.GetProperty("next").GetString());
 
         var asPage = await Send(visitor, HttpMethod.Get, Events.Notifications.Path);
         Assert.Equal(HttpStatusCode.Unauthorized, asPage.Status);
@@ -142,13 +141,13 @@ public sealed class RefusalTests
         var remove = await Json(ada, page, PostPath(hidden, hidden) + "/remove", new { });
         var removeForm = await Form(ada, page, PostPath(hidden, hidden) + "/remove", new Dictionary<string, string>());
 
-        var missing = (HttpStatusCode.NotFound, "Not found", Capabilities.Absent.Text);
-        Assert.Equal(missing, (nowhere.Status, nowhere.Title, nowhere.Gate));
-        Assert.Equal(missing, (startNowhere.Status, startNowhere.Title, startNowhere.Gate));
+        var missing = (HttpStatusCode.NotFound, "absent");
+        Assert.Equal(missing, (nowhere.Status, nowhere.Kind));
+        Assert.Equal(missing, (startNowhere.Status, startNowhere.Kind));
         foreach (var answered in new[] { form, start, reply, edit, editPage, remove })
-            Assert.Equal(missing, (answered.Status, answered.Title, answered.Gate));
+            Assert.Equal(missing, (answered.Status, answered.Kind));
         Assert.Equal((HttpStatusCode.NotFound, HttpStatusCode.NotFound), (startForm.Status, removeForm.Status));
-        Assert.Contains("data-gate=\"absent\"", startForm.Body);
+        Assert.Contains("data-kind=\"absent\"", startForm.Body);
         Assert.DoesNotContain("Let me in.", startForm.Body);
         Assert.Equal(before, await Counted());
         Assert.Equal(("Not for everyone.", false), ((await Post.Get(hidden.Id, Cancellation))?.Body, (await Post.Get(hidden.Id, Cancellation))?.Removed));

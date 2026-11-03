@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using Koan.Data.Core.Commands;
 
 namespace Tangent.Posts;
 
@@ -12,7 +13,7 @@ namespace Tangent.Posts;
 /// parses.</summary>
 public sealed class PostBody
 {
-    private PostBody(string text, string sent, IReadOnlyList<string> mentioned, string? refusal, IReadOnlyList<string>? media = null)
+    private PostBody(string text, string sent, IReadOnlyList<string> mentioned, Reason? refusal, IReadOnlyList<string>? media = null)
     {
         Media = media ?? [];
         Text = text;
@@ -42,7 +43,7 @@ public sealed class PostBody
     /// <summary>Why the body may not be written, by what its parse found; null when nothing did. The rules a glance
     /// decides — empty, a NUL, too many bytes — are <see cref="Post.CheckBody"/>'s, and a body they refuse is not
     /// parsed.</summary>
-    public string? Refusal { get; }
+    public Reason? Refusal { get; }
 
     public static implicit operator PostBody(string text) => Of(text);
 

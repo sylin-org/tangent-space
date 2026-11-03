@@ -8,7 +8,7 @@ namespace Tangent.Space;
 /// with the row and nothing is written. A place not set up is refused with <see cref="NoPlace"/>.</summary>
 public sealed record KeepAddress(string Address) : ICommand<TangentSpace>
 {
-    public const string NoPlace = "This Tangent Space is not set up yet, so it has no address to keep.";
+    public static readonly Reason NoPlace = Reason.Invalid("This Tangent Space is not set up yet, so it has no address to keep.");
 
     public async Task<Outcome<TangentSpace>> Run(CancellationToken ct)
     {

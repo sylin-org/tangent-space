@@ -26,9 +26,9 @@ public sealed partial class Media : MediaEntity<Media>
     /// <summary>The quality a photograph is encoded at.</summary>
     public const int KeptQuality = 85;
 
-    public const string NotAnImage = "Choose a PNG, JPEG or WebP image.";
-    public const string TooLarge = "Choose an image smaller than 20 MiB.";
-    public const string TooManyPixels = "Choose an image of at most 64 megapixels.";
+    public static readonly Reason NotAnImage = Reason.Invalid("Choose a PNG, JPEG or WebP image.");
+    public static readonly Reason TooLarge = Reason.Invalid("Choose an image smaller than 20 MiB.");
+    public static readonly Reason TooManyPixels = Reason.Invalid("Choose an image of at most 64 megapixels.");
 
     /// <summary>Where a Post's body names an image held here, whatever address the place answers at.</summary>
     public static string Reference(string id) => "/media/" + id;

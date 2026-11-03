@@ -14,11 +14,10 @@ using Xunit;
 
 namespace Tangent.Offers;
 
-/// <summary>Offers of an address: a public https origin the place is reached at while its address is local becomes one
-/// Offer to its operator, with one <c>offer.made</c> targeted at them, and nothing else does; the operator alone reads it
-/// on the door, both ways, and uses it, which makes the origin the base URL, or declines it, which keeps it from ever
-/// being offered again; a configured URL lapses what is open.</summary>
-[Collection(nameof(Commands.Tries))]
+/// <summary>Offers of an address: a public https origin the place is reached at while its address is local is open to
+/// its operator, computed from what the place sees and never stored, and nothing else is; the operator alone reads it on
+/// the door, both ways, and uses it, which makes the origin the base URL, or declines it, which keeps it from ever being
+/// offered again and opens the next; a configured URL leaves none open.</summary>
 public sealed class OfferTests
 {
     private const string Leo = "did:plc:leo4offers";
@@ -30,57 +29,35 @@ public sealed class OfferTests
     private static CancellationToken Cancellation => TestContext.Current.CancellationToken;
 
     [Fact]
-    public async Task A_public_https_origin_seen_while_the_address_is_local_makes_one_offer_and_one_offer_made_targeted_at_the_operator()
+    public async Task A_public_https_origin_seen_while_the_address_is_local_is_open_to_the_operator_and_nothing_is_written()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(), ct: Cancellation);
         await Reached.APlace(tangentSpace, Leo, address: "http://127.0.0.1:5220", Cancellation);
 
         await Reached.On(tangentSpace, Public, Cancellation, times: 3);
-        await Reached.Settled(tangentSpace, Cancellation);
 
-        var offer = Assert.Single(await Offer.All(Cancellation));
-        Assert.Equal((Offer.IdFor(OfferKind.Address, Public), OfferKind.Address, Public, Leo, OfferState.Open, (DateTimeOffset?)null),
-            (offer.Id, offer.Kind, offer.Subject, offer.DeciderId, offer.State, offer.DecidedAt));
-        Assert.Equal("address/https%3A%2F%2Ftangent.example.org", offer.Id);
-        var made = Assert.Single(await Event.All(Cancellation), e => e.Kind == EventKind.OfferMade);
-        Assert.Equal((Leo, offer.Id, (string?)null, (string?)null), (made.TargetId, made.OfferId, made.ActorId, made.TangentId));
-    }
-
-    [Fact]
-    public async Task An_https_origin_on_a_port_of_its_own_is_not_offered_and_the_same_host_on_the_default_port_is()
-    {
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(), ct: Cancellation);
-        await Reached.APlace(tangentSpace, Leo, address: null, Cancellation);
-
-        await Reached.On(tangentSpace, OnAPort, Cancellation, times: 3);
-        await Reached.Settled(tangentSpace, Cancellation);
+        Assert.Equal(Public, await Reached.Open(tangentSpace, Cancellation));
+        Assert.Equal("address/https%3A%2F%2Ftangent.example.org", Offer.IdFor(OfferKind.Address, Public));
         Assert.Empty(await Offer.All(Cancellation));
-
-        await Reached.On(tangentSpace, Public, Cancellation);
-        await Reached.Settled(tangentSpace, Cancellation);
-        Assert.Equal(Public, Assert.Single(await Offer.All(Cancellation)).Subject);
+        Assert.Empty(await Event.All(Cancellation));
     }
 
     [Fact]
-    public async Task Using_an_open_offer_of_an_origin_koan_will_not_take_says_why_keeps_nothing_and_it_can_still_be_declined()
+    public async Task An_https_origin_on_a_port_of_its_own_is_not_offered_and_answering_it_finds_nothing_while_the_same_host_on_the_default_port_is_offered()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(), ct: Cancellation);
         await APlaceWithNews(tangentSpace);
-        var offer = Assert.IsType<Outcome<Offer>.Done>(
-            await new MakeOffer(OnAPort).Send(Cancellation)).Result;
+
+        await Reached.On(tangentSpace, OnAPort, Cancellation, times: 3);
+        Assert.Null(await Reached.Open(tangentSpace, Cancellation));
         using var leo = await SignedIn(tangentSpace, "leo", Leo);
-
-        using (var used = await Answer(leo, OfferController.UsePath, offer.Id))
-        {
-            Assert.Equal(HttpStatusCode.Conflict, used.StatusCode);
-            Assert.Contains("a port of its own", WebUtility.HtmlDecode(await used.Content.ReadAsStringAsync(Cancellation)));
-        }
-
-        Assert.Equal(OfferState.Open, (await Offer.Get(offer.Id, Cancellation))!.State);
+        using (var used = await Answer(leo, OfferController.UsePath, OnAPort))
+            Assert.Equal(HttpStatusCode.NotFound, used.StatusCode);
         Assert.Null((await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Address);
-        Assert.Null(tangentSpace.Services.GetRequiredService<KoanWebBaseUrl>().Current);
-        using var declined = await Answer(leo, OfferController.DeclinePath, offer.Id);
-        Assert.Equal(HttpStatusCode.SeeOther, declined.StatusCode);
+        Assert.Empty(await Offer.All(Cancellation));
+
+        await Reached.On(tangentSpace, Public, Cancellation);
+        Assert.Equal(Public, await Reached.Open(tangentSpace, Cancellation));
     }
 
     [Fact]
@@ -92,8 +69,7 @@ public sealed class OfferTests
             await using (var kept = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(("Tangent:DataFolder", dataFolder)), ct: Cancellation))
             {
                 await APlaceWithNews(kept, OnAPort);
-                var used = Offer.Make(OfferKind.Address, OnAPort, Leo, DateTimeOffset.UtcNow);
-                used.Accept(DateTimeOffset.UtcNow);
+                var used = Offer.Decided(OfferKind.Address, OnAPort, OfferState.Accepted, DateTimeOffset.UtcNow);
                 Assert.IsType<Outcome<Offer>.Done>(await new Store<Offer>(used).Send(Cancellation));
             }
 
@@ -104,7 +80,7 @@ public sealed class OfferTests
             Assert.Equal(OnAPort, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Address);
 
             using var leo = await SignedIn(restarted, "leo", Leo);
-            using var again = await Answer(leo, OfferController.UsePath, Offer.IdFor(OfferKind.Address, OnAPort));
+            using var again = await Answer(leo, OfferController.UsePath, OnAPort);
             Assert.Equal(HttpStatusCode.SeeOther, again.StatusCode);
             Assert.Null(baseUrl.Accepted);
         }
@@ -123,10 +99,8 @@ public sealed class OfferTests
         await Reached.APlace(tangentSpace, Leo, address: null, Cancellation);
 
         await Reached.On(tangentSpace, Public, Cancellation);
-        await Reached.Settled(tangentSpace, Cancellation);
 
-        var offer = Assert.Single(await Offer.All(Cancellation));
-        Assert.Equal((Public, Leo, OfferState.Open), (offer.Subject, offer.DeciderId, offer.State));
+        Assert.Equal(Public, await Reached.Open(tangentSpace, Cancellation));
     }
 
     [Fact]
@@ -134,67 +108,57 @@ public sealed class OfferTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(), ct: Cancellation);
         await Reached.On(tangentSpace, Public, Cancellation, times: 2);
-        await Reached.Settled(tangentSpace, Cancellation);
-        Assert.Empty(await Offer.All(Cancellation));
+        Assert.Null(await Reached.Open(tangentSpace, Cancellation));
 
         using var browser = new Browser(tangentSpace);
         (await browser.SignIn("leo", Leo, Cancellation, handle: "leo.example", comeBack: FirstRunController.Path)).Dispose();
-        await Reached.Settled(tangentSpace, Cancellation);
 
-        var offer = Assert.Single(await Offer.All(Cancellation));
-        Assert.Equal((Public, Leo, OfferState.Open), (offer.Subject, offer.DeciderId, offer.State));
         Assert.Equal(Leo, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.OperatorId);
+        Assert.Equal(Public, await Reached.Open(tangentSpace, Cancellation));
+        using var door = await Json(browser.Client, "/");
+        Assert.Equal((Public, 2L), (door.RootElement.GetProperty("offer").GetProperty("subject").GetString(),
+            door.RootElement.GetProperty("offer").GetProperty("count").GetInt64()));
     }
 
     [Fact]
-    public async Task A_new_origin_that_meets_full_tries_is_dropped_without_waiting_and_offered_at_the_next_commit()
-    {
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(), ct: Cancellation);
-        await Reached.APlace(tangentSpace, Leo, address: null, Cancellation);
-        var release = new TaskCompletionSource();
-        var running = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var held = new Hold(release.Task, running).Send(Cancellation);
-        // The held command has the store before the tries fill, so no slot opens once the origin arrives.
-        await running.Task.WaitAsync(TimeSpan.FromSeconds(10), Cancellation);
-        var queued = new List<Task<Outcome<bool>>>();
-        while (queued.Count < 4096 && new Hold(Task.CompletedTask).TrySend() is { } sent) queued.Add(sent);
-        Assert.InRange(queued.Count, 1, 4095);
-
-        // The request that brings the origin goes on at once, and its offer does not wait behind the store.
-        using (var bounded = CancellationTokenSource.CreateLinkedTokenSource(Cancellation))
-        {
-            bounded.CancelAfter(TimeSpan.FromSeconds(10));
-            await Reached.On(tangentSpace, Public, bounded.Token);
-        }
-        release.SetResult();
-        await held;
-        await Task.WhenAll(queued);
-        await Reached.Settled(tangentSpace, Cancellation);
-        Assert.Empty(await Offer.All(Cancellation));
-
-        // An ordinary commit, with no Offer open, retries what was dropped.
-        await Given.AParticipant(tangentSpace, Ada, [Roles.Member], ct: Cancellation);
-        Assert.Equal(Public, (await Eventually(async () => (await Offer.All(Cancellation)).SingleOrDefault()))?.Subject);
-    }
-
-    [Fact]
-    public async Task Loopback_private_unspecified_and_http_origins_make_no_offer_and_neither_does_a_repeat()
+    public async Task Loopback_private_unspecified_and_http_origins_are_not_offered_and_the_public_one_seen_first_is()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(), ct: Cancellation);
         await Reached.APlace(tangentSpace, Leo, address: null, Cancellation);
 
         foreach (var origin in new[] { "https://localhost:8443", "https://tangent.localhost", "https://192.168.1.10", "https://10.0.0.7:8443", "https://0.0.0.0", "http://tangent.example.org" })
-            await Reached.On(tangentSpace, origin, Cancellation);
-        await Reached.Settled(tangentSpace, Cancellation);
-        Assert.Empty(await Offer.All(Cancellation));
+            await Reached.On(tangentSpace, origin, Cancellation, times: 3);
+        Assert.Null(await Reached.Open(tangentSpace, Cancellation));
 
-        await Reached.On(tangentSpace, Public, Cancellation);
-        await Reached.Settled(tangentSpace, Cancellation);
+        await Reached.On(tangentSpace, Other, Cancellation);
         await Reached.On(tangentSpace, Public, Cancellation, times: 2);
-        await Reached.Settled(tangentSpace, Cancellation);
+        Assert.Equal(Other, await Reached.Open(tangentSpace, Cancellation));
+        Assert.Empty(await Offer.All(Cancellation));
+    }
 
-        Assert.Equal(Public, Assert.Single(await Offer.All(Cancellation)).Subject);
-        Assert.Single(await Event.All(Cancellation), e => e.Kind == EventKind.OfferMade);
+    [Fact]
+    public async Task The_open_offer_stays_put_however_many_requests_arrive_on_others_and_an_answer_lands_for_any_origin_offerable()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(), ct: Cancellation);
+        await APlaceWithNews(tangentSpace);
+        await Reached.On(tangentSpace, Public, Cancellation);
+        using var leo = await SignedIn(tangentSpace, "leo", Leo);
+        using (var door = await Json(leo.Client, "/"))
+            Assert.Equal(Public, door.RootElement.GetProperty("offer").GetProperty("subject").GetString());
+
+        // A burst on another host, forged or not, takes nothing from the line the operator read.
+        await Reached.On(tangentSpace, Other, Cancellation, times: 20);
+        Assert.Equal(Public, await Reached.Open(tangentSpace, Cancellation));
+
+        // The operator may still answer the other, which is seen, offerable and undecided; the line stays where it was.
+        using (var declined = await Answer(leo, OfferController.DeclinePath, Other))
+            Assert.Equal(HttpStatusCode.SeeOther, declined.StatusCode);
+        Assert.Equal((Other, OfferState.Declined), (Assert.Single(await Offer.All(Cancellation)).Subject, Assert.Single(await Offer.All(Cancellation)).State));
+        Assert.Equal(Public, await Reached.Open(tangentSpace, Cancellation));
+
+        // An origin never seen is no answer of the operator's.
+        using (var unseen = await Answer(leo, OfferController.DeclinePath, "https://never.example.org"))
+            Assert.Equal(HttpStatusCode.NotFound, unseen.StatusCode);
     }
 
     [Fact]
@@ -204,39 +168,36 @@ public sealed class OfferTests
         {
             await Reached.APlace(addressed, Leo, address: Public, Cancellation);
             await Reached.On(addressed, Other, Cancellation);
-            await Reached.Settled(addressed, Cancellation);
-            Assert.Empty(await Offer.All(Cancellation));
+            Assert.Null(await Reached.Open(addressed, Cancellation));
         }
 
         await using var configured = await TangentSpaceFixture.StartAsync(
             new Dictionary<string, string?> { ["Koan:Web:TrustedProxies:0"] = "127.0.0.1" }, ct: Cancellation);
         await Reached.APlace(configured, Leo, address: null, Cancellation);
         await Reached.On(configured, Other, Cancellation);
-        await Reached.Settled(configured, Cancellation);
+        Assert.Null(await Reached.Open(configured, Cancellation));
         Assert.Empty(await Offer.All(Cancellation));
         Assert.Empty(await Event.All(Cancellation));
     }
 
     [Fact]
-    public async Task The_door_shows_an_open_offer_to_the_operator_alone_both_ways_and_the_log_reaches_only_them()
+    public async Task The_door_shows_the_open_offer_to_the_operator_alone_both_ways()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(), ct: Cancellation);
         await APlaceWithNews(tangentSpace);
         await Reached.On(tangentSpace, Public, Cancellation, times: 14);
-        await Reached.Settled(tangentSpace, Cancellation);
-        var offer = Assert.Single(await Offer.All(Cancellation));
         var loopback = tangentSpace.Client.BaseAddress!.GetLeftPart(UriPartial.Authority);
         using var leo = await SignedIn(tangentSpace, "leo", Leo);
         using var ada = await SignedIn(tangentSpace, "ada", Ada);
 
         using (var door = await Json(leo.Client, "/"))
         {
-            var offered = Assert.Single(door.RootElement.GetProperty("offers").EnumerateArray());
-            Assert.Equal((offer.Id, "address", Public, 14L, $"{loopback}/offers/use", $"{loopback}/offers/decline"),
-                (offered.GetProperty("offer").GetString(), offered.GetProperty("kind").GetString(), offered.GetProperty("subject").GetString(),
+            var offered = door.RootElement.GetProperty("offer");
+            Assert.Equal(("address", Public, 14L, $"{loopback}/offers/use", $"{loopback}/offers/decline"),
+                (offered.GetProperty("kind").GetString(), offered.GetProperty("subject").GetString(),
                     offered.GetProperty("count").GetInt64(), offered.GetProperty("use").GetProperty("action").GetString(),
                     offered.GetProperty("decline").GetProperty("action").GetString()));
-            Assert.Equal(offer.Id, Writing.Valued(offered.GetProperty("use"), OfferController.Field));
+            Assert.Equal(Public, Writing.Valued(offered.GetProperty("use"), OfferController.Field));
             Assert.True(offered.GetProperty("since").GetDateTimeOffset() <= DateTimeOffset.UtcNow);
             Assert.NotEmpty(offered.GetProperty("use").GetProperty("token").GetProperty("value").GetString()!);
         }
@@ -245,28 +206,22 @@ public sealed class OfferTests
         Assert.Contains($"This place is being reached at <strong>{Public}</strong> — 14 requests since ", html);
         Assert.Contains($"<form method=\"post\" action=\"{loopback}/offers/use\">", html);
         Assert.Contains($"<form method=\"post\" action=\"{loopback}/offers/decline\">", html);
-        Assert.Contains($"<input type=\"hidden\" name=\"offer\" value=\"{offer.Id}\" />", html);
+        Assert.Contains($"<input type=\"hidden\" name=\"origin\" value=\"{Public}\" />", html);
 
         // Anyone else reads a door without it, both ways.
         using (var door = await Json(ada.Client, "/"))
-            Assert.False(door.RootElement.TryGetProperty("offers", out _));
+            Assert.False(door.RootElement.TryGetProperty("offer", out _));
         Assert.DoesNotContain("being reached at", await Html(ada.Client, "/"));
         using (var door = await Json(tangentSpace.Client, "/"))
-            Assert.False(door.RootElement.TryGetProperty("offers", out _));
-
-        // The log carries offer.made to the operator alone.
-        using (var poll = await Json(leo.Client, "/events?since=0"))
-            Assert.Contains(poll.RootElement.GetProperty("events").EnumerateArray(),
-                row => row.GetProperty("kind").GetString() == EventKind.OfferMade && row.GetProperty("offer").GetString() == offer.Id);
-        using (var poll = await Json(ada.Client, "/events?since=0"))
-            Assert.DoesNotContain(poll.RootElement.GetProperty("events").EnumerateArray(), row => row.GetProperty("kind").GetString() == EventKind.OfferMade);
+            Assert.False(door.RootElement.TryGetProperty("offer", out _));
 
         // Nor may anyone else answer it: to them it does not exist.
-        using (var posted = await Answer(ada, OfferController.UsePath, offer.Id))
+        using (var posted = await Answer(ada, OfferController.UsePath, Public))
             Assert.Equal(HttpStatusCode.NotFound, posted.StatusCode);
-        using (var posted = await Answer(ada, OfferController.DeclinePath, offer.Id))
+        using (var posted = await Answer(ada, OfferController.DeclinePath, Public))
             Assert.Equal(HttpStatusCode.NotFound, posted.StatusCode);
-        Assert.Equal(OfferState.Open, (await Offer.Get(offer.Id, Cancellation))!.State);
+        Assert.Empty(await Offer.All(Cancellation));
+        Assert.Equal(Public, await Reached.Open(tangentSpace, Cancellation));
         Assert.Null(tangentSpace.Services.GetRequiredService<KoanWebBaseUrl>().Current);
     }
 
@@ -276,18 +231,17 @@ public sealed class OfferTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(), ct: Cancellation);
         await APlaceWithNews(tangentSpace);
         await Reached.On(tangentSpace, Public, Cancellation);
-        await Reached.Settled(tangentSpace, Cancellation);
-        var offer = Assert.Single(await Offer.All(Cancellation));
         using var leo = await SignedIn(tangentSpace, "leo", Leo);
         var baseUrl = tangentSpace.Services.GetRequiredService<KoanWebBaseUrl>();
+        var id = Offer.IdFor(OfferKind.Address, Public);
 
         // Koan holds the origin only once the command has judged and kept it: refused there, nothing changes.
-        Assert.Equal(new Outcome<Offer>.Refused(Decision.NoOffer), await PlaceAddress.Use(baseUrl, new UseOffer(offer.Id, Ada, Public)));
+        Assert.Equal(new Outcome<Offer>.Refused(Decision.NoOffer), await PlaceAddress.Use(baseUrl, new UseOffer(Public, Ada, Public)));
         Assert.Null(baseUrl.Current);
         Assert.Null((await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Address);
-        Assert.Equal(OfferState.Open, (await Offer.Get(offer.Id, Cancellation))!.State);
+        Assert.Null(await Offer.Get(id, Cancellation));
 
-        using (var used = await Answer(leo, OfferController.UsePath, offer.Id))
+        using (var used = await Answer(leo, OfferController.UsePath, Public))
         {
             Assert.Equal(HttpStatusCode.SeeOther, used.StatusCode);
             Assert.Equal(FirstRunController.Path, used.Headers.Location?.OriginalString);
@@ -296,9 +250,8 @@ public sealed class OfferTests
         Assert.Equal(Public, baseUrl.Current);
         var space = (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!;
         Assert.Equal(Public, space.Address);
-        var accepted = (await Offer.Get(offer.Id, Cancellation))!;
-        Assert.Equal(OfferState.Accepted, accepted.State);
-        Assert.NotNull(accepted.DecidedAt);
+        var accepted = (await Offer.Get(id, Cancellation))!;
+        Assert.Equal((OfferState.Accepted, Public), (accepted.State, accepted.Subject));
 
         // Asked for at the loopback address, every link is the origin's.
         using (var descriptor = await Json(tangentSpace.Client, "/tangent.json"))
@@ -309,11 +262,11 @@ public sealed class OfferTests
         using (var door = await Json(leo.Client, "/"))
         {
             Assert.Equal(Public + "/", door.RootElement.GetProperty("address").GetString());
-            Assert.False(door.RootElement.TryGetProperty("offers", out _));
+            Assert.False(door.RootElement.TryGetProperty("offer", out _));
         }
 
         var events = await Event.Log.Highest(Cancellation);
-        using (var again = await Answer(leo, OfferController.UsePath, offer.Id))
+        using (var again = await Answer(leo, OfferController.UsePath, Public))
         {
             Assert.Equal(HttpStatusCode.SeeOther, again.StatusCode);
             Assert.Equal(FirstRunController.Path, again.Headers.Location?.OriginalString);
@@ -321,7 +274,7 @@ public sealed class OfferTests
 
         Assert.Equal(Public, baseUrl.Current);
         Assert.Equal(space.Version, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Version);
-        Assert.Equal(accepted.DecidedAt, (await Offer.Get(offer.Id, Cancellation))!.DecidedAt);
+        Assert.Equal(accepted.DecidedAt, (await Offer.Get(id, Cancellation))!.DecidedAt);
         Assert.Equal(events, await Event.Log.Highest(Cancellation));
     }
 
@@ -331,26 +284,24 @@ public sealed class OfferTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(), ct: Cancellation);
         await APlaceWithNews(tangentSpace);
         await Reached.On(tangentSpace, Public, Cancellation);
-        await Reached.Settled(tangentSpace, Cancellation);
-        var offer = Assert.Single(await Offer.All(Cancellation));
         var baseUrl = tangentSpace.Services.GetRequiredService<KoanWebBaseUrl>();
 
         var release = new TaskCompletionSource();
         var running = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var held = new Hold(release.Task, running).Send(Cancellation);
         await running.Task.WaitAsync(TimeSpan.FromSeconds(10), Cancellation);
-        var used = PlaceAddress.Use(baseUrl, new UseOffer(offer.Id, Leo, Public));
+        var used = PlaceAddress.Use(baseUrl, new UseOffer(Public, Leo, Public));
         release.SetResult();
         await held;
 
         Assert.IsType<Outcome<Offer>.Done>(await used);
         Assert.Equal(Public, baseUrl.Current);
         Assert.Equal(Public, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Address);
-        Assert.Equal(OfferState.Accepted, (await Offer.Get(offer.Id, Cancellation))!.State);
+        Assert.Equal(OfferState.Accepted, (await Offer.Get(Offer.IdFor(OfferKind.Address, Public), Cancellation))!.State);
     }
 
     [Fact]
-    public async Task Not_this_one_declines_the_offer_lands_on_the_door_and_offers_the_origin_that_waited_and_a_declined_origin_is_never_offered_again()
+    public async Task Not_this_one_declines_the_offer_lands_on_the_door_and_opens_the_next_origin_and_a_declined_origin_is_never_offered_again()
     {
         var dataFolder = Path.Combine(Path.GetTempPath(), "tangent-data-" + Guid.CreateVersion7().ToString("n"));
         try
@@ -358,46 +309,41 @@ public sealed class OfferTests
             await using (var tangentSpace = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(("Tangent:DataFolder", dataFolder)), ct: Cancellation))
             {
                 await APlaceWithNews(tangentSpace);
-                await Reached.On(tangentSpace, Public, Cancellation);
-                await Reached.Settled(tangentSpace, Cancellation);
-                // One address is offered at a time: this one waits.
+                // One address is offered at a time, the one seen first: the other waits.
+                await Reached.On(tangentSpace, Public, Cancellation, times: 3);
                 await Reached.On(tangentSpace, Other, Cancellation, times: 2);
-                await Reached.Settled(tangentSpace, Cancellation);
-                var offer = Assert.Single(await Offer.All(Cancellation));
+                Assert.Equal(Public, await Reached.Open(tangentSpace, Cancellation));
                 using var leo = await SignedIn(tangentSpace, "leo", Leo);
 
-                using (var declined = await Answer(leo, OfferController.DeclinePath, offer.Id))
+                using (var declined = await Answer(leo, OfferController.DeclinePath, Public))
                 {
                     Assert.Equal(HttpStatusCode.SeeOther, declined.StatusCode);
                     Assert.Equal("/", declined.Headers.Location?.OriginalString);
                 }
 
-                Assert.Equal(OfferState.Declined, (await Offer.Get(offer.Id, Cancellation))!.State);
-                var next = (await Offer.All(Cancellation)).Single(row => row.Id != offer.Id);
-                Assert.Equal((Other, OfferState.Open), (next.Subject, next.State));
+                Assert.Equal(OfferState.Declined, Assert.Single(await Offer.All(Cancellation)).State);
+                Assert.Equal(Other, await Reached.Open(tangentSpace, Cancellation));
                 using (var door = await Json(leo.Client, "/"))
-                    Assert.Equal(Other, Assert.Single(door.RootElement.GetProperty("offers").EnumerateArray()).GetProperty("subject").GetString());
+                    Assert.Equal(Other, door.RootElement.GetProperty("offer").GetProperty("subject").GetString());
                 Assert.Null(tangentSpace.Services.GetRequiredService<KoanWebBaseUrl>().Current);
 
-                // Declined, never again: neither by the same answer twice nor by another command.
-                using (var again = await Answer(leo, OfferController.DeclinePath, offer.Id))
+                // Declined, never again: neither by the same answer twice nor by the other answer.
+                using (var again = await Answer(leo, OfferController.DeclinePath, Public))
                     Assert.Equal(HttpStatusCode.SeeOther, again.StatusCode);
-                Assert.Equal(new Outcome<Offer>.Refused(MakeOffer.Made),
-                    await new MakeOffer(Public).Send(Cancellation));
-                using (var refused = await Answer(leo, OfferController.UsePath, offer.Id))
+                using (var refused = await Answer(leo, OfferController.UsePath, Public))
                     Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+                Assert.Equal(new Outcome<Offer>.Refused(Offer.NotOpen), await new DeclineOffer(Public, Leo).Send(Cancellation));
                 Assert.Null(tangentSpace.Services.GetRequiredService<KoanWebBaseUrl>().Current);
-                Assert.Equal(OfferState.Open, (await Offer.Get(next.Id, Cancellation))!.State);
-                using (var declinedNext = await Answer(leo, OfferController.DeclinePath, next.Id))
+                using (var declinedNext = await Answer(leo, OfferController.DeclinePath, Other))
                     Assert.Equal(HttpStatusCode.SeeOther, declinedNext.StatusCode);
+                Assert.Null(await Reached.Open(tangentSpace, Cancellation));
             }
 
-            // Nor after a restart, when Koan reports it again as a new origin.
+            // Nor after a restart, when Koan sees it again as a new origin.
             await using var restarted = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(("Tangent:DataFolder", dataFolder)), ct: Cancellation);
             await Reached.On(restarted, Public, Cancellation);
-            await Reached.Settled(restarted, Cancellation);
-            Assert.All(await Offer.All(Cancellation), row => Assert.Equal(OfferState.Declined, row.State));
-            Assert.Equal(2, (await Event.All(Cancellation)).Count(e => e.Kind == EventKind.OfferMade));
+            Assert.Null(await Reached.Open(restarted, Cancellation));
+            Assert.Equal(2, (await Offer.All(Cancellation)).Count(row => row.State == OfferState.Declined));
         }
         finally
         {
@@ -407,7 +353,7 @@ public sealed class OfferTests
     }
 
     [Fact]
-    public async Task After_a_restart_an_open_offer_shows_without_evidence_until_its_origin_is_seen_again()
+    public async Task After_a_restart_no_offer_is_open_until_its_origin_is_seen_again_and_then_it_counts_from_there()
     {
         var dataFolder = Path.Combine(Path.GetTempPath(), "tangent-data-" + Guid.CreateVersion7().ToString("n"));
         try
@@ -416,84 +362,24 @@ public sealed class OfferTests
             {
                 await APlaceWithNews(first);
                 await Reached.On(first, Public, Cancellation, times: 3);
-                await Reached.Settled(first, Cancellation);
+                Assert.Equal(Public, await Reached.Open(first, Cancellation));
             }
 
             await using var restarted = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(("Tangent:DataFolder", dataFolder)), ct: Cancellation);
             using var leo = await SignedIn(restarted, "leo", Leo);
             using (var door = await Json(leo.Client, "/"))
-            {
-                var offered = Assert.Single(door.RootElement.GetProperty("offers").EnumerateArray());
-                Assert.Equal(Public, offered.GetProperty("subject").GetString());
-                Assert.False(offered.TryGetProperty("count", out _));
-                Assert.False(offered.TryGetProperty("since", out _));
-            }
-            Assert.Contains($"This place is being reached at <strong>{Public}</strong>. Use it as its address?", WebUtility.HtmlDecode(await Html(leo.Client, "/")));
+                Assert.False(door.RootElement.TryGetProperty("offer", out _));
 
-            // Seen again, it counts from here, and a rising count makes no new offer.
             await Reached.On(restarted, Public, Cancellation, times: 2);
-            await Reached.Settled(restarted, Cancellation);
             using (var door = await Json(leo.Client, "/"))
-                Assert.Equal(2, Assert.Single(door.RootElement.GetProperty("offers").EnumerateArray()).GetProperty("count").GetInt64());
-            Assert.Single(await Offer.All(Cancellation));
-            Assert.Single(await Event.All(Cancellation), e => e.Kind == EventKind.OfferMade);
+                Assert.Equal(2, door.RootElement.GetProperty("offer").GetProperty("count").GetInt64());
+            Assert.Empty(await Offer.All(Cancellation));
         }
         finally
         {
             SqliteConnection.ClearAllPools();
             if (Directory.Exists(dataFolder)) Directory.Delete(dataFolder, recursive: true);
         }
-    }
-
-    [Fact]
-    public async Task A_configured_url_lapses_the_open_offers_and_the_door_shows_none()
-    {
-        var dataFolder = Path.Combine(Path.GetTempPath(), "tangent-data-" + Guid.CreateVersion7().ToString("n"));
-        try
-        {
-            await using (var unconfigured = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(("Tangent:DataFolder", dataFolder)), ct: Cancellation))
-            {
-                await APlaceWithNews(unconfigured);
-                await Reached.On(unconfigured, Public, Cancellation);
-                await Reached.Settled(unconfigured, Cancellation);
-                Assert.Equal(OfferState.Open, Assert.Single(await Offer.All(Cancellation)).State);
-            }
-
-            await using var configured = await TangentSpaceFixture.StartAsync(new Dictionary<string, string?>
-            {
-                ["Tangent:DataFolder"] = dataFolder,
-                ["Koan:Web:Auth:TestProvider:Enabled"] = "true",
-                ["Tangent:Profile:BaseAddress"] = "http://127.0.0.1:1/",
-                ["Tangent:Profile:Timeout"] = "00:00:01"
-            }, ct: Cancellation);
-            await Reached.Settled(configured, Cancellation);
-
-            var lapsed = Assert.Single(await Offer.All(Cancellation));
-            Assert.Equal(OfferState.Lapsed, lapsed.State);
-            Assert.NotNull(lapsed.DecidedAt);
-            using var leo = await SignedIn(configured, "leo", Leo);
-            using var door = await Json(leo.Client, "/");
-            Assert.False(door.RootElement.TryGetProperty("offers", out _));
-            Assert.Equal(TangentSpaceFixture.DefaultBaseUrl + "/", door.RootElement.GetProperty("address").GetString());
-        }
-        finally
-        {
-            SqliteConnection.ClearAllPools();
-            if (Directory.Exists(dataFolder)) Directory.Delete(dataFolder, recursive: true);
-        }
-    }
-
-    /// <summary>What <paramref name="read"/> answers once it answers something, read every tenth of a second for at most
-    /// ten seconds; null if it never does.</summary>
-    private static async Task<T?> Eventually<T>(Func<Task<T?>> read) where T : class
-    {
-        for (var attempt = 0; attempt < 100; attempt++)
-        {
-            if (await read() is { } found) return found;
-            await Task.Delay(TimeSpan.FromMilliseconds(100), Cancellation);
-        }
-
-        return null;
     }
 
     /// <summary>Keeps the store until <paramref name="Until"/> completes, saying when it began through
@@ -526,10 +412,10 @@ public sealed class OfferTests
         return browser;
     }
 
-    /// <summary>Posts one answer to an Offer, as its form does.</summary>
-    private static async Task<HttpResponseMessage> Answer(Browser browser, string path, string offerId)
+    /// <summary>Posts one answer to the Offer of <paramref name="origin"/>, as its form does.</summary>
+    private static async Task<HttpResponseMessage> Answer(Browser browser, string path, string origin)
     {
-        var fields = new Dictionary<string, string> { [OfferController.Field] = offerId };
+        var fields = new Dictionary<string, string> { [OfferController.Field] = origin };
         return await browser.Client.PostAsync(path, new FormUrlEncodedContent(fields), Cancellation);
     }
 

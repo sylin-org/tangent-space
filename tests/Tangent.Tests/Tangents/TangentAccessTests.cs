@@ -54,7 +54,7 @@ public sealed class TangentAccessTests
 
         // A visitor finds nothing there, as at an address with nothing.
         var absent = await Send(visitor, HttpMethod.Get, "/t/" + Studio, json: true);
-        Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent.Text), (absent.Status, absent.Gate));
+        Assert.Equal((HttpStatusCode.NotFound, "absent"), (absent.Status, absent.Kind));
         Assert.Equal((await Send(visitor, HttpMethod.Get, "/t/nowhere", json: true)).Body, absent.Body);
         Assert.DoesNotContain("Members only", (await Send(visitor, HttpMethod.Get, "/t/" + Studio)).Body);
 

@@ -128,7 +128,7 @@ public sealed class MarkdownTests
             var watch = System.Diagnostics.Stopwatch.StartNew();
             var body = PostBody.Of(text);
             watch.Stop();
-            Assert.True(body.Refusal == Post.BodyTooIntricate, $"{name}: {body.Refusal ?? "accepted"}");
+            Assert.True(body.Refusal == Post.BodyTooIntricate, $"{name}: {body.Refusal?.Text ?? "accepted"}");
             Assert.True(watch.ElapsedMilliseconds < 100, $"{name}: judged in {watch.ElapsedMilliseconds} ms.");
         }
     }

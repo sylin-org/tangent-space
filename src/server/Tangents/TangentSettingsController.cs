@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Koan.Data.Core.Commands;
 using Koan.Web.Attributes;
+using Koan.Web.Controllers;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -79,7 +80,7 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
             case Outcome<Tangent>.Refused { Reason: { Kind: not ReasonKind.Absent } reason }:
                 return await Refused(found, personId, input, reason, ct);
             default:
-                return PostWrites.Answer(HttpContext, outcome);
+                return Answers.NotDone(HttpContext, outcome);
         }
     }
 
@@ -98,7 +99,7 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
     /// keeping what was sent, with the reason where it belongs.</summary>
     private async Task<IActionResult> Refused(PostWrites.Located found, string? personId, ChangeTangentInput input, Reason reason, CancellationToken ct)
     {
-        if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
+        if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
         var (again, unseen) = await PostWrites.Locate(HttpContext, personId, found.Tangent.Id, null, null, ct);
         if (again is null) return unseen!;
         var page = await Page(again, personId, ct);
@@ -118,7 +119,7 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
             TangentWrites.About.Sent => page with { Failure = reason.Text },
             _ => page with { Gate = reason.Word, Change = null }
         };
-        return new ObjectResult(page) { StatusCode = PostWrites.Status(reason) };
+        return new ObjectResult(page) { StatusCode = Answers.Status(HttpContext, reason) };
     }
 
     private async Task<TangentSettingsPage> Page(PostWrites.Located found, string? personId, CancellationToken ct)

@@ -21,11 +21,11 @@ public sealed class Tangent : Entity<Tangent>
     /// <summary>How many numbered suffixes <see cref="FreeSlug"/> tries when another Tangent holds a slug.</summary>
     public const int SuffixBound = 50;
 
-    public const string NeedsSlug = "A Tangent's slug is lowercase letters and digits joined by single hyphens, at most 64 characters.";
-    public const string SlugReserved = "A Tangent's slug is never new, the address where a Tangent is created.";
-    public const string NeedsName = "A Tangent has a name.";
-    public const string NameTooLong = "A Tangent's name holds at most 80 characters.";
-    public const string DescriptionTooLong = "A Tangent's description holds at most 1000 characters.";
+    public static readonly Reason NeedsSlug = Reason.Invalid("A Tangent's slug is lowercase letters and digits joined by single hyphens, at most 64 characters.");
+    public static readonly Reason SlugReserved = Reason.Invalid("A Tangent's slug is never new, the address where a Tangent is created.");
+    public static readonly Reason NeedsName = Reason.Invalid("A Tangent has a name.");
+    public static readonly Reason NameTooLong = Reason.Invalid("A Tangent's name holds at most 80 characters.");
+    public static readonly Reason DescriptionTooLong = Reason.Invalid("A Tangent's description holds at most 1000 characters.");
 
     public string Name { get; set; } = "";
 

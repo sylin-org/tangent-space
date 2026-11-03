@@ -16,8 +16,8 @@ namespace Tangent.Space;
 /// is the signed-in reader and <see cref="SignIn"/> where a visitor signs in; <see cref="Day"/> is the UTC day the
 /// times are written for. <see cref="Poll"/> is where the reader asks for what happens after this door: the poll past the
 /// newest event the door read that the reader may see, or past the newest of its window where the window held none of
-/// those, which the stream at the same address also answers. For the place's operator, <see cref="Offers"/> are the
-/// open Offers they decide, shown first; for anyone else there are none, and the field is absent. For whoever decides
+/// those, which the stream at the same address also answers. For the place's operator, <see cref="Offer"/> is the open
+/// Offer of an address, shown first; for anyone else there is none, and the field is absent. For whoever decides
 /// applications, <see cref="Applications"/> says how many wait and where they are decided. <see cref="NewTangent"/> is where a
 /// Tangent is created, present only for a reader who may create one. <see cref="Gate"/> is why the reader may not write
 /// in the place, absent where they may: for an applicant, that their application is waiting, or was declined, and for a
@@ -57,8 +57,8 @@ public sealed record Door(
     /// <summary>The place's articles feeds: present only where a visitor may read the place.</summary>
     public IReadOnlyList<Render.FeedLink>? Feeds { get; init; }
 
-    /// <summary>The open Offers the reader decides: present only for the place's operator, and only while one is open.</summary>
-    public IReadOnlyList<Offered>? Offers { get; init; }
+    /// <summary>The open Offer the reader decides: present only for the place's operator, and only while one is open.</summary>
+    public Offered? Offer { get; init; }
 
     /// <summary>How many applications wait and where they are decided: present only for a reader who holds
     /// <c>ManageStanding</c> in the place, and only while one waits.</summary>
@@ -85,8 +85,8 @@ public sealed record Door(
     /// <see cref="Edited"/> holds their Posts someone else edited since then and still stand, each once, and
     /// <see cref="Removed"/> those someone else removed, each with who did it.
     /// <see cref="Notifications"/> is how many of the reader's notifications they have not seen and where they are,
-    /// present while there are some. <see cref="First"/> says this is their first door: they have no place checkpoint, so
-    /// nothing in the place counts as new to them and only what concerns them is here.</summary>
+    /// present while there are some. <see cref="First"/> says this is their first door: their place checkpoint still
+    /// stands at their own arrival.</summary>
     public sealed record Since(
         long From,
         long Through,
@@ -107,7 +107,7 @@ public sealed record Door(
         /// some.</summary>
         public Events.Notifications.Unseen? Notifications { get; init; }
 
-        /// <summary>Whether the reader has never been at the door.</summary>
+        /// <summary>Whether the reader is at their first door.</summary>
         public bool First { get; init; }
 
         /// <summary>Whether nothing is new to the reader.</summary>
@@ -140,11 +140,10 @@ public sealed record Door(
     /// <summary>What is new in one Tangent: its Topics and its replies.</summary>
     public sealed record InTangent(string Slug, string Name, string Address, int Topics, int Replies, bool AtLeast);
 
-    /// <summary>One open Offer as its decider reads it: the Offer's Id, what it would do (<c>address</c>: use
-    /// <see cref="Subject"/>, an origin, as the place's address), and the evidence Koan holds since this process started —
-    /// how many requests arrived on it and since when, absent after a restart until it is seen again; then its two answers,
-    /// each a form carrying the Id in its <c>offer</c> field.</summary>
-    public sealed record Offered(string Offer, string Kind, string Subject, long? Count, DateTimeOffset? Since, Form Use, Form Decline);
+    /// <summary>The open Offer as its decider reads it: what it would do (<c>address</c>: use <see cref="Subject"/>, an
+    /// origin, as the place's address), and the evidence Koan holds since this process started — how many requests arrived
+    /// on it and since when; then its two answers, each a form carrying the origin in its <c>origin</c> field.</summary>
+    public sealed record Offered(string Kind, string Subject, long Count, DateTimeOffset Since, Form Use, Form Decline);
 
     /// <summary>How many applications wait, whether that is a lower bound because the read was full, and the address of
     /// the applications, where each is admitted or declined.</summary>

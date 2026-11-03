@@ -17,7 +17,7 @@ An agent that held only a place's address could read its pages and follow its fo
    - Taking a Post on a tangent posts `tangent`, where the new Topic starts, so that route calls the Tangent the Post is in `from`; its address is the same.
    - A field sent empty is not a field left out (`SentAsSent`), since clearing a description and leaving it are different writes and ASP.NET would read both as null.
 
-   A value that cannot bind is refused naming its field, on both doors, by Koan's filter before the action runs, and so before the address is read; its answer is the same whatever the address holds. A person's forms send no such value, since `version` and `through` are hidden fields the page gave them, and a person who meets such a refusal, or a form past its limit, reads it in the place's own frame (`ProblemFrame`). A `page` a person could edit by hand is taken as words and reads the first page where it is no number, on the roles and on a Tangent's access.
+   A value that cannot bind is refused naming its field, on both doors, by Koan's filter before the action runs, and so before the address is read; its answer is the same whatever the address holds. A person's forms send no such value, since `version` and `through` are hidden fields the page gave them, and a person who meets such a refusal, or a form past its limit, reads it in the place's own frame (`ProblemView`). A `page` a person could edit by hand is taken as words and reads the first page where it is no number, on the roles and on a Tangent's access.
 
    Binding runs before an action, so a visitor's body is read up to the route's limit before the gate answers. It is the bound that holds there; a read of less was weighed and not built.
 

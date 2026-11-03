@@ -43,7 +43,7 @@ public sealed class NewMediaController(KoanWebBaseUrl baseUrl) : ControllerBase
         var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, null, null, ct);
         if (found is null) return unseen!;
         var here = found.Capabilities;
-        if (personId is null || (!here.Holds(Bit.Topic) && !here.Holds(Bit.Post))) return PostWrites.Refused(HttpContext, here.Gate(Bit.Topic) ?? Capabilities.SignIn);
+        if (personId is null || (!here.Holds(Bit.Topic) && !here.Holds(Bit.Post))) return Answers.Refused(HttpContext, here.Gate(Bit.Topic) ?? Capabilities.SignIn);
 
         if (await Sent(input, ct) is not { } sent) return NotKept(NoFile);
         Media media;
@@ -87,7 +87,7 @@ public sealed class NewMediaController(KoanWebBaseUrl baseUrl) : ControllerBase
         }
     }
 
-    private static IActionResult NotKept(string reason) => new Problem(StatusCodes.Status400BadRequest, "Not kept", reason).ToResult();
+    private static IActionResult NotKept(string reason) => new Problem(StatusCodes.Status400BadRequest, reason) { Title = "Not kept" }.ToResult();
 }
 
 /// <summary>An image as its coming in answers: its Id, which a cover names; its address; and the reference a body's

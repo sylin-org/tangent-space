@@ -26,13 +26,11 @@ public sealed class CommandGateTests
         await Given.AParticipant(tangentSpace, "leo", [Roles.Member], ct: Cancellation);
         await tangentSpace.Services.GetRequiredService<RoleCollection>().Overwrite(Overwrites.Resource(Workshop), OverwriteSubjectKind.Role,
             RoleTokens.Everyone, [Bits.Token(Bit.View)], [Bits.Token(Bit.Topic)], ct: Cancellation);
-        var announced = 0;
-        tangentSpace.Commits.Landed += _ => announced++;
 
         var refused = await new StartTopic(Tids.Mint(), Workshop, "Not here", "Words.", "leo").Send(Cancellation);
 
         Assert.Equal(Capabilities.Denied(RoleTokens.Everyone, Bit.Topic), Assert.IsType<Outcome<Post>.Refused>(refused).Reason);
-        Assert.Equal((0, 0, 0), (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation), announced));
+        Assert.Equal((0, 0), (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation)));
     }
 
     [Fact]

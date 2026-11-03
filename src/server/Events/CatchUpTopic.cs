@@ -15,7 +15,7 @@ namespace Tangent.Events;
 public sealed record CatchUpTopic(string ParticipantId, string TopicId, long Through) : ICommand<Checkpoint>
 {
     public static readonly Reason NoTopic = Reason.Absent("No topic is here.");
-    public const string NoSequence = "No post of this topic has this sequence.";
+    public static readonly Reason NoSequence = Reason.Invalid("No post of this topic has this sequence.");
 
     public async Task<Outcome<Checkpoint>> Run(CancellationToken ct)
     {

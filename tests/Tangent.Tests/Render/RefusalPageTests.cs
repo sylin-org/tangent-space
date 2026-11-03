@@ -53,10 +53,16 @@ public sealed class RefusalPageTests
 
         var fields = new Dictionary<string, string>();
         fields["body"] = new string('x', (int)PostWrites.RequestLimit * 2);
-        var large = await Send(ada.Client, HttpMethod.Post, TopicPath(root), FormBody(fields));
-        Assert.Equal((HttpStatusCode.RequestEntityTooLarge, "text/html"), (large.Status, large.MediaType));
-        Assert.Contains(Masthead, large.Body);
-        Assert.Contains("Too large", large.Body);
+        // The body waits for the server's go-ahead, so the refusal is read before an unread body closes the connection.
+        using var oversized = new HttpRequestMessage(HttpMethod.Post, TopicPath(root)) { Content = FormBody(fields) };
+        oversized.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
+        oversized.Headers.ExpectContinue = true;
+        using var refused = await ada.Client.SendAsync(oversized, Cancellation);
+        var large = await refused.Content.ReadAsStringAsync(Cancellation);
+        Assert.Equal((HttpStatusCode.RequestEntityTooLarge, "text/html"), (refused.StatusCode, refused.Content.Headers.ContentType?.MediaType));
+        Assert.Contains(Masthead, large);
+        Assert.Contains(">Too large</h1>", large);
+        Assert.Contains("more than this address takes", large);
 
         // The place's own: nothing at an address, and a gate, each with the way to sign in for a visitor.
         var nothing = await Send(visitor, HttpMethod.Get, "/t/" + Workshop + "/nothing-here");
@@ -75,6 +81,51 @@ public sealed class RefusalPageTests
         fragment.Headers.Add(HtmlFormatter.FragmentHeader, "1");
         using var alone = await visitor.SendAsync(fragment, Cancellation);
         Assert.DoesNotContain(Masthead, await alone.Content.ReadAsStringAsync(Cancellation));
+    }
+
+    [Fact]
+    public async Task A_browser_reads_a_refusal_as_a_page_with_its_heading_and_any_other_client_reads_the_problem()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        using var visitor = Agent(tangentSpace);
+
+        using var asked = new HttpRequestMessage(HttpMethod.Get, Events.Notifications.Path);
+        asked.Headers.TryAddWithoutValidation("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+        using var browser = await visitor.SendAsync(asked, Cancellation);
+        var page = await browser.Content.ReadAsStringAsync(Cancellation);
+        Assert.Equal((HttpStatusCode.Unauthorized, "text/html"), (browser.StatusCode, browser.Content.Headers.ContentType?.MediaType));
+        Assert.Contains(Masthead, page);
+        Assert.Contains(">Sign in first</h1>", page);
+        Assert.Contains("data-gate=\"sign-in\"", page);
+
+        foreach (var accept in new[] { "*/*", "application/problem+json", "application/json" })
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, Events.Notifications.Path);
+            request.Headers.TryAddWithoutValidation("Accept", accept);
+            using var response = await visitor.SendAsync(request, Cancellation);
+            using var problem = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync(Cancellation));
+            Assert.Equal((HttpStatusCode.Unauthorized, "application/problem+json"), (response.StatusCode, response.Content.Headers.ContentType?.MediaType));
+            Assert.Equal(("gated", Capabilities.SignIn.Word), (problem.RootElement.GetProperty("kind").GetString(), problem.RootElement.GetProperty("gate").GetString()));
+        }
+    }
+
+    [Fact]
+    public async Task A_fragment_refused_for_sign_in_offers_the_way_to_sign_in_and_come_back()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        using var visitor = Agent(tangentSpace);
+
+        using var fragment = new HttpRequestMessage(HttpMethod.Get, Events.Notifications.Path + "?after=x");
+        fragment.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
+        fragment.Headers.Add(HtmlFormatter.FragmentHeader, "1");
+        using var alone = await visitor.SendAsync(fragment, Cancellation);
+        var body = await alone.Content.ReadAsStringAsync(Cancellation);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, alone.StatusCode);
+        Assert.DoesNotContain(Masthead, body);
+        Assert.Contains("href=\"" + BaseUrl + "/sign-in?return=%2Fnotifications%3Fafter%3Dx\">Sign in</a>", body);
     }
 
     [Theory]

@@ -3,6 +3,7 @@ using System.Globalization;
 using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Koan.Web.Attributes;
+using Koan.Web.Controllers;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Participants;
@@ -61,7 +62,7 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
     /// <summary>The most roles one page holds.</summary>
     public const int PageSize = 50;
 
-    public const string MoveRule = "A role moves higher or lower.";
+    public static readonly Reason MoveRule = Reason.Invalid("A role moves higher or lower.");
 
     /// <summary>The moves a form offers, as words.</summary>
     public static readonly IReadOnlyList<string> Moves = Enum.GetValues<RoleMove>().Select(Word).ToList();
@@ -83,7 +84,7 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
         var read = await Page(place, personId, Numbered(page), ct);
-        return read.Gate is { } gate ? new ObjectResult(read) { StatusCode = PostWrites.Status(gate) } : Ok(read);
+        return place.Gate(Bit.ManageRoles) is { } gate ? new ObjectResult(read) { StatusCode = Answers.Status(HttpContext, gate) } : Ok(read);
     }
 
     [HttpPost(Path)]
@@ -121,7 +122,7 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
 
     /// <summary>The bits <paramref name="sent"/> names, in <paramref name="bits"/>, null where nothing was sent; the refusal
     /// where a word names no bit, null otherwise.</summary>
-    private static string? Granted(string[]? sent, out Bit? bits)
+    private static Reason? Granted(string[]? sent, out Bit? bits)
     {
         bits = null;
         if (sent is null) return null;
@@ -138,8 +139,7 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
 
-        if (built is string or Reason)
-            return await Refused(personId, name, permissions, built is Reason reasoned ? reasoned : (Reason)(string)built, created, ct);
+        if (built is Reason refused) return await Refused(personId, name, permissions, refused, created, ct);
         var sent = (ICommand<Role>)built;
         var outcome = await sent.Send();
         switch (outcome)
@@ -163,7 +163,7 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
             case Outcome<Role>.Refused { Reason: var reason }:
                 return await Refused(personId, name, permissions, reason, created, ct);
             default:
-                return PostWrites.Answer(HttpContext, outcome);
+                return Answers.NotDone(HttpContext, outcome);
         }
     }
 
@@ -171,7 +171,7 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
     /// with the reason above the list, keeping a new role's name and permissions as they were sent.</summary>
     private async Task<IActionResult> Refused(string? personId, string? name, string[]? permissions, Reason reason, bool created, CancellationToken ct)
     {
-        if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
+        if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
 
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
@@ -189,7 +189,7 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
             }
         }
 
-        return new ObjectResult(page) { StatusCode = PostWrites.Status(reason) };
+        return new ObjectResult(page) { StatusCode = Answers.Status(HttpContext, reason) };
     }
 
     private async Task<RolesPage> Page(Capabilities place, string? personId, int number, CancellationToken ct)

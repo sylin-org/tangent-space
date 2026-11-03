@@ -101,7 +101,7 @@ public sealed class TwoDoorsTests
         var concealed = await doors.AdaTools.Call("reply", new { tangent = Studio, topic = "plans", body = "Anyone?" });
         var read = await doors.AdaTools.Call("read_topic", new { tangent = Studio, topic = "plans" });
 
-        Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent.Text), (nothing.Status, nothing.Gate));
+        Assert.Equal((HttpStatusCode.NotFound, "absent"), (nothing.Status, nothing.Kind));
         SameRefusal(nothing, missing);
         SameRefusal(nothing, concealed);
         SameRefusal(nothing, read);
@@ -133,13 +133,13 @@ public sealed class TwoDoorsTests
     }
 
     [Fact]
-    public async Task A_gate_says_its_word_its_sentence_and_its_next_step_on_both_doors()
+    public async Task A_gate_says_its_word_and_its_sentence_on_both_doors()
     {
         await using var tangentSpace = await Starting();
         using var doors = await Open(tangentSpace);
         var root = doors.Root;
 
-        // A word and a sentence, with no next step to name.
+        // A word and a sentence.
         var http = await doors.Posted("/t/new", new { name = "Mine" });
         var tool = await doors.AdaTools.Call("create_tangent", new { name = "Mine" });
         Assert.Equal(HttpStatusCode.Forbidden, http.Status);
@@ -147,15 +147,14 @@ public sealed class TwoDoorsTests
         SameRefusal(http, tool);
         Assert.Equal("gated", tool.ErrorCode);
 
-        // A session whose participant is no longer here reads as a visitor: sign in, and where.
+        // A session whose participant is no longer here reads as a visitor: sign in. Its session still holds, so it is
+        // forbidden rather than unauthorized.
         var row = await Participant.Get(Ada, Cancellation);
         await row!.Remove(Cancellation);
         var signIn = await doors.Posted(TopicPath(root), new { body = "Anyone?" });
         var asked = await doors.AdaTools.Call("reply", new { tangent = root.TangentId, topic = root.Slug, body = "Anyone?" });
-        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (signIn.Status, signIn.Gate));
-        Assert.Equal(BaseUrl + SignInController.Path, signIn.Json.GetProperty("next").GetString());
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.SignIn.Word), (signIn.Status, signIn.Gate));
         SameRefusal(signIn, asked);
-        Assert.Equal(BaseUrl + SignInController.Path, asked.Structured!.Value.GetProperty("next").GetString());
     }
 
     [Fact]
@@ -223,7 +222,7 @@ public sealed class TwoDoorsTests
         // Left out, the rule says what it wants.
         var unnamed = await doors.Posted(PostPath(root, root) + "/edit", new { body = "New words." });
         var named = await doors.AdaTools.Call("edit", new { tangent = root.TangentId, topic = root.Slug, post = root.Id, body = "New words." });
-        Assert.Equal(PostWrites.VersionRule, unnamed.Json.GetProperty("detail").GetString());
+        Assert.Equal(PostWrites.VersionRule.Text, unnamed.Json.GetProperty("detail").GetString());
         SameRefusal(unnamed, named);
 
         // A body of neither shape says so, and says nothing of what the address holds.
@@ -274,7 +273,7 @@ public sealed class TwoDoorsTests
         var http = await doors.Posted(TopicPath(root), new { body = words });
         var tool = await doors.AdaTools.Call("reply", new { tangent = root.TangentId, topic = root.Slug, body = words });
 
-        Assert.Equal((HttpStatusCode.RequestEntityTooLarge, "Too large"), (http.Status, http.Title));
+        Assert.Equal((HttpStatusCode.RequestEntityTooLarge, "invalid"), (http.Status, http.Kind));
         Assert.Equal(413, tool.Status);
         Assert.Equal("invalid", tool.ErrorCode);
         Assert.Equal(before, await Counted());
@@ -354,7 +353,7 @@ public sealed class TwoDoorsTests
 
         var unshaped = await doors.Posted(TopicPath(root), new { id = "not-a-tid", body = "These words." });
         var unshapedTool = await doors.AdaTools.Call("reply", new { tangent = root.TangentId, topic = root.Slug, id = "not-a-tid", body = "These words." });
-        Assert.Equal((HttpStatusCode.BadRequest, Post.NeedsTid), (unshaped.Status, unshaped.Json.GetProperty("detail").GetString()));
+        Assert.Equal((HttpStatusCode.BadRequest, Post.NeedsTid.Text), (unshaped.Status, unshaped.Json.GetProperty("detail").GetString()));
         SameRefusal(unshaped, unshapedTool);
     }
 

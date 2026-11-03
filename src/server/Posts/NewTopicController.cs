@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Koan.Data.Core.Commands;
 using Koan.Web.Attributes;
+using Koan.Web.Controllers;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -42,7 +43,7 @@ public sealed class NewTopicController(KoanWebBaseUrl baseUrl) : ControllerBase
     [HttpPost(Route)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "start_topic", Destructive = false, Idempotent = false, OpenWorld = false)]
-    [Description("Start a Topic in a Tangent, when what you have to say answers nothing already there. Send an id, a TID you mint, and the same call again returns the same Topic, so a retry is safe; without one, each call makes a new Topic. Refused, its gate says why and its next, where there is one, what to do now.")]
+    [Description("Start a Topic in a Tangent, when what you have to say answers nothing already there. Send an id, a TID you mint, and the same call again returns the same Topic, so a retry is safe; without one, each call makes a new Topic. Refused, its gate says why.")]
     public async Task<IActionResult> Start([FromRoute, Description(Holds.Tangent)] string tangent, StartInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
@@ -71,13 +72,13 @@ public sealed class NewTopicController(KoanWebBaseUrl baseUrl) : ControllerBase
             case Outcome<Post>.Refused { Reason: { Kind: not (ReasonKind.Absent or ReasonKind.Conflict) } reason }:
                 return await Refused(tangent, personId, input, reason, ct);
             case Outcome<Post>.Refused { Reason: { Kind: ReasonKind.Conflict } reason }:
-                if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
+                if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
                 return await Again(tangent, personId, input, StatusCodes.Status409Conflict, keepId: false, page => page with
                 {
                     Failure = "This form was already sent with other words, so nothing was posted. Send it again to post these words as well."
                 }, ct);
             default:
-                return PostWrites.Answer(HttpContext, outcome);
+                return Answers.NotDone(HttpContext, outcome);
         }
     }
 
@@ -85,8 +86,8 @@ public sealed class NewTopicController(KoanWebBaseUrl baseUrl) : ControllerBase
     /// reason where it belongs.</summary>
     private async Task<IActionResult> Refused(string tangent, string? personId, StartInput input, Reason reason, CancellationToken ct)
     {
-        if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
-        return await Again(tangent, personId, input, PostWrites.Status(reason), keepId: true, page => PostWrites.Concerning(reason) switch
+        if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
+        return await Again(tangent, personId, input, Answers.Status(HttpContext, reason), keepId: true, page => PostWrites.Concerning(reason) switch
         {
             PostWrites.About.Title => page with { TitleFailure = reason.Text },
             PostWrites.About.Body => page with { BodyFailure = reason.Text },

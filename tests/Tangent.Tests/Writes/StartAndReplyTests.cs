@@ -157,6 +157,6 @@ public sealed class StartAndReplyTests
         Assert.Equal(PostKind.Article, (await Post.Get(article.Json.GetProperty("id").GetString()!, Cancellation))?.Kind);
         Assert.Equal("topic", topic.Json.GetProperty("kind").GetString());
         Assert.Equal("topic", workshop.Json.GetProperty("kind").GetString());
-        Assert.Equal((HttpStatusCode.BadRequest, PostWrites.KindRule), (unknown.Status, unknown.Json.GetProperty("detail").GetString()));
+        Assert.Equal((HttpStatusCode.BadRequest, PostWrites.KindRule.Text), (unknown.Status, unknown.Json.GetProperty("detail").GetString()));
     }
 }

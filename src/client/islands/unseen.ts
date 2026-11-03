@@ -25,8 +25,8 @@ export const applied = 'Applied'
 // or is a report, and, for a reader whose count holds the applications that wait (applications), by one for each
 // application, the rule the server counts by; the stream only delivers rows that reach the reader, a report only to
 // whoever may view the moderators' Tangent and an application only to whoever decides it. Hidden while it is zero. It
-// only ever counts up: opening the notifications is what brings it down, on the next page, as does a decision about an
-// application, which the next page no longer counts.
+// only ever counts up: opening the notifications, the button it is, marks them seen and brings it down on the page that
+// opens, as does a decision about an application, which the next page no longer counts.
 export const unseen = defineComponent({
   name: 'UnseenIsland',
   props: {

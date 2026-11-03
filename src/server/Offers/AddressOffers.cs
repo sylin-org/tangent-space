@@ -1,169 +1,49 @@
-using System.Collections.Concurrent;
-using Koan.Data.Abstractions;
-using Koan.Data.Core.Commands;
 using Koan.Web.Hosting;
 using Tangent.Space;
 
 namespace Tangent.Offers;
 
-/// <summary>Where Offers of an address come from: Koan's record of the origins requests arrive on
-/// (<see cref="KoanWebOrigins"/>). When an origin first appears that the public reaches and Koan would take, it is offered
-/// only where nothing in memory already rules it out — no URL is configured, the place is set up, its address is local, no
-/// Offer of an address is open, and that origin was never offered — and then <see cref="MakeOffer"/> is tried, never
-/// waiting, so a request that brought a new origin goes on at once and no stream of forged hosts piles onto the store; the
-/// command judges the rest. What memory holds comes from the Offers read once at start, bounded by
-/// <see cref="KnownLimit"/>, and from the commands it is told of, and is read without a lock. An origin left out is caught
-/// later: when the place is set up, when its operator declines an Offer, and, after an attempt the store's load or a
-/// failure dropped, at the next commit while no Offer is open, the origin seen most often among those never offered is
-/// offered. Where a URL is configured, nothing is offered and a start lapses what is open. The evidence an Offer shows —
-/// how many requests, since when — is read live from Koan's record, which writes nothing per request and starts again with
-/// the process.</summary>
-public sealed class AddressOffers(KoanWebBaseUrl baseUrl, KoanWebOrigins origins, ILogger<AddressOffers> logger) : ICommandWatcher
+/// <summary>The open Offer of an address, computed and never stored: Koan's record of the origins requests arrive on
+/// (<see cref="KoanWebOrigins"/>), which writes nothing per request and starts again with the process, less the origins
+/// already decided. While no URL is configured and the place's address is local, the origin seen first among those the
+/// public reaches and Koan would take that its operator never decided is open (<see cref="Open"/>), so the line stays put
+/// until it is decided, however many requests arrive on others: one keyed read of their Offers, taking no lock. An answer
+/// lands for any such origin (<see cref="Answerable"/>), so one the operator read is still theirs to decide. Only a
+/// decision writes (<see cref="UseOffer"/>, <see cref="DeclineOffer"/>), so a request on a forged <c>Host</c> writes
+/// nothing, and declining one opens the next.</summary>
+public sealed class AddressOffers(KoanWebBaseUrl baseUrl, KoanWebOrigins origins)
 {
-    /// <summary>The most origins this process remembers as offered; beyond them, the command judges.</summary>
-    public const int KnownLimit = 1024;
-
-    private readonly ConcurrentDictionary<string, byte> _offered = new(StringComparer.Ordinal);
-    private volatile bool _setUp;
-    private volatile bool _open;
-
-    /// <summary>Whether <see cref="Start"/> has read what memory starts from; until it has, commits say nothing here.</summary>
-    private volatile bool _started;
-
-    /// <summary>One when an attempt to offer was dropped, by the store's load or a failure, and none has been retried since.</summary>
-    private int _dropped;
-
-    /// <summary>Begins offering where no URL is configured, from what the store holds, or lapses the open Offers where
-    /// one is. Called once, at start.</summary>
-    public async Task Start(CancellationToken ct)
+    /// <summary>The origin open to <paramref name="space"/>'s operator to use as its address, with what Koan has seen of
+    /// it since this process started — how many requests, since when — or null.</summary>
+    public async Task<ObservedOrigin?> Open(TangentSpace space, CancellationToken ct)
     {
-        if (baseUrl.IsConfigured)
-        {
-            switch (await new LapseOffers().Send(ct))
-            {
-                case Outcome<int>.Done { Result: > 0 and var lapsed }:
-                    logger.LogInformation("A URL is configured, so {Count} open offers lapsed", lapsed);
-                    break;
-                case Outcome<int>.Done:
-                    break;
-                case var other:
-                    logger.LogWarning("Open offers could not lapse: {Outcome}", other);
-                    break;
-            }
-
-            return;
-        }
-
-        _setUp = await TangentSpace.Get(TangentSpace.SingleRow, ct) is not null;
-        var known = await Offer.Query(offer => offer.Kind == OfferKind.Address, new QueryDefinition { Page = 1, PageSize = KnownLimit }, ct);
-        foreach (var offer in known)
-        {
-            Remember(offer.Subject);
-            if (offer.State == OfferState.Open) _open = true;
-        }
-
-        _started = true;
-        origins.Appeared += (_, seen) => Appeared(seen);
+        if (baseUrl.IsConfigured || !space.AddressIsLocal()) return null;
+        var candidates = origins.Seen().Where(Offerable)
+            .OrderBy(seen => seen.FirstSeen).ThenBy(seen => seen.Origin, StringComparer.Ordinal).ToList();
+        if (candidates.Count == 0) return null;
+        var decided = (await Offer.Get(candidates.Select(seen => Offer.IdFor(OfferKind.Address, seen.Origin)).ToList(), ct))
+            .OfType<Offer>().Select(offer => offer.Subject).ToHashSet(StringComparer.Ordinal);
+        return candidates.FirstOrDefault(seen => !decided.Contains(seen.Origin));
     }
+
+    /// <summary>Whether <paramref name="origin"/> is one <paramref name="space"/>'s operator may answer: Koan has seen it,
+    /// the public reaches it and Koan would take it, while no URL is configured and the place's address is local. Whether
+    /// it was decided is the answer's own read.</summary>
+    public bool Answerable(TangentSpace space, string origin)
+        => !baseUrl.IsConfigured && space.AddressIsLocal()
+           && origins.Seen().Any(seen => string.Equals(seen.Origin, origin, StringComparison.Ordinal) && Offerable(seen));
+
+    /// <summary>The open Offer as its decider reads it, with its two answers under <paramref name="baseAddress"/>, or
+    /// null.</summary>
+    public async Task<Door.Offered?> Offered(TangentSpace space, string baseAddress, CancellationToken ct)
+        => await Open(space, ct) is { } seen
+            ? new Door.Offered(Offer.Word(OfferKind.Address), seen.Origin, seen.Count, seen.FirstSeen,
+                OfferController.UseForm(baseAddress, seen.Origin), OfferController.DeclineForm(baseAddress, seen.Origin))
+            : null;
 
     /// <summary>Whether the public reaches <paramref name="seen"/> and Koan would take it as the place's address, so a
     /// person is offered only what can be kept: an http origin of a public address is not, nor, while sign-in names the
     /// place's client from its address, one on a port of its own.</summary>
-    public bool Offerable(ObservedOrigin seen)
+    private bool Offerable(ObservedOrigin seen)
         => seen.AddressClass == OriginAddressClass.Public && baseUrl.WouldAccept(seen.Origin, out _);
-
-    /// <summary>What Koan has seen of <paramref name="origin"/> since this process started, or null.</summary>
-    public ObservedOrigin? Evidence(string origin)
-        => origins.Seen().FirstOrDefault(seen => string.Equals(seen.Origin, origin, StringComparison.Ordinal));
-
-    /// <summary>When the place has just been set up, or its operator has declined an Offer: offers the origin seen most
-    /// often, then most recently, among the offerable ones never offered, through one keyed read of their Offers and one
-    /// command, tried.</summary>
-    public async Task OfferNext(CancellationToken ct)
-    {
-        var candidates = origins.Seen().Where(seen => Offerable(seen) && Worth(seen.Origin))
-            .OrderByDescending(seen => seen.Count).ThenByDescending(seen => seen.LastSeen).ToList();
-        if (candidates.Count == 0) return;
-        var offered = (await Offer.Get(candidates.Select(seen => Offer.IdFor(OfferKind.Address, seen.Origin)).ToList(), ct))
-            .OfType<Offer>().Select(offer => offer.Subject).ToHashSet(StringComparer.Ordinal);
-        if (candidates.FirstOrDefault(seen => !offered.Contains(seen.Origin)) is not { } next) return;
-        if (new MakeOffer(next.Origin).TrySend() is { } sent) Reported(next.Origin, await sent);
-        else Interlocked.Exchange(ref _dropped, 1);
-    }
-
-    /// <summary>Whether memory leaves <paramref name="origin"/> worth offering: nothing configured, the place set up, its
-    /// address local, no Offer of an address open, and the origin never offered.</summary>
-    private bool Worth(string origin)
-        => !baseUrl.IsConfigured && _setUp && !_open && TangentSpace.IsLocal(baseUrl.Accepted) && !_offered.ContainsKey(origin);
-
-    private void Appeared(ObservedOrigin seen)
-    {
-        if (!Offerable(seen) || !Worth(seen.Origin)) return;
-        if (new MakeOffer(seen.Origin).TrySend() is not { } sent)
-        {
-            Interlocked.Exchange(ref _dropped, 1);
-            logger.LogDebug("{Origin} is not offered now: the store is busy", seen.Origin);
-            return;
-        }
-
-        _ = sent.ContinueWith(made => Reported(seen.Origin, made.Result), TaskContinuationOptions.OnlyOnRanToCompletion);
-    }
-
-    /// <summary>What a commit changes of what is worth offering — the settings row written, an Offer made, an Offer
-    /// decided — and a dropped attempt, retried while no Offer is open. It returns at once.</summary>
-    public void Committed(object command, IReadOnlyDictionary<Sequence, long> sequences)
-    {
-        if (!_started) return;
-        switch (command)
-        {
-            case MakeOffer made:
-                Remember(made.Origin);
-                _open = true;
-                break;
-            case UseOffer or DeclineOffer:
-                _open = false;
-                break;
-            case ICommand<TangentSpace>:
-                _setUp = true;
-                break;
-        }
-
-        if (!_open && Interlocked.Exchange(ref _dropped, 0) == 1) _ = Task.Run(Retry);
-    }
-
-    /// <summary>Offers what a dropped attempt left out; a failure is logged, never thrown.</summary>
-    private async Task Retry()
-    {
-        try
-        {
-            await OfferNext(CancellationToken.None);
-        }
-        catch (Exception failure)
-        {
-            logger.LogWarning(failure, "Offering what a dropped attempt left out did not complete");
-        }
-    }
-
-    private void Remember(string origin)
-    {
-        if (_offered.Count < KnownLimit) _offered.TryAdd(origin, 0);
-    }
-
-    private void Reported(string origin, Outcome<Offer> outcome)
-    {
-        switch (outcome)
-        {
-            case Outcome<Offer>.Done:
-                logger.LogInformation("This place is reached at {Origin}; offered to its operator as its address", origin);
-                break;
-            case Outcome<Offer>.Refused { Reason: var reason }:
-                if (reason == MakeOffer.Made) Remember(origin);
-                logger.LogDebug("{Origin} is not offered: {Reason}", origin, reason);
-                break;
-            case var other:
-                Interlocked.Exchange(ref _dropped, 1);
-                logger.LogWarning("Offering {Origin} as this place's address did not complete: {Outcome}", origin, other);
-                break;
-        }
-    }
 }

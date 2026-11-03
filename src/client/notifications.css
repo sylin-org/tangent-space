@@ -1,7 +1,11 @@
 /* Notifications: the count beside the account in the masthead, and the page of them. */
 
-/* The count of unseen notifications: the bell in text-2 and the number on the accent, a 44px target, hidden while
- * there are none. */
+/* The count of unseen notifications: the bell in text-2 and the number on the accent, a 44px target that opens them,
+ * hidden while there are none. Its form adds no box of its own. */
+.masthead-unseen-form {
+  display: contents;
+}
+
 .masthead-unseen {
   height: 44px;
   min-width: 44px;
@@ -10,9 +14,12 @@
   align-items: center;
   justify-content: center;
   gap: 4px;
+  border: 0;
   border-radius: 22px;
+  background: none;
   color: var(--ts-text-2);
-  text-decoration: none;
+  font: inherit;
+  cursor: pointer;
 }
 
 .masthead-unseen[hidden] {

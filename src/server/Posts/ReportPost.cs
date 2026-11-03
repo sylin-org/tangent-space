@@ -37,13 +37,13 @@ public sealed record ReportPost(
 {
     public static readonly Reason NoPost = Koan.Data.Core.Commands.Reason.Absent("No Post has this Id.");
 
-    public const string NeedsReason = "Say in a sentence or two why you are reporting this post.";
+    public static readonly Reason NeedsReason = Koan.Data.Core.Commands.Reason.Invalid("Say in a sentence or two why you are reporting this post.");
 
     /// <summary>The answer where the place records no moderators' Tangent, which a start creates.</summary>
-    public const string NoModerators = "This Tangent Space has no moderators' Tangent yet, so the report was not sent.";
+    public static readonly Reason NoModerators = Koan.Data.Core.Commands.Reason.Invalid("This Tangent Space has no moderators' Tangent yet, so the report was not sent.");
 
     /// <summary>The answer for a Post of the moderators' Tangent, which is already where the moderators read.</summary>
-    public const string InModerators = "Posts in the moderators' Tangent are not reported; the moderators already read them there.";
+    public static readonly Reason InModerators = Koan.Data.Core.Commands.Reason.Invalid("Posts in the moderators' Tangent are not reported; the moderators already read them there.");
 
     /// <summary>What a report's title starts with, before the reported Topic's title or the reason's first words.</summary>
     public const string TitlePrefix = "Report: ";

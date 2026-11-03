@@ -11,7 +11,7 @@ public sealed record CaptureProfile(ProfileAnswer Answer, DateTimeOffset At) : I
     public async Task<Outcome<Participant>> Run(CancellationToken ct)
     {
         var participant = await Participant.Get(Answer.Did, ct);
-        if (participant is null) return new Outcome<Participant>.Refused($"No participant is {Answer.Did}.");
+        if (participant is null) return new Outcome<Participant>.Refused(Reason.Invalid($"No participant is {Answer.Did}."));
         participant.Capture(Answer, At);
         await participant.Save(ct);
         return new Outcome<Participant>.Done(participant);

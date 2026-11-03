@@ -1,4 +1,5 @@
 using System.Globalization;
+using Koan.Web.Controllers;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http.Features;
@@ -6,7 +7,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Net.Http.Headers;
 using Tangent.Access;
 using Tangent.Posts;
-using Tangent.Render;
 using Tangent.Space;
 using Tangent.Tangents;
 
@@ -38,14 +38,14 @@ public sealed class ExportController(KoanWebBaseUrl baseUrl, IDataProtectionProv
 
         ViewableTangents.Cursor? cursor = null;
         if (after is not null && (cursor = ViewableTangents.Cursor.Open(after, protection)) is null)
-            return new Problem(StatusCodes.Status400BadRequest, "Not a page of the Tangents",
-                $"The {After} parameter is the cursor a page of the Tangents names as its next.").ToResult();
+            return new Problem(StatusCodes.Status400BadRequest,
+                $"The {After} parameter is the cursor a page of the Tangents names as its next.") { Title = "Not a page of the Tangents" }.ToResult();
 
         var baseAddress = baseUrl.Resolve(HttpContext);
         var address = baseAddress + Path;
         var here = baseUrl.PathBase + Path;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
-        var gate = place.Gate(Bit.ManageSpace)?.Word;
+        var gate = place.Gate(Bit.ManageSpace);
         var page = gate is null ? await ViewableTangents.Read(personId, ViewableTangents.Views, cursor, TangentsController.PageSize, ct) : null;
         var resource = new ExportSettingsPage(
             TangentSpaceSettingsController.Sections(place, baseAddress, TangentSpaceSettingsController.ExportSection),
@@ -56,12 +56,12 @@ public sealed class ExportController(KoanWebBaseUrl baseUrl, IDataProtectionProv
             cursor is not null,
             address,
             place.Can,
-            gate,
+            gate?.Word,
             personId is null ? baseAddress + Participants.SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,
             space.Name,
             baseAddress + "/",
             await PostWrites.Reader(personId, place, baseAddress, here, ct));
-        return gate is null ? Ok(resource) : new ObjectResult(resource) { StatusCode = PostWrites.Status(gate) };
+        return gate is null ? Ok(resource) : new ObjectResult(resource) { StatusCode = Answers.Status(HttpContext, gate) };
     }
 
     [HttpGet(Path + Extension)]
@@ -77,7 +77,7 @@ public sealed class ExportController(KoanWebBaseUrl baseUrl, IDataProtectionProv
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
-        if (place.Gate(Bit.ManageSpace) is { } gate) return PostWrites.Refused(HttpContext, gate);
+        if (place.Gate(Bit.ManageSpace) is { } gate) return Answers.Refused(HttpContext, gate);
 
         Tangents.Tangent? only = null;
         if (slug is not null)

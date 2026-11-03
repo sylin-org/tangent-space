@@ -210,7 +210,7 @@ public sealed class PeopleTests
             Assert.Empty(Strings(row, "take"));
         }
 
-        foreach (var (target, reason) in new[] { (Leo, People.NotBelow.Text), (Mia, People.NotBelow.Text), (Mo, People.Themselves.Text), (Otto, People.Operator.Text) })
+        foreach (var (target, reason) in new[] { (Leo, People.NotBelow.Word), (Mia, People.NotBelow.Word), (Mo, People.Themselves.Word), (Otto, People.Operator.Word) })
         {
             foreach (var verb in new[] { PeopleController.BanPath, PeopleController.LiftPath })
             {
@@ -230,7 +230,7 @@ public sealed class PeopleTests
 
         // An administrator acts on moderators and members, never on another administrator or the operator.
         Assert.Equal([People.Verb.TimeOut, People.Verb.Ban], Strings(Row((await Send(leo.Client, HttpMethod.Get, path, json: true)).Json, Mia), "can"));
-        Assert.Equal((HttpStatusCode.Forbidden, People.Operator.Text), Refusal(await Json(leo, path, PeopleController.BanPath, new { participant = Otto })));
+        Assert.Equal((HttpStatusCode.Forbidden, People.Operator.Word), Refusal(await Json(leo, path, PeopleController.BanPath, new { participant = Otto })));
         Assert.Equal(HttpStatusCode.NotFound, (await Json(mo, path, PeopleController.BanPath, new { participant = "did:plc:nobody" })).Status);
         Assert.Empty(await Since(before));
     }
@@ -290,7 +290,7 @@ public sealed class PeopleTests
         var beaRow = Row((await Send(leo.Client, HttpMethod.Get, path, json: true)).Json, Bea);
         Assert.Equal([People.Moderator], Strings(beaRow, "give"));
         var notManaged = await Json(leo, path, PeopleController.GivePath, new { participant = Bea, role = People.Administrator });
-        Assert.Equal((HttpStatusCode.Forbidden, People.NotManaged.Text), (notManaged.Status, notManaged.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, People.NotManaged.Word), (notManaged.Status, notManaged.Gate));
         Assert.Contains("Make moderator", (await Send(leo.Client, HttpMethod.Get, path)).Body);
         var before = await Head();
         var given = await Form(leo, path, PeopleController.GivePath, new Dictionary<string, string>
@@ -327,7 +327,7 @@ public sealed class PeopleTests
         // An administrator never takes another's role, nor the operator's; the operator, above every role, takes theirs.
         Assert.Empty(Strings(Row((await Send(leo.Client, HttpMethod.Get, path, json: true)).Json, Otto), "take"));
         var operatorRefused = await Json(leo, path, PeopleController.TakePath, new { participant = Otto, role = People.Administrator });
-        Assert.Equal((HttpStatusCode.Forbidden, People.Operator.Text), (operatorRefused.Status, operatorRefused.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, People.Operator.Word), (operatorRefused.Status, operatorRefused.Gate));
         Assert.Equal([People.Administrator], Strings(Row((await Send(otto.Client, HttpMethod.Get, path, json: true)).Json, Leo), "take"));
         Assert.Equal(HttpStatusCode.OK, (await Json(otto, path, PeopleController.TakePath, new { participant = Leo, role = People.Administrator })).Status);
         Assert.False((await roles.Bag(Leo, authenticated: true, Cancellation)).InRole(Roles.Administrator));

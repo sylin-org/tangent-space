@@ -21,8 +21,6 @@ public sealed class AtomicityTests
         await Place(tangentSpace);
         var root = await Started(Ada, "Lanterns", "How do you hang yours?");
         var before = (await Counted(), await Snapshots());
-        var announced = 0;
-        tangentSpace.Commits.Landed += _ => announced++;
         var topicId = Tids.Mint();
 
         var start = await new ThenThrow<Post>(new StartTopic(topicId, Workshop, "Never", "Not kept.", Ada)).Send(Cancellation);
@@ -38,7 +36,6 @@ public sealed class AtomicityTests
         Assert.Equal(before.Item2, await Snapshots());
         Assert.Equal(before.Item1, await Counted());
         Assert.Empty(await Event.Query(e => e.Kind == EventKind.PostEdited || e.Kind == EventKind.PostRemoved, Cancellation));
-        Assert.Equal(0, announced);
     }
 
     [Fact]

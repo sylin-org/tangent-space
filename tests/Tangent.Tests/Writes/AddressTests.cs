@@ -24,19 +24,19 @@ public sealed class AddressTests
         using var ada = await SignedIn(tangentSpace, Ada);
         var before = await Counted();
 
-        async Task<(HttpStatusCode, string?, string?)> Asked(string path, HttpContent content)
+        async Task<(HttpStatusCode, string?)> Asked(string path, HttpContent content)
         {
             var answered = await Send(ada.Client, HttpMethod.Post, path, content, json: true);
-            return (answered.Status, answered.Title, answered.Gate);
+            return (answered.Status, answered.Kind);
         }
 
         static StringContent Array() => new("[]", Encoding.UTF8, "application/json");
-        var missing = (HttpStatusCode.NotFound, "Not found", Capabilities.Absent.Text);
+        var missing = (HttpStatusCode.NotFound, "absent");
 
         Assert.Equal(missing, await Asked("/t/studio/plans/" + hidden.Id + "/edit", JsonBody(new { body = "x" })));
         Assert.Equal(missing, await Asked("/t/studio/plans/" + Tids.Mint() + "/edit", JsonBody(new { body = "x" })));
         // A body that is not one JSON object is refused before any address is read, so it says nothing of what one holds.
-        var unreadable = (HttpStatusCode.BadRequest, "Not accepted", (string?)null);
+        var unreadable = (HttpStatusCode.BadRequest, "invalid");
         Assert.Equal(unreadable, await Asked("/t/studio/plans/" + hidden.Id + "/edit", Array()));
         Assert.Equal(unreadable, await Asked("/t/studio/plans", Array()));
         Assert.Equal(unreadable, await Asked("/t/studio/nothing", Array()));
@@ -46,7 +46,7 @@ public sealed class AddressTests
         var unused = await Send(ada.Client, HttpMethod.Get, "/t/unused-slug/new", json: true);
         var nowhere = await Send(ada.Client, HttpMethod.Get, "/t/nowhere/new", json: true);
         var studio = await Send(ada.Client, HttpMethod.Get, "/t/studio/new", json: true);
-        Assert.Equal(missing, (unused.Status, unused.Title, unused.Gate));
+        Assert.Equal(missing, (unused.Status, unused.Kind));
         Assert.Equal((unused.Status, unused.Body), (nowhere.Status, nowhere.Body));
         Assert.Equal((unused.Status, unused.Body), (studio.Status, studio.Body));
         Assert.Equal(before, await Counted());
@@ -104,7 +104,7 @@ public sealed class AddressTests
         var answered = await Send(ada.Client, HttpMethod.Post, PostPath(root, root) + "/remove", FormBody(fields), json: true);
 
         // A body past the limit is refused where it is read, before the action.
-        Assert.Equal((HttpStatusCode.RequestEntityTooLarge, "Too large"), (answered.Status, answered.Title));
+        Assert.Equal((HttpStatusCode.RequestEntityTooLarge, "invalid"), (answered.Status, answered.Kind));
         Assert.False((await Post.Get(root.Id, Cancellation))?.Removed);
         Assert.Empty(await Events.Event.Query(e => e.Kind == Events.EventKind.PostRemoved, Cancellation));
     }

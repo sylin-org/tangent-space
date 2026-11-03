@@ -2,6 +2,7 @@ using System.ComponentModel;
 using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Koan.Web.Attributes;
+using Koan.Web.Controllers;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -36,7 +37,7 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, RoleCollecti
 
     public const string AccessField = "access";
 
-    public const string AccessRule = "A role’s access to a Tangent is default, read or post.";
+    public static readonly Reason AccessRule = Reason.Invalid("A role’s access to a Tangent is default, read or post.");
 
     /// <summary>The accesses a role may have, as words.</summary>
     public static readonly IReadOnlyList<string> Accesses = Enum.GetValues<RoleAccess>().Select(Word).ToList();
@@ -53,7 +54,7 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, RoleCollecti
         var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, null, null, ct);
         if (found is null) return unseen!;
         var read = await Page(found, personId, RolesController.Numbered(page), ct);
-        return read.Gate is { } gate ? new ObjectResult(read) { StatusCode = PostWrites.Status(gate) } : Ok(read);
+        return TangentWrites.ManageGate(found.Capabilities) is { } gate ? new ObjectResult(read) { StatusCode = Answers.Status(HttpContext, gate) } : Ok(read);
     }
 
     [HttpPost(Route)]
@@ -91,7 +92,7 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, RoleCollecti
             case Outcome<Tangent>.Refused { Reason: var reason } when reason != ChangeTangent.NoTangent:
                 return await Refused(found, personId, reason, ct);
             default:
-                return PostWrites.Answer(HttpContext, outcome);
+                return Answers.NotDone(HttpContext, outcome);
         }
     }
 
@@ -99,13 +100,13 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, RoleCollecti
     /// with the reason above the list.</summary>
     private async Task<IActionResult> Refused(PostWrites.Located found, string? personId, Reason reason, CancellationToken ct)
     {
-        if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
+        if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
 
         var (again, unseen) = await PostWrites.Locate(HttpContext, personId, found.Tangent.Id, null, null, ct);
         if (again is null) return unseen!;
         var page = await Page(again, personId, 1, ct);
-        page = reason.Word is { } gate ? page with { Gate = gate, Change = null, Roles = [], Next = null, Previous = null } : page with { Failure = reason.Text };
-        return new ObjectResult(page) { StatusCode = PostWrites.Status(reason) };
+        if (page.Gate is null) page = page with { Failure = reason.Text };
+        return new ObjectResult(page) { StatusCode = Answers.Status(HttpContext, reason) };
     }
 
     private async Task<TangentAccessPage> Page(PostWrites.Located found, string? personId, int number, CancellationToken ct)

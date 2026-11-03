@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Koan.Data.Core.Commands;
 using Koan.Web.Attributes;
+using Koan.Web.Controllers;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -71,7 +72,7 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl) : ControllerBase
             case Outcome<Post>.Refused { Reason: { Kind: not ReasonKind.Absent } reason }:
                 return await Refused(root, row, personId, input, reason, ct);
             default:
-                return PostWrites.Answer(HttpContext, outcome);
+                return Answers.NotDone(HttpContext, outcome);
         }
     }
 
@@ -94,10 +95,10 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl) : ControllerBase
             case Outcome<Post>.Done { Result: var removed }:
                 return await PostWrites.Written(HttpContext, removed, root, Address(root, removed), personId, created: false, ct);
             case Outcome<Post>.Refused { Reason: { Kind: not ReasonKind.Absent } reason }:
-                if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
-                return await Again(root, row.Id, personId, PostWrites.Status(reason), page => page with { Failure = reason.Text, FailureGate = reason.Word }, ct);
+                if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
+                return await Again(root, row.Id, personId, Answers.Status(HttpContext, reason), page => page with { Failure = reason.Text, FailureGate = reason.Word }, ct);
             default:
-                return PostWrites.Answer(HttpContext, outcome);
+                return Answers.NotDone(HttpContext, outcome);
         }
     }
 
@@ -105,8 +106,8 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl) : ControllerBase
     /// with the words that were sent and the reason where it belongs.</summary>
     private async Task<IActionResult> Refused(Post root, Post row, string? personId, EditInput input, Reason reason, CancellationToken ct)
     {
-        if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
-        return await Again(root, row.Id, personId, PostWrites.Status(reason), page =>
+        if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
+        return await Again(root, row.Id, personId, Answers.Status(HttpContext, reason), page =>
         {
             var sent = page with
             {

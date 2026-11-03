@@ -82,6 +82,9 @@ internal static partial class Writing
         public string? Gate => MediaType is "application/problem+json" && Json.TryGetProperty("gate", out var gate) ? gate.GetString() : null;
 
         public string? Title => MediaType is "application/problem+json" && Json.TryGetProperty("title", out var title) ? title.GetString() : null;
+
+        /// <summary>The problem's kind, which every problem carries: invalid, absent, gated, conflict or failed.</summary>
+        public string? Kind => MediaType is "application/problem+json" && Json.TryGetProperty("kind", out var kind) ? kind.GetString() : null;
     }
 
     /// <summary>Sends a request as JSON (<paramref name="json"/>) or as a page asks, with a bearer when given, and, from
@@ -111,6 +114,15 @@ internal static partial class Writing
     /// <summary>Posts a form from the page at <paramref name="page"/>, as its browser does.</summary>
     public static Task<Answered> Form(Browser browser, string page, string action, Dictionary<string, string> fields)
         => Send(browser.Client, HttpMethod.Post, action, FormBody(fields), page: page);
+
+    /// <summary>Opens the notifications from the page at <paramref name="page"/>, as its form does: through what that page
+    /// read of them.</summary>
+    public static async Task<Answered> Opened(Browser browser, string page)
+    {
+        var open = (await Send(browser.Client, HttpMethod.Get, page, json: true)).Json.GetProperty("who").GetProperty("notifications").GetProperty("open");
+        return await Form(browser, page, Events.Notifications.Path,
+            new Dictionary<string, string> { [Events.Notifications.ThroughField] = Valued(open, Events.Notifications.ThroughField)! });
+    }
 
     /// <summary>Posts JSON from the page at <paramref name="page"/>, as a signed-in browser's script does.</summary>
     public static Task<Answered> Json(Browser browser, string page, string action, object fields)

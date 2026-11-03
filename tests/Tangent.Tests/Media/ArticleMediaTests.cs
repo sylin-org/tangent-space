@@ -309,9 +309,9 @@ public sealed class ArticleMediaTests
         Assert.Equal(Media.LongestEdge, WidthOf(await Read(ada.Client, "/media/" + IdOf(large))));
 
         var svg = await Bring(ada, Encoding.UTF8.GetBytes("<svg xmlns=\"http://www.w3.org/2000/svg\"><script>1</script></svg>"));
-        Assert.Equal((HttpStatusCode.BadRequest, Media.NotAnImage), (svg.Status, svg.Json.GetProperty("detail").GetString()));
+        Assert.Equal((HttpStatusCode.BadRequest, Media.NotAnImage.Text), (svg.Status, svg.Json.GetProperty("detail").GetString()));
         var broken = await Bring(ada, [0xFF, 0xD8, 0xFF, 0x00, 0x01]);
-        Assert.Equal((HttpStatusCode.BadRequest, Media.NotAnImage), (broken.Status, broken.Json.GetProperty("detail").GetString()));
+        Assert.Equal((HttpStatusCode.BadRequest, Media.NotAnImage.Text), (broken.Status, broken.Json.GetProperty("detail").GetString()));
     }
 
     [Fact]
@@ -324,7 +324,7 @@ public sealed class ArticleMediaTests
         var visitor = await Send(Agent(tangentSpace), HttpMethod.Post, "/t/" + Articles + "/media", JsonBody(new { file = Convert.ToBase64String(Jpeg()) }), json: true);
         Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (visitor.Status, visitor.Gate));
         var hidden = await Send(bea.Client, HttpMethod.Post, "/t/" + Studio + "/media", JsonBody(new { file = Convert.ToBase64String(Jpeg()) }), json: true);
-        Assert.Equal((HttpStatusCode.NotFound, Capabilities.Absent.Text), (hidden.Status, hidden.Gate));
+        Assert.Equal((HttpStatusCode.NotFound, "absent"), (hidden.Status, hidden.Kind));
         var discussion = await Send(bea.Client, HttpMethod.Get, "/t/" + Workshop + "/new", json: true);
         Assert.False(discussion.Json.TryGetProperty("bring", out var bring) && bring.ValueKind == System.Text.Json.JsonValueKind.Object);
     }

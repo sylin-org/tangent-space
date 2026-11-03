@@ -31,7 +31,7 @@ public static class ModeratorsTangent
     public const Bit ModeratorBits = Bit.View | Bit.Post | Bit.Topic;
 
     /// <summary>The answer when every slug tried is another Tangent's.</summary>
-    public const string NoSlug = "Every slug tried for the moderators' Tangent belongs to another Tangent.";
+    public static readonly Reason NoSlug = Reason.Invalid("Every slug tried for the moderators' Tangent belongs to another Tangent.");
 
     /// <summary>The slug it takes: <see cref="Slug"/>, or the first numbered suffix of it that no Tangent holds
     /// (<see cref="Tangents.Tangent.FreeSlug"/>).</summary>

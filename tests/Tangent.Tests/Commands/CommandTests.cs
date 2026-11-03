@@ -19,8 +19,7 @@ public sealed class CommandTests(ITestOutputHelper output)
     [Fact]
     public async Task Commands_from_several_senders_each_run_once_in_each_senders_order_with_one_unbroken_sequence()
     {
-        var announced = new Announced();
-        await using var tangentSpace = await Start(announced);
+        await using var tangentSpace = await Start();
         const int senders = 8, each = 50;
 
         var clock = Stopwatch.StartNew();
@@ -36,7 +35,7 @@ public sealed class CommandTests(ITestOutputHelper output)
 
         var slips = outcomes.SelectMany(sender => sender).Select(outcome => Assert.IsType<Outcome<Slip>.Done>(outcome).Result).ToList();
         var stored = await Slip.FirstPage(senders * each + 1, sort => sort.OrderBy(slip => slip.Sequence), Cancellation);
-        output.WriteLine($"{slips.Count} commands in {clock.ElapsedMilliseconds}ms; {announced.Commits.Count} announced");
+        output.WriteLine($"{slips.Count} commands in {clock.ElapsedMilliseconds}ms");
 
         Assert.Equal(senders * each, slips.Count);
         Assert.Equal(senders * each, await Slip.Count.Exact(Cancellation));
@@ -47,9 +46,6 @@ public sealed class CommandTests(ITestOutputHelper output)
             Assert.Equal(sender.OrderBy(slip => slip.Ordinal).Select(slip => slip.Id), sender.Select(slip => slip.Id));
         }
 
-        Assert.Equal(senders * each, announced.Commits.Count);
-        Assert.Equal(Enumerable.Range(1, senders * each).Select(n => (long)n), announced.Commits.Select(commit => commit.Sequences[CreateSlip.Numbers]));
-        Assert.All(announced.Commits, commit => Assert.IsType<CreateSlip>(commit.Command));
     }
 
     [Fact]
@@ -72,41 +68,36 @@ public sealed class CommandTests(ITestOutputHelper output)
     [Fact]
     public async Task A_command_the_entity_refuses_commits_nothing_and_its_sender_receives_the_reason()
     {
-        var announced = new Announced();
-        await using var tangentSpace = await Start(announced);
+        await using var tangentSpace = await Start();
 
         var refused = await new CreateSlip("blank", "s", 0, " ").Send(Cancellation);
         var next = await new CreateSlip("written", "s", 1, "body").Send(Cancellation);
 
-        Assert.Equal(Slip.NeedsBody, Assert.IsType<Outcome<Slip>.Refused>(refused).Reason.Text);
+        Assert.Equal(Slip.NeedsBody, Assert.IsType<Outcome<Slip>.Refused>(refused).Reason);
         Assert.Null(await Slip.Get("blank", Cancellation));
         Assert.Equal(1, Assert.IsType<Outcome<Slip>.Done>(next).Result.Sequence);
-        Assert.Single(announced.Commits);
+        Assert.Equal(1, await Slip.Count.Exact(Cancellation));
     }
 
     [Fact]
     public async Task The_same_id_with_the_same_body_answers_with_the_existing_slip_and_a_different_body_is_a_conflict()
     {
-        var announced = new Announced();
-        await using var tangentSpace = await Start(announced);
+        await using var tangentSpace = await Start();
 
         var first = Assert.IsType<Outcome<Slip>.Done>(await new CreateSlip("same", "s", 0, "one").Send(Cancellation)).Result;
         var again = await new CreateSlip("same", "s", 0, "one").Send(Cancellation);
-        var announcedForBoth = announced.Commits.Count;
         var differs = await new CreateSlip("same", "s", 0, "two").Send(Cancellation);
         var after = Assert.IsType<Outcome<Slip>.Done>(await new CreateSlip("next", "s", 1, "three").Send(Cancellation)).Result;
 
-        // The replay answers with the existing slip and, having written nothing, is not announced.
+        // The replay answers with the existing slip and, having written nothing, takes no number: the next slip has the second.
         var existing = Assert.IsType<Outcome<Slip>.Done>(again).Result;
         Assert.Equal((first.Id, first.Sequence, first.Body), (existing.Id, existing.Sequence, existing.Body));
-        Assert.Equal(1, announcedForBoth);
         var conflict = Assert.IsType<Outcome<Slip>.Refused>(differs).Reason;
         Assert.Equal(ReasonKind.Conflict, conflict.Kind);
         Assert.Contains("'same'", conflict.Text);
         Assert.Equal("one", (await Slip.Get("same", Cancellation))?.Body);
         Assert.Equal(2, await Slip.Count.Exact(Cancellation));
         Assert.Equal(2, after.Sequence);
-        Assert.Equal(2, announced.Commits.Count);
     }
 
     [Fact]
@@ -151,19 +142,7 @@ public sealed class CommandTests(ITestOutputHelper output)
         Assert.Equal(2, CountRows(tangentSpace.DatabasePath, nameof(Slip)));
     }
 
-    private static Task<TangentSpaceFixture> Start(Announced? announced = null) => TangentSpaceFixture.StartAsync(
-        null, services => { if (announced is not null) services.AddSingleton<ICommandWatcher>(announced); }, Cancellation);
-
-    /// <summary>Each commit a watcher is told of, in the order it was told.</summary>
-    private sealed class Announced : ICommandWatcher
-    {
-        public List<(object Command, IReadOnlyDictionary<Sequence, long> Sequences)> Commits { get; } = [];
-
-        public void Committed(object command, IReadOnlyDictionary<Sequence, long> sequences)
-        {
-            if (command is CreateSlip or WriteSlipAndStub) Commits.Add((command, sequences));
-        }
-    }
+    private static Task<TangentSpaceFixture> Start() => TangentSpaceFixture.StartAsync(ct: Cancellation);
 
     /// <summary>Rows in the entity's table, counted on a connection of the test's own, outside the driver's pool; zero
     /// when the table does not exist yet.</summary>
