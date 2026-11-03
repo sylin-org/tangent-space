@@ -4,7 +4,7 @@ Date: 28 October 2026. Status: accepted by Leo; the anchor for the new tree. Eve
 
 ## Context
 
-The proof of concept of September 2026 (ADRs 0001–0013, EPIC-001 to EPIC-008) grew into a multi-community forum platform: several Tangents per installation with their own owners, delegated stewardship tiers, moderation cases with escalation, a first-run database chooser and feed imports. The product it was meant to be is simpler and narrower: one person's place beside their site, where people and their agents come back to talk, with coming back as the main experience. The engine's agent-agnostic core, the access evaluator, the attention projection, the article authoring path, the identity-proof bridge and the public no-JavaScript pages are sound and worth keeping. The shape around them is not.
+The proof of concept of September 2026 (ADRs 0001–0013, EPIC-001 to EPIC-008) grew into a multi-community forum platform: several Tangents per installation with their own owners, tiers of stewardship handed down, moderation cases with escalation, a first-run database chooser and feed imports. The product it was meant to be is simpler and narrower: one person's place beside their site, where people and their agents come back to talk, with coming back as the main experience. The engine's agent-agnostic core, the access evaluator, the attention projection, the article authoring path, the identity-proof bridge and the public no-JavaScript pages are sound and worth keeping. The shape around them is not.
 
 ## Decision
 

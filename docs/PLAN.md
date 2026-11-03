@@ -36,7 +36,7 @@ The planner is the lead in the main session. The executor is a session the lead 
 
 A failure escalates one step at a time: the builder re-runs the failing check at higher effort once; still failing, the lead looks; still failing, Leo hears about it with the evidence.
 
-## Delegation rules
+## Splitting rules
 
 - One package, one session, one model. Split a package only when its pieces are independent — no piece needs another's result, and none touch the same files.
 - Fan out for bulk: an audit across many files, a review of a whole slice, research across many sources. A fan-out costs roughly fifteen times a conversation; it is for breadth, never for a chain.
@@ -91,10 +91,8 @@ Group A is a chain from 0.1; group B is independent of it. Four sessions at once
 | 1.5 The door, as one resource, both ways | 1.1–1.3 | first of its kind |
 | 1.6 The Tangent page | 1.1, 1.3 | repeat |
 | 1.7 Discovery: `tangent.json`, `llms.txt`, the site's pointers, the proxy rule | 1.4 | explorer-grade |
-| 1.8 The delegated agent door: the consent page, the Device flow, a pre-registered client | 1.2 | repeat |
 | 1.9 Phone layouts for the door and the Tangent | the polish stage | repeat |
 | 1.10 Access on Koan's overwrites: Tangent's own overwrite step lifted onto K2's resolution and explainer | K2, 1.3 | repeat |
-| 1.11 Tangent on Koan's K6 and K7: the pin moves, the delegated agent door composes Koan's resource edge and consent seam, and Tangent's own copies of them go | K6, K7, 1.8 | repeat |
 | 1.12 First run without questions: one action sets the place up, `Tangent:Operator` names the operator by handle or DID, the name comes from the handle | 1.4, 2.8 | repeat |
 | 1.13 The address learned and offered: a notification to the operator carries an Offer to use the address requests arrive on | 1.12 | first of its kind |
 | 1.14 Sign in with Bluesky, and signing in sets the place up: one button starts at bsky.social, another server by handle, and the sign-in itself establishes the place | 1.12 | repeat |
@@ -106,7 +104,7 @@ Parallel once 1.1 lands: 1.2 and 1.3 together; then 1.4 and 1.6 together; then 1
 | Package | After | Role |
 | --- | --- | --- |
 | 2.1 The topic window: a Topic as one resource, bounded, cursors are sequence numbers, anchor first; plain bodies until 2.3 | 1.6 | first of its kind |
-| 2.2 The write verbs over HTTP: start a Topic, reply, edit, remove by command; TID ids as idempotency keys; pre-edit snapshots in the audit partition; visible tombstones | 1.8 | first of its kind, xhigh |
+| 2.2 The write verbs over HTTP: start a Topic, reply, edit, remove by command; TID ids as idempotency keys; pre-edit snapshots in the audit partition; visible tombstones | 1.2 | first of its kind, xhigh |
 | 2.3 Markdown: sanitized HTML, mentions as identity-bearing links resolved at render, `mention` events written with the Post | 2.2 | repeat |
 | 2.4 The composer island: drafts by scope, an uncertain submit reconciled by `GET` of the minted Id, never auto-posts | 2.1, 2.2 | first of its kind |
 | 2.5 Checkpoints and the watch flag: reading a Topic moves its checkpoint; watch on a Tangent or a Topic | 2.1 | repeat |
