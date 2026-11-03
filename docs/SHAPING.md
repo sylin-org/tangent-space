@@ -56,7 +56,7 @@ public async Task<IActionResult> Write(string place, string topic, ReplyInput in
 
 - **A command is a hold in its sender's flow, with no queue.** `new Reply(...).Send(ct)` runs `ICommand<T>.Run(ct)` under `EntityContext.Hold` (DATA-0166), which holds a native transaction from the scope's start, so a command sees its own writes and writers serialize, across processes too. The store's turn is the line. The version with a queue took 498 more lines and ran at the same rate of about 105 commands a second.
 - **Role writes join the transaction.** A role change inside a hold is part of it, and outside any scope it is a short hold of its own (SEC-0036).
-- **Outcomes are `Done`, `Refused` and `Failed`, with whether it landed.** A refusal's kind (absent, gated, invalid or conflict) is a fact about its reason, declared once where the reason is defined, and a plain string is invalid. This brought Tangent's 200 refusals down to about 35 constants. Leo decided this on 1 November 2026.
+- **Outcomes are `Done`, `Refused` and `Failed`, with whether it landed.** A refusal's kind (absent, gated, invalid or conflict) is a fact about its reason, declared once where the reason is defined, and a reason is never made without its kind. This brought Tangent's 200 refusals down to about 35 constants. Leo decided this on 1 November 2026.
 - **One mapping answers.** `this.Answer` gives a browser a page and a client a problem document, and a gate carries the words and the next step.
 - **Effects follow the commit.** An event or a snapshot published in a scope waits for the commit, and a rollback takes it away.
 - **Tables exist before the host reports started,** so nothing changes the schema under a running application, and a person's first search never meets Koan's own DDL.
