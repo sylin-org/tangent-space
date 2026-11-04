@@ -29,12 +29,12 @@ PLAN holds the roles, the order of the packages and the decisions they wait on. 
 
 - **Small Koan changes first.** Access lands on k-refuse, k-gate and k-edge, not behind the HTML projection.
 - **Nets before repeats.** The sweep lands after the first access package on routes and before the repeat across every route, and one render package lands before the render repeat.
-- **No shared files.** No two packages in flight touch the same files. A Koan package runs beside the Tangent packages that do not depend on it, once k-build gives each worktree its own build of the pinned revision. Group 0's Tangent packages run one at a time, in this line: docs-arch, cut-3, cut-1, cut-2, look-1 and look-2, and k-refuse's Tangent half after look-2.
-- **Koan packages start in this line.** k-invoke and k-head start now, side by side; k-build starts once docs-0 has landed; k-refuse runs alone once k-invoke and k-head have landed; then k-page beside k-atproto-1. Access waits on k-refuse, so nothing else starts ahead of it.
+- **No shared files.** No two packages in flight touch the same files. Tangent worktrees that share the pinned checkout run beside each other only once k-build lands. A Koan package in its own Koan worktree, with its own `TEMP`, shares no `obj` or `bin` with the pinned checkout, so it runs beside the Tangent packages that do not depend on it now. Group 0's Tangent packages run one at a time, in this line: docs-arch, cut-3, cut-1, cut-2, look-1 and look-2. k-refuse's Tangent half runs after look-2, or in a gap between two packages that do not touch its files.
+- **Koan packages start in this line.** k-invoke and k-head start now, side by side; k-build starts once docs-0 has landed, and never runs beside docs-arch; k-refuse runs alone once k-invoke and k-head have landed; then k-page beside k-atproto-1. k-atproto-1 never runs beside K43, since both own Koan.Identity. k-data, k-jobs and k-test wait behind this line, after k-atproto-1, one at a time under the same rule of no shared files. Access waits on k-refuse, so nothing else starts ahead of it.
 - **A walk closes each group.** A live walk ends each group, and its findings become packages. A walk drives the real place in a browser, and at `/mcp` as Lumen, an agent signed in with its own account. Where Companion Lobby's adapter has not caught up with what Tangent answers, the walk reaches `/mcp` through a plain MCP client, and the Lobby's breakage is written up for the Lobby, a separate product never built here.
 - **The tree works.** Every package lands with the tree working.
 - **Each package carries its own words:** the ARCHITECTURE seam paragraph, the LANGUAGE words, the AGENTS rule, the FEATURES rows and the ADRs its change touches.
-- **Stored shapes move by script.** A package that changes a stored shape carries a one-off script for the real-run folder. The script lives outside `src`, runs once and is deleted.
+- **Stored shapes move by script.** A package that changes a stored shape carries a one-off script for the real-run folder at `scripts/once/<what-it-moves>`. It runs right after its own package's merge, before the next merged build opens the real-run folder, and the commit after that run deletes only that package's script.
 
 The packages, as `id · name · role · after`:
 
@@ -104,14 +104,14 @@ The packages, as `id · name · role · after`:
 - feeds-1 · Tangent's feeds on Koan's · mechanic · k-feeds, render-2
 - k-snapshot · A static copy of an application's GET routes · koan · k-answer, k-invoke
 - life-1 · Export and the archive are one static copy · repeat · k-snapshot, render-3, feeds-1
-- k-data · Backup and the data root are Koan's · koan · none
+- k-data · Backup and the data root are Koan's · koan · k-atproto-1
 - life-2 · Backup is a copy, restore is putting it back · repeat · k-data, life-1, k-build, k-atproto-2
-- k-jobs · A quiet Jobs · koan · none
+- k-jobs · A quiet Jobs · koan · k-atproto-1
 - The walk: the agent door's instructions, with `read` measured
 
 **Group 6, tests, client, Markdown**
 
-- k-test · Koan's web test kit · koan · none
+- k-test · Koan's web test kit · koan · k-atproto-1
 - tests-1 · Fixtures on Koan's kit · mechanic · k-test, render-3
 - tests-2 · Tests only of Tangent's decisions · mechanic · tests-1
 - client-1 · Islands are functions · first of its kind · tests-2, events-4
@@ -130,7 +130,7 @@ Each decision is cited by its number, and each package builds the default given 
 - **5 · Companion Lobby's move.** Should one release keep aliases for the tools that change, and `Form.Token` past render-3? Until he answers, no: Tangent shapes nothing for the Lobby.
 - **7 · Standard MCP clients.** A client with no atproto identity stays a visitor. That is product scope, named for him.
 - **8 · The profile at sign-in.** Does sign-in wait a short bound for the public profile, or does the fill run just after? Until he answers, k-atproto-1 reads the profile in the sign-in step, best-effort within a short bound, and sign-in never fails on it.
-- **9 · Concord.** Is it a base, an arrangement layer above `tangent`, or cut? Until he answers, `data-base` stays.
 - **10 · The deferred layout.** Settings in three pages, and verbs as panels, wait for the polish stage unless he calls them now.
 - **11 · Holds as the only model.** This is his second ordered Koan step. Commands judging inside their hold rely on it; until he answers, commands keep their holds as they are.
 - **13 · His lines in BRIEF.** `docs/BRIEF.md:3` names ADR 0014 as the record of which earlier records bind. `:55` says background work runs in background workers. Until he answers, BRIEF stays as it is, and each package that meets the conflict reports it.
+- **15 · The token of a list of Tangents.** k-page's keyset token is encoded, not sealed, by default, and an encoded token's order can tell a reader how many Tangents they cannot view come before the last one they see. He answers before k-page starts.

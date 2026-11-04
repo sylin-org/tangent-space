@@ -37,5 +37,5 @@ Date: 28 October 2026. Status: accepted.
 - [ARCHITECTURE](../ARCHITECTURE.md) describes the tree this record shapes; [FEATURES](../FEATURES.md) orders the slices around it.
 - ADR 0014's earlier records read with one amendment: ADR 0010's public HTML as the renderer of every page, not a second one.
 - The protocol contract is recorded in a record of its own when slice 4 writes it from code; the door's record follows slice 1.
-- Two Koan dependencies sit on the critical path: SQLite posture and the base URL before slice 0 closes, overwrites with deny before slice 1 closes. Until the second ships, Tangent evaluates its overwrites beside Koan's facts in the same function, and lifts the step afterwards.
+- Two Koan dependencies sit on the critical path: SQLite posture and the base URL before slice 0 closes, overwrites with deny before slice 1 closes. Until the second ships, Tangent evaluates its overwrites beside Koan's facts in the same function.
 - Named risks: Koan's velocity on those two; Auth.Server's rule that every client is public (loopback registration for Lobby, Device flow with a pre-registered client for everything else); Koan's person id, not the DID, as the participant key, with `/p/{handle}` resolved through the external identity.

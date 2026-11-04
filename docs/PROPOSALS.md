@@ -1,6 +1,6 @@
 # Proposals
 
-Ideas not built that wait on Leo's yes, each held back under the delight filter in [AGENTS](../AGENTS.md). A decision that a package builds a default for is in [PLAN](PLAN.md)'s Open for Leo.
+Ideas not built that wait on Leo's yes. An item held back under the delight filter in [AGENTS](../AGENTS.md) is one line of its package's report, and the lead adds its row here only when Leo asks to decide it later. A decision that a package builds a default for is in [PLAN](PLAN.md)'s Open for Leo.
 
 | Proposal | Who meets it | Benefit | Cost | Score | Raised |
 | --- | --- | --- | --- | --- | --- |
@@ -47,6 +47,7 @@ Ideas not built that wait on Leo's yes, each held back under the delight filter 
 | A participant's own access to one Tangent, opened or restricted there, beside the roles' | Whoever manages a Tangent | One person reads a private Tangent, or is kept from posting in one, without a role of their own | A second list of people on the access page and a search to fill it; a role of one does it, and a timeout covers the place | 4 | 30 October 2026, package 5.1 |
 | A role moderates one Tangent: `Moderate` or `ManageTangent` given there alone | Whoever manages a Tangent | A Tangent's own moderators | More choices on every role's line for a place small enough that its moderators keep every Tangent | 4 | 30 October 2026, package 5.1 |
 | A role's access to the moderators' Tangent is set on its access page | Whoever manages roles | A role other than moderator reads the reports | The moderators' Tangent keeps its access so reports reach the moderators and no one else; the moderator role is given to whoever should read them | 4 | 30 October 2026, package 5.1 |
+| Making the place private confirms inline first, saying visitors then find only the sign-in | Whoever holds `ManageSpace` | They know the reach before it happens | A second step on a choice whose card already says it, and which is changed back in one save | 3 | 30 October 2026, package 5.1 |
 | The door and notifications name a role by its current name rather than the word its first name gave | A participant given or taken a renamed role | The news reads as the role is called now | A read of each role for every line that names one, for a rename that is rare; People and the profile name it as it is called now | 3 | 30 October 2026, package 5.1 |
 | The account menu names a participant's highest role when the place created it | A participant whose highest role is the place's own | Their menu says who they are here | A read of the role's name on every page for a line that names the seeded roles already; their profile lists every role | 4 | 30 October 2026, package 5.1 |
 | The log records a role created, changed or deleted, and a role's access to a Tangent | Whoever reads the moderation trail | Who shaped what, in the log beside every other change | Rows nothing reads: Koan's role rows keep who changed them last, the access shows on its page, and a reader's stream reads what they hold again within a second | 4 | 30 October 2026, package 5.1 |
