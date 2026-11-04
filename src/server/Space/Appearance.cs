@@ -10,8 +10,10 @@ public enum Accent
     Copper
 }
 
-/// <summary>What fills the base layer, the plain elements and the fonts: Tangent's own, or one of the classless
-/// stylesheets Tangent bundles, each with its adapter onto the <c>--ts-*</c> tokens.</summary>
+/// <summary>What fills the base layer, the plain elements and the fonts: Tangent's own; one of the classless stylesheets
+/// Tangent bundles, each with its adapter onto the <c>--ts-*</c> tokens; or Concord, Tangent's own arrangement of the
+/// place in a chat app's look, which also arranges Tangent's parts in the tangent layer, scoped by
+/// <c>data-base</c>.</summary>
 public enum Base
 {
     Tangent,
@@ -20,7 +22,8 @@ public enum Base
     Marx,
     Sakura,
     Water,
-    New
+    New,
+    Concord
 }
 
 /// <summary>What fills the palette layer: the base's own colours, Tangent's palette under Tangent's own base, or
@@ -65,8 +68,12 @@ public sealed class Appearance
     /// <summary>The palette layer's stylesheet, under the base URL: the base's own, or Tangent's.</summary>
     public string PaletteSheet => Palette == Palette.Base && Base != Base.Tangent ? "bases/" + Word(Base) + ".palette.css" : "palette.css";
 
-    /// <summary>The licence that travels with a bundled base, under the base URL; none for Tangent's own.</summary>
-    public string? Licence => Base == Base.Tangent ? null : "bases/" + Word(Base) + "/LICENSE";
+    /// <summary>The licence that travels with a bundled base, under the base URL; none for Tangent's own and Concord,
+    /// which are Tangent's.</summary>
+    public string? Licence => Base is Base.Tangent or Base.Concord ? null : "bases/" + Word(Base) + "/LICENSE";
+
+    /// <summary>The base as <c>data-base</c> on <c>&lt;html&gt;</c> says it, for a stylesheet to read; none for Tangent's own.</summary>
+    public string? BaseAttribute => Base == Base.Tangent ? null : Word(Base);
 
     /// <summary>The owner layer as a page carries it in its head: the place's CSS inside <c>@layer owner</c>, kept CSS
     /// throughout, since a <c>&lt;/</c> in it never closes the element; nothing while it is empty.</summary>

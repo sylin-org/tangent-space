@@ -1,0 +1,24 @@
+/* Concord's own palette, which the palette layer holds when it is left to the base: the --ts-* values for Light and Dark,
+ * in the reader's theme, and the three of its own its arrangement reads — the title bar, a chosen row and a name — which
+ * it draws from the tokens under any other palette. What follows from them is Tangent's (tokens.css). */
+
+@layer base, shapes, tangent, palette, owner;
+
+@layer palette {
+:root {
+  --ts-page: light-dark(#ffffff, #2e3035);
+  --ts-surface: light-dark(#f1f2f5, #27292e);
+  --ts-raised: light-dark(#e8eaef, #36383e);
+  --ts-hover: light-dark(#f4f5f8, #2b2d32);
+  --ts-line: light-dark(#e0e2e7, #3c3e45);
+  --ts-connector: light-dark(#d2d5dc, #4a4d55);
+  --ts-text: light-dark(#2f3137, #dcdee2);
+  --ts-text-2: light-dark(#5a5d66, #b2b6be);
+  --ts-text-3: light-dark(#6f737d, #9297a1);
+  --ts-accent: light-dark(#5559d8, #6b70ee);
+  --ts-on-accent: #ffffff;
+  --concord-bar: light-dark(#e4e6eb, #1c1d21);
+  --concord-chosen: light-dark(#d8dbe2, #3e4047);
+  --concord-name: light-dark(#0b0c0e, #f3f4f6);
+}
+}

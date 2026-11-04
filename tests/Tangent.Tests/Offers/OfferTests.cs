@@ -204,8 +204,8 @@ public sealed class OfferTests
 
         var html = WebUtility.HtmlDecode(await Html(leo.Client, "/"));
         Assert.Contains($"This place is being reached at <strong>{Public}</strong> — 14 requests since ", html);
-        Assert.Contains($"<form method=\"post\" action=\"{loopback}/offers/use\">", html);
-        Assert.Contains($"<form method=\"post\" action=\"{loopback}/offers/decline\">", html);
+        Assert.Contains($"<form class=\"use-offer\" method=\"post\" action=\"{loopback}/offers/use\">", html);
+        Assert.Contains($"<form class=\"decline-offer\" method=\"post\" action=\"{loopback}/offers/decline\">", html);
         Assert.Contains($"<input type=\"hidden\" name=\"origin\" value=\"{Public}\" />", html);
 
         // Anyone else reads a door without it, both ways.

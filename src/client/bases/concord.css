@@ -1,0 +1,654 @@
+/* Concord, Tangent's own arrangement of the place in a chat app's look, for whoever arrives from one: a title
+ * bar on top, the Tangents listed down the left as a chat app lists its conversations, and a Topic as one stream of messages with the composer at its foot
+ * and each message's actions where the pointer or the keyboard is. It fills the base layer with Tangent's plain elements
+ * in the system's own font, and arranges Tangent's parts in the tangent layer, after Tangent's own and scoped by
+ * data-base="concord" on <html>, so its rules win there without the place's own CSS. It reads every colour from the tokens,
+ * so its own palette (concord.palette.css) or Tangent's colours it. */
+
+@layer base, shapes, tangent, palette, owner;
+
+@import '../elements.css' layer(base);
+
+@layer base {
+:root {
+  --ts-font-ui: system-ui, "Segoe UI", "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+  --ts-font-display: var(--ts-font-ui);
+  --ts-font-mono: ui-monospace, Consolas, Menlo, monospace;
+}
+}
+
+@layer tangent {
+:root[data-base="concord"] {
+  --concord-rail: 240px;
+  --ts-header-height: 48px;
+  --ts-pathbar-height: 32px;
+  --bar: var(--concord-bar, var(--ts-surface));
+  --chosen: var(--concord-chosen, var(--ts-hover));
+  --name: var(--concord-name, var(--ts-text));
+
+  & body {
+    background: var(--ts-page);
+    color: var(--ts-text);
+    font: 16px/1.375 var(--ts-font-ui);
+  }
+
+  /* The title bar: the place, the search, the reader. */
+  & .masthead {
+    padding: 0 12px;
+    gap: 12px;
+    background: var(--bar);
+    border: 0;
+  }
+
+  & .masthead-mark {
+    border-radius: 9px;
+    background: var(--ts-accent);
+    color: var(--ts-on-accent);
+    font: 700 14px/1 var(--ts-font-ui);
+  }
+
+  & .masthead-name {
+    color: var(--name);
+    font: 600 15px/1.2 var(--ts-font-ui);
+  }
+
+  & .masthead-search-field {
+    height: 28px;
+    border: 0;
+    border-radius: 4px;
+    background: var(--ts-page);
+    color: var(--ts-text);
+    font-size: 14px;
+  }
+
+  & .masthead-sign-in {
+    border: 0;
+    border-radius: 4px;
+    background: var(--ts-accent);
+    color: var(--ts-on-accent);
+  }
+
+  /* The path: a slim bar under the title bar. */
+  & .path {
+    padding: 0 16px;
+    background: var(--bar);
+    border: 0;
+    color: var(--ts-text-3);
+    font: 13px/1.4 var(--ts-font-ui);
+  }
+
+  & .path a,
+  & .path .path-current,
+  & .path .switcher-label {
+    color: var(--ts-text-2);
+    font: 13px/1.4 var(--ts-font-ui);
+  }
+
+  & .path-elbow {
+    display: none;
+  }
+
+  & .path-crumbs {
+    margin: 0;
+  }
+
+  /* A page with a rail is one frame: the Tangents down the left, everything else in the stream beside them. */
+  & main:has(aside.rail) {
+    flex: 1;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: var(--concord-rail) minmax(0, 1fr);
+    grid-template-rows: repeat(19, min-content) 1fr;
+    gap: 0;
+    align-items: start;
+    background: var(--ts-page);
+  }
+
+  & main:has(aside.rail) > .layout {
+    display: contents;
+  }
+
+  & main:has(aside.rail) > *,
+  & main:has(aside.rail) > .layout > * {
+    grid-column: 2;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  & main:has(aside.rail) aside.rail {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    align-self: stretch;
+    position: static;
+    margin: 0;
+    padding: 16px 8px;
+    background: var(--ts-surface);
+  }
+
+  /* A page without a rail keeps its one column, on the stream's colour; under a head, such as a profile's, the column is
+     the stream's whole width, as the head is. */
+  & main:not(:has(aside.rail)) {
+    background: var(--ts-page);
+  }
+
+  & main.frame-main:not(:has(aside.rail)) > .layout {
+    width: auto;
+    max-width: none;
+    margin: 0;
+  }
+
+  /* The rail: the Tangents, the views of one, the sections of the settings. */
+  & .rail-heading {
+    margin: 0 8px 4px;
+    color: var(--ts-text-3);
+    font: 600 12px/1.3 var(--ts-font-ui);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  & .rail-heading-spaced {
+    margin-top: 20px;
+  }
+
+  & .rail ul {
+    margin: 0;
+    padding: 0;
+  }
+
+  & .rail li {
+    margin: 1px 0;
+    display: flex;
+    align-items: center;
+  }
+
+  & .rail li > a {
+    flex: 1;
+    min-width: 0;
+  }
+
+  & .rail li > a,
+  & .rail a.row,
+  & .rail .rail-new {
+    padding: 6px 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 4px;
+    color: var(--ts-text-3);
+    font: 500 15px/1.3 var(--ts-font-ui);
+    text-decoration: none;
+  }
+
+  & .rail li > a:hover,
+  & .rail .rail-new:hover {
+    background: var(--ts-hover);
+    color: var(--ts-text-2);
+  }
+
+  & .rail a[aria-current] {
+    background: var(--chosen);
+    color: var(--name);
+  }
+
+  & .rail li.tangent > a::before {
+    content: "#";
+    width: 16px;
+    color: var(--ts-text-3);
+    font-size: 20px;
+    font-weight: 400;
+    text-align: center;
+  }
+
+  & .rail .badge {
+    margin: 0 8px;
+  }
+
+  & .rail-audience {
+    padding: 4px 8px;
+    color: var(--ts-text-3);
+    font-size: 13px;
+  }
+
+  & .rail-audience-icon {
+    display: none;
+  }
+
+  /* A Tangent's head: its name, what it is for, and its counts, in one line over the stream. */
+  & .tangent-head {
+    margin: 0;
+    padding: 12px 16px;
+    background: var(--ts-page);
+    border: 0;
+    box-shadow: 0 1px 0 var(--ts-line);
+  }
+
+  & .tangent-head-inner {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  & .tangent-head .tile {
+    display: none;
+  }
+
+  & .tangent-head .mark {
+    width: 32px;
+    height: 32px;
+    align-self: center;
+  }
+
+  & .tangent-head-text {
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 12px;
+  }
+
+  & .tangent-head-text > * {
+    margin: 0;
+  }
+
+  & .tangent-title {
+    margin: 0;
+    color: var(--name);
+    font: 600 16px/1.25 var(--ts-font-ui);
+    letter-spacing: 0;
+  }
+
+  & .tangent-head.tangent .tangent-title::before {
+    content: "# ";
+    color: var(--ts-text-3);
+    font-weight: 400;
+  }
+
+  & .tangent-description,
+  & .tangent-meta {
+    margin: 0;
+    color: var(--ts-text-3);
+    font: 14px/1.4 var(--ts-font-ui);
+  }
+
+  & .tangent-head-text .tangent-description {
+    padding-left: 12px;
+    border-left: 1px solid var(--ts-line);
+  }
+
+  & .tangent-head-actions {
+    margin: 0;
+  }
+
+  /* The stream's own column: no reading width, no offsets. */
+  & .tangent-main,
+  & .topic-main,
+  & .layout-main {
+    max-width: none;
+    width: auto;
+    padding: 0 16px 24px;
+  }
+
+  /* An article keeps a reader's measure in the stream. */
+  & .topic-main > article.article {
+    width: 100%;
+    max-width: 860px;
+  }
+
+  & .slot-door-intro {
+    margin: 12px 16px 0;
+  }
+
+  /* Topic lists read as cards in the stream. */
+  & .topic-list-head {
+    margin: 16px 0 4px;
+    padding: 0;
+    border: 0;
+  }
+
+  & .topic-list-title {
+    margin: 0;
+    color: var(--ts-text-3);
+    font: 600 12px/1.3 var(--ts-font-ui);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  & .topic-table {
+    padding: 0;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  & .topic-table-heading {
+    display: none;
+  }
+
+  & .topic-rows > li {
+    margin: 0 0 8px;
+    border: 0;
+  }
+
+  & a.row.topic {
+    padding: 12px 16px;
+    background: var(--ts-surface);
+    border: 1px solid transparent;
+    border-radius: 8px;
+  }
+
+  & a.row.topic:hover {
+    background: var(--ts-hover);
+    border-color: var(--ts-line);
+  }
+
+  & .topic-row-title {
+    color: var(--name);
+    font: 600 16px/1.3 var(--ts-font-ui);
+  }
+
+  & .topic-row-latest-reply {
+    background: var(--ts-page);
+  }
+
+  & .article-card {
+    border-radius: 8px;
+  }
+
+  /* A Topic is one stream of messages. */
+  & .topic-title {
+    margin: 0 -16px;
+    padding: 14px 16px 2px;
+    color: var(--name);
+    font: 600 16px/1.25 var(--ts-font-ui);
+    letter-spacing: 0;
+  }
+
+  & .topic-meta {
+    margin: 0 -16px;
+    padding: 0 16px 12px;
+    color: var(--ts-text-3);
+    font-size: 13px;
+    box-shadow: 0 1px 0 var(--ts-line);
+  }
+
+  & .topic-main > .watch-form {
+    margin: 8px 0 0;
+  }
+
+  & article.post {
+    margin: 12px -16px 0;
+    padding: 2px 48px 2px 16px;
+    column-gap: 16px;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  & article.post:hover,
+  & article.post:focus-within {
+    background: var(--ts-hover);
+  }
+
+  & article.post.is-current {
+    background: var(--ts-accent-soft);
+    box-shadow: inset 2px 0 0 var(--ts-accent);
+  }
+
+  & article.post > .mark {
+    width: 40px;
+    height: 40px;
+    margin-top: 2px;
+    font-size: 14px;
+  }
+
+  & article.post > header {
+    gap: 6px;
+  }
+
+  & .post-author {
+    color: var(--name);
+    font: 500 16px/1.375 var(--ts-font-ui);
+  }
+
+  & article.by-agent .post-author {
+    color: var(--ts-accent);
+  }
+
+  & .post-handle {
+    display: none;
+  }
+
+  & .post-time,
+  & .post-time time {
+    color: var(--ts-text-3);
+    font: 12px/1.375 var(--ts-font-ui);
+    text-decoration: none;
+  }
+
+  & .badge.is-agent {
+    padding: 0 4px;
+    align-self: center;
+    background: var(--ts-accent);
+    color: var(--ts-on-accent);
+    border: 0;
+    border-radius: 3px;
+    font: 600 10px/16px var(--ts-font-ui);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  & .post-body,
+  & .post-body-root {
+    margin-top: 0;
+    color: var(--ts-text);
+    font: 16px/1.375 var(--ts-font-ui);
+  }
+
+  & .post-root {
+    padding-bottom: 8px;
+    border: 0;
+  }
+
+  /* A message's actions: in a line under it where nothing hovers; where a pointer does, a small bar over its corner that
+     shows where the pointer or the keyboard is, back in its line once a report opens or the message lists what was taken
+     from it. */
+  & article.post > footer {
+    margin: 2px 0 4px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 4px;
+    font-size: 13px;
+  }
+
+  & article.post > footer .post-actions,
+  & article.post > footer .post-report {
+    margin: 0;
+  }
+
+  @media (hover: hover) {
+    & article.post {
+      position: relative;
+    }
+
+    & article.post > footer:not(:has(details[open], .post-taken)) {
+      position: absolute;
+      top: -14px;
+      right: 16px;
+      z-index: 2;
+      margin: 0;
+      padding: 2px 4px;
+      background: var(--ts-surface);
+      border: 1px solid var(--ts-line);
+      border-radius: 6px;
+      box-shadow: 0 2px 6px var(--ts-shadow);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    & article.post:hover > footer,
+    & article.post:focus-within > footer {
+      opacity: 1;
+      pointer-events: auto;
+    }
+  }
+
+  & .post-action {
+    height: 26px;
+    color: var(--ts-text-3);
+    font: 600 13px/1 var(--ts-font-ui);
+  }
+
+  /* "Replies" is the divider a stream draws between its messages and its start. */
+  & .topic-replies {
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  & .topic-replies-head {
+    margin: 20px 0 0;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 0;
+    color: var(--ts-text-3);
+    font: 600 12px/1.3 var(--ts-font-ui);
+  }
+
+  & .topic-replies-head::before,
+  & .topic-replies-head::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--ts-line);
+  }
+
+  & .topic-replies-title {
+    margin: 0;
+    color: inherit;
+    font: inherit;
+  }
+
+  & .topic-replies-range {
+    color: inherit;
+    font-weight: 400;
+  }
+
+  /* The composer stays at the foot of the stream. */
+  & .topic-main {
+    min-height: calc(100dvh - 120px);
+    display: flex;
+    flex-direction: column;
+  }
+
+  & .topic-main > .topic-reply,
+  & .topic-main > .topic-closed {
+    margin: auto 0 16px;
+    padding: 11px 16px;
+    background: var(--ts-raised);
+    color: var(--ts-text-3);
+    border: 0;
+    border-radius: 8px;
+  }
+
+  & .topic-main > .topic-replies {
+    margin-bottom: 24px;
+  }
+
+  & .topic-reply .topic-replies-title,
+  & .topic-reply .field-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  & .topic-reply textarea {
+    min-height: 44px;
+    max-height: 40vh;
+    field-sizing: content;
+    background: transparent;
+    color: var(--ts-text);
+    border: 0;
+    box-shadow: none;
+    font: 16px/1.375 var(--ts-font-ui);
+  }
+
+  & .topic-reply .post-form-actions {
+    margin-top: 6px;
+  }
+
+  & .topic-reply button[type="submit"],
+  & .sign-in-submit {
+    border-radius: 4px;
+    background: var(--ts-accent);
+    color: var(--ts-on-accent);
+  }
+
+  /* Panels: the sign-in, the forms, notifications, search and the settings, in the stream's colours. */
+  & .sign-in-panel {
+    border-radius: 8px;
+    background: var(--ts-surface);
+    box-shadow: none;
+    border: 1px solid var(--ts-line);
+  }
+
+  & .sign-in-title {
+    color: var(--name);
+    font: 600 20px/1.25 var(--ts-font-ui);
+  }
+
+  /* The foot: one slim bar. */
+  & .footer {
+    min-height: 0;
+    padding: 6px 16px;
+    background: var(--bar);
+    border: 0;
+    color: var(--ts-text-3);
+    font-size: 12px;
+  }
+
+  /* Under 1024 the rail folds, as Tangent's own does, and the stream stands alone. */
+  @media (max-width: 1023px) {
+    & main:has(aside.rail) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    & main:has(aside.rail) > *,
+    & main:has(aside.rail) > .layout > * {
+      grid-column: 1;
+    }
+
+    & main:has(aside.rail) aside.rail {
+      display: none;
+    }
+  }
+
+  @media (max-width: 719px) {
+    & article.post {
+      padding-right: 16px;
+    }
+
+    & .masthead-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+}
+}

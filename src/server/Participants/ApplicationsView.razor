@@ -51,7 +51,7 @@
                                     @if (Model.Admit is { } admit && Model.Decline is { } decline)
                                     {
                                     <div class="door-offer-answers">
-                                        <form method="post" action="@admit.Action">
+                                        <form class="admit" method="post" action="@admit.Action">
                                             <input type="hidden" name="@ApplicationsController.ParticipantField" value="@applicant.Id">
                                             <button type="submit" class="tangent-new">Admit</button>
                                         </form>
@@ -61,7 +61,7 @@
                                                 <summary class="watch-button">Decline</summary>
                                                 <div class="post-remove-confirm">
                                                     <p class="post-remove-note">They keep reading what a visitor reads, and you can still admit them later.</p>
-                                                    <form method="post" action="@decline.Action">
+                                                    <form class="decline" method="post" action="@decline.Action">
                                                         <input type="hidden" name="@ApplicationsController.ParticipantField" value="@applicant.Id">
                                                         <button type="submit" class="post-remove-submit">Decline</button>
                                                     </form>

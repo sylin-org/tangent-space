@@ -39,7 +39,7 @@
             {
                 <p class="sign-in-failure" id="take-failure" role="alert">@failure</p>
             }
-            <form class="sign-in-form" method="post" action="@Model.Take?.Action">
+            <form class="sign-in-form take-on-a-tangent" method="post" action="@Model.Take?.Action">
                 @if (Model.Take is { } take)
                 {
                     <input type="hidden" name="@PostWrites.IdField" value="@take.Value(PostWrites.IdField)">

@@ -9,7 +9,7 @@
     <div class="door-offer-answers people-answers">
         @if (Person.Can.Contains(People.Verb.Lift) && Forms.Lift is { } lift)
         {
-            <form method="post" action="@lift.Action">
+            <form class="lift" method="post" action="@lift.Action">
                 @Fields(lift)
                 <button type="submit" class="tangent-new">@(Person.Standing == People.Word(Standing.Banned) ? "Lift the ban" : "Lift the timeout")</button>
             </form>
@@ -22,7 +22,7 @@
                     <p class="post-remove-note">They keep reading and reporting here, and post, reply and start nothing until it ends; you can lift it sooner.</p>
                     @foreach (var duration in Forms.Durations)
                     {
-                        <form method="post" action="@timeOut.Action">
+                        <form class="time-out" method="post" action="@timeOut.Action">
                             @Fields(timeOut)
                             <input type="hidden" name="@PeopleController.ForField" value="@duration">
                             <button type="submit" class="watch-button">@For(duration)</button>
@@ -35,7 +35,7 @@
         {
             @foreach (var role in Person.Give)
             {
-                <form method="post" action="@give.Action">
+                <form class="give-role" method="post" action="@give.Action">
                     @Fields(give)
                     <input type="hidden" name="@PeopleController.RoleField" value="@role">
                     <button type="submit" class="watch-button">Make @Spoken(role)</button>
@@ -46,7 +46,7 @@
         {
             @foreach (var role in Person.Take)
             {
-                <form method="post" action="@take.Action">
+                <form class="take-role" method="post" action="@take.Action">
                     @Fields(take)
                     <input type="hidden" name="@PeopleController.RoleField" value="@role">
                     <button type="submit" class="watch-button">Take @Spoken(role) role</button>
@@ -59,7 +59,7 @@
                 <summary class="watch-button">Ban</summary>
                 <div class="post-remove-confirm">
                     <p class="post-remove-note">This place disappears for them, every page and every stream, until you lift the ban.</p>
-                    <form method="post" action="@ban.Action">
+                    <form class="ban" method="post" action="@ban.Action">
                         @Fields(ban)
                         <button type="submit" class="post-remove-submit">Ban</button>
                     </form>

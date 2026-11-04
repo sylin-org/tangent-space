@@ -1,18 +1,19 @@
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { defineConfig, type Plugin } from 'vitest/config'
 
 // The page entry, one module script, and the stylesheet of each of Tangent's layers with fixed names: base.css,
-// tangent.css (shapes and tangent) and palette.css; and each bundled base with its adapter, bases/<name>.css, its own
-// palette, bases/<name>.palette.css, and its licence, bases/<name>/LICENSE; all written where the server serves its
+// tangent.css (shapes and tangent) and palette.css; and each bundled base, bases/<name>.css — a classless stylesheet
+// with its adapter, or Concord — its own palette, bases/<name>.palette.css, and a vendored one's licence,
+// bases/<name>/LICENSE; all written where the server serves its
 // static files. Fonts keep content hashes. Relative URLs let the Tangent Space answer under a path of its base URL. The
 // theme script is built after this one by vite.theme.config.ts into the same folder.
 const bases = readdirSync('bases').filter((file) => file.endsWith('.css')).map((file) => file.slice(0, -'.css'.length))
 
-// Each bundled base's licence travels beside it, as its package ships it.
+// Each vendored base's licence travels beside it, as its package ships it; Concord is Tangent's own and has none.
 const licences: Plugin = {
   name: 'licences',
   generateBundle() {
-    for (const base of bases.filter((name) => !name.endsWith('.palette')))
+    for (const base of bases.filter((name) => !name.endsWith('.palette') && existsSync(`bases/${name}/LICENSE`)))
       this.emitFile({ type: 'asset', fileName: `bases/${base}/LICENSE`, source: readFileSync(`bases/${base}/LICENSE`) })
   },
 }

@@ -18,8 +18,18 @@
   --accent-text: var(--ts-accent-foreground);
   --preformatted: var(--ts-text-2);
   --disabled: var(--ts-hover);
+  --code: light-dark(#d81b60, #f06292);
   --ts-font-display: var(--sans-font);
   --ts-font-ui: var(--sans-font);
   --ts-font-mono: var(--mono-font);
+}
+
+/* It dims images where the device is dark; here, where the reader's theme is. */
+:root[data-theme="dark"] :is(img, video) { opacity: 0.8; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) :is(img, video), :root[data-theme="system"] :is(img, video) { opacity: 0.8; }
+}
+img, video {
+  opacity: 1;
 }
 }

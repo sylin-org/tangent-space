@@ -23,7 +23,7 @@
                             <li class="door-offer row post" @key="hit.Id">
                                 <div class="notification-body">
                                     <p class="door-offer-line notification-line">
-                                        @TopicRow.Mark(hit.Author, "face")
+                                        @TopicRow.Mark(hit.Author, "face", Model.Who?.Id)
                                         <span class="notification-text"><strong>@hit.Author.Name</strong> in <a class="notification-link" href="@hit.Address">@hit.Topic</a> <span class="topic-row-none">· @hit.Tangent · <time datetime="@hit.At.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture)">@TopicRow.When(hit.At, Model.Day)</time></span></span>
                                     </p>
                                     @if (hit.Snippet.Count > 0 || hit.Edited is not null)

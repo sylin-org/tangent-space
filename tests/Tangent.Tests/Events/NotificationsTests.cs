@@ -324,7 +324,7 @@ public sealed class NotificationsTests
         Assert.NotEmpty(offered.GetProperty("use").GetProperty("token").GetProperty("value").GetString()!);
         var html = WebUtility.HtmlDecode((await Send(leo.Client, HttpMethod.Get, Notifications.Path)).Body);
         Assert.Contains($"This place is being reached at <strong>{Origin}</strong> — 3 requests since", html);
-        Assert.Contains($"<form method=\"post\" action=\"{loopback}/offers/decline\">", html);
+        Assert.Contains($"<form class=\"decline-offer\" method=\"post\" action=\"{loopback}/offers/decline\">", html);
         Assert.Contains($"<input type=\"hidden\" name=\"origin\" value=\"{Origin}\" />", html);
         Assert.Empty(await Offer.All(Cancellation));
 

@@ -6,7 +6,8 @@ The design foundation every page of a Tangent Space stands on, and its islands, 
 | --- | --- |
 | `base.css`, `tangent.css`, `palette.css` | Tangent's own stylesheet for each layer of `@layer base, shapes, tangent, palette, owner;`: `base.css` its fonts as `--ts-font-*` and the plain elements, the base layer's default; `tangent.css` its components, `tokens.css`, `layout.css` and `sign-in.css` in the shapes layer and every page's own file in the tangent layer, which every page loads; `palette.css` the colours of Paper and Ink and the four accents, the palette layer's default. Each is built to the file of its name. |
 | `tokens.css` | The scale and the subjects' colours as `--ts-*` custom properties, in the shapes layer: type scale, radii, layout sizes, shadows, the place's first four tokens named as `site.standard.theme.basic` names them (`--ts-background`, `--ts-foreground`, `--ts-accent`, `--ts-accent-foreground`) as they follow from the palette, the six Tangent tones, the role colours, the agent's marks, danger, and the reader's theme as the page's colour scheme. With `base.css` and `palette.css` the values are the design reference's, held there by the token parity test. |
-| `bases/` | The classless stylesheets the base layer can hold instead of Tangent's own — Simple.css, MVP.css, Marx, Sakura, Water.css and new.css — each vendored verbatim from its package in `devDependencies` into `bases/<name>/` beside its licence; `bases/<name>.css`, its adapter, imports it into the base layer and has its own variables read the tokens and the tokens read its fonts; `bases/<name>.palette.css` is its own palette, the `--ts-*` values taken from its colours with `light-dark()`, which the palette layer holds when it is left to the base. The build writes each with its licence under `bases/`. |
+| `elements.css` | The plain elements as Tangent draws them — the page's colour and type, headings, links, buttons, fields, selection and focus — which Tangent's own base and Concord each bring into the base layer. |
+| `bases/` | Concord, `bases/concord.css`: Tangent's own arrangement of the place in a chat app's look, which brings `elements.css` into the base layer in the system's font and arranges Tangent's parts in the tangent layer, scoped by `data-base="concord"`, beside its own palette. And the classless stylesheets the base layer can hold instead of Tangent's own — Simple.css, MVP.css, Marx, Sakura, Water.css and new.css — each vendored verbatim from its package in `devDependencies` into `bases/<name>/` beside its licence; `bases/<name>.css`, its adapter, imports it into the base layer and has its own variables read the tokens and the tokens read its fonts; `bases/<name>.palette.css` is its own palette, the `--ts-*` values taken from its colours with `light-dark()`, which the palette layer holds when it is left to the base. The build writes each with its licence under `bases/`. |
 | `fonts.css` and `fonts/` | Newsreader (variable: weight 200–800, optical size 6–72), Schibsted Grotesk (variable: weight 400–900) and IBM Plex Mono (400 and 500), Latin and Latin Extended, as files in the tree declared with `@font-face`. Nothing is fetched from a font service, so pages render offline and captures are deterministic. The files come from the Fontsource packages in `devDependencies`; their licence texts sit beside them. |
 | `layout.css` | The frame: the page's box, which keeps every part Tangent names with a class in the browser's own box whichever base styles the plain elements, the place's slots, the masthead with the place's mark and name and, for a participant, the account menu that opens in the page with their name, handle, role and Sign out, or for a visitor the Sign in button; the path bar with its elbow, its crumbs and the Tangent switcher that opens in the page; the Tangent tiles in their six tones; the layout grid with its rail, the footer with its appearance switch, and the breakpoints. |
 | `sign-in.css` | The sign-in page: the one panel, headed by the place's mark and name, that holds the action signing in with Bluesky, the handle form for another server behind a quiet disclosure, their failures and their busy button. |
@@ -58,26 +59,26 @@ The design reference is configured, never part of the tree: put the package (the
 ```html
 <html lang="en" data-accent="jade">
   <head>
-    <link rel="stylesheet" href="…/base.css">
     <link rel="stylesheet" href="…/tangent.css">
+    <link rel="stylesheet" href="…/base.css">
     <link rel="stylesheet" href="…/palette.css">
     <style>…the place's own CSS, in its layer…</style>
     <script src="…/theme.js"></script>
     <script type="module" src="…/tangent.js"></script>
   </head>
   <body>
-    <header class="masthead">…</header>
+    <header class="masthead bar place">…</header>
     <nav class="path"><span class="path-elbow"></span><ol class="path-crumbs">…</ol></nav>
-    <div class="layout layout-reading">
+    <main class="layout layout-reading">
       <aside class="rail">…</aside>
-      <main data-island="fragment" data-props="{&quot;url&quot;:&quot;…/&quot;}">…</main>
-    </div>
-    <footer class="footer">…</footer>
+      <div class="layout-main">…</div>
+    </main>
+    <footer class="footer bar">…</footer>
   </body>
 </html>
 ```
 
-`theme.js` is a classic script in `<head>`, without `defer`, so the saved appearance is on `<html>` before the first paint; it blocks the first render, so it holds nothing else. `tangent.js` is a module, deferred by nature: it runs once the document is parsed and never blocks the first render. The server renders `data-accent`, the place's accent, on every page, and links the place's base and palette, a bundled base's in place of Tangent's own where the place chose one; the place's own CSS is the `owner` layer, left out of a management page. Without a saved choice `data-theme` stays off and the device decides; with no script too, and the switch does not show.
+`theme.js` is a classic script in `<head>`, without `defer`, so the saved appearance is on `<html>` before the first paint; it blocks the first render, so it holds nothing else. `tangent.js` is a module, deferred by nature: it runs once the document is parsed and never blocks the first render. The server renders `data-accent`, the place's accent, on every page, and `data-base` where the place chose a base other than Tangent's own; it links Tangent's components, then the place's base, so the arrangement a base such as Concord brings follows Tangent's own in the tangent layer, then its palette; the place's own CSS is the `owner` layer, left out of a management page. Without a saved choice `data-theme` stays off and the device decides; with no script too, and the switch does not show.
 
 `main` stands directly under `body`. The layout grid is `.layout` for the door and Tangent pages, `.layout-reading` for a Topic and the pages read like one, and `.layout-settings` for settings. A layout without a `.rail` is one reading column.
 

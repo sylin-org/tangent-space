@@ -1,9 +1,10 @@
 @using System.Globalization
 @using System.Text.Json
 @using Tangent.Space
-@* The page around one resource's component: the place's accent on <html>, the stylesheets of the place's appearance in
-   their layers — its base, Tangent's components and its palette, each one stylesheet, and the place's own CSS as the owner
-   layer, which a management page leaves out — and the two scripts every page loads, absolute from the base URL. The theme script blocks in <head> so the reader's theme applies before the first paint; the
+@* The page around one resource's component: the place's accent, and any base other than Tangent's own, on <html>; the
+   stylesheets of the place's appearance in their layers — Tangent's components, then its base, whose arrangement, where it
+   has one, follows Tangent's own in the tangent layer, then its palette, and the place's own CSS as the owner layer, which
+   a management page leaves out — and the two scripts every page loads, absolute from the base URL. The theme script blocks in <head> so the reader's theme applies before the first paint; the
    page script is a module, deferred by nature, that mounts the islands once the document is parsed. A standalone page
    opens with no server and no script: the device decides its theme, and no island answers on it. A resource
    that names a frame is drawn inside it: the masthead with the place's mark and name, the search box, a form that works without JavaScript and suggests as someone types with it, and, for someone signed in, how
@@ -11,18 +12,18 @@
    new ones arrive, a button that opens them, marking them seen, and their account opening in the page with their name,
    handle and role, the same way to their notifications, the place's settings for whoever may change them, and the way to sign out, or for a visitor the way to
    sign in; the path bar whose elbow hangs from the mark, with a Tangent's crumb opening the list of Tangents
-   in the page, and where a new one is created for whoever may; and the footer with the appearance a visitor can choose. A page a visitor may
+   in the page, and where a new one is created for whoever may; and the footer with the theme a visitor can choose. A page a visitor may
    read carries in its head the card a link to it previews. A page of the place's archive opens with the one line that says it is retired. The place's own
    slots come through here: its head last in <head>, so what it sets wins, its masthead after the place's name and its footer first in the footer, each adding nothing while it is empty.
    Nothing here is a dialog. *@
 <!DOCTYPE html>
-<html lang="en" data-accent="@Appearance.Word(Appearance.Accent)">
+<html lang="en" data-accent="@Appearance.Word(Appearance.Accent)" data-base="@Appearance.BaseAttribute">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@Title</title>
-    <link rel="stylesheet" href="@(BaseUrl + "/" + Appearance.BaseSheet)">
     <link rel="stylesheet" href="@(BaseUrl + "/" + HtmlFormatter.Stylesheet)">
+    <link rel="stylesheet" href="@(BaseUrl + "/" + Appearance.BaseSheet)">
     <link rel="stylesheet" href="@(BaseUrl + "/" + Appearance.PaletteSheet)">
     @if (!Management && Appearance.CssLayer is { } owner)
     {
@@ -97,7 +98,7 @@
                             </span>
                         </div>
                         <div class="account-appearance appearance" data-island="appearance">
-                            <span class="account-appearance-label" id="account-appearance-label">@Icon(AppearanceIcon)Appearance</span>
+                            <span class="account-appearance-label" id="account-appearance-label">@Icon(ThemeIcon)Theme</span>
                             <div class="segmented" role="group" aria-labelledby="account-appearance-label">
                                 <button type="button" data-theme-choice="system" aria-pressed="true">System</button>
                                 <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
@@ -189,7 +190,7 @@
         @if (!Standalone)
         {
             <div class="footer-end appearance" data-island="appearance">
-                <span id="appearance-label">Appearance</span>
+                <span id="appearance-label">Theme</span>
                 <div class="segmented" role="group" aria-labelledby="appearance-label">
                     <button type="button" data-theme-choice="system" aria-pressed="true">System</button>
                     <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
@@ -234,7 +235,7 @@ else
 
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
-    private const string AppearanceIcon = "<circle cx=\"10\" cy=\"10\" r=\"6.5\"></circle><path d=\"M10 3.5v13a6.5 6.5 0 0 0 0-13z\" fill=\"currentColor\" stroke=\"none\"></path>";
+    private const string ThemeIcon = "<circle cx=\"10\" cy=\"10\" r=\"6.5\"></circle><path d=\"M10 3.5v13a6.5 6.5 0 0 0 0-13z\" fill=\"currentColor\" stroke=\"none\"></path>";
     private const string SettingsIcon = "<circle cx=\"10\" cy=\"10\" r=\"2.5\"></circle><path d=\"M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4\"></path>";
     private const string SignOutIcon = "<path d=\"M8 4.5H5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h3\"></path><path d=\"M12.5 6.5L16 10l-3.5 3.5\"></path><path d=\"M16 10H8\"></path>";
     private const string NotificationsIcon = "<path d=\"M5.5 13.5V9a4.5 4.5 0 0 1 9 0v4.5l1.5 1.5H4z\"></path><path d=\"M8.5 17a1.5 1.5 0 0 0 3 0\"></path>";
@@ -257,7 +258,7 @@ else
         if (Monogram.Avatar(who.Avatar) is { } avatar)
         {
             builder.OpenElement(0, "img");
-            builder.AddAttribute(1, "class", "who-mark");
+            builder.AddAttribute(1, "class", "who-mark chip participant is-you");
             builder.AddAttribute(2, "src", avatar);
             builder.AddAttribute(3, "alt", "");
             builder.CloseElement();
@@ -265,7 +266,7 @@ else
         }
 
         builder.OpenElement(4, "span");
-        builder.AddAttribute(5, "class", "who-mark tone-" + Monogram.Tone(who.Id));
+        builder.AddAttribute(5, "class", "who-mark chip participant is-you tone-" + Monogram.Tone(who.Id));
         builder.AddAttribute(6, "aria-hidden", "true");
         builder.AddContent(7, Monogram.Letters(who.Handle));
         builder.CloseElement();

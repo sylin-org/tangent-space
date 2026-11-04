@@ -27,7 +27,7 @@
             {
                 <p class="sign-in-failure" id="new-tangent-failure" role="alert">@failure</p>
             }
-            <form class="sign-in-form" method="post" action="@Model.Create?.Action" data-island="@(Model.Gate is null ? "submitting" : null)">
+            <form class="sign-in-form create-tangent" method="post" action="@Model.Create?.Action" data-island="@(Model.Gate is null ? "submitting" : null)">
                 @if (Model.Create is { } create)
                 {
                 }

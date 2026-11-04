@@ -131,7 +131,7 @@ public sealed class AppearanceTests
         Assert.DoesNotContain("@layer owner", door);
         var page = await Send(leo.Client, HttpMethod.Get, Path, json: true);
         Assert.Equal(("tangent", "base", ""), (page.Json.GetProperty("base").GetString(), page.Json.GetProperty("palette").GetString(), page.Json.GetProperty("css").GetString()));
-        Assert.Equal(["tangent", "simple", "mvp", "marx", "sakura", "water", "new"], page.Json.GetProperty("bases").EnumerateArray().Select(word => word.GetString()));
+        Assert.Equal(["tangent", "simple", "mvp", "marx", "sakura", "water", "new", "concord"], page.Json.GetProperty("bases").EnumerateArray().Select(word => word.GetString()));
 
         // Sakura, in its own palette, under the place's own CSS, which stays CSS whatever it holds.
         var sakura = await Json(leo, Path, Path, new { @base = "sakura", css = "article.post.by-agent > header { color: teal; } </style>" });
@@ -143,10 +143,15 @@ public sealed class AppearanceTests
             Assert.Contains("<style>@layer owner {\narticle.post.by-agent > header { color: teal; } <\\/style>\n}</style>", body);
         }
 
-        // The settings wear the place's base and palette and leave its own CSS out, so it can hide no way back.
+        // The settings wear the place's base and palette and leave its own CSS out, so it can hide no way back; so does a
+        // refusal answered under them.
         var settings = (await Send(leo.Client, HttpMethod.Get, Path)).Body;
         Assert.Contains($"href=\"{BaseUrl}/bases/sakura.css\"", settings);
         Assert.DoesNotContain("@layer owner", settings);
+        var refusal = await Send(leo.Client, HttpMethod.Get, "/settings/export?after=garbage");
+        Assert.True((int)refusal.Status >= 400, refusal.Status.ToString());
+        Assert.Contains("class=\"masthead", refusal.Body);
+        Assert.DoesNotContain("@layer owner", refusal.Body);
 
         // Tangent's palette over the base; a stylesheet Tangent does not bundle is refused.
         Assert.Equal(HttpStatusCode.OK, (await Json(leo, Path, Path, new { palette = "accent" })).Status);

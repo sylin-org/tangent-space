@@ -39,7 +39,7 @@ public sealed class TangentSpace : Entity<TangentSpace>
     public static readonly Reason AccentRule = Reason.Invalid("The place's accent is one of four: choose gold, jade, iris or copper.");
 
     /// <summary>The refusal a base outside Tangent's own and the bundled stylesheets meets.</summary>
-    public static readonly Reason BaseRule = Reason.Invalid("The base is Tangent's own or a bundled stylesheet: choose tangent, simple, mvp, marx, sakura, water or new.");
+    public static readonly Reason BaseRule = Reason.Invalid("The base is Tangent's own or a bundled stylesheet: choose tangent, simple, mvp, marx, sakura, water, new or concord.");
 
     /// <summary>The refusal a palette other than the base's own or Tangent's in the accent meets.</summary>
     public static readonly Reason PaletteRule = Reason.Invalid("The palette is the base's own or Tangent's in the place's accent: choose base or accent.");

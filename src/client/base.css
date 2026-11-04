@@ -1,80 +1,16 @@
 /* Tangent's own base, the base layer's default: its three typefaces, as the fonts every layer reads (--ts-font-*), and
- * the plain elements in them — the page's colour and type, headings, links, buttons and fields, selection and focus.
- * A bundled classless stylesheet (bases/<name>.css) takes this file's place, and with it these fonts. */
+ * the plain elements in them (elements.css). A bundled stylesheet (bases/<name>.css) takes this file's place, and with it
+ * these fonts. */
 
 @layer base, shapes, tangent, palette, owner;
 
 @import './fonts.css' layer(base);
+@import './elements.css' layer(base);
 
 @layer base {
 :root {
   --ts-font-display: 'Newsreader', Georgia, serif;
   --ts-font-ui: 'Schibsted Grotesk', 'Helvetica Neue', Arial, sans-serif;
   --ts-font-mono: 'IBM Plex Mono', ui-monospace, monospace;
-}
-
-body {
-  background: var(--ts-background);
-  color: var(--ts-foreground);
-  font: var(--ts-type-ui);
-}
-
-button,
-input,
-select,
-textarea {
-  font: inherit;
-}
-
-button,
-summary {
-  cursor: pointer;
-}
-
-button:disabled {
-  cursor: default;
-  opacity: 0.5;
-}
-
-a {
-  color: var(--ts-accent);
-  text-underline-offset: 3px;
-}
-
-h1,
-h2,
-h3,
-h4,
-p {
-  margin-top: 0;
-}
-
-h1,
-h2,
-h3,
-h4 {
-  color: var(--ts-text);
-  letter-spacing: -0.015em;
-}
-
-h1 {
-  font: var(--ts-type-page-title);
-}
-
-h2 {
-  font: var(--ts-type-section);
-}
-
-h3 {
-  font: var(--ts-type-shelf);
-}
-
-::selection {
-  background: var(--ts-selection);
-}
-
-:focus-visible {
-  outline: 2px solid var(--ts-accent);
-  outline-offset: 3px;
 }
 }

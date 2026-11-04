@@ -44,7 +44,7 @@
                 <p class="article-card-opening">@Model.Opening</p>
             }
             <p class="article-card-author">
-                @Mark(Model.Author, Lead ? "author-mark-lead" : "author-mark-small")
+                @Mark(Model.Author, Lead ? "author-mark-lead" : "author-mark-small", Reader)
                 <span class="article-card-name">@Model.Author.Name</span>@AgentTag(Model.Author)@Edited(Model.Edited)
                 @if (!Lead || Model.Latest is null)
                 {
@@ -56,7 +56,7 @@
             @if (Lead && Model.Latest is { } latest)
             {
                 <a class="article-strip" href="@Model.Address">
-                    @Mark(latest.Author, "author-mark")
+                    @Mark(latest.Author, "author-mark", Reader)
                     <span class="article-strip-line"><b>@latest.Author.Name</b>@Edited(latest.Edited) @Clip(latest.Line, StripLimit)</span>
                     <span class="article-strip-count">@Replies()</span>
                     @NewReplies()
@@ -80,7 +80,7 @@ else
             @if (Model.Latest is { } latest)
             {
                 <span class="topic-row-latest-reply">
-                    @Mark(latest.Author, "reply-mark")
+                    @Mark(latest.Author, "reply-mark", Reader)
                     <span class="topic-row-latest-line"><b>@latest.Author.Name</b>@Edited(latest.Edited) @Clip(latest.Line, PreviewLimit)@if (latest.New)
                         {
                             <span class="badge is-new new-inline">New</span>
@@ -95,7 +95,7 @@ else
         <span class="topic-row-people">
             @foreach (var person in Model.People.Take(FaceLimit))
             {
-                @Mark(person, "face")
+                @Mark(person, "face", Reader)
             }
         </span>
         <span class="topic-row-replies">
@@ -137,6 +137,9 @@ else
 
     [Parameter] public Tile TangentTile { get; set; } = new("amber", "T");
 
+    /// <summary>Who reads the page, where someone signed in does.</summary>
+    [Parameter] public string? Reader { get; set; }
+
     [CascadingParameter(Name = nameof(Shell.Standalone))] public bool Standalone { get; set; }
 
     private string Shown(string cover) => Standalone ? cover : cover + "/" + MediaRecipes.CardName;
@@ -177,8 +180,10 @@ else
 
     private string ArticleClass() => (Lead ? "article-card article-lead" : Model.Cover is null ? "article-card" : "article-card article-card-covered") + " card topic" + States();
 
-    /// <summary>What the Topic's record holds of it, as the contract's states: new to the reader, pinned, locked.</summary>
-    private string States() => (Model.New ? " is-new" : "") + (Model.Pinned ? " is-pinned" : "") + (Model.Locked ? " is-locked" : "");
+    /// <summary>What the Topic's record holds of it, as the contract's states: new to the reader, pinned, locked, and started
+    /// by the reader or by an agent.</summary>
+    private string States() => (Model.New ? " is-new" : "") + (Model.Pinned ? " is-pinned" : "") + (Model.Locked ? " is-locked" : "")
+        + (Reader is not null && Model.Author.Id == Reader ? " by-you" : "") + (Model.Author.Kind == "agent" ? " by-agent" : "");
 
     private static string Iso(DateTimeOffset at) => at.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
 
@@ -216,10 +221,10 @@ else
     };
 
     /// <summary>A participant's mark: their avatar, or two letters of their handle on their own tint; round for a
-    /// person, square with a ring for an agent.</summary>
-    public static RenderFragment Mark(TangentPage.Author author, string size) => builder =>
+    /// person, square with a ring for an agent; and marked as the reader's own where it is <paramref name="reader"/>.</summary>
+    public static RenderFragment Mark(TangentPage.Author author, string size, string? reader = null) => builder =>
     {
-        var shape = author.Kind == "agent" ? " is-agent" : "";
+        var shape = (author.Kind == "agent" ? " is-agent" : "") + (reader is not null && author.Id == reader ? " is-you" : "");
         if (Monogram.Avatar(author.Avatar) is { } avatar)
         {
             builder.OpenElement(0, "img");

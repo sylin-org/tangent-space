@@ -396,7 +396,7 @@
   white-space: nowrap;
 }
 
-.badge:where(.is-new) {
+.badge:where(.is-new, .is-watched) {
   flex: none;
   color: var(--ts-accent);
   font: 700 11px/1.3 var(--ts-font-ui);

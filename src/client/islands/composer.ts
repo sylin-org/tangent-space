@@ -260,13 +260,11 @@ export const composer = defineComponent({
         replyTo(null, '')
       })
       for (const post of form.ownerDocument.querySelectorAll<HTMLElement>('article.post[id]:not(.post-root):not(.is-removed)')) {
-        const main = post.querySelector('.post-main')
-        if (!main) continue
-        let footer = main.querySelector(':scope > footer')
+        let footer = post.querySelector(':scope > footer')
         if (!footer) {
           footer = document.createElement('footer')
           footer.className = 'post-footer'
-          main.append(footer)
+          post.append(footer)
         }
         let actions = footer.querySelector('.post-actions')
         if (!actions) {

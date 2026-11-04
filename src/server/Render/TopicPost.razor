@@ -11,58 +11,53 @@
 <article id="@Model.Id" class="@Classes()" aria-current="@(Anchor ? "true" : null)">
     @if (!Article)
     {
-        @TopicRow.Mark(Model.Author, Root ? "post-mark-root" : "post-mark")
-    }
-    <div class="post-main">
-        @if (!Article)
-        {
-            <header class="post-head">
-                @if (Model.Author.Profile is { } profile)
-                {
-                    <a class="post-author" href="@profile">@Model.Author.Name</a>
-                }
-                else
-                {
-                    <span class="post-author">@Model.Author.Name</span>
-                }@AgentTag()
-                <span class="post-handle">@("@" + Model.Author.Handle)</span>
-                @if (Model.New)
-                {
-                    <span class="badge is-new">New</span>
-                }
-                <a class="post-time" href="@Model.Address" title="@Full(Model.CreatedAt)"><time datetime="@Iso(Model.CreatedAt)">@TopicRow.When(Model.CreatedAt, Today)</time></a>
-            </header>
-        }
-        @if (Model.Parent is { } parent)
-        {
-            <a class="post-parent" href="@parent">In reply to @(ParentAuthor ?? "an earlier post")</a>
-        }
-        @if (Model.Removed is { } removed)
-        {
-            <p class="post-removed">Removed by @(removed.By.Id == Model.Author.Id ? "its author" : removed.By.Name) <time datetime="@Iso(removed.At)" title="@Full(removed.At)">@TopicRow.When(removed.At, Today)</time></p>
-        }
-        else
-        {
-            <div class="@(Article ? "article-prose" : Root ? "post-body post-body-root" : "post-body")">@((MarkupString)Media.Placed(Mentions.Html(Model.Id, Model.Version, Model.Body ?? "", Model.Mentions), Door))</div>
-            @if (Model.Edited is { } edited)
+        @TopicRow.Mark(Model.Author, Root ? "post-mark-root" : "post-mark", Reader)
+        <header class="post-head">
+            @if (Model.Author.Profile is { } profile)
             {
-                <p class="post-edited">Edited by @edited.By.Name <time datetime="@Iso(edited.At)" title="@Full(edited.At)">@TopicRow.When(edited.At, Today)</time></p>
+                <a class="post-author" href="@profile">@Model.Author.Name</a>
             }
-        }
-        @if (Model.Edit is not null || Model.TakeOnATangent is not null || Model.Taken is not null || Model.Report is not null)
+            else
+            {
+                <span class="post-author">@Model.Author.Name</span>
+            }@AgentTag()
+            <span class="post-handle">@("@" + Model.Author.Handle)</span>
+            @if (Model.New)
+            {
+                <span class="badge is-new">New</span>
+            }
+            <a class="post-time" href="@Model.Address" title="@Full(Model.CreatedAt)"><time datetime="@Iso(Model.CreatedAt)">@TopicRow.When(Model.CreatedAt, Today)</time></a>
+        </header>
+    }
+    @if (Model.Parent is { } parent)
+    {
+        <a class="post-parent" href="@parent">In reply to @(ParentAuthor ?? "an earlier post")</a>
+    }
+    @if (Model.Removed is { } removed)
+    {
+        <p class="post-removed">Removed by @(removed.By.Id == Model.Author.Id ? "its author" : removed.By.Name) <time datetime="@Iso(removed.At)" title="@Full(removed.At)">@TopicRow.When(removed.At, Today)</time></p>
+    }
+    else
+    {
+        <div class="@(Article ? "article-prose" : Root ? "post-body post-body-root" : "post-body")">@((MarkupString)Media.Placed(Mentions.Html(Model.Id, Model.Version, Model.Body ?? "", Model.Mentions), Door))</div>
+        @if (Model.Edited is { } edited)
         {
-            <footer class="post-footer">
-                @if (Model.Edit is { } edit)
-                {
-                    <div class="post-actions">
-                        <a class="post-action" href="@edit">Edit</a>
-                    </div>
-                }
-                <TakeOnATangent Model="@Model" />
-                <ReportForm Model="@Model" />
-            </footer>
+            <p class="post-edited">Edited by @edited.By.Name <time datetime="@Iso(edited.At)" title="@Full(edited.At)">@TopicRow.When(edited.At, Today)</time></p>
         }
-    </div>
+    }
+    @if (Model.Edit is not null || Model.TakeOnATangent is not null || Model.Taken is not null || Model.Report is not null)
+    {
+        <footer class="post-footer">
+            @if (Model.Edit is { } edit)
+            {
+                <div class="post-actions">
+                    <a class="post-action" href="@edit">Edit</a>
+                </div>
+            }
+            <TakeOnATangent Model="@Model" />
+            <ReportForm Model="@Model" />
+        </footer>
+    }
 </article>
 
 @code {

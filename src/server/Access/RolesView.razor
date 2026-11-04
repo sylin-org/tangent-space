@@ -40,7 +40,7 @@
                         <details class="post-form-more roles-new" open="@(Model.Chosen is not null)">
                             <summary class="sign-in-other-toggle">New role</summary>
                             <div class="post-form-more-body">
-                                <form class="sign-in-form" method="post" action="@forms.Create.Action" data-island="submitting">
+                                <form class="sign-in-form create-role" method="post" action="@forms.Create.Action" data-island="submitting">
                                     <div class="field">
                                         <label class="field-label" for="role-new-name">Name</label>
                                         <span class="field-input">
@@ -80,7 +80,7 @@
                                             <details class="application-decline roles-change">
                                                 <summary class="watch-button">Change</summary>
                                                 <div class="post-remove-confirm">
-                                                    <form class="sign-in-form" method="post" action="@roleForms.Change.Action">
+                                                    <form class="sign-in-form change-role" method="post" action="@roleForms.Change.Action">
                                                         <input type="hidden" name="@RolesController.RoleField" value="@role.Word">
                                                         <div class="field">
                                                             <label class="field-label" for="@("role-" + role.Word + "-name")">Name</label>
@@ -101,7 +101,7 @@
                                                 <summary class="watch-button">Delete</summary>
                                                 <div class="post-remove-confirm">
                                                     <p class="post-remove-note">Everyone in it loses it, and so does every Tangent’s access for it.</p>
-                                                    <form method="post" action="@roleForms.Delete.Action">
+                                                    <form class="delete-role" method="post" action="@roleForms.Delete.Action">
                                                         <input type="hidden" name="@RolesController.RoleField" value="@role.Word">
                                                         <button type="submit" class="post-remove-submit">Delete</button>
                                                     </form>
@@ -150,7 +150,7 @@
     }
 
     /// <summary>One move as a small form of its own, posting the role and the move alone.</summary>
-    private static RenderFragment Moved(Form change, RolesPage.Listed role, RoleMove move, string label) => @<form method="post" action="@change.Action">
+    private static RenderFragment Moved(Form change, RolesPage.Listed role, RoleMove move, string label) => @<form class="change-role" method="post" action="@change.Action">
         <input type="hidden" name="@RolesController.RoleField" value="@role.Word">
         <button type="submit" class="watch-button" name="@RolesController.MoveField" value="@RolesController.Word(move)">@label</button>
     </form>;

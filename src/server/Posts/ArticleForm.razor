@@ -17,7 +17,7 @@
         {
             <p class="sign-in-failure" id="article-failure" role="alert" data-gate="@FailureGate">@Failure</p>
         }
-        <form class="article-form" method="post" action="@Action" data-island="@Island" data-props="@IslandProps">
+        <form class="@("article-form " + Tool)" method="post" action="@Action" data-island="@Island" data-props="@IslandProps">
             @Hidden
             <input type="hidden" name="@PostWrites.CoverField" value="@CoverId">
             <article class="article">
@@ -44,6 +44,9 @@
 
 @code {
     [Parameter, EditorRequired] public string Heading { get; set; } = "";
+
+    /// <summary>The name of the tool the form sends: <c>start-topic</c> or <c>edit</c>.</summary>
+    [Parameter, EditorRequired] public string Tool { get; set; } = "";
     [Parameter, EditorRequired] public string TangentName { get; set; } = "";
     [Parameter, EditorRequired] public string TangentAddress { get; set; } = "";
     [Parameter, EditorRequired] public string Action { get; set; } = "";

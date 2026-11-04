@@ -28,7 +28,7 @@
                 {
                     <p class="sign-in-failure" id="space-admission-failure" role="alert">@failure</p>
                 }
-                <form class="sign-in-form" method="post" action="@Model.Change?.Action" data-island="@(Mutable ? "submitting" : null)">
+                <form class="sign-in-form change-admission" method="post" action="@Model.Change?.Action" data-island="@(Mutable ? "submitting" : null)">
                     @if (Model.Change is { } change)
                     {
                     }

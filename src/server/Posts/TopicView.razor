@@ -23,7 +23,7 @@
                 {
                     <li>
                         <a class="@("row post" + (reply.Id == Model.Anchor ? " is-current" : "") + (reply.New ? " is-new" : ""))" href="@("#" + reply.Id)" aria-current="@(reply.Id == Model.Anchor ? "true" : null)">
-                            @TopicRow.Mark(reply.Author, "author-mark")
+                            @TopicRow.Mark(reply.Author, "author-mark", Model.Who?.Id)
                             <span class="topic-rail-reply-text">
                                 <span class="topic-rail-reply-name">@reply.Author.Name</span>
                                 <span class="topic-rail-reply-time">@TopicRow.When(reply.CreatedAt, Model.Day)</span>
@@ -46,7 +46,7 @@
                 <TakenFrom Model="@Model.TakenFrom" />
                 <TopicPost Model="@Model.Root" Today="@Model.Day" Root="true" Article="true" Door="@Model.Door" Anchor="@(Model.Anchor == Model.Root.Id)" Reader="@Model.Who?.Id" />
             </article>
-            <Tangent.Events.WatchForm Model="@Model.Watching" />
+            <Tangent.Events.WatchForm Model="@Model.Watching" Tool="watch-topic" />
         }
         else
         {
@@ -57,7 +57,7 @@
                 <span>@TopicRow.Count(Model.ReplyCount, "reply", "replies", "No replies yet")</span>
             </p>
             <TakenFrom Model="@Model.TakenFrom" />
-            <Tangent.Events.WatchForm Model="@Model.Watching" />
+            <Tangent.Events.WatchForm Model="@Model.Watching" Tool="watch-topic" />
             <TopicPost Model="@Model.Root" Today="@Model.Day" Root="true" Door="@Model.Door" Anchor="@(Model.Anchor == Model.Root.Id)" Reader="@Model.Who?.Id" />
         }
         <section class="topic-replies" aria-labelledby="topic-replies-title">

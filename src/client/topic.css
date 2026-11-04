@@ -70,11 +70,28 @@
   font-weight: 400;
 }
 
-/* One Post: the mark beside its head, body and actions. */
+/* One Post: the mark in the first column, beside everything else, its head, body and actions, in the second; an
+   article's root, which has no mark, reads as one column (article.css). */
 .post {
   padding-top: 16px;
   display: flex;
   gap: 12px;
+}
+
+article.post:not(.post-article) {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-content: start;
+  row-gap: 0;
+}
+
+article.post:not(.post-article) > .mark {
+  grid-row: 1 / span 9;
+}
+
+article.post:not(.post-article) > :not(.mark) {
+  grid-column: 2;
+  min-width: 0;
 }
 
 .post-root {
@@ -102,11 +119,6 @@
   width: 40px;
   height: 40px;
   font-size: 14px;
-}
-
-.post-main {
-  flex: 1;
-  min-width: 0;
 }
 
 .post-head {
@@ -147,6 +159,7 @@
 
 .post-parent {
   margin-top: 2px;
+  justify-self: start;
   display: inline-block;
   color: var(--ts-text-3);
   font: var(--ts-type-meta);

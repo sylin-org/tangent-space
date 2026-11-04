@@ -49,7 +49,7 @@
                 }
                 @if (Model.Report is not null || Model.Gate is not null)
                 {
-                <form class="sign-in-form" method="post" action="@Model.Report?.Action">
+                <form class="sign-in-form report" method="post" action="@Model.Report?.Action">
                     @if (Model.Report is { } report)
                     {
                         <input type="hidden" name="@PostWrites.IdField" value="@report.Value(PostWrites.IdField)">
