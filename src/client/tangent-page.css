@@ -1090,3 +1090,17 @@
 .rail-new:hover {
   text-decoration: underline;
 }
+
+/* The Tangent head's actions: for whoever may change it, the Tangent's settings. */
+.tangent-head-actions {
+  margin: 12px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+/* The door's seen control, at the end of its news's head. */
+.topic-list-head > .seen {
+  margin-left: auto;
+}

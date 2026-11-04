@@ -48,13 +48,14 @@ public sealed record Seen(string ParticipantId, long Through, string? TopicId = 
     }
 
     /// <summary>Moves <paramref name="authorId"/>'s mark on the Topic of <paramref name="root"/> onto the Post they just
-    /// wrote at <paramref name="sequence"/>, inside the command that wrote it, where their mark stood on the Post just
-    /// before it — the root for the Topic they started — so their own write never reads as new to them and never passes
-    /// over a Post they had not read.</summary>
+    /// wrote at <paramref name="sequence"/>, inside the command that wrote it: where they hold no mark there, since
+    /// writing in a Topic presumes it was read, and where their mark stood on the Post just before it, so their own write
+    /// never reads as new to them. A mark that stands further back stays, and never passes over a Post they had not
+    /// read.</summary>
     public static async Task Wrote(string authorId, Post root, long sequence, CancellationToken ct)
     {
-        var key = Checkpoint.Key(authorId, Scope.Topic(root.Id));
-        if (sequence > 0 && (await Checkpoint.Get(key, ct))?.Seq != sequence - 1) return;
+        var mark = await Checkpoint.Get(Checkpoint.Key(authorId, Scope.Topic(root.Id)), ct);
+        if (mark is not null && mark.Seq != sequence - 1) return;
         await Checkpoint.At(authorId, Scope.Topic(root.Id), sequence).Save(ct);
     }
 }

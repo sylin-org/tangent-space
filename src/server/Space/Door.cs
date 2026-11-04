@@ -79,8 +79,10 @@ public sealed record Door(
     /// (<see cref="Through"/>). What is for them: <see cref="Replies"/> to them, <see cref="Mentions"/> of them,
     /// <see cref="Taken"/>, the Topics taken on a tangent from their Posts, which are not replies, and, for whoever may
     /// view the moderators' Tangent, <see cref="Reports"/>; <see cref="Admitted"/>, who admitted them and when, and
-    /// <see cref="Lifted"/>, who lifted their timeout or ban and when, where that happened since and they stand admitted
-    /// still; <see cref="Roles"/>, the roles someone gave them or took from them since, the newest change of each;
+    /// <see cref="Lifted"/>, who lifted their timeout or ban and when, <see cref="TimedOut"/>, who timed them out, until
+    /// when, and <see cref="Declined"/>, who declined their application, where that is the newest change of their
+    /// standing since; <see cref="Applications"/>, for whoever decides them, how many applications arrived since;
+    /// <see cref="Roles"/>, the roles someone gave them or took from them since, the newest change of each;
     /// <see cref="Edited"/>, their Posts someone else edited since that still stand, each once, and
     /// <see cref="Removed"/>, those someone else removed, each with who did it. Then what is new in each Tangent
     /// (<see cref="PerTangent"/>) and the new <see cref="Articles"/>. A Post's entry stays while the Post is new, so
@@ -100,17 +102,21 @@ public sealed record Door(
         IReadOnlyList<RoleChange>? Roles = null,
         Group? Edited = null,
         Group? Removed = null,
-        Group? Reports = null)
+        Group? Reports = null,
+        Decision? TimedOut = null,
+        Decision? Declined = null,
+        Waiting? Applications = null)
     {
-        /// <summary>Whether nothing is new to the reader.</summary>
+        /// <summary>Whether nothing is new to the reader, so nothing is counted for them either.</summary>
         public bool Quiet => Replies.Count == 0 && Mentions.Count == 0 && PerTangent.Count == 0 && Articles.Count == 0 && (Taken?.Count ?? 0) == 0
-                             && Admitted is null && Lifted is null && (Roles?.Count ?? 0) == 0 && (Edited?.Count ?? 0) == 0 && (Removed?.Count ?? 0) == 0
-                             && (Reports?.Count ?? 0) == 0;
+                             && Admitted is null && Lifted is null && TimedOut is null && Declined is null && (Roles?.Count ?? 0) == 0
+                             && (Edited?.Count ?? 0) == 0 && (Removed?.Count ?? 0) == 0 && (Reports?.Count ?? 0) == 0 && Applications is null;
     }
 
     /// <summary>A decision about the reader's standing: who made it, and when; for a lift, the standing it lifted
-    /// (<c>timed-out</c> or <c>banned</c>) in <see cref="Was"/>.</summary>
-    public sealed record Decision(TangentPage.Author Who, DateTimeOffset At, string? Was = null);
+    /// (<c>timed-out</c> or <c>banned</c>) in <see cref="Was"/>; for a timeout, when it ends, or ended, in
+    /// <see cref="Until"/>.</summary>
+    public sealed record Decision(TangentPage.Author Who, DateTimeOffset At, string? Was = null, DateTimeOffset? Until = null);
 
     /// <summary>A role someone gave the reader or took from them: who, when, the role (<c>moderator</c> or
     /// <c>administrator</c>) and whether it was given.</summary>

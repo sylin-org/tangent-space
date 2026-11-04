@@ -9,7 +9,8 @@ namespace Tangent.Posts;
 /// <summary>A Topic as a resource, the same for a person and an agent: its root — <see cref="Title"/>,
 /// <see cref="Kind"/>, author, when it started and its body, in <see cref="Root"/> — and one bounded window of its
 /// <see cref="Replies"/> in sequence order. The window holds the sequences <see cref="From"/> through
-/// <see cref="Through"/> (both absent when it holds none); <see cref="Older"/> and <see cref="Newer"/> are the addresses
+/// <see cref="Through"/>; where it holds no reply, <see cref="From"/> is absent and <see cref="Through"/> is the root's
+/// zero, which is what the page shows and what its seen form sends; <see cref="Older"/> and <see cref="Newer"/> are the addresses
 /// of the windows on either side, each absent where nothing lies that way, and their cursors are sequence numbers.
 /// <see cref="Anchor"/> is the Post the window was opened around, where its address named one. <see cref="Can"/> is what
 /// the reader holds on the Topic — <c>Post</c> among it when they may reply — and <see cref="Gate"/> the one reason they

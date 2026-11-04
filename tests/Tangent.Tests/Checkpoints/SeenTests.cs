@@ -45,13 +45,14 @@ public sealed class SeenTests
         var read = await Send(bea.Client, HttpMethod.Get, TopicPath(root), json: true);
         Assert.False(read.Json.TryGetProperty("seen", out _));
         Assert.Equal((long?)3, await SeenThrough(Bea, root));
-        Assert.Null(await SeenThrough(Mo, root));
+        // Ada started the Topic, so her mark stands on its root.
+        Assert.Equal((long?)0, await SeenThrough(Ada, root));
 
-        using var mo = await SignedIn(tangentSpace, Mo);
-        var sent = await Send(mo.Client, HttpMethod.Post, SeenController.Path, JsonBody(new { topic = root.Id, through = 2 }), json: true);
+        using var ada = await SignedIn(tangentSpace, Ada);
+        var sent = await Send(ada.Client, HttpMethod.Post, SeenController.Path, JsonBody(new { topic = root.Id, through = 2 }), json: true);
         Assert.Equal((HttpStatusCode.OK, "topic:" + root.Id, 2L), (sent.Status, sent.Json.GetProperty("scope").GetString(),
             sent.Json.GetProperty("seq").GetInt64()));
-        Assert.Equal(((long?)2, (long?)3), (await SeenThrough(Mo, root), await SeenThrough(Bea, root)));
+        Assert.Equal(((long?)2, (long?)3), (await SeenThrough(Ada, root), await SeenThrough(Bea, root)));
 
         var visitor = await Send(Agent(tangentSpace), HttpMethod.Post, SeenController.Path, JsonBody(new { topic = root.Id, through = 2 }), json: true);
         Assert.Equal((HttpStatusCode.Unauthorized, Access.Capabilities.SignIn.Word), (visitor.Status, visitor.Gate));
@@ -156,6 +157,43 @@ public sealed class SeenTests
         var marked = page.GetProperty("replies").EnumerateArray().ToDictionary(post => post.GetProperty("id").GetString()!, post => post.GetProperty("new").GetBoolean());
         Assert.Equal((false, true, false), (marked[own.Id], marked[others.Id], marked[after.Id]));
     }
+
+    [Fact]
+    public async Task A_reply_in_a_topic_the_author_never_said_seen_on_sets_their_mark_so_their_own_post_is_new_nowhere()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        var root = await Started(Ada, "Lanterns", "How do you hang yours?");
+        await Replied(root, Mo, "From a hook.");
+        using var bea = await SignedIn(tangentSpace, Bea);
+        Assert.Null(await SeenThrough(Bea, root));
+
+        var mine = await Replied(root, Bea, "From the beam.");
+
+        Assert.Equal((long?)mine.Sequence, await SeenThrough(Bea, root));
+        Assert.False(await NewOnTangentPage(bea, root));
+        Assert.Equal(0, await NewOnDoor(bea));
+    }
+
+    [Fact]
+    public async Task Seen_on_a_topic_the_sender_may_not_view_answers_as_for_no_topic_and_writes_nothing()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        await Given.AParticipant(tangentSpace, Keeper, [Access.Roles.Administrator], ct: Cancellation);
+        var secret = await Started(Keeper, "Studio notes", "Only for us.", Studio);
+        using var bea = await SignedIn(tangentSpace, Bea);
+
+        var asJson = await Json(bea, "/", SeenController.Path, new { topic = secret.Id, through = 0 });
+        var asForm = await Form(bea, "/", SeenController.Path, Fields(secret, "0"));
+
+        Assert.Equal((HttpStatusCode.NotFound, HttpStatusCode.NotFound), (asJson.Status, asForm.Status));
+        Assert.Null(await SeenThrough(Bea, secret));
+        Assert.Equal(new Outcome<Checkpoint>.Refused(Seen.NoTopic), await new Seen(Bea, 0, secret.Id).Send(Cancellation));
+        Assert.Null(await SeenThrough(Bea, secret));
+    }
+
+    private const string Keeper = "did:plc:keeper4seen";
 
     private static Dictionary<string, string> Fields(Post root, string through)
         => new() { [SeenController.TopicField] = root.Id, [SeenController.ThroughField] = through };

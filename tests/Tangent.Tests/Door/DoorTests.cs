@@ -65,7 +65,8 @@ public sealed class DoorTests(ITestOutputHelper output)
         var reply = await Replied(mine, "ada");
         var other = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, "Ada asks", $"A question for [@reader](at://{Reader}).", "ada").Send(Cancellation)).Result;
         var article = await Started(Articles, "On lanterns", "leo");
-        var own = await Replied(other, Reader, body: "My own words in reply.");
+        // The reader's own reply is never news to them, and it leaves the reply before it, which they have not read, new.
+        var own = await Replied(mine, Reader, body: "My own words in reply.");
         var through = await Event.Log.Highest(Cancellation);
 
         using var browser = await SignedIn(tangentSpace);

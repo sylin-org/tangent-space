@@ -596,7 +596,7 @@
     color: var(--ts-on-accent);
   }
 
-  /* Panels: the sign-in, the forms, notifications, search and the settings, in the stream's colours. */
+  /* Panels: the sign-in, the forms, search and the settings, in the stream’s colours. */
   & .sign-in-panel {
     border-radius: 8px;
     background: var(--ts-surface);

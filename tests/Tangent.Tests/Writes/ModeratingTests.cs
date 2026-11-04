@@ -8,7 +8,7 @@ namespace Tangent.Posts;
 
 /// <summary>A moderator's hand on someone's Post: an edit by anyone but the author is marked with who wherever the Post
 /// is read, as a page and as JSON, until the author's own edit makes the words theirs again; and the author is told of
-/// someone else's edit or removal in their notifications and on their door, with who did it. Editing or removing your own
+/// someone else's edit or removal on their door, with who did it. Editing or removing your own
 /// Post marks nothing and tells no one.</summary>
 public sealed class ModeratingTests
 {

@@ -244,7 +244,7 @@ test('a reload while a submit was on its way checks the Post’s address before 
 test('a refusal reads inline above the fields, keeps the words, and opens no dialog', async () => {
   const alerted = vi.spyOn(window, 'alert').mockImplementation(() => {})
   fetched.mockResolvedValueOnce(
-    json(403, { title: 'Locked', detail: 'This topic is locked, so no one replies in it.', gate: 'locked' }, 'application/problem+json'),
+    json(403, { title: 'Removed', detail: 'This post is removed, so nothing changes it now.', gate: 'removed' }, 'application/problem+json'),
   )
   const page = replyPage()
   type(page.body, 'Too late?')
@@ -253,7 +253,7 @@ test('a refusal reads inline above the fields, keeps the words, and opens no dia
 
   await vi.waitFor(() => expect(page.form.dataset.composer).toBe('refused'))
   expect(page.form.firstElementChild).toBe(page.status())
-  expect(page.status().textContent).toBe('This topic is locked, so no one replies in it.')
+  expect(page.status().textContent).toBe('This post is removed, so nothing changes it now.')
   expect(page.status().getAttribute('role')).toBe('alert')
   expect(page.body.readOnly).toBe(false)
   expect(page.button.textContent).toBe('Post reply')

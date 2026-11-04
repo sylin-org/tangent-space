@@ -387,3 +387,10 @@ article.post:not(.post-article) > :not(.mark) {
     font-size: 12px;
   }
 }
+
+/* The seen control at the end of a Topic's window. */
+.topic-seen {
+  margin: 16px 0 0;
+  display: flex;
+  justify-content: flex-end;
+}

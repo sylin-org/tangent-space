@@ -54,7 +54,7 @@ public sealed class SearchTests
 
         var page = await Send(tangentSpace.Client, HttpMethod.Get, Path("annealing"));
         Assert.Equal(HttpStatusCode.OK, page.Status);
-        Assert.Contains($"<a class=\"notification-link\" href=\"{AddressOf(root, reply)}\">Copper lanterns</a>", page.Body);
+        Assert.Contains($"<a class=\"search-hit-link\" href=\"{AddressOf(root, reply)}\">Copper lanterns</a>", page.Body);
         Assert.Contains("<mark class=\"search-mark\">Annealing</mark> matters most", page.Body);
     }
 

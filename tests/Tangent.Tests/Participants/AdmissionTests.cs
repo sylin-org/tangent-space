@@ -186,7 +186,7 @@ public sealed class AdmissionTests
         Assert.Equal(BaseUrl + "/p/grace4admission.example", listed.Json.GetProperty("applications")[1].GetProperty("profile").GetString());
         var html = await Send(mo.Client, HttpMethod.Get, path);
         Assert.Contains("href=\"" + BaseUrl + "/p/grace4admission.example\"", html.Body);
-        Assert.Contains("<summary class=\"watch-button\">Decline</summary>", html.Body);
+        Assert.Contains("<summary class=\"button\">Decline</summary>", html.Body);
         var before = await Event.Count.Exact(Cancellation);
 
         var admitted = await Form(mo, path, ApplicationsController.AdmitPath, new Dictionary<string, string> { [ApplicationsController.ParticipantField] = Grace });

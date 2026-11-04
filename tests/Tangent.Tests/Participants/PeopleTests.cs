@@ -84,7 +84,7 @@ public sealed class PeopleTests
         Assert.Equal(["Member"], Strings(adaRow, "roles"));
         Assert.Equal(["hour", "day", "week"], Strings(listed.Json.GetProperty("forms"), "durations"));
         var html = (await Send(mo.Client, HttpMethod.Get, path)).Body;
-        Assert.Contains("<summary class=\"watch-button\">Time out</summary>", html);
+        Assert.Contains("<summary class=\"button\">Time out</summary>", html);
         Assert.Contains("href=\"" + BaseUrl + "/p/ada4writes.example\"", html);
         var before = await Head();
 
@@ -156,7 +156,7 @@ public sealed class PeopleTests
         await using var stream = await Streamed.Open(ada.Client, EventsController.Path);
         Assert.Equal("open", (await stream.Any()).Comment);
         var path = PeopleController.Path;
-        Assert.Contains("<summary class=\"watch-button\">Ban</summary>", (await Send(mo.Client, HttpMethod.Get, path)).Body);
+        Assert.Contains("<summary class=\"button\">Ban</summary>", (await Send(mo.Client, HttpMethod.Get, path)).Body);
         var before = await Head();
 
         var banned = await Form(mo, path, PeopleController.BanPath, new Dictionary<string, string>
@@ -410,7 +410,7 @@ public sealed class PeopleTests
         Assert.Equal(BaseUrl + PeopleController.TimeOutPath, read.Json.GetProperty("forms").GetProperty("timeOut").GetProperty("action").GetString());
         var html = (await Send(mo.Client, HttpMethod.Get, profile)).Body;
         Assert.Contains("is admitted here.", html);
-        Assert.Contains("<summary class=\"watch-button\">Ban</summary>", html);
+        Assert.Contains("<summary class=\"button\">Ban</summary>", html);
 
         var timed = await Form(mo, profile, PeopleController.TimeOutPath, new Dictionary<string, string>
         {

@@ -9,7 +9,7 @@
    created for whoever may, and who is around in the rail, each name linked to their profile; and in the column, first, for the operator, the open Offer as one line with its evidence and its two
    answers; for whoever decides applications, how many wait, in an Offer's line, with the way to them; for an applicant, in one sentence, that their application is waiting, or was declined; for a participant timed
    out, until when; for a signed-in reader with news, what is new since they were here — one sentence, then who admitted
-   them, who lifted their timeout or ban, and who gave them a role or took one, where someone did, their Posts someone else edited or removed, with who did, replies to them, mentions of them, the Topics taken on a tangent from their Posts, the reports for whoever may view the moderators' Tangent, the new articles and what is new in each Tangent, with the form that says
+   them, who lifted their timeout or ban, who timed them out and until when, who declined their application, and who gave them a role or took one, where someone did, how many applications arrived for whoever decides them, their Posts someone else edited or removed, with who did, replies to them, mentions of them, the Topics taken on a tangent from their Posts, the reports for whoever may view the moderators' Tangent, the new articles and what is new in each Tangent, with the form that says
    all of it seen — and then the front page: the featured Topics and the ones alive now. A reader with nothing new reads
    that in one sentence above the front page. A count the door could not finish reads "at least". The whole door is the
    fragment island's host, so it refreshes itself from its own address, unless it stands alone, with nothing to refresh from. *@
@@ -142,6 +142,14 @@
                         {
                             <p class="tangent-description door-admitted">@lifted.Who.Name lifted your @(lifted.Was == "banned" ? "ban" : "timeout"): you’re back, and you can start topics and reply here again.</p>
                         }
+                        @if (news.TimedOut is { Until: { } ends } timedOut)
+                        {
+                            <p class="tangent-description door-admitted">@timedOut.Who.Name timed you out until <time datetime="@ends.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture)">@(global::Tangent.Participants.PeopleView.Until(ends))</time>@(Model.Gate == Access.Capabilities.TimedOut.Word ? "." : ". It has ended, and you can start topics and reply here again.")</p>
+                        }
+                        @if (news.Declined is { } declined)
+                        {
+                            <p class="tangent-description door-admitted">@declined.Who.Name declined your application: you read here what a visitor reads.</p>
+                        }
                         @foreach (var change in news.Roles ?? [])
                         {
                             <p class="tangent-description door-admitted">@change.Who.Name @Roles.Changed(change.Role, change.Given).</p>
@@ -235,6 +243,8 @@
         var parts = new List<string>();
         if (news.Admitted is not null) parts.Add("you were admitted");
         if (news.Lifted is not null) parts.Add("you’re back");
+        if (news.TimedOut is not null) parts.Add("you were timed out");
+        if (news.Declined is not null) parts.Add("your application was declined");
         if (news.Roles is { Count: > 0 }) parts.Add("your roles changed");
         if (news.Edited is { Count: > 0 } edited) parts.Add(Words(edited.Count, edited.AtLeast, "post of yours edited", "posts of yours edited"));
         if (news.Removed is { Count: > 0 } removed) parts.Add(Words(removed.Count, removed.AtLeast, "post of yours removed", "posts of yours removed"));
@@ -242,6 +252,7 @@
         if (news.Mentions.Count > 0) parts.Add(Words(news.Mentions.Count, news.Mentions.AtLeast, "mention", "mentions") + " of you");
         if (news.Taken is { Count: > 0 } taken) parts.Add(Words(taken.Count, taken.AtLeast, "topic", "topics") + " taken on a tangent from your posts");
         if (news.Reports is { Count: > 0 } reports) parts.Add(Words(reports.Count, reports.AtLeast, "report", "reports"));
+        if (news.Applications is { } applications) parts.Add(Words(applications.Count, applications.AtLeast, "new application", "new applications"));
         foreach (var tangent in news.PerTangent)
             parts.Add(Words(tangent.Topics + tangent.Replies, tangent.AtLeast, "new post", "new posts") + " in " + tangent.Name);
         if (news.Articles.Count > 0) parts.Add(Words(news.Articles.Count, news.Articles.AtLeast, "new article", "new articles"));

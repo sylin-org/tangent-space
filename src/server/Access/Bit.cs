@@ -15,7 +15,7 @@ public enum Bit
     EditOwn = 1 << 3,
     RemoveOwn = 1 << 4,
 
-    /// <summary>Edit or remove any Post, lock, pin, move, take on a tangent anywhere.</summary>
+    /// <summary>Edit or remove anyone's Post.</summary>
     Moderate = 1 << 5,
     ManageTangent = 1 << 6,
     ManageRoles = 1 << 7,

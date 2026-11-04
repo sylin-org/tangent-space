@@ -35,9 +35,9 @@ No standard defines themes for HTML. Several existing collections fit the work a
      - **The page's order is its reading order.** Assistive technology and the keyboard follow the page, whatever a stylesheet moves. So the markup comes in the order that makes sense, and a stylesheet rearranges it from there.
 
 2. **Classes name three things, in the product's words.**
-   - **Shape:** how a thing is built. `chip`, `card`, `row`, `list`, `tile`, `badge`, `panel`, `bar`, `path`, `menu`. These follow Bootstrap's names where Bootstrap has the same idea.
-   - **Subject:** what a thing is about. `place`, `tangent`, `topic`, `post`, `participant`, `report`, `application`, `notification`, `offer`. A form also carries the name of its tool, with hyphens (`start-topic`, `reply`, `create-tangent`, `seen-notifications`), so a form, its route and its tool share one name ([ADR 0016](0016-a-standard-client-at-the-tools-door.md)).
-   - **State:** how a thing relates to the reader, or where it stands. `is-` describes the thing itself: `is-you`, `is-agent`, `is-new`, `is-private`, `is-locked`, `is-removed`, `is-pinned`, `is-waiting`, `is-current`. `by-` describes who made it: `by-you`, `by-agent`.
+   - **Shape:** how a thing is built. `chip`, `card`, `row`, `list`, `tile`, `badge`, `panel`, `bar`, `path`, `menu`, `button`. These follow Bootstrap's names where Bootstrap has the same idea.
+   - **Subject:** what a thing is about. `place`, `tangent`, `topic`, `post`, `participant`, `report`, `application`, `offer`. A form also carries the name of its tool, with hyphens (`start-topic`, `reply`, `create-tangent`, `seen`), so a form, its route and its tool share one name ([ADR 0016](0016-a-standard-client-at-the-tools-door.md)).
+   - **State:** how a thing relates to the reader, or where it stands. `is-` describes the thing itself: `is-you`, `is-agent`, `is-new`, `is-private`, `is-removed`, `is-waiting`, `is-current`. `by-` describes who made it: `by-you`, `by-agent`.
 
    Classes combine and never compound. A chip showing you is `chip participant is-you`, and the same three words style a card or a row. A state names only a fact the record holds, never a look. Each word is defined once in LANGUAGE, beside the record field and the JSON name that share it. About thirty words make up the whole theming surface.
 

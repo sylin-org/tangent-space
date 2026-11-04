@@ -99,7 +99,7 @@
                             <summary class="sign-in-other-toggle">Clear your CSS</summary>
                             <div class="post-form-more-body">
                                 <p class="post-form-note">Your CSS goes, and every page wears the other layers alone.</p>
-                                <button type="submit" class="watch-button" form="appearance-reset-css">Clear it</button>
+                                <button type="submit" class="button" form="appearance-reset-css">Clear it</button>
                             </div>
                         </details>
                     }
@@ -109,7 +109,7 @@
                             <span class="field-label">Your door, as it will look</span>
                             <iframe class="appearance-preview" name="appearance-preview" src="@preview" title="Your door, as it will look"
                                     data-island="preview" data-props="@JsonSerializer.Serialize(new { button = "appearance-preview-button" })"></iframe>
-                            <button type="submit" class="watch-button" id="appearance-preview-button" formaction="@preview" formtarget="appearance-preview">Preview</button>
+                            <button type="submit" class="button" id="appearance-preview-button" formaction="@preview" formtarget="appearance-preview">Preview</button>
                         </div>
                     }
                     <details class="post-form-more" open="@(Model.Failure is not null || Model.Slots != new Slots())">
@@ -156,7 +156,7 @@
     /// <summary>The one press that returns a layer to its default, shown while it is elsewhere, sending its own form.</summary>
     private RenderFragment Reset(string form, bool away, string label) => @<text>@if (Mutable && away)
         {
-            <p class="post-form-note"><button type="submit" class="watch-button" form="@form">@label</button></p>
+            <p class="post-form-note"><button type="submit" class="button" form="@form">@label</button></p>
         }</text>;
 
     /// <summary>A form of one field, which a layer's reset sends, leaving every other choice as it is saved.</summary>

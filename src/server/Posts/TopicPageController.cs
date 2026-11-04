@@ -141,7 +141,7 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
             Shown(root, root, address, rows, people, mentioned, unread, seen?.Seq, reader, taken, takeOn),
             window.Replies.Select(reply => Shown(reply, root, address, rows, people, mentioned, unread, seen?.Seq, reader, taken, takeOn)).ToList(),
             window.Replies.Count == 0 ? null : window.Low,
-            window.Replies.Count == 0 ? null : window.High,
+            shownThrough,
             window.Older is { } older ? address + "?" + Before + "=" + older.ToString(CultureInfo.InvariantCulture) : null,
             window.Newer is { } newer ? address + "?" + After + "=" + newer.ToString(CultureInfo.InvariantCulture) : null,
             anchor?.Id,

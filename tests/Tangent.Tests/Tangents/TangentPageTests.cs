@@ -12,8 +12,8 @@ using Xunit;
 
 namespace Tangent.Tangents;
 
-/// <summary>The Tangent page both ways: the Tangent, its <c>can</c> and one bounded page of its Topics, pinned first
-/// and then by last activity, with what is new to a signed-in reader marked; the gate for a reader who may not read;
+/// <summary>The Tangent page both ways: the Tangent, its <c>can</c> and one bounded page of its Topics by last activity,
+/// with what is new to a signed-in reader marked; the gate for a reader who may not read;
 /// the empty state and the start affordance; and the page's <c>ETag</c>.</summary>
 public sealed class TangentPageTests
 {

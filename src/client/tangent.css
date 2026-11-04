@@ -13,7 +13,7 @@
 @import './topic.css' layer(tangent);
 @import './composer.css' layer(tangent);
 @import './article.css' layer(tangent);
-@import './watch.css' layer(tangent);
+@import './buttons.css' layer(tangent);
 @import './profile.css' layer(tangent);
-@import './notifications.css' layer(tangent);
+@import './for-you.css' layer(tangent);
 @import './search.css' layer(tangent);

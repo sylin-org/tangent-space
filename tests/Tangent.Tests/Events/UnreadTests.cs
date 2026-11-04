@@ -2,7 +2,9 @@ using System.Net;
 using System.Text.Json;
 using Koan.Data.Core.Commands;
 using Tangent.Access;
+using Tangent.Participants;
 using Tangent.Posts;
+using Tangent.Space;
 using Tangent.Tools;
 using Xunit;
 using static Tangent.Posts.Writing;
@@ -123,7 +125,7 @@ public sealed class UnreadTests
         await Started(Bea, "A question for Ada", $"Over to [@ada](at://{Ada}).");
         await Replied(mine, Ada, "And mine at seven.");
         Assert.IsType<Outcome<Event>.Done>(await new Logged(EventKind.StandingChanged, Ada, Ada).Send(Cancellation));
-        Assert.IsType<Outcome<Event>.Done>(await new Logged(EventKind.Mention, Ada, Bea, mine).Send(Cancellation));
+        await Started(Ada, "Over to Bea", $"Your turn, [@bea](at://{Bea}).");
         var newest = await Event.Log.Highest(Cancellation);
         var secret = await Started(Leo, "Studio notes", "Only for us.", Studio);
         Assert.IsType<Outcome<Event>.Done>(await new Logged(EventKind.Mention, Leo, Ada, secret).Send(Cancellation));
@@ -175,6 +177,92 @@ public sealed class UnreadTests
         Assert.Contains($"aria-label=\"At least {Unread.CountLimit + 1} new for you\"", html);
         Assert.Contains("Mentions of you · at least", html);
     }
+
+    [Fact]
+    public async Task A_timeout_is_told_on_the_door_the_count_counts_with_until_when()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        var until = DateTimeOffset.UtcNow.AddHours(1);
+        Assert.IsType<Outcome<Participant>.Done>(await new TimeOut(Mo, Ada, until).Send(Cancellation));
+        using var ada = await SignedIn(tangentSpace, Ada);
+
+        var door = await Door(ada);
+        var news = door.GetProperty("news");
+        Assert.Equal((1, false), (door.GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32(), news.GetProperty("quiet").GetBoolean()));
+        Assert.Equal(Mo, news.GetProperty("timedOut").GetProperty("who").GetProperty("id").GetString());
+        Assert.Equal(until.ToUnixTimeSeconds(), news.GetProperty("timedOut").GetProperty("until").GetDateTimeOffset().ToUnixTimeSeconds());
+        Assert.True(news.TryGetProperty("seen", out var seen) && seen.ValueKind == JsonValueKind.Object);
+        var html = WebUtility.HtmlDecode((await Send(ada.Client, HttpMethod.Get, "/")).Body);
+        Assert.Contains("Since you were here: you were timed out.", html);
+        Assert.Contains("timed you out until", html);
+        Assert.DoesNotContain("Nothing new since you were here.", html);
+    }
+
+    [Fact]
+    public async Task A_timeout_that_has_ended_is_told_as_ended()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        var then = DateTimeOffset.UtcNow.AddHours(-2);
+        Assert.IsType<Outcome<Participant>.Done>(await new TimeOut(Mo, Ada, then.AddHours(1), then).Send(Cancellation));
+        using var ada = await SignedIn(tangentSpace, Ada);
+
+        var door = await Door(ada);
+        Assert.Equal(1, door.GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32());
+        Assert.False(door.GetProperty("news").GetProperty("quiet").GetBoolean());
+        Assert.False(door.TryGetProperty("gate", out var gate) && gate.ValueKind == JsonValueKind.String);
+        Assert.Contains("It has ended, and you can start topics and reply here again.", WebUtility.HtmlDecode((await Send(ada.Client, HttpMethod.Get, "/")).Body));
+    }
+
+    [Fact]
+    public async Task A_declined_application_is_told_on_the_applicants_door_the_count_counts()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Applying(tangentSpace);
+        Assert.IsType<Outcome<Participant>.Done>(await new FirstArrival(Grace, "grace4unread.example").Send(Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new Decline(Mo, Grace).Send(Cancellation));
+        using var grace = await SignedIn(tangentSpace, Grace);
+
+        var door = await Door(grace);
+        var news = door.GetProperty("news");
+        Assert.Equal((1, false), (door.GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32(), news.GetProperty("quiet").GetBoolean()));
+        Assert.Equal(Mo, news.GetProperty("declined").GetProperty("who").GetProperty("id").GetString());
+        var html = WebUtility.HtmlDecode((await Send(grace.Client, HttpMethod.Get, "/")).Body);
+        Assert.Contains("Since you were here: your application was declined.", html);
+        Assert.Contains("declined your application", html);
+    }
+
+    [Fact]
+    public async Task A_deciders_door_whose_only_news_is_a_waiting_application_is_not_quiet_and_seen_clears_it()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Applying(tangentSpace);
+        Assert.IsType<Outcome<Participant>.Done>(await new FirstArrival(Grace, "grace4unread.example").Send(Cancellation));
+        using var mo = await SignedIn(tangentSpace, Mo);
+
+        var door = await Door(mo);
+        var news = door.GetProperty("news");
+        Assert.Equal((1, false), (door.GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32(), news.GetProperty("quiet").GetBoolean()));
+        Assert.Equal(1, news.GetProperty("applications").GetProperty("count").GetInt32());
+        Assert.Contains("Since you were here: 1 new application.", WebUtility.HtmlDecode((await Send(mo.Client, HttpMethod.Get, "/")).Body));
+
+        await Form(mo, "/", SeenController.Path, new Dictionary<string, string> { [SeenController.ThroughField] = Valued(news.GetProperty("seen"), SeenController.ThroughField)! });
+        door = await Door(mo);
+        Assert.Equal((0, true, 1), (door.GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32(),
+            door.GetProperty("news").GetProperty("quiet").GetBoolean(), door.GetProperty("applications").GetProperty("count").GetInt32()));
+    }
+
+    /// <summary>The writing place, whose admission says apply.</summary>
+    private static async Task Applying(TangentSpaceFixture tangentSpace)
+    {
+        await Place(tangentSpace);
+        var space = (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!;
+        space.Admission = Admission.Apply;
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(Cancellation));
+    }
+
+    private const string Grace = "did:plc:grace4unread";
 
     private static async Task<JsonElement> Door(Participants.Browser browser) => (await Send(browser.Client, HttpMethod.Get, "/", json: true)).Json;
 

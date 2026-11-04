@@ -69,12 +69,12 @@ function topicPage(newest: boolean): void {
     '</section></main>'
 }
 
-// Every request the island made was a read: nothing posted, nothing to a seen or a checkpoint's address.
+// Every request the island made was a read: nothing posted, nothing to the seen address.
 function onlyReads(): void {
   expect(calls.length).toBeGreaterThan(0)
   for (const call of calls) {
     expect(call.init.method ?? 'GET').toBe('GET')
-    expect(call.url).not.toMatch(/\/seen$|\/watch$/)
+    expect(call.url).not.toMatch(/\/seen$/)
   }
 }
 

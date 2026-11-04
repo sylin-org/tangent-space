@@ -17,7 +17,7 @@
         @if (Person.Can.Contains(People.Verb.TimeOut) && Forms.TimeOut is { } timeOut)
         {
             <details class="application-decline people-time-out">
-                <summary class="watch-button">Time out</summary>
+                <summary class="button">Time out</summary>
                 <div class="post-remove-confirm">
                     <p class="post-remove-note">They keep reading and reporting here, and post, reply and start nothing until it ends; you can lift it sooner.</p>
                     @foreach (var duration in Forms.Durations)
@@ -25,7 +25,7 @@
                         <form class="time-out" method="post" action="@timeOut.Action">
                             @Fields(timeOut)
                             <input type="hidden" name="@PeopleController.ForField" value="@duration">
-                            <button type="submit" class="watch-button">@For(duration)</button>
+                            <button type="submit" class="button">@For(duration)</button>
                         </form>
                     }
                 </div>
@@ -38,7 +38,7 @@
                 <form class="give-role" method="post" action="@give.Action">
                     @Fields(give)
                     <input type="hidden" name="@PeopleController.RoleField" value="@role">
-                    <button type="submit" class="watch-button">Make @Spoken(role)</button>
+                    <button type="submit" class="button">Make @Spoken(role)</button>
                 </form>
             }
         }
@@ -49,14 +49,14 @@
                 <form class="take-role" method="post" action="@take.Action">
                     @Fields(take)
                     <input type="hidden" name="@PeopleController.RoleField" value="@role">
-                    <button type="submit" class="watch-button">Take @Spoken(role) role</button>
+                    <button type="submit" class="button">Take @Spoken(role) role</button>
                 </form>
             }
         }
         @if (Person.Can.Contains(People.Verb.Ban) && Forms.Ban is { } ban)
         {
             <details class="application-decline people-ban">
-                <summary class="watch-button">Ban</summary>
+                <summary class="button">Ban</summary>
                 <div class="post-remove-confirm">
                     <p class="post-remove-note">This place disappears for them, every page and every stream, until you lift the ban.</p>
                     <form class="ban" method="post" action="@ban.Action">

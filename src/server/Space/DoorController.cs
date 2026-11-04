@@ -82,7 +82,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
         var (featured, alive, writers) = Front(created, posts);
 
         var now = DateTimeOffset.UtcNow;
-        var forYouGroups = forYou is null || reader is null ? null : ForYouOf(forYou, reader, now);
+        var forYouGroups = forYou is null || reader is null ? null : ForYouOf(forYou, reader.Id);
         var people = await People(
             baseAddress,
             new[] { space.ProprietorId, reader?.Id }
@@ -102,10 +102,10 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             // event in a Tangent they may not view moves nothing they can see.
             var newestViewable = window.Where(e => Viewable(e.TangentId)).Select(e => e.Seq).DefaultIfEmpty(0).Max();
             through = new[] { unread.Floor, newestViewable, forYou.Through }.Max();
-            news = News(unread, forYou, forYouGroups, fresh, window, posts, tangents, people, through);
+            news = News(unread, forYou, forYouGroups, fresh, window, posts, tangents, people, through, baseAddress);
             // A door that carries a form is never stored, so a browser's Back after sign-out redisplays nothing of it; any
             // other door of a signed-in reader is theirs alone to cache.
-            if ((!news.Quiet || forYou.Count > 0) && through > unread.Floor) news = news with { Seen = SeenController.DoorForm(baseAddress, through) };
+            if (!news.Quiet && through > unread.Floor) news = news with { Seen = SeenController.DoorForm(baseAddress, through) };
             Response.Headers.CacheControl = news.Seen is null ? "private" : "no-cache, no-store";
         }
 
@@ -188,11 +188,13 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
         IReadOnlyList<Event> Removed,
         Event? Admitted,
         Event? Lifted,
+        Event? TimedOut,
+        Event? Declined,
         IReadOnlyList<Event> Roles)
     {
         /// <summary>Who the groups name.</summary>
         public IEnumerable<string?> People() => Replies.Concat(Taken).Concat(Mentions).Concat(Reports).Concat(Edited).Concat(Removed).Concat(Roles)
-            .Concat(new[] { Admitted, Lifted }.OfType<Event>()).Select(e => e.ActorId);
+            .Concat(new[] { Admitted, Lifted, TimedOut, Declined }.OfType<Event>()).Select(e => e.ActorId);
 
         /// <summary>The rows the door shows with a Post's first words.</summary>
         public IEnumerable<Event> Shown() => Replies.Take(ItemLimit).Concat(Taken.Take(ItemLimit)).Concat(Mentions.Take(ItemLimit))
@@ -200,22 +202,25 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
     }
 
     /// <summary>What is for the reader, by what it is: a reply to them, a Topic taken on a tangent from their Post, a
-    /// mention of them, a report, their Post someone else edited or removed, who admitted them or lifted their timeout or
-    /// ban while they stand admitted, and the roles someone gave them or took from them.</summary>
-    private static ForYouGroups ForYouOf(Unread.ForYou forYou, Participant reader, DateTimeOffset now)
+    /// mention of them, a report, their Post someone else edited or removed, the newest change someone else made of their
+    /// standing — who admitted them, lifted their timeout or ban, timed them out or declined their application — and the
+    /// roles someone gave them or took from them. A ban has no line: the place is absent to whoever it bans.</summary>
+    private static ForYouGroups ForYouOf(Unread.ForYou forYou, string readerId)
     {
         var rows = forYou.Rows;
         bool Taken(Event e) => forYou.Posts.TryGetValue(e.PostId ?? "", out var post) && post is { ParentId: null, OriginId: not null };
-        var decided = reader.StandingAt(now) == Standing.Admitted ? rows.FirstOrDefault(e => e.Kind == EventKind.StandingChanged) : null;
+        var decided = rows.FirstOrDefault(e => e.Kind == EventKind.StandingChanged);
         return new ForYouGroups(
-            rows.Where(e => e is { Kind: EventKind.PostCreated, Report: not true } && e.TargetId == reader.Id && !Taken(e)).ToList(),
-            rows.Where(e => e is { Kind: EventKind.PostCreated, Report: not true } && e.TargetId == reader.Id && Taken(e)).ToList(),
+            rows.Where(e => e is { Kind: EventKind.PostCreated, Report: not true } && e.TargetId == readerId && !Taken(e)).ToList(),
+            rows.Where(e => e is { Kind: EventKind.PostCreated, Report: not true } && e.TargetId == readerId && Taken(e)).ToList(),
             rows.Where(e => e.Kind == EventKind.Mention).ToList(),
             rows.Where(e => e is { Kind: EventKind.PostCreated, Report: true }).ToList(),
             rows.Where(e => e.Kind == EventKind.PostEdited).ToList(),
             rows.Where(e => e.Kind == EventKind.PostRemoved).ToList(),
             decided is { Standing: Standing.Admitted, Before: not (Standing.TimedOut or Standing.Banned) } ? decided : null,
             decided is { Standing: Standing.Admitted, Before: Standing.TimedOut or Standing.Banned } ? decided : null,
+            decided is { Standing: Standing.TimedOut } ? decided : null,
+            decided is { Standing: Standing.Declined } ? decided : null,
             rows.Where(e => e is { Kind: EventKind.RoleChanged, Given: not null }).ToList());
     }
 
@@ -223,7 +228,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
     /// articles, each count a lower bound where a read it came from was full.</summary>
     private Door.Since News(Unread unread, Unread.ForYou forYou, ForYouGroups groups, IReadOnlyList<Event> fresh, IReadOnlyList<Event> window,
         IReadOnlyDictionary<string, Post> posts, IReadOnlyDictionary<string, Tangents.Tangent> tangents,
-        IReadOnlyDictionary<string, TangentPage.Author> people, long through)
+        IReadOnlyDictionary<string, TangentPage.Author> people, long through, string baseAddress)
     {
         var partial = LogWindow.Partial(window, unread.Floor);
         Door.Group Group(IReadOnlyList<Event> events, bool atLeast) => this.Group(events, atLeast, posts, tangents, people);
@@ -244,7 +249,10 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             groups.Roles.Select(e => new Door.RoleChange(Person(people, e.ActorId!), e.At, Roles.Word(e.Role!), e.Given!.Value)).ToList(),
             Group(groups.Edited, forYou.AtLeast),
             Group(groups.Removed, forYou.AtLeast),
-            Group(groups.Reports, forYou.AtLeast));
+            Group(groups.Reports, forYou.AtLeast),
+            groups.TimedOut is { } timedOut ? new Door.Decision(Person(people, timedOut.ActorId!), timedOut.At, Until: unread.Reader.StandingUntil) : null,
+            groups.Declined is { } declined ? new Door.Decision(Person(people, declined.ActorId!), declined.At) : null,
+            forYou.Waiting > 0 ? new Door.Waiting(forYou.Waiting, forYou.AtLeast, baseAddress + ApplicationsController.Path) : null);
     }
 
     /// <summary>Whether a new Post is an article's root.</summary>
