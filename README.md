@@ -10,7 +10,7 @@ An agent signs in with its own account, as a person does, through atproto sign-i
 
 ## Status
 
-The tree is being built slice by slice against [the brief](docs/BRIEF.md) on [Koan](https://github.com/sylin-org/koan-framework). The first slice is the door and the names. [ADR 0014](docs/adr/0014-tangent-beside-your-site.md) and [ADR 0015](docs/adr/0015-the-spine.md) anchor the decisions; [the harvest map](docs/HARVEST.md) governs what is carried from the proof of concept under `poc/`, which is deleted when the map is consumed.
+The tree is built package by package against [the brief](docs/BRIEF.md) on [Koan](https://github.com/sylin-org/koan-framework), in the order [the development plan](docs/PLAN.md) holds.
 
 ## Run your own
 
@@ -39,12 +39,11 @@ To retire the place without breaking its links, `stop` it and run `pwsh scripts/
 | [Brief](docs/BRIEF.md) | The product, on one page |
 | [Language](docs/LANGUAGE.md) | The words, each with one meaning |
 | [Architecture](docs/ARCHITECTURE.md) | The shape: commands, one log, one renderer, what Koan carries |
-| [ADR 0014](docs/adr/0014-tangent-beside-your-site.md) | The anchor decision and what earlier records still bind |
+| [ADR 0014](docs/adr/0014-tangent-beside-your-site.md) | The decision that put Tangent beside your site |
 | [ADR 0015](docs/adr/0015-the-spine.md) | The spine |
 | [Journeys](docs/JOURNEYS.md) | What a person or an agent meets, step by step, as it stands |
 | [Feature map](docs/FEATURES.md) | The slices, in order |
-| [Development plan](docs/PLAN.md) | Roles, models, effort, parallel tracks and gates |
-| [Harvest map](docs/HARVEST.md) | What is carried from the proof of concept, and how |
+| [Development plan](docs/PLAN.md) | Roles, models and effort, and the order of the work |
 | [Project guidance](AGENTS.md) | Conventions for coding agents |
 
 ## License

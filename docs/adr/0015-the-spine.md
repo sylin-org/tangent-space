@@ -4,7 +4,7 @@ Date: 28 October 2026. Status: accepted.
 
 ## Context
 
-[ADR 0014](0014-tangent-beside-your-site.md) anchors the tree at the root and names [BRIEF](../BRIEF.md) as the product. Building it needs a shape: which things exist, what owns a write, how a participant's rights are decided, how people and agents share one surface, and what Koan carries. Leo owns Koan and directs that a capability with reuse beyond Tangent is Koan's, and that a Koan quirk met while building Tangent is corrected in Koan first. The shape below was reviewed against the proof of concept's code before it was accepted; [HARVEST](../HARVEST.md) carries that evidence.
+[ADR 0014](0014-tangent-beside-your-site.md) anchors the tree at the root and names [BRIEF](../BRIEF.md) as the product. Building it needs a shape: which things exist, what owns a write, how a participant's rights are decided, how people and agents share one surface, and what Koan carries. Leo owns Koan and directs that a capability with reuse beyond Tangent is Koan's, and that a Koan quirk met while building Tangent is corrected in Koan first.
 
 ## Decision
 
@@ -20,9 +20,9 @@ Date: 28 October 2026. Status: accepted.
 
 6. **The page is the API.** One handler and one DTO per resource; `Accept` selects HTML through a statically rendered Razor component, JSON, or a fragment. There is no separate API namespace. The reading surface is rendered once on the server; Vue mounts islands only where a participant does something; there is no client router and no store library, which narrows the stack ADR 0014 described by one library.
 
-7. **One body format.** Markdown, with a mention written as a link whose target carries the identity; facets are derived for syndication. This amends ADR 0014's inheritance of ADR 0008: the intent — stable identities inside the text — carries; stored facets do not.
+7. **One body format.** Markdown, with a mention written as a link whose target carries the identity; facets are derived for syndication.
 
-8. **Koan carries what Koan has.** Persons, external identities, sessions, audit and erasure; roles and effective access; atproto sign-in; the OAuth 2.1 server and the ES256 issuer; the MCP edge ([ADR 0016](0016-a-standard-client-at-the-tools-door.md)); media; social cards; server-sent events; entity events; jobs; the audit partition; the test host. `Sylin.Koan.Tenancy`, `Sylin.Koan.Data.SoftDelete` and the shelved `Sylin.Koan.Data.Backup` are not referenced. A reusable capability Tangent needs and Koan lacks is Koan work under Koan's naming decision DX-0043, with identifiers Koan's agent assigns: SQLite posture and a canonical base URL; scoped overwrites with deny; atproto content operations, service-auth verification and `did:web`; lexical search. The HTML projection, the durable journal with checkpoints, feeds, the static archive and the agent descriptor are built first in Tangent in Koan's shape and lifted when proven.
+8. **Koan carries what Koan has.** Persons, external identities, sessions, audit and erasure; roles and effective access; atproto sign-in; the OAuth 2.1 server and the ES256 issuer; the MCP edge ([ADR 0016](0016-a-standard-client-at-the-tools-door.md)); media; social cards; server-sent events; entity events; jobs; the audit partition; the test host. `Sylin.Koan.Tenancy`, `Sylin.Koan.Data.SoftDelete` and the shelved `Sylin.Koan.Data.Backup` are not referenced. A reusable capability Tangent needs and Koan lacks is Koan work under Koan's naming decision DX-0043, with identifiers Koan's agent assigns: SQLite posture and a canonical base URL; scoped overwrites with deny; atproto content operations, service-auth verification and `did:web`; lexical search.
 
 9. **Any URL.** A Tangent Space has a base URL — scheme, host, optional path — from which every absolute thing derives. `tangent.<domain>` is the suggested address. Discovery pointers live on the site, because `/.well-known/` belongs to an origin; the Tangent Space serves its descriptor and `llms.txt` under its base.
 
@@ -34,8 +34,8 @@ Date: 28 October 2026. Status: accepted.
 
 ## Consequences
 
-- [ARCHITECTURE](../ARCHITECTURE.md) describes the tree this record shapes; [FEATURES](../FEATURES.md) orders the slices around it; [HARVEST](../HARVEST.md) gains a destination, *to Koan*, for units that belong to the framework.
-- ADR 0014's inheritance list reads with these amendments: ADR 0008 as decision 7 states; ADR 0013's role model realized on Koan.Identity with overwrites; ADR 0010's public HTML as the renderer of every page, not a second one.
+- [ARCHITECTURE](../ARCHITECTURE.md) describes the tree this record shapes; [FEATURES](../FEATURES.md) orders the slices around it.
+- ADR 0014's earlier records read with one amendment: ADR 0010's public HTML as the renderer of every page, not a second one.
 - The protocol contract is recorded in a record of its own when slice 4 writes it from code; the door's record follows slice 1.
-- Two Koan dependencies sit on the critical path: SQLite posture and the base URL before slice 0 closes, overwrites with deny before slice 1 closes. Until the second ships, Tangent evaluates its overwrites beside Koan's facts in the same function, and lifts the step afterwards.
+- Two Koan dependencies sit on the critical path: SQLite posture and the base URL before slice 0 closes, overwrites with deny before slice 1 closes. Until the second ships, Tangent evaluates its overwrites beside Koan's facts in the same function.
 - Named risks: Koan's velocity on those two; Auth.Server's rule that every client is public (loopback registration for Lobby, Device flow with a pre-registered client for everything else); Koan's person id, not the DID, as the participant key, with `/p/{handle}` resolved through the external identity.

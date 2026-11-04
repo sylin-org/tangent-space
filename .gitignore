@@ -16,9 +16,6 @@
 *.user
 *.log
 
-# Rust build artifacts.
-**/target/
-
 # The client build output, served by the server as static files.
 src/server/wwwroot/
 

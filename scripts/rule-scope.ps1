@@ -1,10 +1,10 @@
 # Shared by the rule checks: lists the prose and source files of the tree.
 # Each file comes back as @{ Path = <full path>; Relative = <path from the tree base, forward slashes> }.
 
-$script:ExcludedTopFolders = '.git', '.local', '.dream-loop', 'poc', 'publish'
+$script:ExcludedTopFolders = '.git', '.local', '.dream-loop', 'publish'
 $script:ExcludedDirectories = '.git', 'node_modules', 'bin', 'obj'
 # The bundled classless stylesheets are their authors' text, vendored verbatim beside their licences.
-$script:ExcludedRelativePaths = 'docs/adr', 'docs/HARVEST.md', 'docs/LANGUAGE.md', 'src/server/wwwroot',
+$script:ExcludedRelativePaths = 'docs/adr', 'docs/LANGUAGE.md', 'src/server/wwwroot',
     'src/client/bases/simple', 'src/client/bases/mvp', 'src/client/bases/marx', 'src/client/bases/sakura', 'src/client/bases/water',
     'src/client/bases/new'
 $script:TextExtensions = '.md', '.cs', '.razor', '.ts', '.vue', '.js', '.mjs', '.json', '.ps1', '.yaml', '.yml', '.css', '.html',

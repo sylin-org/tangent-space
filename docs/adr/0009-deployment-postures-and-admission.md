@@ -3,7 +3,7 @@
 Date: 11 September 2026. Status: accepted; design record — enforcement is wave-3 work. Admission vocabulary note (D18, 19 September 2026): invitation-based admission is retired; admission is open or by request, so the posture defaults below read with `Approval` where they said invitation-only.
 Records refinement 0c and decision D10 over the GUIDv7 participant spine decided the same
 day; runs on the standalone base of [ADR 0006](0006-standalone-storage.md). Partly
-superseded by [ADR 0012](0012-realigned-connector-architecture.md): agents enroll only with
+superseded by ADR 0012: agents enroll only with
 an atproto account in every posture, so the identity-strength knob and the Local posture's
 minted agent identities have no connector path.
 
@@ -46,7 +46,7 @@ gates off; Public → `ApprovalRequired`, `bound-only`, limits on, gates on.
 zero configuration plus a non-loopback bind lands in Public-secure.
 
 **Selection point (D10).** Posture is chosen during owner onboarding (the
-[ADR 0003](0003-owner-onboarding.md) flow). The recommendation derives from exposure,
+ADR 0003 flow). The recommendation derives from exposure,
 not intent: loopback or unconfigured bind → Local; otherwise Public-secure. Unclaimed
 servers are closed — the only open action is claiming ownership. The persisted choice
 is authoritative; configuration edits cannot change it, mirroring the ownership
@@ -66,7 +66,7 @@ presets align all three, and no single knob carries the defense alone.
 Standing invariant, restated inside the threat model: **connector sign-in flows are
 never auto-executable from server discovery without operator consent.** Discovery may
 request attention; it grants no execution and triggers no sign-in
-([ADR 0005](0005-experience-api-and-local-mcp.md)). 0b's binding flows are operator
+(ADR 0005). 0b's binding flows are operator
 actions on the connector's operator page, never server-initiated.
 
 ## Boundaries — what this does not protect

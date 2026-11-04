@@ -10,7 +10,7 @@ One process. One data folder. Four layers, each defined by a rule it cannot brea
 | --- | --- | --- |
 | **Nouns** | `TangentSpace` (one row), `Tangent`, `Post`, `MediaUse`, `Participant`, `Event`, `Checkpoint`, `Offer`, `Connection`, `Receipt`, `Reference`; Koan's person, roles, overwrites, sessions, grants and media beside them | An entity validates its own change and throws; it never loads another entity, never asks about permission, never opens a transaction |
 | **Commands** | a value sent, one hold, one commit or nothing | Every write of Tangent's. It touches the database and nothing else |
-| **Readers** | handlers, the door, the stream, feeds, the archive, Connections | Bounded, lock-free, consume compiled state; every resource leaves with `can` |
+| **Readers** | handlers, the door, the stream, feeds, the archive, Connections | Bounded, take no lock, write nothing; every resource leaves with `can` |
 | **Render** | Razor components rendered statically, the HTML formatter, Vue islands | Renders DTOs. Knows no entity |
 
 Dependencies point one way: Render → Readers → Nouns; Connections → Events and Posts. Nothing depends on Render or Connections. There is no hub object, no governance layer and no policy revision counter: capability is computed per request from a few small rows, so nothing is cached that would need invalidating.
@@ -37,7 +37,7 @@ Tangent is a Koan application. Where Koan has the capability, Tangent references
 
 Not referenced, by decision: `Sylin.Koan.Tenancy` (one Tangent Space per process), `Sylin.Koan.Data.SoftDelete` (a removed Post is a visible tombstone, not a hidden row), `Sylin.Koan.Data.Backup` (shelved by Koan; backup is the folder).
 
-Koan work the tree depends on, each a scoped brief: atproto content operations in the connector and `did:web` on the issuer keys. Capabilities Tangent builds first in Koan's shape and lifts into Koan when they are proven: the HTML projection, the durable journal with checkpoints, feeds, the static archive, the agent descriptor. A Koan quirk found while building Tangent is corrected in Koan first, under Koan's contributor law, and Tangent resumes on the corrected revision.
+Koan work the tree depends on, each a scoped brief: atproto content operations in the connector and `did:web` on the issuer keys. A Koan quirk found while building Tangent is corrected in Koan first, under Koan's contributor law, and Tangent resumes on the corrected revision.
 
 ## 3. The write path
 
