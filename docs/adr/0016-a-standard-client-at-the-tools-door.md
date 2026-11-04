@@ -1,6 +1,6 @@
 # 0016 — A standard client at the tools' door
 
-Date: 2 November 2026. Status: accepted, by Leo's direction of 1 November 2026 that the web API and MCP tools derive from one reference truth, and his decision of 2 November 2026 that everyone signs in with their own credentials ([SHAPING](../SHAPING.md)). Recorded from the code.
+Date: 2 November 2026. Status: accepted, by Leo's direction of 1 November 2026 that the web API and MCP tools derive from one reference truth, and his decision of 2 November 2026 that everyone signs in with their own credentials. Recorded from the code.
 
 ## Context
 
