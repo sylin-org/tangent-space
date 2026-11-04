@@ -18,7 +18,7 @@ public sealed class PostTests
     private static async Task Started(TangentSpaceFixture tangentSpace)
     {
         await Given.ATangent(tangentSpace, Workshop, ct: Cancellation);
-        await Given.ATangent(tangentSpace, "articles", ct: Cancellation);
+        await Given.ATangent(tangentSpace, "articles", ct: Cancellation, kind: PostKind.Article);
         await Given.AParticipant(tangentSpace, "leo", [Roles.Member], ct: Cancellation);
         await Given.AParticipant(tangentSpace, "ada", [Roles.Member], ct: Cancellation);
     }
@@ -34,7 +34,7 @@ public sealed class PostTests
 
         var first = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(firstId, Workshop, "  Hello, Wörld! ", "A first word.", "leo").Send(Cancellation)).Result;
         var second = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(secondId, Workshop, "Hello world", "The same title again.", "leo").Send(Cancellation)).Result;
-        var elsewhere = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(elsewhereId, "articles", "Hello world", "The title in another Tangent.", "leo", PostKind.Article).Send(Cancellation)).Result;
+        var elsewhere = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(elsewhereId, "articles", "Hello world", "The title in another Tangent.", "leo").Send(Cancellation)).Result;
 
         Assert.Equal((firstId, firstId, null, Workshop, "hello-world", "Hello, Wörld!", PostKind.Topic), (first.Id, first.TopicId, first.ParentId, first.TangentId, first.Slug, first.Title, first.Kind));
         Assert.Equal((0L, 0L, 0, 1L), (first.Sequence, first.LastSequence, first.ReplyCount, first.Version));
@@ -121,14 +121,14 @@ public sealed class PostTests
         var topicId = Tids.Mint();
         var startedAt = new DateTimeOffset(2026, 10, 29, 9, 0, 0, TimeSpan.Zero);
         var repliedAt = startedAt.AddMinutes(5);
-        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(topicId, Workshop, "A question", "What is this?", "leo", PostKind.Article, startedAt).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(topicId, "articles", "A question", "What is this?", "leo", startedAt).Send(Cancellation));
         var firstId = Tids.Mint();
         var secondId = Tids.Mint();
 
         var first = Assert.IsType<Outcome<Post>.Done>(await new Reply(firstId, topicId, "An answer.", "ada", At: repliedAt).Send(Cancellation)).Result;
         var second = Assert.IsType<Outcome<Post>.Done>(await new Reply(secondId, topicId, "Another.", "leo", ParentId: firstId, At: repliedAt.AddMinutes(1)).Send(Cancellation)).Result;
 
-        Assert.Equal((Workshop, topicId, topicId, 1L, "ada", repliedAt), (first.TangentId, first.TopicId, first.ParentId, first.Sequence, first.AuthorId, first.CreatedAt));
+        Assert.Equal(("articles", topicId, topicId, 1L, "ada", repliedAt), (first.TangentId, first.TopicId, first.ParentId, first.Sequence, first.AuthorId, first.CreatedAt));
         Assert.Equal((topicId, firstId, 2L), (second.TopicId, second.ParentId, second.Sequence));
         // The kind lives on the root; a reply stays at the default.
         Assert.Equal((PostKind.Topic, PostKind.Topic, null, null), (first.Kind, second.Kind, first.Title, first.Slug));
@@ -137,11 +137,11 @@ public sealed class PostTests
         Assert.Equal((PostKind.Article, 2L, 2, repliedAt.AddMinutes(1)), (root.Kind, root.LastSequence, root.ReplyCount, root.LastActivityAt));
         var stored = await Post.Get(firstId, Cancellation);
         Assert.NotNull(stored);
-        Assert.Equal((Workshop, topicId, 1L, "An answer.", PostKind.Topic), (stored.TangentId, stored.TopicId, stored.Sequence, stored.Body, stored.Kind));
+        Assert.Equal(("articles", topicId, 1L, "An answer.", PostKind.Topic), (stored.TangentId, stored.TopicId, stored.Sequence, stored.Body, stored.Kind));
 
         var logged = (await Event.All(Cancellation)).OrderBy(e => e.Seq).ToList();
         Assert.Equal(3, logged.Count);
-        Assert.Equal((2L, EventKind.PostCreated, Workshop, topicId, firstId, "ada", repliedAt), (logged[1].Seq, logged[1].Kind, logged[1].TangentId, logged[1].TopicId, logged[1].PostId, logged[1].ActorId, logged[1].At));
+        Assert.Equal((2L, EventKind.PostCreated, "articles", topicId, firstId, "ada", repliedAt), (logged[1].Seq, logged[1].Kind, logged[1].TangentId, logged[1].TopicId, logged[1].PostId, logged[1].ActorId, logged[1].At));
         Assert.Equal((3L, secondId), (logged[2].Seq, logged[2].PostId));
     }
 
@@ -172,28 +172,22 @@ public sealed class PostTests
     }
 
     [Fact]
-    public async Task A_reply_on_a_locked_or_removed_topic_is_refused_with_the_gate_word_and_writes_nothing_the_log_included()
+    public async Task A_reply_on_a_removed_topic_is_refused_with_the_gate_word_and_writes_nothing_the_log_included()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Started(tangentSpace);
-        var at = DateTimeOffset.UtcNow;
-        var locked = Post.Root(Tids.Mint(), Workshop, "Locked", "locked", PostKind.Topic, "No more.", "leo", at);
-        locked.Locked = true;
-        var removed = Post.Root(Tids.Mint(), Workshop, "Removed", "removed", PostKind.Topic, "Gone.", "leo", at);
+        var removed = Post.Root(Tids.Mint(), Workshop, "Removed", "removed", PostKind.Topic, "Gone.", "leo", DateTimeOffset.UtcNow);
         removed.Removed = true;
-        Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(locked).Send(Cancellation));
         Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(removed).Send(Cancellation));
         var before = (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation));
 
-        var onLocked = await new Reply(Tids.Mint(), locked.Id, "Still?", "ada").Send(Cancellation);
         var onRemoved = await new Reply(Tids.Mint(), removed.Id, "Still?", "ada").Send(Cancellation);
         var onNothing = await new Reply(Tids.Mint(), Tids.Mint(), "Anyone?", "ada").Send(Cancellation);
 
-        Assert.Equal(Capabilities.Locked, Assert.IsType<Outcome<Post>.Refused>(onLocked).Reason);
         Assert.Equal(Capabilities.Removed, Assert.IsType<Outcome<Post>.Refused>(onRemoved).Reason);
         Assert.Equal(Reply.NoTopic, Assert.IsType<Outcome<Post>.Refused>(onNothing).Reason);
         Assert.Equal(before, (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation)));
-        Assert.Equal((0L, 0), ((await Post.Get(locked.Id, Cancellation))!.LastSequence, (await Post.Get(locked.Id, Cancellation))!.ReplyCount));
+        Assert.Equal((0L, 0), ((await Post.Get(removed.Id, Cancellation))!.LastSequence, (await Post.Get(removed.Id, Cancellation))!.ReplyCount));
     }
 
     [Fact]
@@ -214,7 +208,6 @@ public sealed class PostTests
         {
             await new StartTopic(topicId, Workshop, "Once", "Said twice.", "leo").Send(Cancellation),
             await new StartTopic(topicId, Workshop, "Twice", "Said once.", "leo").Send(Cancellation),
-            await new StartTopic(topicId, Workshop, "Once", "Said once.", "leo", PostKind.Article).Send(Cancellation),
             await new StartTopic(topicId, Workshop, "Once", "Said once.", "ada").Send(Cancellation),
             await new StartTopic(replyId, Workshop, "Once", "Heard.", "ada").Send(Cancellation)
         };

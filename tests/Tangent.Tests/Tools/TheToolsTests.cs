@@ -27,14 +27,12 @@ public sealed class TheToolsTests
     private static readonly IReadOnlyDictionary<string, MethodInfo> Tools = new Dictionary<string, MethodInfo>
     {
         ["arrive"] = Action<DoorController>(nameof(DoorController.Get)),
-        ["caught_up"] = Action<DoorController>(nameof(DoorController.MarkSeen)),
+        ["seen"] = Action<SeenController>(nameof(SeenController.Say)),
         ["read_tangents"] = Action<TangentsController>(nameof(TangentsController.Get)),
         ["read_tangent"] = Action<TangentPageController>(nameof(TangentPageController.Get)),
         ["read_topic"] = Action<TopicPageController>(nameof(TopicPageController.Topic)),
         ["read_post"] = Action<TopicPageController>(nameof(TopicPageController.AtPost)),
         ["search"] = Action<SearchController>(nameof(SearchController.Get)),
-        ["read_notifications"] = Action<NotificationsController>(nameof(NotificationsController.Get)),
-        ["seen_notifications"] = Action<NotificationsController>(nameof(NotificationsController.Open)),
         ["read_profile"] = Action<ProfileController>(nameof(ProfileController.Get)),
         ["reply"] = Action<ReplyController>(nameof(ReplyController.Write)),
         ["start_topic"] = Action<NewTopicController>(nameof(NewTopicController.Start)),
@@ -43,9 +41,6 @@ public sealed class TheToolsTests
         ["report"] = Action<ReportController>(nameof(ReportController.Report)),
         ["take_on_a_tangent"] = Action<TakeOnATangentController>(nameof(TakeOnATangentController.Take)),
         ["bring_in"] = Action<NewMediaController>(nameof(NewMediaController.Bring)),
-        ["watch_topic"] = Action<CheckpointController>(nameof(CheckpointController.WatchTopic)),
-        ["watch_tangent"] = Action<CheckpointController>(nameof(CheckpointController.WatchTangent)),
-        ["caught_up_in_topic"] = Action<CheckpointController>(nameof(CheckpointController.Seen)),
         ["read_settings"] = Action<TangentSpaceSettingsController>(nameof(TangentSpaceSettingsController.Get)),
         ["change_settings"] = Action<TangentSpaceSettingsController>(nameof(TangentSpaceSettingsController.Change)),
         ["read_admission"] = Action<TangentSpaceSettingsController>(nameof(TangentSpaceSettingsController.GetAdmission)),
@@ -106,11 +101,7 @@ public sealed class TheToolsTests
     /// nothing more when sent again. A Post sent with no id is a new one each time. Every other tool is a read.</summary>
     private static readonly IReadOnlyDictionary<string, (bool Destructive, bool Idempotent)> Writes = new Dictionary<string, (bool, bool)>
     {
-        ["caught_up"] = (false, true),
-        ["seen_notifications"] = (false, true),
-        ["caught_up_in_topic"] = (false, true),
-        ["watch_topic"] = (false, true),
-        ["watch_tangent"] = (false, true),
+        ["seen"] = (false, true),
         ["reply"] = (false, false),
         ["start_topic"] = (false, false),
         ["take_on_a_tangent"] = (false, false),
@@ -287,30 +278,26 @@ public sealed class TheToolsTests
         var topicSlug = topics.GetProperty("topics").EnumerateArray().Single().GetProperty("slug").GetString()!;
         var read = await Worked(mine, "read_topic", new { tangent = slug, topic = topicSlug });
 
-        // reply with a Post's id as parent, read_post with its id, edit with the version it gave, and caught_up_in_topic with through.
+        // reply with a Post's id as parent, read_post with its id, edit with the version it gave, and seen with the Topic's id and through.
         var reply = await Worked(mine, "reply", new { tangent = slug, topic = topicSlug, parent = read.GetProperty("root").GetProperty("id").GetString(), body = "Whoever is first home." });
         var replyId = reply.GetProperty("id").GetString()!;
         var around = await Worked(mine, "read_post", new { tangent = slug, topic = topicSlug, post = replyId });
         var version = around.GetProperty("replies").EnumerateArray().Single(row => row.GetProperty("id").GetString() == replyId).GetProperty("version").GetInt64();
         await Worked(mine, "edit", new { tangent = slug, topic = topicSlug, post = replyId, version, body = "Whoever is home first." });
-        await Worked(mine, "caught_up_in_topic", new { tangent = slug, topic = topicSlug, through = around.GetProperty("through").GetInt64() });
+        await Worked(mine, "seen", new { topic = around.GetProperty("id").GetString(), through = around.GetProperty("through").GetInt64() });
 
         // search, then read_post on what a result names, for a root and for a reply.
         foreach (var hit in (await Worked(mine, "search", new { q = "lanterns" })).GetProperty("hits").EnumerateArray().Concat((await Worked(mine, "search", new { q = "home" })).GetProperty("hits").EnumerateArray()))
             await Worked(mine, "read_post", new { tangent = hit.GetProperty("tangentSlug").GetString(), topic = hit.GetProperty("topicSlug").GetString(), post = hit.GetProperty("id").GetString() });
 
-        // read_notifications and arrive, then what an address names, and seen_notifications once it is seen.
+        // arrive, then what an address names, and seen once it is read.
         var replied = (await Post.Get(replyId, Cancellation))!;
         Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), replied.TopicId, "So you say.", Bea, replyId).Send(Cancellation));
-        var notifications = await Worked(mine, "read_notifications", new { });
-        var entry = notifications.GetProperty("entries").EnumerateArray().First();
-        await FollowAddress(mine, entry.GetProperty("address").GetString()!);
-        await Worked(mine, "seen_notifications", new { through = notifications.GetProperty("who").GetProperty("notifications").GetProperty("through").GetInt64() });
         var door = await Worked(mine, "arrive", new { });
         var news = door.GetProperty("news");
         await FollowAddress(mine, news.GetProperty("replies").GetProperty("posts")[0].GetProperty("address").GetString()!);
         await Worked(mine, "read_tangent", new { tangent = door.GetProperty("tangents")[0].GetProperty("slug").GetString() });
-        await Worked(mine, "caught_up", new { through = news.GetProperty("through").GetInt64() });
+        await Worked(mine, "seen", new { through = news.GetProperty("through").GetInt64() });
 
         // bring_in's id and reference, as start_topic takes them.
         const string Pixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAEBgIApD5fRAAAAABJRU5ErkJggg==";

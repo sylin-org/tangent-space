@@ -7,11 +7,9 @@ using Tangent.Posts;
 namespace Tangent.Tangents;
 
 /// <summary>The Tangent page as a resource: the Tangent's name, description, kind and audience, what the reader
-/// <see cref="Can"/> do here, and one bounded page of its <see cref="Topics"/>, pinned first and then by last
-/// activity. <see cref="Next"/> is the address of the page after this one, absent on the last; nothing is counted to
+/// <see cref="Can"/> do here, and one bounded page of its <see cref="Topics"/>, by last activity. <see cref="Next"/> is the address of the page after this one, absent on the last; nothing is counted to
 /// answer it. <see cref="NewTopic"/> is where a Topic is started, present only when <see cref="Can"/> holds
-/// <c>Topic</c>; <see cref="Watching"/> is a signed-in reader's watch flag on the Tangent, with the form that sets it;
-/// <see cref="SignIn"/> is where a visitor signs in, coming back here. <see cref="Tangents"/> are the
+/// <c>Topic</c>; <see cref="SignIn"/> is where a visitor signs in, coming back here. <see cref="Tangents"/> are the
 /// Tangents the reader may view, this one among them, with the Topics started in each. <see cref="Place"/>,
 /// <see cref="Door"/> and <see cref="Who"/> say where the page is and who reads it; <see cref="Day"/> is the UTC day
 /// its times are written for. <see cref="Settings"/> is where the Tangent's settings are changed, present only for a
@@ -29,7 +27,6 @@ public sealed partial record TangentPage(
     string? Next,
     bool Continued,
     string? NewTopic,
-    Events.Watching? Watching,
     string? SignIn,
     IReadOnlyList<TangentPage.Listed> Tangents,
     string Place,
@@ -48,10 +45,10 @@ public sealed partial record TangentPage(
     public const int WordsPerMinute = 230;
 
     /// <summary>One Topic on the page: its root's title, slug, kind and author, the opening words of its body, the
-    /// minutes it takes to read, its reply count, when it started and when it last gained a Post, whether it is pinned
-    /// or locked, its <see cref="Latest"/> reply and its most recent <see cref="People"/>, and, for a signed-in reader,
-    /// whether it is <see cref="New"/> to them — its last sequence past their checkpoint for it, or no checkpoint at
-    /// all — with <see cref="NewPosts"/>, how many of its Posts they have not seen. <see cref="Edited"/> says who other
+    /// minutes it takes to read, its reply count, when it started and when it last gained a Post, its
+    /// <see cref="Latest"/> reply and its most recent <see cref="People"/>, and, for a signed-in reader, whether it is
+    /// <see cref="New"/> to them (<see cref="Events.Unread.InTopic"/>) with <see cref="NewPosts"/>, how many of its Posts
+    /// are, absent where they never read it and so it is new with no count. <see cref="Edited"/> says who other
     /// than its author last edited its root, where someone did. <see cref="Cover"/> is the address of an article's cover,
     /// while its root stands and has one.</summary>
     public sealed record Topic(
@@ -66,12 +63,10 @@ public sealed partial record TangentPage(
         int ReplyCount,
         DateTimeOffset CreatedAt,
         DateTimeOffset LastActivityAt,
-        bool Pinned,
-        bool Locked,
         Latest? Latest,
         IReadOnlyList<Author> People,
         bool New,
-        long NewPosts,
+        long? NewPosts,
         Edited? Edited = null,
         string? Cover = null);
 
@@ -92,10 +87,10 @@ public sealed partial record TangentPage(
 
     /// <summary>The signed-in participant reading the page: their id, the name to show, their handle, the highest role
     /// they hold where they hold one, their avatar, where they sign out, coming back to this page, and the place's
-    /// settings, for one who holds <c>ManageSpace</c>, <c>ManageStanding</c> or <c>ManageRoles</c>, and how many of their
-    /// notifications they have not seen.</summary>
+    /// settings, for one who holds <c>ManageSpace</c>, <c>ManageStanding</c> or <c>ManageRoles</c>, and how many things
+    /// are for them and new.</summary>
     public sealed record Reader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut, string? Settings = null,
-        Events.Notifications.Unseen? Notifications = null);
+        Events.Unread.Badge? ForYou = null);
 
     /// <summary>The version the page's <c>ETag</c> carries: a hash of everything the page says, the day its times are
     /// written for among it, so the same page for a visitor on the same day answers the same tag, and a new Post, a

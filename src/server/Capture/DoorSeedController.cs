@@ -14,8 +14,8 @@ namespace Tangent.Capture;
 
 /// <summary>The rows the door's captures show, sent as commands when the capture asks: a place with articles,
 /// discussions and a workshop, people who wrote in them, a Topic of the capture persona's with replies to her, and a
-/// mention of her. For <c>door</c> her place checkpoint sits behind the newest of them, so the door has news for her;
-/// for <c>door-quiet</c> it sits at the log's last sequence, so the door has none. Compiled only into the capture host,
+/// mention of her. For <c>door</c> her place mark sits behind the newest of them, so the door has news for her; for
+/// <c>door-quiet</c> it sits at the log's last sequence, so the door has none. Compiled only into the capture host,
 /// like <see cref="CaptureSeedController"/>; fixed names, words, times and TIDs.</summary>
 public sealed class DoorSeedController(RoleCollection roles) : ControllerBase
 {
@@ -55,7 +55,6 @@ public sealed class DoorSeedController(RoleCollection roles) : ControllerBase
 
         var rules = await Topic("discussions", "House rules, in plain words", "Be kind, be specific, and say when you are guessing. Agents are welcome here; the person who runs one answers for it.", Leo, At(20, 9, 0), 1, ct);
         await Answer(rules, "Thank you for writing these down.", Mara, At(20, 10, 12), 2, ct);
-        await Write(new Keep<Post>(Pinned(await Post.Get(rules.Id, ct))), ct);
         var reading = await Topic("workshop", "Reading list for October", "Three books and one long essay I keep coming back to. Add yours; one line on why is plenty.", Mara, At(24, 8, 30), 3, ct);
         await Answer(reading, "Seconding the essay. It changed how I write release notes.", Leo, At(24, 9, 2), 4, ct);
         var intro = await Topic("discussions", "What should an agent’s introduction say?", "Who runs it, what it is good at, and when it will not answer. What else belongs there?", Persona, At(26, 16, 45), 5, ct);
@@ -85,17 +84,10 @@ public sealed class DoorSeedController(RoleCollection roles) : ControllerBase
     }
 
     private Task<Post> Topic(string tangent, string title, string body, string author, DateTimeOffset at, int clock, CancellationToken ct)
-        => Write(new StartTopic(Tid(at, clock), tangent, title, body, author, tangent == "articles" ? PostKind.Article : PostKind.Topic, at), ct);
+        => Write(new StartTopic(Tid(at, clock), tangent, title, body, author, at), ct);
 
     private Task<Post> Answer(Post topic, string body, string author, DateTimeOffset at, int clock, CancellationToken ct)
         => Write(new Reply(Tid(at, clock), topic.Id, body, author, At: at), ct);
-
-    private static Post Pinned(Post? root)
-    {
-        ArgumentNullException.ThrowIfNull(root);
-        root.Pinned = true;
-        return root;
-    }
 
     private async Task<T> Write<T>(ICommand<T> command, CancellationToken ct) => await command.Send() switch
     {

@@ -9,9 +9,11 @@ namespace Tangent.Posts;
 /// counters and last activity moved in the same commit, and <see cref="EventKind.PostCreated"/> appended with them,
 /// its target the parent's author unless the author replies to their own Post, so a reply reaches whom it answers
 /// through the log's target index, and one <see cref="EventKind.Mention"/> per participant the body mentions
-/// (<see cref="Mentions.Notify"/>). The parent is the root unless a Post of this Topic is named. The Topic exists for
+/// (<see cref="Mentions.Notify"/>). The reply and its root carry that event's sequence (<see cref="Post.Logged"/>),
+/// and the author's mark on the Topic moves onto the reply where it stood on the Post just before
+/// (<see cref="Seen.Wrote"/>). The parent is the root unless a Post of this Topic is named. The Topic exists for
 /// the author, who holds <see cref="Bit.View"/> in its Tangent, or the command answers that no Topic has the Id; the
-/// author holds <see cref="Bit.Post"/> on the Topic, which no one does on a locked or removed one, or is refused with
+/// author holds <see cref="Bit.Post"/> on the Topic, which no one does on a removed one, or is refused with
 /// the gate word. Idempotent by Id: the same Id with the same request answers with the existing Post, before any
 /// gate, so a replay is safe, whoever the handles it typed name by then; a Post of this Topic holding the Id with a
 /// different parent, body or author is a conflict, and a Post anywhere else holding it is refused with
@@ -48,12 +50,14 @@ public sealed record Reply(
 
         var at = At ?? DateTimeOffset.UtcNow;
         var reply = root.Reply(Id, Body, AuthorId, parent.Id, at);
+        var created = await Event.Append(EventKind.PostCreated, at, ct,
+            tangentId: reply.TangentId, topicId: reply.TopicId, postId: reply.Id, actorId: reply.AuthorId,
+            targetId: parent.AuthorId == reply.AuthorId ? null : parent.AuthorId, version: reply.Version);
+        reply.Logged(created.Seq, root);
         await reply.Save(ct);
         await root.Save(ct);
         await MediaUse.Record(reply, reply.AuthorId, [], ct);
-        await Event.Append(EventKind.PostCreated, at, ct,
-            tangentId: reply.TangentId, topicId: reply.TopicId, postId: reply.Id, actorId: reply.AuthorId,
-            targetId: parent.AuthorId == reply.AuthorId ? null : parent.AuthorId, version: reply.Version);
+        await Seen.Wrote(reply.AuthorId, root, reply.Sequence, ct);
         await Mentions.Notify(reply, reply.AuthorId, [], at, ct);
         return new Outcome<Post>.Done(reply);
     }

@@ -14,19 +14,19 @@ export function badge(count: number, atLeast: boolean): string {
 
 // The count in words, for whoever does not see the badge.
 export function label(count: number, atLeast: boolean): string {
-  return `${atLeast ? 'At least ' : ''}${count} ${count === 1 && !atLeast ? 'new notification' : 'new notifications'}`
+  return `${atLeast ? 'At least ' : ''}${count} new for you`
 }
 
 // The standing an arrival leaves an applicant with, as the stream writes it.
 export const applied = 'Applied'
 
-// How many of the reader's notifications they have not seen, in the masthead: the server's count, raised by one for each
-// row the page's stream delivers past where the count reads through that someone else did and that targets the reader
-// or is a report, and, for a reader whose count holds the applications that wait (applications), by one for each
-// application, the rule the server counts by; the stream only delivers rows that reach the reader, a report only to
-// whoever may view the moderators' Tangent and an application only to whoever decides it. Hidden while it is zero. It
-// only ever counts up: opening the notifications, the button it is, marks them seen and brings it down on the page that
-// opens, as does a decision about an application, which the next page no longer counts.
+// How many things are for the reader and new to them, in the masthead: the server's count, raised by one for each row
+// the page's stream delivers past where the count reads through that someone else did and that targets the reader or
+// is a report, and, for a reader whose count holds the applications that wait (applications), by one for each
+// application; the stream only delivers rows that reach the reader, a report only to whoever may view the moderators'
+// Tangent and an application only to whoever decides it. Hidden while it is zero. It only ever counts up: the link it
+// is leads to the door, where they are read, and reading a Topic, saying seen or deciding an application brings it
+// down on the next page.
 export const unseen = defineComponent({
   name: 'UnseenIsland',
   props: {

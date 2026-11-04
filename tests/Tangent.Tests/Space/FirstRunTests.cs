@@ -85,7 +85,7 @@ public sealed class FirstRunTests
         Assert.Equal(HttpStatusCode.OK, liveStatus);
         Assert.DoesNotContain("challenge", live);
         Assert.Equal(HttpStatusCode.OK, signInStatus);
-        Assert.Contains("Sign in to reply and watch", signIn);
+        Assert.Contains("Sign in to reply", signIn);
         // Before setup the sign-in page sends everyone on to first run, wherever they were going.
         Assert.Equal("/first-run", signInJson.RootElement.GetProperty("return").GetString());
         Assert.Equal(HttpStatusCode.OK, stylesheet.StatusCode);

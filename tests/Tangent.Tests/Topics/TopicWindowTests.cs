@@ -318,23 +318,10 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
         var after = await Tag(tangentSpace.Client, $"/t/{Workshop}/a-removal", first.ETag);
         Assert.Equal(HttpStatusCode.OK, after.Status);
         Assert.NotEqual(first.ETag, after.ETag);
-
-        // A locked Topic says so, and no one may reply in it.
-        var root = (await Post.Get(topic.Id, Cancellation))!;
-        root.Locked = true;
-        Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(root).Send(Cancellation));
-        using (var json = await Json(browser.Client, $"/t/{Workshop}/a-removal"))
-        {
-            Assert.True(json.RootElement.GetProperty("locked").GetBoolean());
-            Assert.DoesNotContain("Post", Strings(json.RootElement.GetProperty("can")));
-            Assert.Equal(Capabilities.Locked.Word, json.RootElement.GetProperty("gate").GetString());
-        }
-
-        Assert.Contains(Capabilities.Locked.Text, await Html(browser.Client, $"/t/{Workshop}/a-removal"));
     }
 
     [Fact]
-    public async Task In_a_locked_or_removed_topic_no_reply_holds_post_with_the_topics_gate_and_an_open_topics_replies_are_unchanged()
+    public async Task In_a_removed_topic_no_reply_holds_post_with_the_topics_gate_and_an_open_topics_replies_are_unchanged()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
         await Place(tangentSpace);
@@ -362,14 +349,6 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
         string? Gate(Post reply, Post root) => Capabilities.For(participant, member, place, reply.TangentId, [], DateTimeOffset.UtcNow, reply, root).Gate(Bit.Post)?.Word;
 
         var root = (await Post.Get(topic.Id, Cancellation))!;
-        root.Locked = true;
-        Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(root).Send(Cancellation));
-        var locked = await ReplyCans();
-        Assert.All(locked, can => Assert.DoesNotContain("Post", can));
-        Assert.Equal(["View", "Topic", "EditOwn", "RemoveOwn"], locked[1]);
-        Assert.All([leos, readers], reply => Assert.Equal(Capabilities.Locked.Word, Gate(reply, root)));
-
-        root.Locked = false;
         root.Removed = true;
         root.RemovedBy = Leo;
         root.RemovedAt = Start.AddMinutes(5);

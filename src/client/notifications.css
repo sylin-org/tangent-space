@@ -1,11 +1,7 @@
-/* Notifications: the count beside the account in the masthead, and the page of them. */
+/* What is for the reader: the count beside the account in the masthead, and the lines search shares. */
 
-/* The count of unseen notifications: the bell in text-2 and the number on the accent, a 44px target that opens them,
- * hidden while there are none. Its form adds no box of its own. */
-.masthead-unseen-form {
-  display: contents;
-}
-
+/* How many things are for the reader and new: the bell in text-2 and the number on the accent, a 44px link to the
+ * door, where they are read, hidden while there are none. */
 .masthead-unseen {
   height: 44px;
   min-width: 44px;
@@ -19,6 +15,7 @@
   background: none;
   color: var(--ts-text-2);
   font: inherit;
+  text-decoration: none;
   cursor: pointer;
 }
 
@@ -47,8 +44,8 @@
   font: var(--ts-type-tag);
 }
 
-/* One notification in an Offer's line: the dot where it is new, who did it by their mark, what happened with its
- * subject linked, and a Post's opening words under it; an open Offer's answers beside it. */
+/* One line in an Offer's line, as search shows a hit: the dot where it is new, who did it by their mark, what happened
+ * with its subject linked, and a Post's opening words under it. */
 .notifications {
   margin: 16px 0 0;
   padding: 0;
@@ -99,9 +96,7 @@
   overflow-wrap: anywhere;
 }
 
-.door-notifications {
+/* The door's seen control, at the end of its news's head. */
+.topic-list-head > .seen {
   margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  text-decoration: none;
 }

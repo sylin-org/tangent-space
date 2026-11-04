@@ -56,10 +56,6 @@
   overflow-wrap: anywhere;
 }
 
-.topic-title .badge:where(.is-pinned, .is-locked) {
-  vertical-align: 10px;
-}
-
 .topic-meta {
   margin: 10px 0 0;
   display: flex;

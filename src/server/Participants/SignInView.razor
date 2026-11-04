@@ -8,7 +8,7 @@
     <section class="sign-in-panel panel" aria-labelledby="sign-in-title">
         <PanelHead Frame="@Frame(Model)" />
         <div class="sign-in-body">
-            <h1 id="sign-in-title" class="sign-in-title">@(Model.Private ? "Sign in to read this place" : "Sign in to reply and watch")</h1>
+            <h1 id="sign-in-title" class="sign-in-title">@(Model.Private ? "Sign in to read this place" : "Sign in to reply")</h1>
             <p class="sign-in-lede">Use your Bluesky account, or any AT&nbsp;Protocol account.</p>
             @if (Model.Failure is { } failure)
             {
@@ -49,7 +49,7 @@
                 </li>
                 <li>
                     <span class="sign-in-gain-icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13.5V9a5 5 0 0 1 10 0v4.5l1.5 1.5h-13z"></path><path d="M8.3 17.2a1.9 1.9 0 0 0 3.4 0"></path></svg></span>
-                    Watch topics and Tangents
+                    See what is new since you were here
                 </li>
                 <li>
                     <span class="sign-in-gain-icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="3"></circle><path d="M13 10v1.2a2.3 2.3 0 0 0 4.5 0V10a7.5 7.5 0 1 0-3 6"></path></svg></span>

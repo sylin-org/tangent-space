@@ -8,7 +8,7 @@ namespace Tangent.Space;
 
 /// <summary>The door as a resource, the same for a person and an agent: where they are — the place's
 /// <see cref="Name"/>, its <see cref="Description"/>, its <see cref="Address"/> and its <see cref="Proprietor"/> — what they <see cref="Can"/> do
-/// here, and, for a signed-in reader, <see cref="News"/>: what is new to them since their checkpoints and the sequence
+/// here, and, for a signed-in reader, <see cref="News"/>: what is new to them since they were here and the sequence
 /// the door read through. For everyone, and alone for a visitor or a reader with nothing new, the front page: the
 /// <see cref="Tangents"/> the reader may view, the Topics <see cref="Featured"/> and <see cref="Alive"/> in them, and
 /// who is <see cref="Around"/>. Every list is bounded, and a count the door could not finish says it is a lower bound
@@ -74,45 +74,38 @@ public sealed record Door(
     /// <summary>When the reader's timeout ends, while they are timed out; absent otherwise.</summary>
     public DateTimeOffset? Until { get; init; }
 
-    /// <summary>What is new to a signed-in reader: the place checkpoint the door read past (<see cref="From"/>, zero
-    /// when they have none) and the sequence it read through (<see cref="Through"/>); first the Topics and Tangents they
-    /// watch that hold something new, then replies to them, mentions of them, what is new in each Tangent and the new
-    /// articles; <see cref="Taken"/> holds the Topics taken on a tangent from their Posts, which are not replies.
-    /// <see cref="CaughtUp"/> is the form that moves the place checkpoint to <see cref="Through"/>, present while there
-    /// is news. <see cref="Admitted"/> is who admitted the reader and when, and <see cref="Lifted"/> who lifted their
-    /// timeout or ban and when, where that happened since their checkpoint and they stand admitted still;
-    /// <see cref="Roles"/> are the roles someone gave them or took from them since then, the newest change of each;
-    /// <see cref="Edited"/> holds their Posts someone else edited since then and still stand, each once, and
-    /// <see cref="Removed"/> those someone else removed, each with who did it.
-    /// <see cref="Notifications"/> is how many of the reader's notifications they have not seen and where they are,
-    /// present while there are some. <see cref="First"/> says this is their first door: their place checkpoint still
-    /// stands at their own arrival.</summary>
+    /// <summary>What is new to a signed-in reader (<see cref="Events.Unread"/>): where since they were here begins in the
+    /// log (<see cref="From"/>, the later of their arrival and their place mark) and the sequence the door read through
+    /// (<see cref="Through"/>). What is for them: <see cref="Replies"/> to them, <see cref="Mentions"/> of them,
+    /// <see cref="Taken"/>, the Topics taken on a tangent from their Posts, which are not replies, and, for whoever may
+    /// view the moderators' Tangent, <see cref="Reports"/>; <see cref="Admitted"/>, who admitted them and when, and
+    /// <see cref="Lifted"/>, who lifted their timeout or ban and when, where that happened since and they stand admitted
+    /// still; <see cref="Roles"/>, the roles someone gave them or took from them since, the newest change of each;
+    /// <see cref="Edited"/>, their Posts someone else edited since that still stand, each once, and
+    /// <see cref="Removed"/>, those someone else removed, each with who did it. Then what is new in each Tangent
+    /// (<see cref="PerTangent"/>) and the new <see cref="Articles"/>. A Post's entry stays while the Post is new, so
+    /// reading its Topic clears it here. <see cref="Seen"/> is the form that says all of it is seen, through
+    /// <see cref="Through"/>, present while there is news.</summary>
     public sealed record Since(
         long From,
         long Through,
-        IReadOnlyList<Watched> Watched,
         Group Replies,
         Group Mentions,
         IReadOnlyList<InTangent> PerTangent,
         Group Articles,
-        Form? CaughtUp,
+        Form? Seen,
         Group? Taken = null,
         Decision? Admitted = null,
         Decision? Lifted = null,
         IReadOnlyList<RoleChange>? Roles = null,
         Group? Edited = null,
-        Group? Removed = null)
+        Group? Removed = null,
+        Group? Reports = null)
     {
-        /// <summary>How many of the reader's notifications they have not seen and where they are, present while there are
-        /// some.</summary>
-        public Events.Notifications.Unseen? Notifications { get; init; }
-
-        /// <summary>Whether the reader is at their first door.</summary>
-        public bool First { get; init; }
-
         /// <summary>Whether nothing is new to the reader.</summary>
         public bool Quiet => Replies.Count == 0 && Mentions.Count == 0 && PerTangent.Count == 0 && Articles.Count == 0 && (Taken?.Count ?? 0) == 0
-                             && Admitted is null && Lifted is null && (Roles?.Count ?? 0) == 0 && (Edited?.Count ?? 0) == 0 && (Removed?.Count ?? 0) == 0;
+                             && Admitted is null && Lifted is null && (Roles?.Count ?? 0) == 0 && (Edited?.Count ?? 0) == 0 && (Removed?.Count ?? 0) == 0
+                             && (Reports?.Count ?? 0) == 0;
     }
 
     /// <summary>A decision about the reader's standing: who made it, and when; for a lift, the standing it lifted
@@ -123,19 +116,14 @@ public sealed record Door(
     /// <c>administrator</c>) and whether it was given.</summary>
     public sealed record RoleChange(TangentPage.Author Who, DateTimeOffset At, string Role, bool Given);
 
-    /// <summary>How many of a kind are new, whether that is a lower bound because the window the door read was full,
-    /// and the newest of them, a few at most.</summary>
+    /// <summary>How many of a kind are new, whether that is a lower bound because a read the door made was full, and
+    /// the newest of them, a few at most.</summary>
     public sealed record Group(int Count, bool AtLeast, IReadOnlyList<NewPost> Posts);
 
-    /// <summary>One new Post: who wrote it, or who edited or removed it, the Topic and Tangent it is in, its address, its
-    /// first words, when, and who other than its author last edited it, where someone did.</summary>
+    /// <summary>One new Post: who wrote it, reported with it, or edited or removed it, the Topic and Tangent it is in, its
+    /// address, its first words, when, and who other than its author last edited it, where someone did.</summary>
     public sealed record NewPost(string PostId, TangentPage.Author Who, string Topic, string Tangent, string Address, string Line, DateTimeOffset At,
         TangentPage.Edited? Edited = null);
-
-    /// <summary>A Topic or a Tangent the reader watches that holds new Posts: its scope (<c>topic</c> or <c>tangent</c>),
-    /// its name, the Tangent it is in (itself, for a Tangent), its address, how many of its Posts are new, and whether
-    /// that is a lower bound.</summary>
-    public sealed record Watched(string Scope, string Name, string Tangent, string Address, int New, bool AtLeast);
 
     /// <summary>What is new in one Tangent: its Topics and its replies.</summary>
     public sealed record InTangent(string Slug, string Name, string Address, int Topics, int Replies, bool AtLeast);
@@ -162,17 +150,17 @@ public sealed record Door(
 
     /// <summary>The signed-in reader: their id, the name to show, their handle, the highest role they hold where they
     /// hold one, their avatar, where they sign out, coming back to the door, and the place's settings, for one who holds
-    /// <c>ManageSpace</c>, <c>ManageStanding</c> or <c>ManageRoles</c>, and how many of their notifications they have not
-    /// seen.</summary>
+    /// <c>ManageSpace</c>, <c>ManageStanding</c> or <c>ManageRoles</c>, and how many things are for them and new, which
+    /// this door lists.</summary>
     public sealed record Reader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut, string? Settings = null,
-        Events.Notifications.Unseen? Notifications = null);
+        Events.Unread.Badge? ForYou = null);
 
     /// <summary>Where the door stands in the log and where to ask again: the sequence it read through for this reader, and the
     /// poll's address past it.</summary>
     public sealed record Position(long Through, string Next);
 
     /// <summary>The version the door's <c>ETag</c> carries: a hash of everything the door says, so a new event the
-    /// reader may see, a moved checkpoint, a changed <c>can</c> or a new day changes it.</summary>
+    /// reader may see, a moved mark, a changed <c>can</c> or a new day changes it.</summary>
     public static long Version(Door door)
         => BitConverter.ToInt64(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(door)), 0) & long.MaxValue;
 }

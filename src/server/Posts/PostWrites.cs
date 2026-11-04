@@ -25,13 +25,10 @@ public static class PostWrites
     public const string IdField = "id";
     public const string TitleField = "title";
     public const string BodyField = "body";
-    public const string KindField = "kind";
     public const string ParentField = "parent";
     public const string VersionField = "version";
     public const string CoverField = "cover";
 
-    /// <summary>The refusal of a kind that is not one of <see cref="PostKind"/>'s words.</summary>
-    public static readonly Reason KindRule = Reason.Invalid("A Topic's kind is topic or article.");
 
     /// <summary>The refusal of an edit that names no version.</summary>
     public static readonly Reason VersionRule = Reason.Invalid("An edit carries the version of the Post its editor read, as a whole number.");
@@ -97,21 +94,6 @@ public static class PostWrites
         return (new Located(row, rows, root, named), null);
     }
 
-    /// <summary>The kind a start names: null for none, the kind for one of its words, and false in <paramref name="valid"/>
-    /// for anything else.</summary>
-    public static PostKind? Kind(string? word, out bool valid)
-    {
-        valid = true;
-        if (string.IsNullOrEmpty(word)) return null;
-        foreach (var kind in Enum.GetValues<PostKind>())
-        {
-            if (string.Equals(Word(kind), word, StringComparison.OrdinalIgnoreCase)) return kind;
-        }
-
-        valid = false;
-        return null;
-    }
-
     public static string Word(PostKind kind) => kind.ToString().ToLowerInvariant();
 
     /// <summary>The body a write route hands its command: written as its sender wrote it, each typed handle of a
@@ -135,16 +117,15 @@ public static class PostWrites
         new Form.Field(BodyField, Holds.ReplyBody),
         new Form.Field(ParentField, Holds.Parent, parent ?? ""));
 
-    /// <summary>The form that starts a Topic at <paramref name="action"/>, a Tangent's, whose default kind is
-    /// <paramref name="kind"/>: a TID minted for it, the title, the body and the kind.</summary>
+    /// <summary>The form that starts a Topic at <paramref name="action"/>, a Tangent's, whose default kind
+    /// <paramref name="kind"/> the Topic takes: a TID minted for it, the title and the body, and an article's cover.</summary>
     public static Form StartForm(string action, PostKind kind)
     {
         Form.Field[] fields =
         [
             Form.Minted(IdField, Tid.Mint(DateTimeOffset.UtcNow)),
             new Form.Field(TitleField, Holds.TopicTitle),
-            new Form.Field(BodyField, Holds.TopicBody),
-            new Form.Field(KindField, $"{Holds.Kind} Here, {Word(kind)}.")
+            new Form.Field(BodyField, Holds.TopicBody)
         ];
         return Form.Posting(action, kind == PostKind.Article ? [.. fields, new Form.Field(CoverField, Holds.Cover)] : fields);
     }
@@ -221,8 +202,8 @@ public static class PostWrites
 
     /// <summary>Who is signed in, as the shell's account menu shows them, signing out back to <paramref name="back"/>, a
     /// path under the base URL, with the place's settings where they hold <see cref="Bit.ManageSpace"/>,
-    /// <see cref="Bit.ManageStanding"/> or <see cref="Bit.ManageRoles"/>, and how many of their notifications they have
-    /// not seen; null for a visitor.</summary>
+    /// <see cref="Bit.ManageStanding"/> or <see cref="Bit.ManageRoles"/>, and how many things are for them
+    /// and new; null for a visitor.</summary>
     public static async Task<Who?> Reader(string? personId, Capabilities capabilities, string baseUrl, string back, CancellationToken ct)
     {
         if (personId is null) return null;
@@ -231,7 +212,7 @@ public static class PostWrites
         var name = participant?.Profile.DisplayName is { Length: > 0 } displayName ? displayName : handle;
         return new Who(personId, name, handle, Roles.Word(capabilities.RoleIds), participant?.Profile.Avatar,
             baseUrl + AuthConstants.Routes.Logout + "?return=" + Uri.EscapeDataString(back), await SettingsFor(personId, baseUrl, ct),
-            await Events.Notifications.Count(personId, baseUrl, ct));
+            await Events.Unread.BadgeFor(personId, baseUrl, ct));
     }
 
     /// <summary>Where the place's settings open under <paramref name="baseUrl"/> for a participant who holds

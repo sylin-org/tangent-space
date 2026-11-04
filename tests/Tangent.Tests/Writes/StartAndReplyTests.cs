@@ -139,7 +139,7 @@ public sealed class StartAndReplyTests
     }
 
     [Fact]
-    public async Task A_topic_that_names_no_kind_takes_its_tangents_so_one_in_an_articles_tangent_is_an_article_and_one_that_names_its_kind_keeps_it()
+    public async Task A_topic_takes_its_tangents_kind_so_one_in_an_articles_tangent_is_an_article_whatever_kind_is_sent()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
@@ -148,15 +148,14 @@ public sealed class StartAndReplyTests
 
         var page = await Send(ada.Client, HttpMethod.Get, articles, json: true);
         var article = await Json(ada, articles, articles, new { id = Tids.Mint(), title = "On wicks", body = "A short piece." });
-        var topic = await Json(ada, articles, articles, new { id = Tids.Mint(), title = "A question", body = "Not a piece.", kind = "topic" });
+        var named = await Json(ada, articles, articles, new { id = Tids.Mint(), title = "A question", body = "Not a piece.", kind = "topic" });
         var workshop = await Json(ada, articles, "/t/" + Workshop + "/new", new { id = Tids.Mint(), title = "In the workshop", body = "Plain." });
-        var unknown = await Json(ada, articles, articles, new { id = Tids.Mint(), title = "Odd", body = "Odd kind.", kind = "essay" });
 
         Assert.Equal(("article", true), (page.Json.GetProperty("kind").GetString(), Tid.IsValid(Valued(page.Json.GetProperty("start"), PostWrites.IdField))));
+        Assert.DoesNotContain(page.Json.GetProperty("start").GetProperty("fields").EnumerateArray(), field => field.GetProperty("name").GetString() == "kind");
         Assert.Equal("article", article.Json.GetProperty("kind").GetString());
         Assert.Equal(PostKind.Article, (await Post.Get(article.Json.GetProperty("id").GetString()!, Cancellation))?.Kind);
-        Assert.Equal("topic", topic.Json.GetProperty("kind").GetString());
+        Assert.Equal((HttpStatusCode.Created, "article"), (named.Status, named.Json.GetProperty("kind").GetString()));
         Assert.Equal("topic", workshop.Json.GetProperty("kind").GetString());
-        Assert.Equal((HttpStatusCode.BadRequest, PostWrites.KindRule.Text), (unknown.Status, unknown.Json.GetProperty("detail").GetString()));
     }
 }

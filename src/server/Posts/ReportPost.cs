@@ -18,12 +18,12 @@ namespace Tangent.Posts;
 /// removed Post with <see cref="Capabilities.Removed"/>; a reason of
 /// nothing but white space with <see cref="NeedsReason"/>. The <see cref="EventKind.PostCreated"/> it appends targets
 /// nobody, so the reported author hears nothing of it, and is marked a report (<see cref="Event.Report"/>), which is how it
-/// reaches everyone who may view the moderators' Tangent when they read their notifications, without one row written for
-/// each of them (<see cref="Notifications"/>); and one <see cref="EventKind.Mention"/> goes to each participant
+/// reaches everyone who may view the moderators' Tangent among what is for them on their door, without one row written
+/// for each of them (<see cref="Unread"/>); and one <see cref="EventKind.Mention"/> goes to each participant
 /// the reason mentions who may view the moderators' Tangent (<see cref="Mentions.Notify"/>). A participant who reports
-/// the same Post again while their earlier report stands — its root neither removed nor locked — replies in that
+/// the same Post again while their earlier report stands — its root not removed — replies in that
 /// report's Topic with the new reason, so the moderators keep one Topic per reporter and Post with every reason in
-/// order; once the moderators remove or lock it, the next report starts a Topic of its own. Idempotent by Id: the same
+/// order; once the moderators remove it, the next report starts a Topic of its own. Idempotent by Id: the same
 /// Id from the same reporter about the same Post answers with the Post it wrote, whatever reason is sent and whatever
 /// the moderators have done with it since, so a resend says nothing of the report's state; any other Post holding it is
 /// refused with <see cref="Post.IdTaken"/>, which says nothing of that Post. The reason is judged where the command is built
@@ -75,26 +75,29 @@ public sealed record ReportPost(
         if (string.IsNullOrWhiteSpace(Reason.Text)) return new Outcome<Post>.Refused(NeedsReason);
 
         var at = At ?? DateTimeOffset.UtcNow;
+        var earlier = await Standing(moderators, ct);
         Post written;
-        if (await Standing(moderators, ct) is { } earlier)
+        if (earlier is not null)
         {
             written = earlier.Reply(Id, Reason, ReporterId, earlier.Id, at);
-            await written.Save(ct);
-            await earlier.Save(ct);
         }
         else
         {
             var title = Title(await ModeratorsTangent.MayView(reported.TangentId, rows.Space, ct) ? topic.Title ?? "" : FirstWords(Reason.Sent));
             written = Post.Root(Id, into.Id, title, await StartTopic.UniqueSlug(into.Id, title, Id, ct), into.DefaultKind, Reason, ReporterId, at,
                 reported.Id);
-            await written.Save(ct);
             into.TopicStarted();
             await into.Save(ct);
         }
 
-        await Event.Append(EventKind.PostCreated, at, ct,
+        var root = earlier ?? written;
+        var created = await Event.Append(EventKind.PostCreated, at, ct,
             tangentId: written.TangentId, topicId: written.TopicId, postId: written.Id, actorId: ReporterId, version: written.Version,
             report: true);
+        written.Logged(created.Seq, root);
+        await written.Save(ct);
+        if (earlier is not null) await earlier.Save(ct);
+        await Seen.Wrote(ReporterId, root, written.Sequence, ct);
         await MediaUse.Record(written, ReporterId, [], ct);
         await Mentions.Notify(written, ReporterId, [], at, ct);
         return new Outcome<Post>.Done(written);
@@ -127,14 +130,14 @@ public sealed record ReportPost(
         return root?.OriginId == postId;
     }
 
-    /// <summary>The reporter's earlier report of this Post that still stands — a root of the moderators' Tangent, neither
-    /// removed nor locked — or null: one read of <c>ix_post_origins</c>'s range for the Post, which holds the Topics
+    /// <summary>The reporter's earlier report of this Post that still stands — a root of the moderators' Tangent that is
+    /// not removed — or null: one read of <c>ix_post_origins</c>'s range for the Post, which holds the Topics
     /// taken from it and nothing else.</summary>
     private async Task<Post?> Standing(string moderators, CancellationToken ct)
     {
         var (postId, reporterId) = (PostId, ReporterId);
         var found = await Post.Query(post => post.OriginId == postId && post.TangentId == moderators && post.AuthorId == reporterId
-                                             && post.ParentId == null && post.Removed == false && post.Locked == false,
+                                             && post.ParentId == null && post.Removed == false,
             new QueryDefinition { Page = 1, PageSize = 1 }, ct);
         return found.Count > 0 ? found[0] : null;
     }

@@ -19,6 +19,7 @@ public sealed class FeedTests
 {
     private const string BaseUrl = TangentSpaceFixture.DefaultBaseUrl;
     private const string Workshop = "the-workshop";
+    private const string Articles = "articles";
     private const string Back = "the-back-room";
     private const string Reader = "did:plc:reader";
 
@@ -129,9 +130,9 @@ public sealed class FeedTests
         await Place(tangentSpace);
         var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
         await Overwrites.SetAudience(roles, Back, Audience.Private, Cancellation);
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new Store<Tangents.Tangent>(Tangents.Tangent.Create(Back, "The back room", "", PostKind.Topic, 2)).Send(Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new Store<Tangents.Tangent>(Tangents.Tangent.Create(Back, "The back room", "", PostKind.Article, 3)).Send(Cancellation));
         await Overwrites.SetAccess(roles, Back, Roles.Member, RoleAccess.Post, Cancellation);
-        var inside = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Back, "Said in the back", "Secret words.", "ada", PostKind.Article, Start).Send(Cancellation)).Result;
+        var inside = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Back, "Said in the back", "Secret words.", "ada", Start).Send(Cancellation)).Result;
         await Started("Said in the open", "Open words.", Start.AddMinutes(1), PostKind.Article);
 
         using var member = new Browser(tangentSpace);
@@ -187,12 +188,12 @@ public sealed class FeedTests
         await Place(tangentSpace);
         var staying = await Started("Staying", "These stay.", Start, PostKind.Article);
         var leaving = await Started("Leaving", "These go.", Start.AddMinutes(1), PostKind.Article);
-        Assert.Contains("These go.", await tangentSpace.Client.GetStringAsync($"/t/{Workshop}/feed.atom", Cancellation));
+        Assert.Contains("These go.", await tangentSpace.Client.GetStringAsync($"/t/{Articles}/feed.atom", Cancellation));
         Assert.Contains("These go.", await tangentSpace.Client.GetStringAsync("/articles.json", Cancellation));
 
         Assert.IsType<Outcome<Post>.Done>(await new RemovePost(leaving.Id, "leo", Start.AddMinutes(2)).Send(Cancellation));
 
-        foreach (var path in new[] { $"/t/{Workshop}/feed.atom", $"/t/{Workshop}/feed.json", "/articles.atom", "/articles.json" })
+        foreach (var path in new[] { $"/t/{Articles}/feed.atom", $"/t/{Articles}/feed.json", "/articles.atom", "/articles.json" })
         {
             var text = await tangentSpace.Client.GetStringAsync(path, Cancellation);
             Assert.Contains(staying.Title!, text);
@@ -255,7 +256,7 @@ public sealed class FeedTests
 
         var articles = await Atomic(tangentSpace.Client, "/articles.atom");
         Assert.Equal("A published piece", Assert.Single(articles.Elements(Atom + "entry")).Element(Atom + "title")?.Value);
-        Assert.Equal(2, (await Atomic(tangentSpace.Client, $"/t/{Workshop}/feed.atom")).Elements(Atom + "entry").Count());
+        Assert.Equal("A discussion", Assert.Single((await Atomic(tangentSpace.Client, $"/t/{Workshop}/feed.atom")).Elements(Atom + "entry")).Element(Atom + "title")?.Value);
     }
 
     [Fact]
@@ -293,10 +294,13 @@ public sealed class FeedTests
         await Given.AParticipant(tangentSpace, "leo", [Roles.Administrator], ct: Cancellation);
         await Given.AParticipant(tangentSpace, "ada", [Roles.Member], ct: Cancellation);
         Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent(Workshop, "The workshop", "Where things get made.", PostKind.Topic, 1, Audience.Public, "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent(Articles, "Articles", "Pieces.", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
     }
 
-    private static async Task<Post> Started(string title, string body, DateTimeOffset at, PostKind? kind = null)
-        => Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, title, body, "ada", kind, at).Send(Cancellation)).Result;
+    /// <summary>A Topic started by Ada at <paramref name="at"/>: in the workshop, or, for an article, in the articles
+    /// Tangent, whose default kind it takes.</summary>
+    private static async Task<Post> Started(string title, string body, DateTimeOffset at, PostKind kind = PostKind.Topic)
+        => Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), kind == PostKind.Article ? Articles : Workshop, title, body, "ada", at).Send(Cancellation)).Result;
 
     private static async Task<XElement> Atomic(HttpClient client, string path)
         => XDocument.Parse(await client.GetStringAsync(path, Cancellation)).Root!;

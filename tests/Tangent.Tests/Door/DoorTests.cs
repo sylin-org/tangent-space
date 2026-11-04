@@ -64,7 +64,7 @@ public sealed class DoorTests(ITestOutputHelper output)
 
         var reply = await Replied(mine, "ada");
         var other = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, "Ada asks", $"A question for [@reader](at://{Reader}).", "ada").Send(Cancellation)).Result;
-        var article = await Started(Articles, "On lanterns", "leo", PostKind.Article);
+        var article = await Started(Articles, "On lanterns", "leo");
         var own = await Replied(other, Reader, body: "My own words in reply.");
         var through = await Event.Log.Highest(Cancellation);
 
@@ -94,14 +94,14 @@ public sealed class DoorTests(ITestOutputHelper output)
             var text = json.RootElement.GetRawText();
             Assert.DoesNotContain(own.Id, text);
             Assert.DoesNotContain(before.Id, text);
-            var form = news.GetProperty("caughtUp");
-            Assert.Equal(($"{BaseUrl}/", through.ToString(CultureInfo.InvariantCulture)), (form.GetProperty("action").GetString(), Writing.Valued(form, DoorController.Through)));
+            var form = news.GetProperty("seen");
+            Assert.Equal(($"{BaseUrl}/seen", through.ToString(CultureInfo.InvariantCulture)), (form.GetProperty("action").GetString(), Writing.Valued(form, SeenController.ThroughField)));
         }
 
         var html = await Html(browser.Client, "/");
         Assert.Contains("Since you were here: 1 reply to you, 1 mention of you, 1 new post in Articles, 2 new posts in The workshop, 1 new article.",
             WebUtility.HtmlDecode(html));
-        Assert.Contains($"name=\"{DoorController.Through}\" value=\"{through.ToString(CultureInfo.InvariantCulture)}\"", html);
+        Assert.Contains($"name=\"{SeenController.ThroughField}\" value=\"{through.ToString(CultureInfo.InvariantCulture)}\"", html);
         Assert.Contains("Mark all seen", html);
         Assert.Contains($"href=\"{BaseUrl}/t/{Workshop}/my-question/{reply.Id}\"", html);
         Assert.DoesNotContain("My own words", html);
@@ -109,7 +109,7 @@ public sealed class DoorTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task A_waiting_applicants_checkpoint_begins_at_their_arrival_so_what_the_place_held_is_not_new_to_them()
+    public async Task A_waiting_applicants_news_begins_at_their_arrival_so_what_the_place_held_is_not_new_to_them()
     {
         const string applicant = "did:plc:applicant4door";
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
@@ -123,36 +123,37 @@ public sealed class DoorTests(ITestOutputHelper output)
         using var browser = new Browser(tangentSpace);
         (await browser.SignIn("applicant", applicant, Cancellation, handle: "applicant.example", comeBack: "/t")).Dispose();
         var arrival = Assert.Single(await Event.Query(e => e.Kind == EventKind.StandingChanged && e.TargetId == applicant, Cancellation));
-        Assert.Equal(arrival.Seq, (await Checkpoint.Get(Checkpoint.Key(applicant, Scope.Place), Cancellation))?.Seq);
+        Assert.Equal(arrival.Seq, (await Participant.Get(applicant, Cancellation))?.ArrivedSeq);
+        Assert.Null(await Checkpoint.Get(Checkpoint.Key(applicant, Scope.Place), Cancellation));
 
         using var json = await Json(browser.Client, "/");
         var news = json.RootElement.GetProperty("news");
         Assert.True(news.GetProperty("quiet").GetBoolean());
         Assert.Empty(news.GetProperty("perTangent").EnumerateArray());
         Assert.Equal(Capabilities.Apply.Word, json.RootElement.GetProperty("gate").GetString());
-        Assert.Contains("Welcome to Lantern Works.", WebUtility.HtmlDecode(await Html(browser.Client, "/")));
+        Assert.Contains("Nothing new since you were here.", WebUtility.HtmlDecode(await Html(browser.Client, "/")));
     }
 
     [Fact]
-    public async Task A_newcomers_checkpoint_begins_at_their_arrival_so_what_the_place_held_is_not_new_and_what_follows_is()
+    public async Task A_newcomers_news_begins_at_their_arrival_so_what_the_place_held_is_not_new_and_what_follows_is()
     {
         const string newcomer = "did:plc:newcomer";
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
         await Place(tangentSpace);
         var topic = await Started(Workshop, "What should we build?", "ada");
         await Replied(topic, "leo");
-        await Started(Articles, "On lanterns", "leo", PostKind.Article);
+        await Started(Articles, "On lanterns", "leo");
 
         using var browser = new Browser(tangentSpace);
         (await browser.SignIn("newcomer", newcomer, Cancellation, handle: "newcomer.example", comeBack: "/t")).Dispose();
         var arrival = Assert.Single(await Event.Query(e => e.Kind == EventKind.StandingChanged && e.TargetId == newcomer, Cancellation));
-        Assert.Equal(arrival.Seq, (await Checkpoint.Get(Checkpoint.Key(newcomer, Scope.Place), Cancellation))?.Seq);
+        Assert.Equal(arrival.Seq, (await Participant.Get(newcomer, Cancellation))?.ArrivedSeq);
+        Assert.Null(await Checkpoint.Get(Checkpoint.Key(newcomer, Scope.Place), Cancellation));
 
         var first = WebUtility.HtmlDecode(await Html(browser.Client, "/"));
-        Assert.Contains("Welcome to Lantern Works.", first);
-        Assert.DoesNotContain("Nothing new since you were here.", first);
+        Assert.Contains("Nothing new since you were here.", first);
         using (var json = await Json(browser.Client, "/"))
-            Assert.True(json.RootElement.GetProperty("news").GetProperty("first").GetBoolean());
+            Assert.Equal(arrival.Seq, json.RootElement.GetProperty("news").GetProperty("from").GetInt64());
         Assert.Contains("What should we build?", first);
         Assert.DoesNotContain("Mark all seen", first);
         Assert.DoesNotContain("class=\"new-dot\"", first);
@@ -164,18 +165,18 @@ public sealed class DoorTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task A_get_or_head_of_the_door_the_notifications_and_any_page_writes_nothing()
+    public async Task A_get_or_head_of_the_door_and_any_page_writes_nothing()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
         await Place(tangentSpace);
-        // The reader arrived before any checkpoint was kept, and has a notification they have not seen.
+        // The reader has a reply to them they have not seen.
         var mine = await Started(Workshop, "My question", Reader);
         await Replied(mine, "ada");
         using var browser = await SignedIn(tangentSpace);
         Assert.Null(await Checkpoint.Get(Checkpoint.Key(Reader, Scope.Place), Cancellation));
         var before = await Written();
 
-        foreach (var path in new[] { "/", Notifications.Path, "/t", "/t/" + Workshop, "/t/" + Workshop + "/" + mine.Slug, "/events?since=0", "/search?q=question" })
+        foreach (var path in new[] { "/", "/t", "/t/" + Workshop, "/t/" + Workshop + "/" + mine.Slug, "/events?since=0", "/search?q=question" })
         foreach (var method in new[] { HttpMethod.Get, HttpMethod.Head })
         {
             using var request = new HttpRequestMessage(method, path);
@@ -192,7 +193,7 @@ public sealed class DoorTests(ITestOutputHelper output)
     private static async Task<string> Written()
     {
         var checkpoints = (await Checkpoint.All(Cancellation)).OrderBy(checkpoint => checkpoint.Id, StringComparer.Ordinal)
-            .Select(checkpoint => $"{checkpoint.Id}={checkpoint.Seq}{(checkpoint.Watch ? "w" : "")}");
+            .Select(checkpoint => $"{checkpoint.Id}={checkpoint.Seq}");
         return $"{await Event.Log.Highest(Cancellation)}/{await Event.Count.Exact(Cancellation)}/{await Offers.Offer.Count.Exact(Cancellation)}: "
                + string.Join(", ", checkpoints);
     }
@@ -239,7 +240,6 @@ public sealed class DoorTests(ITestOutputHelper output)
         for (var index = 0; index < LogWindow.Size + 5; index++) await Replied(topic, index % 2 == 0 ? "ada" : "leo");
 
         using var browser = await SignedIn(tangentSpace);
-        await Given.BeenAtTheDoor(tangentSpace, Reader, Cancellation);
         using (var json = await Json(browser.Client, "/"))
         {
             var news = json.RootElement.GetProperty("news");
@@ -273,7 +273,6 @@ public sealed class DoorTests(ITestOutputHelper output)
         var mine = await Started(Workshop, "My question", Reader);
         await Replied(mine, "ada");
         using var browser = await SignedIn(tangentSpace);
-        await Given.BeenAtTheDoor(tangentSpace, Reader, Cancellation);
 
         using (var json = await Json(browser.Client, "/"))
             Assert.True(json.RootElement.GetProperty("alive")[0].GetProperty("topic").GetProperty("new").GetBoolean());
@@ -283,7 +282,7 @@ public sealed class DoorTests(ITestOutputHelper output)
         Assert.Contains("no-store", caching);
         Assert.Equal(HttpStatusCode.NotModified, (await Read(browser.Client, busy)).Status);
         Assert.Equal(await Event.Log.Highest(Cancellation), through);
-        Assert.Equal(0, (await Checkpoint.Get(Checkpoint.Key(Reader, Scope.Place), Cancellation))!.Seq);
+        Assert.Null(await Checkpoint.Get(Checkpoint.Key(Reader, Scope.Place), Cancellation));
 
         using (var marked = await MarkSeen(browser, through))
         {
@@ -300,7 +299,7 @@ public sealed class DoorTests(ITestOutputHelper output)
         {
             var news = json.RootElement.GetProperty("news");
             Assert.True(news.GetProperty("quiet").GetBoolean());
-            Assert.False(news.TryGetProperty("caughtUp", out _));
+            Assert.False(news.TryGetProperty("seen", out var seen) && seen.ValueKind != JsonValueKind.Null);
             Assert.False(json.RootElement.GetProperty("alive")[0].GetProperty("topic").GetProperty("new").GetBoolean());
         }
         Assert.Contains("Nothing new since you were here.", await Html(browser.Client, "/"));
@@ -321,7 +320,7 @@ public sealed class DoorTests(ITestOutputHelper output)
         await Place(tangentSpace);
         var topic = await Started(Workshop, "What should we build?", "ada");
         await Replied(topic, "leo");
-        var article = await Started(Articles, "On lanterns", "leo", PostKind.Article);
+        var article = await Started(Articles, "On lanterns", "leo");
 
         using (var json = await Json(tangentSpace.Client, "/"))
         {
@@ -435,8 +434,8 @@ public sealed class DoorTests(ITestOutputHelper output)
         Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent(Articles, "Articles", "", PostKind.Article, 1, Audience.Public, "leo").Send(Cancellation));
     }
 
-    private static async Task<Post> Started(string tangent, string title, string author, PostKind kind = PostKind.Topic)
-        => Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), tangent, title, "The opening words of " + title + ".", author, kind).Send(Cancellation)).Result;
+    private static async Task<Post> Started(string tangent, string title, string author)
+        => Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), tangent, title, "The opening words of " + title + ".", author).Send(Cancellation)).Result;
 
     private static async Task<Post> Replied(Post topic, string author, string? parent = null, string body = "A reply.")
         => Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), topic.Id, body, author, parent).Send(Cancellation)).Result;
@@ -457,7 +456,7 @@ public sealed class DoorTests(ITestOutputHelper output)
     }
 
     private static async Task<HttpResponseMessage> MarkSeen(Browser browser, long through)
-        => await browser.Client.PostAsync("/", Form(new() { [DoorController.Through] = through.ToString(CultureInfo.InvariantCulture) }), Cancellation);
+        => await browser.Client.PostAsync("/seen", Form(new() { [SeenController.ThroughField] = through.ToString(CultureInfo.InvariantCulture) }), Cancellation);
 
     private static FormUrlEncodedContent Form(Dictionary<string, string> fields) => new(fields);
 
@@ -488,7 +487,7 @@ public sealed class DoorTests(ITestOutputHelper output)
         var statements = new[]
         {
             $"SELECT * FROM \"{table}\" ORDER BY {seq[0]} DESC LIMIT {LogWindow.Size} OFFSET 0",
-            $"SELECT * FROM \"{table}\" WHERE {targets[0]} = '{Reader}' AND {targets[1]} > 0 ORDER BY {seq[0]} DESC LIMIT {LogWindow.TargetedSize} OFFSET 0"
+            $"SELECT * FROM \"{table}\" WHERE {targets[0]} = '{Reader}' AND {targets[1]} > 0 ORDER BY {seq[0]} DESC LIMIT {Unread.CountLimit + 1} OFFSET 0"
         };
         var plans = new List<(string, List<string>)>();
         foreach (var statement in statements)

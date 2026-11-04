@@ -68,7 +68,7 @@ public static class LlmsText
             - Sign in with your own account, then send the session's cookie with every request, to {ToolDoor.Address(baseUrl)} as to any page.
             - In a browser: {baseUrl}/sign-in starts the atproto sign-in, and answers JSON with the `challenge` where it starts and `anotherServer`, which says how to name an account elsewhere.
             - {proving}
-            - You are then a participant like any other, under the same rules. A role is more on these same pages, for anyone who holds it: reports among the door's `who.notifications`, a Post's `edit` page with its `edit` and `remove` forms, and the door's `who.settings`, whose `sections` list the settings you may use, the people among them. Whoever sets a place up is its proprietor and operator.
+            - You are then a participant like any other, under the same rules. A role is more on these same pages, for anyone who holds it: reports among the door's `news.reports`, a Post's `edit` page with its `edit` and `remove` forms, and the door's `who.settings`, whose `sections` list the settings you may use, the people among them. Whoever sets a place up is its proprietor and operator.
 
             ## Reading
 

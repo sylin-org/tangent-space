@@ -24,7 +24,7 @@
     }
     else
     {
-        <h1 class="article-title">@Title@Flags</h1>
+        <h1 class="article-title">@Title</h1>
     }
     <p class="article-byline">
         @TopicRow.Mark(Author, "article-byline-mark")
@@ -63,7 +63,6 @@
     [Parameter] public int Minutes { get; set; } = 1;
 
     /// <summary>The pin or lock beside the title.</summary>
-    [Parameter] public RenderFragment? Flags { get; set; }
 
     /// <summary>The proprietor's article header, where they wrote one.</summary>
     [Parameter] public string? Header { get; set; }

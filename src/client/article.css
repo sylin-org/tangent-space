@@ -33,10 +33,6 @@
   overflow-wrap: anywhere;
 }
 
-.article-title .badge:where(.is-pinned, .is-locked) {
-  vertical-align: 14px;
-}
-
 .article-byline {
   margin: 18px 0 0;
   padding-bottom: 22px;

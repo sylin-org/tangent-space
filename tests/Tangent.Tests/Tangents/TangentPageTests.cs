@@ -51,15 +51,13 @@ public sealed class TangentPageTests
     }
 
     [Fact]
-    public async Task The_page_as_html_and_json_carries_the_tangent_its_can_and_its_topics_pinned_first_then_by_last_activity_and_a_reply_moves_its_topic_to_the_top()
+    public async Task The_page_as_html_and_json_carries_the_tangent_its_can_and_its_topics_by_last_activity_and_a_reply_moves_its_topic_to_the_top()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Place(tangentSpace);
-        var pinned = await Started("Read this first", Start);
         var older = await Started("An older question", Start.AddMinutes(1));
         var newer = await Started("A newer question", Start.AddMinutes(2));
-        pinned.Pinned = true;
-        Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(pinned).Send(Cancellation));
+        var latest = await Started("Read this first", Start.AddMinutes(3));
 
         using (var json = await Json(tangentSpace.Client, "/t/" + Workshop))
         {
@@ -69,32 +67,31 @@ public sealed class TangentPageTests
                     root.GetProperty("kind").GetString(), root.GetProperty("audience").GetString()));
             Assert.Equal($"{BaseUrl}/t/{Workshop}", root.GetProperty("address").GetString());
             Assert.Equal(["View"], Strings(root.GetProperty("can")));
-            Assert.Equal([pinned.Id, newer.Id, older.Id], Ids(root));
+            Assert.Equal([latest.Id, newer.Id, older.Id], Ids(root));
             var first = root.GetProperty("topics")[0];
-            Assert.Equal(("read-this-first", "Read this first", "topic", true), (first.GetProperty("slug").GetString(),
-                first.GetProperty("title").GetString(), first.GetProperty("kind").GetString(), first.GetProperty("pinned").GetBoolean()));
+            Assert.Equal(("read-this-first", "Read this first", "topic"), (first.GetProperty("slug").GetString(),
+                first.GetProperty("title").GetString(), first.GetProperty("kind").GetString()));
             Assert.Equal($"{BaseUrl}/t/{Workshop}/read-this-first", first.GetProperty("address").GetString());
             Assert.Equal(("ada", "ada.example"), (first.GetProperty("author").GetProperty("id").GetString(), first.GetProperty("author").GetProperty("handle").GetString()));
             Assert.Equal("The words of the opening Post.", first.GetProperty("opening").GetString());
             Assert.False(root.TryGetProperty("next", out _));
         }
 
-        Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), older.Id, "A reply.", "ada", At: Start.AddMinutes(3)).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), older.Id, "A reply.", "ada", At: Start.AddMinutes(4)).Send(Cancellation));
 
         using (var json = await Json(tangentSpace.Client, "/t/" + Workshop))
         {
-            Assert.Equal([pinned.Id, older.Id, newer.Id], Ids(json.RootElement));
-            Assert.Equal(1, json.RootElement.GetProperty("topics")[1].GetProperty("replyCount").GetInt32());
+            Assert.Equal([older.Id, latest.Id, newer.Id], Ids(json.RootElement));
+            Assert.Equal(1, json.RootElement.GetProperty("topics")[0].GetProperty("replyCount").GetInt32());
         }
 
         var html = await Html(tangentSpace.Client, "/t/" + Workshop);
         Assert.Contains("<h1 id=\"tangent-title\" class=\"tangent-title\">The workshop</h1>", html);
         Assert.Contains("<summary class=\"switcher-button\" aria-current=\"page\" aria-label=\"The workshop, switch Tangent\">", html);
         Assert.Contains($"href=\"{BaseUrl}/t/{Workshop}/an-older-question\"", html);
-        var order = new[] { "Read this first", "An older question", "A newer question" }.Select(title => html.IndexOf(title, StringComparison.Ordinal)).ToList();
+        var order = new[] { "An older question", "Read this first", "A newer question" }.Select(title => html.IndexOf(title, StringComparison.Ordinal)).ToList();
         Assert.All(order, index => Assert.True(index > 0));
         Assert.Equal(order.Order().ToList(), order);
-        Assert.Contains("<span class=\"badge is-pinned\">Pinned</span>", html);
         Assert.DoesNotContain("<dialog", html);
     }
 
@@ -104,18 +101,11 @@ public sealed class TangentPageTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Place(tangentSpace);
         var all = new List<Post>();
-        // Three Topics share every instant, so the order rests on the Id where last activity is the same; three are
-        // pinned, so a page crosses from the pinned Topics to the rest.
+        // Three Topics share every instant, so the order rests on the Id where last activity is the same.
         for (var index = 0; index < 2 * TopicList.PageSize + 1; index++)
             all.Add(await Started("Topic " + index, Start.AddMinutes(index / 3)));
-        foreach (var topic in all.Take(3))
-        {
-            topic.Pinned = true;
-            Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(topic).Send(Cancellation));
-        }
 
-        var expected = all.Take(3).OrderByDescending(topic => topic.LastActivityAt).ThenByDescending(topic => topic.Id, StringComparer.Ordinal)
-            .Concat(all.Skip(3).OrderByDescending(topic => topic.LastActivityAt).ThenByDescending(topic => topic.Id, StringComparer.Ordinal))
+        var expected = all.OrderByDescending(topic => topic.LastActivityAt).ThenByDescending(topic => topic.Id, StringComparer.Ordinal)
             .Select(topic => topic.Id).ToList();
         var read = new List<string>();
         var pages = new List<int>();
@@ -140,7 +130,7 @@ public sealed class TangentPageTests
     }
 
     [Fact]
-    public async Task A_signed_in_reader_sees_unseen_topics_marked_a_checkpoint_at_the_last_sequence_unmarks_one_a_later_reply_marks_it_again_and_a_visitor_sees_no_marks()
+    public async Task A_signed_in_reader_sees_new_topics_marked_one_never_opened_with_no_count_a_mark_at_the_last_sequence_unmarks_one_a_later_reply_counts_it_and_a_visitor_sees_no_marks()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
         await Place(tangentSpace);
@@ -164,14 +154,14 @@ public sealed class TangentPageTests
         using (var json = await Json(browser.Client, "/t/" + Workshop))
         {
             var marks = Marks(json.RootElement);
-            Assert.Equal((false, 0L), marks[seen.Id]);
-            Assert.Equal((true, 1L), marks[unseen.Id]);
+            Assert.Equal((false, (long?)0), marks[seen.Id]);
+            Assert.Equal((true, (long?)null), marks[unseen.Id]);
         }
 
         Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), seen.Id, "Second reply.", "ada", At: Start.AddMinutes(3)).Send(Cancellation));
 
         using (var json = await Json(browser.Client, "/t/" + Workshop))
-            Assert.Equal((true, 1L), Marks(json.RootElement)[seen.Id]);
+            Assert.Equal((true, (long?)1), Marks(json.RootElement)[seen.Id]);
         var html = await Html(browser.Client, "/t/" + Workshop);
         Assert.Contains("<span class=\"new-dot\" role=\"img\" aria-label=\"Unread\"></span>", html);
         Assert.Contains("<span class=\"badge is-new\">1 new</span>", html);
@@ -181,7 +171,7 @@ public sealed class TangentPageTests
         Assert.Contains("</svg>Sign out</button></form>", html);
 
         using (var json = await Json(tangentSpace.Client, "/t/" + Workshop))
-            Assert.All(Marks(json.RootElement).Values, mark => Assert.Equal((false, 0L), mark));
+            Assert.All(Marks(json.RootElement).Values, mark => Assert.Equal((false, (long?)0), mark));
         var visitorHtml = await Html(tangentSpace.Client, "/t/" + Workshop);
         Assert.DoesNotContain("new-dot", visitorHtml);
         Assert.DoesNotContain("class=\"account\"", visitorHtml);
@@ -341,9 +331,9 @@ public sealed class TangentPageTests
         var at = new DateTimeOffset(2026, 10, 29, 15, 0, 0, TimeSpan.Zero);
         var author = new TangentPage.Author("ada", "ada.example", "Ada", "person", null);
         var topic = new TangentPage.Topic(Tids.Mint(), "a-question", "A question", "topic", $"{BaseUrl}/t/{Workshop}/a-question", author,
-            "Words.", 1, 0, at, at, false, false, null, [author], false, 0);
+            "Words.", 1, 0, at, at, null, [author], false, 0);
         var today = new TangentPage(Workshop, "The workshop", "", "topic", "public", $"{BaseUrl}/t/{Workshop}", ["View"], [topic], null,
-            false, null, null, null, [], "Tangent Space", BaseUrl + "/", null, new DateOnly(2026, 10, 29));
+            false, null, null, [], "Tangent Space", BaseUrl + "/", null, new DateOnly(2026, 10, 29));
         var tomorrow = today with { Day = new DateOnly(2026, 10, 30) };
 
         Assert.Equal(TangentPage.Version(today), TangentPage.Version(today with { }));
@@ -371,9 +361,12 @@ public sealed class TangentPageTests
 
     private static List<string> Strings(JsonElement array) => array.EnumerateArray().Select(item => item.GetString()!).ToList();
 
-    private static Dictionary<string, (bool New, long NewPosts)> Marks(JsonElement page)
+    /// <summary>What the page says is new in each Topic: whether it is, and how many of its Posts, null where it is new
+    /// with no count.</summary>
+    private static Dictionary<string, (bool New, long? NewPosts)> Marks(JsonElement page)
         => page.GetProperty("topics").EnumerateArray().ToDictionary(topic => topic.GetProperty("id").GetString()!,
-            topic => (topic.GetProperty("new").GetBoolean(), topic.GetProperty("newPosts").GetInt64()));
+            topic => (topic.GetProperty("new").GetBoolean(),
+                topic.TryGetProperty("newPosts", out var count) && count.ValueKind == JsonValueKind.Number ? count.GetInt64() : (long?)null));
 
     private static async Task<JsonDocument> Json(HttpClient client, string path)
     {

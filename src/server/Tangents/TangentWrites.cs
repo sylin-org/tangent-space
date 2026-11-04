@@ -14,7 +14,7 @@ public static class TangentWrites
 {
     public const string NameField = "name";
     public const string DescriptionField = "description";
-    public const string KindField = PostWrites.KindField;
+    public const string KindField = "kind";
     public const string AudienceField = "audience";
     public const string MoveField = "move";
 

@@ -378,7 +378,7 @@ export const screens: Readonly<Record<string, Screen>> = {
   // opened at the persona's first unread with the older window a cursor away; the same Topic at the address of its
   // fortieth reply, marked in the middle of its window, the composer replying to it; a Topic with a reply a moderator
   // removed; and a Topic without replies. Then the composer: her reply typed and the page opened again, which brings
-  // it back; a reply of nothing but spaces, refused above the field; a locked Topic, whose gate she reads instead; and
+  // it back; a reply of nothing but spaces, refused above the field; and
   // last, since it writes, a reply sent through the composer, which lands on the reply's address; it carries the same
   // TID in every width and theme, so the server's idempotency keeps it one Post; and a reply to the quiet question
   // that types its author's handle, which lands reading it as her mention. Then take this on a tangent: a Topic
@@ -391,42 +391,42 @@ export const screens: Readonly<Record<string, Screen>> = {
   topic: {
     path: '/t/discussions/what-kind-of-discussions',
     states: [
-      { name: 'populated', seed: 'topic', signedIn: true, cancel: '/t/discussions/what-kind-of-discussions/seen' },
+      { name: 'populated', seed: 'topic', signedIn: true, cancel: '/seen' },
       { name: 'populated-visitor', seed: 'topic' },
       {
         name: 'long',
         seed: 'topic',
         signedIn: true,
         path: '/t/discussions/notes-from-the-repair-workshop',
-        cancel: '/t/discussions/notes-from-the-repair-workshop/seen',
+        cancel: '/seen',
       },
       {
         name: 'anchored',
         seed: 'topic',
         signedIn: true,
         path: '/t/discussions/notes-from-the-repair-workshop/3mwdfsj6d226g',
-        cancel: '/t/discussions/notes-from-the-repair-workshop/seen',
+        cancel: '/seen',
       },
       {
         name: 'tombstone',
         seed: 'topic',
         signedIn: true,
         path: '/t/discussions/is-a-visible-repair-a-better-repair',
-        cancel: '/t/discussions/is-a-visible-repair-a-better-repair/seen',
+        cancel: '/seen',
       },
       {
         name: 'empty-replies',
         seed: 'topic',
         signedIn: true,
         path: '/t/discussions/a-quiet-question',
-        cancel: '/t/discussions/a-quiet-question/seen',
+        cancel: '/seen',
       },
       {
         name: 'composer-restored',
         seed: 'topic',
         signedIn: true,
         path: '/t/discussions/a-quiet-question',
-        cancel: '/t/discussions/a-quiet-question/seen',
+        cancel: '/seen',
         fill: { '#reply-body': 'Mornings, before anyone else is in.' },
         reload: true,
       },
@@ -435,23 +435,16 @@ export const screens: Readonly<Record<string, Screen>> = {
         seed: 'topic',
         signedIn: true,
         path: '/t/discussions/a-quiet-question',
-        cancel: '/t/discussions/a-quiet-question/seen',
+        cancel: '/seen',
         fill: { '#reply-body': '   ' },
         click: '.post-form-submit',
         waitFor: 'form[data-composer="refused"]',
       },
       {
-        name: 'locked',
-        seed: 'topic-locked',
-        signedIn: true,
-        path: '/t/discussions/the-kiln-schedule-is-settled',
-        cancel: '/t/discussions/the-kiln-schedule-is-settled/seen',
-      },
-      {
         name: 'replied',
         seed: 'topic',
         signedIn: true,
-        cancel: '/t/discussions/what-kind-of-discussions/seen',
+        cancel: '/seen',
         values: { '#reply-form-id': '3mwfixedrep22' },
         fill: { '#reply-body': 'Fridays it is. I’ll bring a link about glue.' },
         click: '.post-form-submit',
@@ -462,7 +455,7 @@ export const screens: Readonly<Record<string, Screen>> = {
         seed: 'topic',
         signedIn: true,
         path: '/t/discussions/a-quiet-question',
-        cancel: '/t/discussions/a-quiet-question/seen',
+        cancel: '/seen',
         values: { '#reply-form-id': '3mwfixedmen22' },
         fill: { '#reply-body': 'Index cards, @mara.bsky.social. A notebook replaced them in March.' },
         click: '.post-form-submit',
@@ -473,27 +466,27 @@ export const screens: Readonly<Record<string, Screen>> = {
         seed: 'tangent-taken',
         signedIn: true,
         path: '/t/discussions/where-should-the-glue-notes-live',
-        cancel: '/t/discussions/where-should-the-glue-notes-live/seen',
+        cancel: '/seen',
       },
       {
         name: 'taken-from',
         seed: 'tangent-taken',
         signedIn: true,
         path: '/t/workshop/adhesives-we-trust',
-        cancel: '/t/workshop/adhesives-we-trust/seen',
+        cancel: '/seen',
       },
       {
         name: 'taken-from-unseen',
         seed: 'tangent-taken',
         signedIn: true,
         path: '/t/workshop/the-kiln-budget',
-        cancel: '/t/workshop/the-kiln-budget/seen',
+        cancel: '/seen',
       },
       {
         name: 'report-open',
         seed: 'topic',
         signedIn: true,
-        cancel: '/t/discussions/what-kind-of-discussions/seen',
+        cancel: '/seen',
         click: '.post-root .post-report > summary',
         waitFor: '.post-root .post-report[open]',
       },
@@ -534,21 +527,6 @@ export const screens: Readonly<Record<string, Screen>> = {
         click: '.profile-standing .people-ban > summary',
         waitFor: '.profile-standing .people-ban[open]',
       },
-    ],
-  },
-  // The persona's notifications: none yet; with what the notifications seed holds, newest first, those since she last
-  // opened them marked new, Leo's rewrite of her Topic and his removal of her reply, Mara's report of Lumen's reply, which she reads as a moderator, and Wren's application,
-  // which she decides as one, among them; and, as the operator of a
-  // place reached at a public origin while it has no address, the Offer above them with its two answers. Last, the
-  // frame's count of what she has not seen, on the door, which says how many applications wait. Reading them moves
-  // nothing, so every width and theme reads the same.
-  notifications: {
-    path: '/notifications',
-    states: [
-      { name: 'empty', signedIn: true },
-      { name: 'with-entries', seed: 'notifications', signedIn: true },
-      { name: 'with-offer', seed: 'offer', place: 'persona', signedIn: true, settings: offerSettings },
-      { name: 'count', seed: 'notifications', signedIn: true, path: '/' },
     ],
   },
   // A search of the Topic seed's words: found, read by the persona and by a visitor; words nothing here holds; the page
@@ -593,7 +571,6 @@ export const references: Readonly<Record<string, Partial<Record<Width, string>>>
   topic: { 1440: '04-discussion-topic.html', 390: '22-phone-discussion-topic.html' },
   'article-editor': { 1440: '06-article-editor.html' },
   'new-topic': { 1440: '05-new-topic.html' },
-  notifications: { 1440: '18-notifications.html' },
   'sign-in': { 1440: '19-sign-in.html' },
   'tangent-space-settings-general': { 1440: '08-space-general.html' },
   'tangent-space-settings-appearance': { 1440: '09-space-appearance.html' },

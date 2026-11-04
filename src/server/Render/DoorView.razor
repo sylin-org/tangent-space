@@ -8,11 +8,10 @@
 @* The door: the place's name, the line that describes it, whose place this is, in the head with what it holds; the proprietor's door intro under it, where they wrote one; the first page of the Tangents the reader may view, the moderators' Tangent after them for whoever may view it, and all of them a link away, where a new one is
    created for whoever may, and who is around in the rail, each name linked to their profile; and in the column, first, for the operator, the open Offer as one line with its evidence and its two
    answers; for whoever decides applications, how many wait, in an Offer's line, with the way to them; for an applicant, in one sentence, that their application is waiting, or was declined; for a participant timed
-   out, until when; for a reader at their first door, a welcome, with what concerns them under it; for a signed-in reader with news, what is new since they were here — one sentence, then who admitted
-   them, who lifted their timeout or ban, and who gave them a role or took one, where someone did, their Posts someone else edited or removed, with who did, replies to them, mentions of them, the Topics taken on a tangent from their Posts, the new articles and what is new in each Tangent, with the form that marks
-   it seen and, while they have notifications they have not seen, how many, a button that opens them — and then the front page:
-   the featured Topics and the ones alive now. A reader with nothing new reads that in one sentence above the front
-   page, with how many notifications they have not seen, a button that opens them, while there are some. A count the door could not finish reads "at least". The whole door is the
+   out, until when; for a signed-in reader with news, what is new since they were here — one sentence, then who admitted
+   them, who lifted their timeout or ban, and who gave them a role or took one, where someone did, their Posts someone else edited or removed, with who did, replies to them, mentions of them, the Topics taken on a tangent from their Posts, the reports for whoever may view the moderators' Tangent, the new articles and what is new in each Tangent, with the form that says
+   all of it seen — and then the front page: the featured Topics and the ones alive now. A reader with nothing new reads
+   that in one sentence above the front page. A count the door could not finish reads "at least". The whole door is the
    fragment island's host, so it refreshes itself from its own address, unless it stands alone, with nothing to refresh from. *@
 <main class="door" data-island="@(Standalone ? null : "fragment")" data-props="@(Standalone ? null : JsonSerializer.Serialize(new { url = Model.Address }))">
     <section class="tangent-head place" aria-labelledby="door-title">
@@ -123,29 +122,16 @@
                 @if (news.Quiet)
                 {
                     <div class="topic-empty">
-                        <p class="topic-empty-title">@(news.First ? $"Welcome to {Model.Name}." : "Nothing new since you were here.")</p>
-                        @if (news.Notifications is { } notifications)
-                        {
-                            <form class="tangent-description seen-notifications" method="post" action="@notifications.Open.Action"><input type="hidden" name="@Events.Notifications.ThroughField" value="@notifications.Open.Value(Events.Notifications.ThroughField)"><button class="watch-button">@Shell.Unseen(notifications.Count, notifications.AtLeast)</button></form>
-                        }
+                        <p class="topic-empty-title">Nothing new since you were here.</p>
+                        @Seen(news.Seen)
                     </div>
                 }
                 else
                 {
                     <section class="door-news" aria-labelledby="door-news-title">
                         <div class="topic-list-head">
-                            <h2 id="door-news-title" class="topic-list-title">@(news.First ? $"Welcome to {Model.Name}" : "Since you were here")</h2>
-                            @if (news.Notifications is { } notifications)
-                            {
-                                <form class="door-notifications seen-notifications" method="post" action="@notifications.Open.Action"><input type="hidden" name="@Events.Notifications.ThroughField" value="@notifications.Open.Value(Events.Notifications.ThroughField)"><button class="watch-button">@Shell.Unseen(notifications.Count, notifications.AtLeast)</button></form>
-                            }
-                            @if (news.CaughtUp is { } caughtUp)
-                            {
-                                <form class="caught-up" method="post" action="@caughtUp.Action">
-                                    <input type="hidden" name="@DoorController.Through" value="@caughtUp.Value(DoorController.Through)">
-                                    <button type="submit" class="tangent-new">Mark all seen</button>
-                                </form>
-                            }
+                            <h2 id="door-news-title" class="topic-list-title">Since you were here</h2>
+                            @Seen(news.Seen)
                         </div>
                         <p class="tangent-description">@Sentence(news)</p>
                         @if (news.Admitted is { } admitted)
@@ -162,10 +148,13 @@
                         }
                         @Changed("Your posts someone else edited", "edited your post", news.Edited)
                         @Changed("Your posts someone else removed", "removed your post", news.Removed)
-                        <Tangent.Events.WatchedNews Model="@news.Watched" />
                         @Items("Replies to you", news.Replies)
                         @Items("Mentions of you", news.Mentions)
                         <TakenNews Model="@news.Taken" Today="@Model.Day" />
+                        @if (news.Reports is { } reports)
+                        {
+                            @Items("Reports", reports)
+                        }
                         @Items("New articles", news.Articles)
                         @if (news.PerTangent.Count > 0)
                         {
@@ -202,7 +191,7 @@
     /// reads, or where a visitor signs in.</summary>
     public static Frame Frame(Door door)
     {
-        var who = door.Who is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut, reader.Settings, reader.Notifications) : null;
+        var who = door.Who is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut, reader.Settings, reader.ForYou) : null;
         return new(door.Name, door.Address, [new Crumb(door.Name)], who, door.SignIn, door.Feeds);
     }
 
@@ -252,11 +241,24 @@
         if (news.Replies.Count > 0) parts.Add(Words(news.Replies.Count, news.Replies.AtLeast, "reply", "replies") + " to you");
         if (news.Mentions.Count > 0) parts.Add(Words(news.Mentions.Count, news.Mentions.AtLeast, "mention", "mentions") + " of you");
         if (news.Taken is { Count: > 0 } taken) parts.Add(Words(taken.Count, taken.AtLeast, "topic", "topics") + " taken on a tangent from your posts");
+        if (news.Reports is { Count: > 0 } reports) parts.Add(Words(reports.Count, reports.AtLeast, "report", "reports"));
         foreach (var tangent in news.PerTangent)
             parts.Add(Words(tangent.Topics + tangent.Replies, tangent.AtLeast, "new post", "new posts") + " in " + tangent.Name);
         if (news.Articles.Count > 0) parts.Add(Words(news.Articles.Count, news.Articles.AtLeast, "new article", "new articles"));
         return "Since you were here: " + string.Join(", ", parts) + ".";
     }
+
+    /// <summary>The form that says everything the door read through is seen, where the door offers it.</summary>
+    private static RenderFragment Seen(Form? seen) => @<text>@if (seen is not null)
+        {
+            <form class="seen" method="post" action="@seen.Action">
+                @foreach (var field in seen.Fields)
+                {
+                    <input type="hidden" name="@field.Name" value="@field.Value">
+                }
+                <button type="submit" class="tangent-new">Mark all seen</button>
+            </form>
+        }</text>;
 
     /// <summary>The reader's Posts someone else changed as rows: who did and what they did, in which Topic and Tangent, its
     /// first words where it still has them and when.</summary>

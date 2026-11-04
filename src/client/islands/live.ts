@@ -10,7 +10,7 @@ import { logEvent } from './unseen'
 // again in place. On a Tangent's page, its list of Topics is fetched again, which marks what is new. On the door, the
 // door is fetched again from its own fragment. When the transport has fallen back to the door, which names no rows,
 // the Tangent's list and the door are fetched again and a Topic's notice says there may be new replies. Every run of
-// rows is also dispatched on the document (logEvent), where the masthead's count of unseen notifications reads it. It
+// rows is also dispatched on the document (logEvent), where the masthead's count of what is new for the reader reads it. It
 // only ever reads: a checkpoint moves where the reader says so (the seen island), never here.
 export const live = defineComponent({
   name: 'LiveIsland',

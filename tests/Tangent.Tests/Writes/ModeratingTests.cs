@@ -55,17 +55,14 @@ public sealed class ModeratingTests
         Assert.Equal(2, edits.Count);
         Assert.All(edits, e => Assert.Equal((Ada, Mo), (e.TargetId, e.ActorId)));
         var door = (await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json;
-        Assert.Equal(2, door.GetProperty("who").GetProperty("notifications").GetProperty("count").GetInt32());
+        Assert.Equal(2, door.GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32());
         var told = door.GetProperty("news").GetProperty("edited");
         Assert.Equal(2, told.GetProperty("count").GetInt32());
         Assert.All(told.GetProperty("posts").EnumerateArray(), post => Assert.Equal(Mo, post.GetProperty("who").GetProperty("id").GetString()));
         var doorPage = (await Send(ada.Client, HttpMethod.Get, "/")).Body;
         Assert.Contains("Your posts someone else edited · 2", doorPage);
         Assert.Contains("edited your post: From a hook, says the moderator.", doorPage);
-        var notifications = (await Send(ada.Client, HttpMethod.Get, Notifications.Path, json: true)).Json.GetProperty("entries");
-        Assert.All(notifications.EnumerateArray(), entry => Assert.Equal(("edited", Mo), (entry.GetProperty("kind").GetString(), entry.GetProperty("who").GetProperty("id").GetString())));
-        Assert.Contains("edited your post in", (await Send(ada.Client, HttpMethod.Get, Notifications.Path)).Body);
-        Assert.Equal(0, (await Send(mo.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("who").GetProperty("notifications").GetProperty("count").GetInt32());
+        Assert.Equal(0, (await Send(mo.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32());
     }
 
     [Fact]
@@ -87,8 +84,9 @@ public sealed class ModeratingTests
         Assert.Equal(Mo, shown.GetProperty("removed").GetProperty("by").GetProperty("id").GetString());
         Assert.False(shown.TryGetProperty("edited", out var edited) && edited.ValueKind != JsonValueKind.Null);
 
+        // The tombstone is the news: the edit of a Post since removed is told no more.
         var door = (await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json;
-        Assert.Equal(2, door.GetProperty("who").GetProperty("notifications").GetProperty("count").GetInt32());
+        Assert.Equal(1, door.GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32());
         var news = door.GetProperty("news");
         Assert.Equal(0, news.GetProperty("edited").GetProperty("count").GetInt32());
         var told = Assert.Single(news.GetProperty("removed").GetProperty("posts").EnumerateArray());
@@ -96,14 +94,6 @@ public sealed class ModeratingTests
         var doorPage = (await Send(ada.Client, HttpMethod.Get, "/")).Body;
         Assert.Contains("Your posts someone else removed · 1", doorPage);
         Assert.Contains("removed your post</span>", doorPage);
-
-        var entries = (await Send(ada.Client, HttpMethod.Get, Notifications.Path, json: true)).Json.GetProperty("entries");
-        Assert.Equal(("removed", Mo, true), (entries[0].GetProperty("kind").GetString(), entries[0].GetProperty("who").GetProperty("id").GetString(), entries[0].GetProperty("removed").GetBoolean()));
-        Assert.Equal(("edited", true), (entries[1].GetProperty("kind").GetString(), entries[1].GetProperty("removed").GetBoolean()));
-        var page = (await Send(ada.Client, HttpMethod.Get, Notifications.Path)).Body;
-        Assert.Contains("removed your post in", page);
-        Assert.Contains("edited your post in", page);
-        Assert.Contains("— since removed", System.Net.WebUtility.HtmlDecode(page));
     }
 
     [Fact]
@@ -123,7 +113,7 @@ public sealed class ModeratingTests
         var read = await Send(Agent(tangentSpace), HttpMethod.Get, TopicPath(root));
         Assert.DoesNotContain("post-edited", read.Body);
         var door = (await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json;
-        Assert.Equal(0, door.GetProperty("who").GetProperty("notifications").GetProperty("count").GetInt32());
+        Assert.Equal(0, door.GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32());
         Assert.Equal((0, 0), (door.GetProperty("news").GetProperty("edited").GetProperty("count").GetInt32(), door.GetProperty("news").GetProperty("removed").GetProperty("count").GetInt32()));
 
         // A moderator's own Post is theirs like anyone's.
@@ -138,7 +128,7 @@ public sealed class ModeratingTests
         var mine = await Post.Get(root.Id, Cancellation);
         Assert.Equal((null, null), (mine?.EditedBy, mine?.EditedAt));
         Assert.DoesNotContain("post-edited", (await Send(Agent(tangentSpace), HttpMethod.Get, TopicPath(root))).Body);
-        Assert.Equal(1, (await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("who").GetProperty("notifications").GetProperty("count").GetInt32());
+        Assert.Equal(1, (await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32());
     }
 
     private static string Name(Answered door) => door.Json.GetProperty("who").GetProperty("name").GetString()!;

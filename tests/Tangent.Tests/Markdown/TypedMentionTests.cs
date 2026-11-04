@@ -141,12 +141,11 @@ public sealed class TypedMentionTests
         var landed = await Send(ada.Client, HttpMethod.Get, new Uri(replied.Location!).AbsolutePath);
         Assert.Contains($"<a href=\"{BaseUrl}/p/bea4writes.example\">@bea4writes.example</a> you said you had a spare knob?", landed.Body);
 
-        // Bea hears it on her door and among her notifications.
+        // Bea hears it on her door, among what is for her.
         var door = (await Send(bea.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news").GetProperty("mentions");
         Assert.Equal((1, replyId), (door.GetProperty("count").GetInt32(), door.GetProperty("posts")[0].GetProperty("postId").GetString()));
-        var heard = Assert.Single((await Send(bea.Client, HttpMethod.Get, Notifications.Path, json: true)).Json.GetProperty("entries").EnumerateArray());
-        Assert.Equal(("mention", Ada, "Spare parts"),
-            (heard.GetProperty("kind").GetString(), heard.GetProperty("who").GetProperty("id").GetString(), heard.GetProperty("topic").GetString()));
+        var heard = door.GetProperty("posts")[0];
+        Assert.Equal((Ada, "Spare parts"), (heard.GetProperty("who").GetProperty("id").GetString(), heard.GetProperty("topic").GetString()));
 
         // Ada replies as JSON, typing Mo's handle in another case: Mo hears it.
         var agentReplyId = Tids.Mint();
@@ -158,8 +157,7 @@ public sealed class TypedMentionTests
         var events = await Event.Query(e => e.Kind == EventKind.Mention, Cancellation);
         Assert.Equal([(replyId, Bea, Ada), (agentReplyId, Mo, Ada)],
             events.OrderBy(e => e.Seq).Select(e => (e.PostId!, e.TargetId!, e.ActorId!)).ToList());
-        var moHeard = (await Send(mo.Client, HttpMethod.Get, Notifications.Path, json: true)).Json.GetProperty("entries").EnumerateArray()
-            .Single(entry => entry.GetProperty("kind").GetString() == "mention");
+        var moHeard = Assert.Single((await Send(mo.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news").GetProperty("mentions").GetProperty("posts").EnumerateArray());
         Assert.Equal(Ada, moHeard.GetProperty("who").GetProperty("id").GetString());
     }
 
@@ -242,7 +240,7 @@ public sealed class TypedMentionTests
         Assert.Equal(($"How do you hang yours, {Mention(Bea, "@bea4writes.example")}? From a hook, I hope.", 3L), (edited.Body, edited.Version));
         var heard = Assert.Single(await Event.Query(e => e.Kind == EventKind.Mention, Cancellation));
         Assert.Equal((Bea, Ada, root.Id, 2L), (heard.TargetId, heard.ActorId, heard.PostId, heard.Version));
-        Assert.Single((await Send(bea.Client, HttpMethod.Get, Notifications.Path, json: true)).Json.GetProperty("entries").EnumerateArray(),
-            entry => entry.GetProperty("kind").GetString() == "mention");
+        // A mention an edit wrote is new by the log alone, however long ago Bea read the Post it is in.
+        Assert.Equal(1, (await Send(bea.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news").GetProperty("mentions").GetProperty("count").GetInt32());
     }
 }

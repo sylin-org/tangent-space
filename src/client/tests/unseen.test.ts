@@ -4,8 +4,8 @@ import { mountIslands } from '../islands'
 import { applied, badge, logEvent } from '../islands/unseen'
 import type { LiveEvent } from '../live'
 
-// The masthead's count of unseen notifications: the server renders it, hidden at zero, with the reader, the newest
-// sequence its count read and whether the applications that wait count among them; the page's stream raises it by one
+// The masthead's count of what is for the reader and new: the server renders it as a link to the door, hidden at zero,
+// with the reader, the newest sequence its count read and whether the applications that wait count among them; the page's stream raises it by one
 // for each row past that sequence that someone else did and that targets the reader or is a report, which the stream
 // delivers only to whoever may view the moderators' Tangent, and, where applications count, for each application, and by
 // nothing else.
@@ -15,9 +15,8 @@ const reader = 'did:plc:ada'
 function render(count: number, atLeast: boolean, through: number, applications = false): HTMLElement {
   const props = JSON.stringify({ reader, count, atLeast, through, applications }).replaceAll('"', '&quot;')
   document.body.innerHTML =
-    `<form class="masthead-unseen-form" method="post" action="https://tangent.example/notifications">` +
-    `<button class="masthead-unseen"${count === 0 ? ' hidden' : ''} aria-label="${count} new notifications" ` +
-    `data-island="unseen" data-props="${props}"><span class="masthead-unseen-count">${badge(count, atLeast)}</span></button></form>`
+    `<a class="masthead-unseen" href="https://tangent.example/"${count === 0 ? ' hidden' : ''} aria-label="${count} new for you" ` +
+    `data-island="unseen" data-props="${props}"><span class="masthead-unseen-count">${badge(count, atLeast)}</span></a>`
   mountIslands(document)
   return document.querySelector<HTMLElement>('.masthead-unseen')!
 }
@@ -39,7 +38,7 @@ test('a reply to the reader delivered past the count shows the count and raises 
 
   expect(host.hidden).toBe(false)
   expect(host.querySelector('.masthead-unseen-count')!.textContent).toBe('1')
-  expect(host.getAttribute('aria-label')).toBe('1 new notification')
+  expect(host.getAttribute('aria-label')).toBe('1 new for you')
 
   delivered({ seq: 42, kind: 'mention', actor: 'did:plc:mo', target: reader }, { seq: 43, actor: 'did:plc:mo', target: null })
   expect(host.querySelector('.masthead-unseen-count')!.textContent).toBe('2')
@@ -66,7 +65,7 @@ test('a count past its bound reads at least, and stays at 99+ as it rises', () =
   delivered({ seq: 501, actor: 'did:plc:bea', target: reader })
 
   expect(host.querySelector('.masthead-unseen-count')!.textContent).toBe('99+')
-  expect(host.getAttribute('aria-label')).toBe('At least 101 new notifications')
+  expect(host.getAttribute('aria-label')).toBe('At least 101 new for you')
   expect(badge(40, true)).toBe('40+')
   expect(badge(7, false)).toBe('7')
 })
