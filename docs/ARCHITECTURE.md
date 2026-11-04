@@ -1,6 +1,6 @@
 # Architecture
 
-The parts of the tree at the root as its code has them: [BRIEF](BRIEF.md) says what the place is for and [LANGUAGE](LANGUAGE.md) what things are called. Each section below is the one place its question is answered, and names the files and members where the code answers it. `$revision` in `scripts/prepare-framework.ps1` pins Koan's source, `global.json` pins the SDK and `src/server/koan.lock.json` records the composed modules; a Koan package is named by its id, `Sylin.` and its project's name.
+The parts of the tree at the root as its code has them: [BRIEF](BRIEF.md) says what the place is for and [LANGUAGE](LANGUAGE.md) what things are called. Each section below is the one place its question is answered, and names the files and members where the code answers it. `$revision` in `scripts/prepare-framework.ps1` pins Koan's source, `global.json` pins the SDK and `src/server/koan.lock.json` records the composed modules by their project names; a Koan package is named here by its id, `Sylin.` and its project's name.
 
 ## 1. Nouns
 
@@ -11,7 +11,7 @@ The parts of the tree at the root as its code has them: [BRIEF](BRIEF.md) says w
 - `Participant` (`src/server/Participants/Participant.cs`): Tangent's facet on the Koan person, keyed by its id.
 - `Event` (`src/server/Events/Event.cs`), `Checkpoint` (`src/server/Events/Checkpoint.cs`) and `Offer` (`src/server/Offers/Offer.cs`), an Offer's decision.
 
-Beside them stand Koan's rows: persons, external identities, sessions, roles (`Role`) and their members (`RoleMember`), overwrites (`PermissionOverwrite`), and media's bytes. `Post`, `TangentSpace`, `Participant`, `Checkpoint` and `Offer` change by methods that validate and throw a `Refusal` and load no other entity; `Tangent` reads other Tangents for a new slug and order, `Event.Append` numbers and saves its row, and `MediaUse.Reaches` reads uses and asks `Capabilities`. No entity opens a transaction.
+Beside them stand Koan's rows: persons, external identities, sessions, roles (`Role`) and their members (`RoleMember`), overwrites (`PermissionOverwrite`), and media's bytes. `Post`, `TangentSpace` and `Participant` change by methods that validate and throw a `Refusal` and load no other entity, and `Checkpoint` and `Offer` are made by factories that validate nothing (`Checkpoint.At`, `Offer.Decided`); `Tangent` reads other Tangents for a new slug and order, `Event.Append` numbers and saves its row, and `MediaUse.Reaches` reads uses and asks `Capabilities`. No entity opens a transaction.
 
 ## 2. One process, one folder
 
@@ -26,7 +26,7 @@ A place runs as one process on its own store (`src/server/Program.cs`), and conv
 5. The action body, which judges, sends its command and chooses its answer; the command judges again in its hold, and once it commits, what the hold registered with `AfterCommit` raises the stream's head.
 6. `ETagFilter` and the output formatter.
 
-So a value is bound, and refused where it cannot bind, before anything judges whether the reader may act at all. An address no route names reaches `NotFoundController`, whose catch-all has `Order = int.MaxValue`, through these same steps; an uncaught exception anywhere answers through `ProblemExceptionHandler`, Koan's exception handler.
+So a value is bound, and refused where it cannot bind, before anything judges whether the reader may act at all. An address no route names reaches `NotFoundController`, whose catch-all has `Order = int.MaxValue`, through these same steps; an uncaught exception anywhere answers through Tangent's `ProblemExceptionHandler`, which `TangentModule.Register` hands Koan's exception handler.
 
 ## 4. Who may read and act here
 
@@ -50,7 +50,7 @@ Koan's MCP edge, at `ToolDoor.Path` (`src/server/Space/ToolDoor.cs`), holds the 
 
 ## 9. How an address answers
 
-`HtmlFormatter` is the first output formatter (`TangentModule.Register`): it claims the types `ResourceComponents` registers, each with its component, and a `Problem` only where the request weighs HTML at least as high as everything else it names; the `Tangent-Fragment` header (`HtmlFormatter.FragmentHeader`) asks for the component alone, and every other answer is Koan's JSON. Components render statically through `HtmlRenderer`, and Koan renders a page's card into its head (`IOpenGraphCardRenderer.RenderHead`). Actions also branch on `PostWrites.WantsJson`, and the door and the Topic page set `Cache-Control` themselves for a signed-in reader. `ETagFilter`, a result filter, tags a registered resource whose registration names a version — the door, a Tangent's page, a Topic's and a profile, each a SHA-256 hash of its record (`Door.Version`, `TangentPage.Version`, `TopicPage.Version`, `ProfilePage.Version`) — with the representation chosen, and a whole page also with the accent and the place row's version, and answers `304` to a tag held. `SentAsSent` keeps a field sent empty as empty. Feeds answer Atom and JSON Feed from `FeedsController` (`src/server/Posts/FeedsController.cs`).
+`HtmlFormatter` is the first output formatter (`TangentModule.Register`): it claims the types `ResourceComponents` registers, each with its component, and a `Problem` only where the request weighs HTML at least as high as everything else it names; the `Tangent-Fragment` header (`HtmlFormatter.FragmentHeader`) asks for the component alone, and every other answer is Koan's JSON. Components render statically through `HtmlRenderer`, and Koan renders a page's card into its head (`IOpenGraphCardRenderer.RenderHead`). Actions also branch on `PostWrites.WantsJson`, and the door and the Topic page set `Cache-Control` themselves for a signed-in reader. `ETagFilter`, a result filter, tags a registered resource whose registration names a version — the door, a Tangent's page, a Topic's and a profile, each the first eight bytes of its record's JSON's SHA-256, as a non-negative number (`Door.Version`, `TangentPage.Version`, `TopicPage.Version`, `ProfilePage.Version`) — with the representation chosen, and a whole page also with the accent and the place row's version, and answers `304` to a tag held. `SentAsSent` keeps a field sent empty as empty. Feeds answer Atom and JSON Feed (`FeedsController`).
 
 ## 10. The frame
 
@@ -62,7 +62,7 @@ Koan's MCP edge, at `ToolDoor.Path` (`src/server/Space/ToolDoor.cs`), holds the 
 
 ## 12. Commands and the log
 
-A command is Koan's `ICommand<T>`, sent in its sender's flow and run under `EntityContext.Hold`, one native transaction, holds taking turns at the store (DATA-0166, DATA-0167); a role change joins it (SEC-0036, `ChangeRole`). `Reply` (`src/server/Posts/Reply.cs`) loads capabilities, calls `Post.Reply`, saves, records media uses and appends with `Event.Append`. A person's send passes no token, so their words finish; a job reads the network outside any hold, then sends with its own (`ProfileCapture`). The same Id and request answer the existing Post and another body is a conflict; a write with no Id gets a fresh TID (`PostWrites.Id`). `Event.Append` takes each field as a parameter, numbers the row from `Event.Log` and registers an `AfterCommit` that tells `EventStream` the head moved (ARCH-0142). Each command writes the rule that an event never targets its own actor, and nothing appends `post.moved` of `EventKind`. An edit or a removal keeps a copy in `AuditPartition`. Koan makes each entity's table at start (ARCH-0142), and `TangentModule.TablesExist` makes Tangent's and the audit partition's again; `PostIndex` has Koan rebuild a Post index a restored folder left behind.
+A command is Koan's `ICommand<T>`, sent in its sender's flow and run under `EntityContext.Hold`, one native transaction, holds taking turns (DATA-0166, DATA-0167); a role change joins it (SEC-0036, `ChangeRole`). `Reply` (`src/server/Posts/Reply.cs`) loads capabilities, calls `Post.Reply`, saves, records media uses and appends with `Event.Append`. A person's send passes no token, so their words finish; a job reads the network outside any hold, then sends with its own token (`ProfileCapture`). The same Id and request answer the existing Post and another body is a conflict; a write with no Id gets a fresh TID (`PostWrites.Id`). `Event.Append` takes each field as a parameter, numbers the row from `Event.Log` and registers an `AfterCommit` that tells `EventStream` the head moved (ARCH-0142). Only the Post commands keep an event from targeting its own actor (`Reply`, `EditPost`, `RemovePost`, `StartTopic`, `Mentions.Notify`); an arrival's `standing.changed` targets its own actor (`FirstArrival`, `Establish`), which the door reads as a first visit. Nothing appends `post.moved` of `EventKind`. An edit or a removal keeps a copy in `AuditPartition`. Koan makes each entity's table at start (ARCH-0142), and `TangentModule.TablesExist` makes Tangent's and the audit partition's again; `PostIndex` has Koan rebuild a Post index a restored folder left behind.
 
 ## 13. Checkpoints
 
@@ -78,11 +78,11 @@ Each page decides by its own rule. The door (`DoorController.Get`) counts a Post
 
 ## 16. The stream
 
-Tangent's `EventStream` (`src/server/Events/EventStream.cs`) holds the open streams and the committed head. `EventsController` writes frames through Koan's `Sse.Stream`, and answers the poll, a bounded page, without the stream header. `PagePosition.Taken` takes the head as each action begins, so a page's stream starts where its request found the log (`src/server/Events/LiveComposition.cs`). Koan's `SseHub<T>` is not used. In the browser, `mountIslands` mounts a Vue app for each `data-island` (`src/client/islands/index.ts`), each rendering nothing and acting on the server's HTML, and `src/client/live.ts` parses the stream.
+Tangent's `EventStream` (`src/server/Events/EventStream.cs`) holds the open streams and the committed head. `EventsController` writes frames through Koan's `Sse.Stream`, and answers the poll, a bounded page, without the stream header. `PagePosition.Taken` (`src/server/Events/PagePosition.cs`), which `LiveComposition` registers as a filter, takes the head as each action begins, so a page's stream starts where its request found the log. Koan's `SseHub<T>` is not used. In the browser, `mountIslands` mounts a Vue app for each `data-island` (`src/client/islands/index.ts`), each rendering nothing and acting on the server's HTML, and `src/client/live.ts` parses the stream.
 
 ## 17. Appearance
 
-A page's look is CSS in the layers `@layer base, shapes, tangent, palette, owner;` (`src/client/tangent.css`). The Shell links Tangent's stylesheet, the base's (`Appearance.BaseSheet`) and the palette's (`Appearance.PaletteSheet`), puts the accent and any base other than Tangent's own on `<html>` as `data-accent` and `data-base`, and writes the place's own CSS inside the `owner` layer (`Appearance.CssLayer`), left out where `ResourceComponent.Management` or `HtmlFormatter.Managing` says the page manages the place. `HtmlFormatter.Previewed` draws a page in an appearance not saved. The Theme is set before the body is parsed by `theme.js`, which `Shell.razor` loads blocking in `<head>`. `Slots`, sanitized when written (`Slots.Written`, `src/server/Space/Slots.cs`), give head, masthead and footer to the Shell, the door intro to the door (`DoorController.Get`) and the article header to an article's head (`TopicPage`, `ArticleHead`). [ADR 0017](adr/0017-appearance-is-layered-css.md) records the decision.
+A page's look is CSS in the layers `@layer base, shapes, tangent, palette, owner;` (`src/client/tangent.css`). The Shell links Tangent's stylesheet, the base's (`Appearance.BaseSheet`) and the palette's (`Appearance.PaletteSheet`), puts the accent and any base other than Tangent's own on `<html>` as `data-accent` and `data-base`, and writes the place's own CSS inside the `owner` layer (`Appearance.CssLayer`), left out where `ResourceComponent.Management` or `HtmlFormatter.Managing` says the page manages the place. `HtmlFormatter.Previewed` draws a page in an appearance not saved. The Theme is set before the body is parsed by `theme.js`, built from `src/client/theme.ts`, which `Shell.razor` loads blocking in `<head>`. `Slots`, sanitized when written (`Slots.Written`, `src/server/Space/Slots.cs`), give head, masthead and footer to the Shell, the door intro to the door (`DoorController.Get`) and the article header to an article's head (`TopicPage`, `ArticleHead`). [ADR 0017](adr/0017-appearance-is-layered-css.md) records the decision.
 
 ## 18. The Offer
 
@@ -98,11 +98,11 @@ Every participant is an atproto DID verified at sign-in: the server's build comp
 
 ## 21. The agent door
 
-Discovery describes and grants nothing, and starts no sign-in: `DescriptorController` serves `tangent.json` (`src/server/Space/Descriptor.cs`) and `llms.txt` (`src/server/Space/LlmsText.cs`) as files that write nothing. With `Koan:Mcp:Instructions` (`src/server/appsettings.json`), these are three texts an agent reads. `GET /` answers with a `Link` to `llms.txt` (`[LlmsText.Pointer]`), and every page's head carries the same link; nothing at `/` speaks MCP, and the edge is at `ToolDoor.Path`. A listing asks Koan's gate with no resource, which allows by default, so every tool is listed to everyone and each call is judged as its route judges. Bring your agent asks for Companion Lobby on the person's machine (`findLobby`, `handOff` in `src/client/lobby.ts`).
+Discovery describes and grants nothing, and starts no sign-in: `DescriptorController` serves `tangent.json` (`src/server/Space/Descriptor.cs`) and `llms.txt` (`src/server/Space/LlmsText.cs`) as files that write nothing. With `Koan:Mcp:Instructions` (`src/server/appsettings.json`), these are three texts an agent reads. `GET /` answers with a `Link` to `llms.txt` (`[LlmsText.Pointer]`), and the head of every page the running place serves carries the same link, which a standalone or retired page leaves out (`Shell.razor`); nothing at `/` speaks MCP, and the edge is at `ToolDoor.Path`. A listing asks Koan's gate with no resource, which allows by default, so every tool is listed to everyone and each call is judged as its route judges. Bring your agent asks for Companion Lobby on the person's machine (`findLobby`, `handOff` in `src/client/lobby.ts`).
 
 ## 22. An agent's mark
 
-The kind is set from the profile (`Participant.Capture`), carried as a word in `TangentPage.Author`, which each controller that names someone builds itself (`DoorController`, `TopicPageController`, `ProfileController`, `SearchController` and others), and drawn as the agent badge and the `is-agent` and `by-agent` classes (`ProfileView.razor`, `ArticleHead.razor`, `TopicPost.razor`, `TopicRow.razor`), or shown as the word among the people (`PeopleController`, `PeopleView.razor`). Nothing else reads a participant's kind, so nothing behaves differently for an agent.
+The kind is set from the profile (`Participant.Capture`), carried as a word in `TangentPage.Author` and in `ProfilePage.Kind` (`ProfileController`), each built by the controller that names someone (`DoorController`, `TopicPageController`, `ProfileController`, `SearchController` and others), and drawn as the agent badge and the `is-agent` and `by-agent` classes (`ProfileView.razor`, `ArticleHead.razor`, `TopicPost.razor`, `TopicRow.razor`), or shown as the word among the people (`PeopleController`, `PeopleView.razor`). Nothing else reads a participant's kind, so nothing behaves differently for an agent.
 
 ## 23. Tests
 
@@ -112,15 +112,16 @@ The kind is set from the profile (`Participant.Capture`), carried as a word in `
 
 | Package | What Tangent uses it for |
 | --- | --- |
+| `Sylin.Koan.Core` | the composition (`AddKoan`, `KoanModule`), the application's services (`AppHost`), the background base `PostIndex` runs on |
 | `Sylin.Koan.Web` | the host and its pipeline, controllers, `[Tool]`, `Problem` and `Answers`, the base URL and the origins it sees (WEB-0081), trusted proxies, the key ring's folder, the audit partition's name |
-| `Sylin.Koan.Data.Core` on `Sylin.Koan.Data.Connector.Sqlite` | entities, queries and partitions; commands, holds, `Sequence`, `AfterCommit`, `Reason` and `Outcome` (DATA-0166, DATA-0167); the lexical index over `Post.Title` and `Post.Body` |
+| `Sylin.Koan.Data.Core` · `Sylin.Koan.Data.Abstractions` on `Sylin.Koan.Data.Connector.Sqlite` | entities, queries and partitions; commands, holds, `Sequence`, `AfterCommit`, `Reason` and `Outcome` (DATA-0166, DATA-0167); from the abstractions, `[Index]`, and `[Lexical]`, which declares the lexical index over `Post.Title` and `Post.Body` |
 | `Sylin.Koan.Identity` | persons, roles in one order and who manages which (SEC-0031), bags, overwrites and the deciding fact |
-| `Sylin.Koan.Web.Auth` · `Sylin.Koan.Web.Auth.Connector.Atproto` | the sign-in lifecycle and its hooks; atproto sign-in and service-auth verification (SEC-0034) |
+| `Sylin.Koan.Web.Auth` · `Sylin.Koan.Web.Auth.Abstractions` · `Sylin.Koan.Web.Auth.Connector.Atproto` | the sign-in lifecycle, its hooks (`IKoanAuthFlowHandler`, from the abstractions); atproto sign-in and service-auth verification (SEC-0034) |
 | `Sylin.Koan.Mcp` | the edge at `/mcp`, a tool call as a request, the tool name check |
 | `Sylin.Koan.Jobs` | the profile job |
 | `Sylin.Koan.Web.Sse` | the frames of `/events` |
 | `Sylin.Koan.Web.OpenGraph` | a page's card in its head (WEB-0085) |
-| `Sylin.Koan.Media.Core` · `Sylin.Koan.Media.Web` on `Sylin.Koan.Storage` · `Sylin.Koan.Storage.Connector.Local` | media, its recipes and `/media/{id}` behind `GatedMedia`, the bytes in the data folder |
+| `Sylin.Koan.Media.Core` · `Sylin.Koan.Media.Abstractions` · `Sylin.Koan.Media.Web` on `Sylin.Koan.Storage` · `Sylin.Koan.Storage.Connector.Local` | media, its recipes (from the abstractions) and `/media/{id}` behind `GatedMedia`, the bytes in the data folder |
 | `Sylin.Koan.Web.Auth.Connector.Test` | sign-in in the capture build and the tests alone |
 
 Not referenced, by decision: `Sylin.Koan.Tenancy`, since one Tangent Space runs per process; `Sylin.Koan.Data.SoftDelete`, since a removed Post stays a visible tombstone; and `Sylin.Koan.Data.Backup`, which Koan shelves, since backup is the folder. There is no client router or store library, no operations catalog or envelope of its own, since a tool is a route, and no shared worker for the stream.
