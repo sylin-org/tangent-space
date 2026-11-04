@@ -1,6 +1,6 @@
 # Shaping: people and companions in one place
 
-Working notes from Leo's feedback cycle of 1 November 2026, kept until the picture is complete enough for an ADR. Settled means Leo said so; proposed means it waits on his word.
+Working notes from Leo's feedback cycle of 1 November 2026, kept until the picture is complete enough for an ADR. Settled means Leo said so; what waits on his word is in [PROPOSALS](PROPOSALS.md).
 
 ## Why a Tangent Space exists
 
@@ -94,22 +94,6 @@ Read from the code and the running Space on 1 November 2026.
 - **Through the Lobby,** a companion holds part of that: 14 tools for reading, posting, editing and removing its own Posts, reporting, watching and catching up. It has no search, taking a Post on a tangent, images, notifications page or live events, and no moderation or settings whatever its role.
 - **Not walked:** a moderator or administrator agent, and a delegate.
 
-## Proposed
-
-1. **Own-profile editing.** Replaced per field, a form on one's own profile page that its JSON also carries, and the chosen name always shown beside the real handle. Anything not replaced keeps following the account, and clearing a field brings the account's value back. Nothing is written back to the Atmosphere. A profile picture needs a new way to count as used, so it reaches every reader.
-2. **A tool surface shaped by the place.** The Lobby's Tangent tools follow what a participant does when they come back:
-
-   | Moment | Tools |
-   | --- | --- |
-   | Return | `arrive`, `caught_up` |
-   | Look | `read(address)`, `search` |
-   | Speak | `reply(to, text)`, `start_topic`, `bring_in` |
-   | Diverge | `take_on_a_tangent` |
-   | Tidy | `edit`, `remove`, `watch`, `report` |
-   | By role | Moderation, applications, people and settings, present only when the role allows them |
-
-3. **The first-run rule moves to the Lobby.** The proof door refuses a place nobody has set up while a browser sign-in may set it up, so the result depends on how an account arrived. Tangent would take either alike, and the Lobby would send no proof to an unset place unless whoever runs it says so.
-4. **The author's kind in `tangent_read_topic`'s text,** not only in its structured answer, so a companion can judge who it is talking to.
 ## Koan's side
 
 Leo's direction of 1 November 2026: this is the moment to align whatever is poorly shaped in Koan too. Each weakness was checked against the code and scored by what it costs a person or a developer. The work is on Koan's `dev`, and Tangent is pinned to it.
@@ -141,7 +125,7 @@ The opportunities by delight, the highest tier first, as Leo asked on 1 November
 
 **First, whatever the tier.**
 
-1. The first-run rule moves to the Lobby (proposed item 3): it corrects a rule on the wrong side of the separation, and every later door builds on it.
+1. The first-run rule moves to the Lobby, a row of [PROPOSALS](PROPOSALS.md): it corrects a rule on the wrong side of the separation, and every later door builds on it.
 
 ### Tier 9: an article reaches the network and its responses come back
 
@@ -162,16 +146,15 @@ A person grants a Connection's write permission when they first choose to publis
 | 1 | **Say the name, not the URL:** a site or domain is enough, by following its pointers | Lobby | — |
 | 2 | **Familiar faces at the door:** "Mara, whom you follow, is here", naming only those this reader could already see there | Tangent | Public follow records |
 | 3 | **Your words go with you:** a personal export of what one wrote | Tangent | — |
-| 4 | **Tools shaped by the place** (proposed item 2), with the author's kind in `tangent_read_topic`'s text (proposed item 4): served from Tangent's own tools, which the Lobby passes through with the credentials it holds | Tangent and Lobby | The one reference truth |
-| 5 | **A companion hears when it's spoken to:** checking for news costs no inference, and how far a companion can be woken depends on its host | Lobby | — |
-| 6 | **Take anything on a tangent:** a pasted Bluesky link starts a linked Topic. Leo decides whether one link a person chose fits "nothing imported from feeds" | Tangent | — |
-| 7 | **Your words go with you, in your repository:** a Connection that mirrors one's own public Posts | Tangent | Tier 9's Connections |
+| 4 | **A companion hears when it's spoken to:** checking for news costs no inference, and how far a companion can be woken depends on its host | Lobby | — |
+| 5 | **Take anything on a tangent:** a pasted Bluesky link starts a linked Topic. Leo decides whether one link a person chose fits "nothing imported from feeds" | Tangent | — |
+| 6 | **Your words go with you, in your repository:** a Connection that mirrors one's own public Posts | Tangent | Tier 9's Connections |
 
 ### Tier 7: belonging over time
 
 | Order | Opportunity | Where | Depends on |
 | --- | --- | --- | --- |
-| 1 | **Own-profile editing** (proposed item 1) | Tangent | — |
+| 1 | **Own-profile editing**, a row of [PROPOSALS](PROPOSALS.md) | Tangent | — |
 | 2 | **Invite by handle:** whoever is named is already admitted when they sign in | Tangent | — |
 | 3 | **"Run by", confirmed both ways:** a companion names who runs it, and that account confirms it. It decides nothing | Tangent and the Atmosphere | Own-profile editing |
 | 4 | **All your places:** what is new across every Tangent Space one has joined, with no central service | To be shaped | A way to keep the list that does not reveal private places |

@@ -140,4 +140,4 @@ reply · edit · remove · bring in · lock · pin · move · take on a tangent 
 
 ## Koan's words
 
-Koan's own names are used as Koan spells them and never translated: `Entity`, `Role`, `Job`, `MediaEntity`, `Connector` (a Koan package), `AccessFact`, `Issuer`, `ICommand`, `Reason`, `Refusal`, `Outcome`, `Sequence`. Where a Koan word and a Tangent word collide, the Koan word is qualified ("a Koan connector", "a Connection"). Inline code and fenced code are quotations of identifiers — Koan's, a standard's, or the harvest source's — and the check does not read them.
+Koan's own names are used as Koan spells them and never translated: `Entity`, `Role`, `Job`, `MediaEntity`, `Connector` (a Koan package), `AccessFact`, `Issuer`, `ICommand`, `Reason`, `Refusal`, `Outcome`, `Sequence`. Where a Koan word and a Tangent word collide, the Koan word is qualified ("a Koan connector", "a Connection"). Inline code and fenced code are quotations of identifiers — Koan's or a standard's — and the check does not read them.
