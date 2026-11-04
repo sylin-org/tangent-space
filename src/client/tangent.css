@@ -1,0 +1,19 @@
+/* Tangent's components, in the order they cascade: the shapes layer holds its scale and subject colours (tokens.css),
+ * the frame and its shared shapes (layout.css) and the panel (sign-in.css); the tangent layer holds each page's own
+ * subjects and states. Both read the base's fonts and the palette's colours through the --ts-* tokens. */
+
+@layer base, shapes, tangent, palette, owner;
+
+@import './tokens.css' layer(shapes);
+@import './layout.css' layer(shapes);
+@import './sign-in.css' layer(shapes);
+@import './first-run.css' layer(tangent);
+@import './post-form.css' layer(tangent);
+@import './tangent-page.css' layer(tangent);
+@import './topic.css' layer(tangent);
+@import './composer.css' layer(tangent);
+@import './article.css' layer(tangent);
+@import './watch.css' layer(tangent);
+@import './profile.css' layer(tangent);
+@import './notifications.css' layer(tangent);
+@import './search.css' layer(tangent);

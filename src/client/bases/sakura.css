@@ -1,0 +1,34 @@
+/* Sakura 1.5.1, a classless stylesheet the base layer can hold, vendored verbatim from its official package
+ * (sakura.css, MIT: sakura/LICENSE, github.com/oxalorg/sakura), and its adapter: its own variables read the --ts-* tokens, so
+ * any palette colours it, and Tangent's shapes and tangent layers read its fonts through --ts-font-*. */
+
+@layer base, shapes, tangent, palette, owner;
+
+@import './sakura/sakura.css' layer(base);
+
+@layer base {
+:root {
+  --ts-font-display: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --ts-font-ui: var(--ts-font-display);
+  --ts-font-mono: Consolas, Menlo, ui-monospace, monospace;
+}
+
+body { color: var(--ts-foreground); background-color: var(--ts-background); }
+hr { border-color: var(--ts-accent); }
+a { color: var(--ts-accent); }
+a:visited { color: var(--ts-accent); }
+a:hover { color: var(--ts-accent); border-bottom-color: var(--ts-text); }
+blockquote { border-left-color: var(--ts-accent); background-color: var(--ts-surface); }
+pre, code, kbd, samp { background-color: var(--ts-surface); }
+td, th { border-bottom-color: var(--ts-line); }
+input, textarea { border-color: var(--ts-text-2); }
+input:focus, textarea:focus { border-color: var(--ts-accent); }
+.button, button, input[type=submit], input[type=reset], input[type=button], input[type=file]::file-selector-button {
+  background-color: var(--ts-accent); color: var(--ts-accent-foreground); border-color: var(--ts-accent);
+}
+.button:hover, button:hover, input[type=submit]:hover, input[type=reset]:hover, input[type=button]:hover, input[type=file]::file-selector-button:hover {
+  background-color: var(--ts-accent); color: var(--ts-accent-foreground);
+}
+textarea, select, input { color: var(--ts-foreground); background-color: var(--ts-surface); border-color: var(--ts-surface);
+}
+}

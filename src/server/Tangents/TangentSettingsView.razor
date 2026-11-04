@@ -29,7 +29,7 @@
             {
                 <p class="sign-in-failure" id="settings-failure" role="alert">@failure</p>
             }
-            <form class="sign-in-form" method="post" action="@Model.Change?.Action" data-island="@(Mutable ? "submitting" : null)">
+            <form class="sign-in-form change-tangent" method="post" action="@Model.Change?.Action" data-island="@(Mutable ? "submitting" : null)">
                 @if (Model.Change is { } change)
                 {
                 }
@@ -98,7 +98,7 @@
 
     /// <summary>One move as a small form of its own, posting the move alone; disabled where the Tangent is already at
     /// that end.</summary>
-    private RenderFragment Moved(Move move, string label, bool possible) => @<form method="post" action="@Model.Change?.Action">
+    private RenderFragment Moved(Move move, string label, bool possible) => @<form class="change-tangent" method="post" action="@Model.Change?.Action">
         @if (Model.Change is { } change)
         {
         }

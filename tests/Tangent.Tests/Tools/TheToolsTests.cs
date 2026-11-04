@@ -82,6 +82,7 @@ public sealed class TheToolsTests
         [Action<TakeOnATangentController>(nameof(TakeOnATangentController.Get))] = "only shows a form",
         [Action<ReportController>(nameof(ReportController.Get))] = "only shows a form",
         [Action<NewTangentController>(nameof(NewTangentController.Get))] = "only shows a form",
+        [Action<TangentSpaceSettingsController>(nameof(TangentSpaceSettingsController.Preview))] = "only shows the door in an appearance, saving nothing",
         [Action<BringYourAgentController>(nameof(BringYourAgentController.Get))] = "hands the place to an agent, so an agent has it already",
         [Action<SignInController>(nameof(SignInController.Get))] = "sign-in",
         [Action<FirstRunController>(nameof(FirstRunController.Get))] = "first run",

@@ -1,0 +1,67 @@
+/* The plain elements as Tangent draws them, in the base's fonts (--ts-font-*): the page's colour and type, headings,
+ * links, buttons and fields, selection and focus. Tangent's own base and Concord each bring it into the base layer. */
+
+body {
+  background: var(--ts-background);
+  color: var(--ts-foreground);
+  font: var(--ts-type-ui);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+summary {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+a {
+  color: var(--ts-accent);
+  text-underline-offset: 3px;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin-top: 0;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  color: var(--ts-text);
+  letter-spacing: -0.015em;
+}
+
+h1 {
+  font: var(--ts-type-page-title);
+}
+
+h2 {
+  font: var(--ts-type-section);
+}
+
+h3 {
+  font: var(--ts-type-shelf);
+}
+
+::selection {
+  background: var(--ts-selection);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ts-accent);
+  outline-offset: 3px;
+}

@@ -1,15 +1,20 @@
+@using System.Text.Json
 @using global::Tangent.Posts
 @using global::Tangent.Render
 @* The place's settings, appearance: the sections of the settings in the rail, this one marked, and in one panel beside
-   them the choice of the place's accent, four cards, each with its colour in the reader's theme, a note that light or
-   dark stays each reader's own, and behind one quiet disclosure, open once any holds something or a refusal needs it, the
-   place's slots, each a field of its own HTML that says what it keeps. A reader who may not change them reads why above
-   the form, whose choices are disabled, whose fields are read-only and which has no button, and a visitor the way to
-   sign in; a refusal shows above the form. *@
-<div class="layout layout-settings">
+   them the place's layers as it fills them — its base, Tangent's own or a bundled classless stylesheet, each a card; its
+   palette, the base's own colours or Tangent's in the place's accent, with the four accents as cards, each with its colour
+   in the reader's theme, and a note that light or dark stays each reader's own; and the place's own CSS — then the door
+   as it will look, drawn in the choices before they are saved, following each change where script runs and on Preview
+   where it does not; and behind one quiet disclosure, open once any holds something or a refusal needs it, the place's
+   slots, each a field of its own HTML that says what it keeps. A layer away from its default returns there in one press,
+   and clearing the place's CSS asks once more in the page. A reader who may not change them reads why above the form,
+   whose choices are disabled, whose fields are read-only and which has no button, and a visitor the way to sign in; a
+   refusal shows above the form. *@
+<main class="layout layout-settings">
     <SettingsRail Sections="@Model.Sections" />
-    <main>
-        <section class="sign-in-panel post-form-panel" aria-labelledby="space-appearance-heading">
+    <div class="layout-main">
+        <section class="sign-in-panel post-form-panel panel place" aria-labelledby="space-appearance-heading">
             <div class="sign-in-body">
                 <p class="post-form-where">Settings of <a href="@Model.Door">@Model.Place</a></p>
                 <h1 id="space-appearance-heading" class="sign-in-title">@TangentSpaceSettingsController.AppearanceSection</h1>
@@ -30,10 +35,41 @@
                 {
                     <p class="sign-in-failure" id="space-appearance-failure" role="alert">@failure</p>
                 }
-                <form class="sign-in-form" method="post" action="@Model.Change?.Action" data-island="@(Mutable ? "submitting" : null)">
-                    @if (Model.Change is { } change)
-                    {
-                    }
+                <form class="sign-in-form change-appearance" method="post" action="@Model.Change?.Action" data-island="@(Mutable ? "submitting" : null)">
+                    <fieldset class="post-form-choice">
+                        <legend class="field-label">The base: the plain elements and the fonts</legend>
+                        <div class="post-form-options">
+                            @foreach (var word in Model.Bases)
+                            {
+                                <label class="post-form-option">
+                                    <span class="post-form-option-text">
+                                        <span class="post-form-option-name">@BaseName(word)</span>
+                                        <span class="post-form-option-detail">@BaseDetail(word)</span>
+                                    </span>
+                                    <input type="radio" name="@TangentSpaceSettingsController.BaseField" value="@word"
+                                           checked="@(word == Model.Base)" disabled="@(!Mutable)">
+                                </label>
+                            }
+                        </div>
+                    </fieldset>
+                    @Reset("appearance-reset-base", Model.Base != Space.Appearance.Word(Space.Base.Tangent), "Return to Tangent's own base")
+                    <fieldset class="post-form-choice">
+                        <legend class="field-label">The palette: the colours</legend>
+                        <div class="post-form-options">
+                            @foreach (var word in Model.Palettes)
+                            {
+                                <label class="post-form-option">
+                                    <span class="post-form-option-text">
+                                        <span class="post-form-option-name">@PaletteName(word)</span>
+                                        <span class="post-form-option-detail">@PaletteDetail(word)</span>
+                                    </span>
+                                    <input type="radio" name="@TangentSpaceSettingsController.PaletteField" value="@word"
+                                           checked="@(word == Model.Palette)" disabled="@(!Mutable)">
+                                </label>
+                            }
+                        </div>
+                    </fieldset>
+                    @Reset("appearance-reset-palette", Model.Palette != Space.Appearance.Word(Space.Palette.Base), "Return to the base's own colours")
                     <fieldset class="post-form-choice">
                         <legend class="field-label">The place's accent</legend>
                         <div class="post-form-options">
@@ -50,7 +86,32 @@
                             }
                         </div>
                     </fieldset>
-                    <p class="post-form-note">Links, buttons and what is new take it on every page, for everyone. Light or dark is each reader's own, at the foot of any page.</p>
+                    <p class="post-form-note">Links, buttons and what is new take it on every page, for everyone, in Tangent's palette. Light or dark is each reader's own, at the foot of any page.</p>
+                    <div class="field">
+                        <label class="field-label" for="space-appearance-css">Your own CSS</label>
+                        <textarea class="post-form-body slot-source appearance-css" id="space-appearance-css" name="@TangentSpaceSettingsController.CssField" rows="8"
+                                  spellcheck="false" maxlength="@Space.Appearance.CssLimit" readonly="@(!Mutable)" aria-describedby="space-appearance-css-note">@Model.Css</textarea>
+                        <p class="post-form-note" id="space-appearance-css-note">Over every other layer, on every page but these settings. Pages say what each thing is: <code>article.post.by-agent &gt; header</code>, <code>.row.topic.is-new</code>, <code>.badge</code>. At most @Space.Appearance.CssLimit.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) characters.</p>
+                    </div>
+                    @if (Mutable && Model.Css.Length > 0)
+                    {
+                        <details class="post-form-more appearance-clear">
+                            <summary class="sign-in-other-toggle">Clear your CSS</summary>
+                            <div class="post-form-more-body">
+                                <p class="post-form-note">Your CSS goes, and every page wears the other layers alone.</p>
+                                <button type="submit" class="watch-button" form="appearance-reset-css">Clear it</button>
+                            </div>
+                        </details>
+                    }
+                    @if (Model.Preview is { } preview)
+                    {
+                        <div class="field appearance-preview-field">
+                            <span class="field-label">Your door, as it will look</span>
+                            <iframe class="appearance-preview" name="appearance-preview" src="@preview" title="Your door, as it will look"
+                                    data-island="preview" data-props="@JsonSerializer.Serialize(new { button = "appearance-preview-button" })"></iframe>
+                            <button type="submit" class="watch-button" id="appearance-preview-button" formaction="@preview" formtarget="appearance-preview">Preview</button>
+                        </div>
+                    }
                     <details class="post-form-more" open="@(Model.Failure is not null || Model.Slots != new Slots())">
                         <summary class="sign-in-other-toggle">Your own HTML</summary>
                         <div class="post-form-more-body">
@@ -75,16 +136,32 @@
                         </div>
                     }
                 </form>
+                @if (Model.Change is { } change)
+                {
+                    @ResetForm("appearance-reset-base", change.Action, TangentSpaceSettingsController.BaseField, Space.Appearance.Word(Space.Base.Tangent))
+                    @ResetForm("appearance-reset-palette", change.Action, TangentSpaceSettingsController.PaletteField, Space.Appearance.Word(Space.Palette.Base))
+                    @ResetForm("appearance-reset-css", change.Action, TangentSpaceSettingsController.CssField, "")
+                }
             </div>
         </section>
-    </main>
-</div>
+    </div>
+</main>
 
 @code {
     [Parameter, EditorRequired] public AppearanceSettingsPage Model { get; set; } = default!;
 
-    /// <summary>Whether the reader may change the accent and the slots here.</summary>
+    /// <summary>Whether the reader may change the appearance and the slots here.</summary>
     private bool Mutable => Model.Gate is null;
+
+    /// <summary>The one press that returns a layer to its default, shown while it is elsewhere, sending its own form.</summary>
+    private RenderFragment Reset(string form, bool away, string label) => @<text>@if (Mutable && away)
+        {
+            <p class="post-form-note"><button type="submit" class="watch-button" form="@form">@label</button></p>
+        }</text>;
+
+    /// <summary>A form of one field, which a layer's reset sends, leaving every other choice as it is saved.</summary>
+    private static RenderFragment ResetForm(string id, string action, string field, string value) =>
+        @<form id="@id" class="change-appearance" method="post" action="@action" hidden><input type="hidden" name="@field" value="@value"></form>;
 
     /// <summary>One slot's field: its source as it stands, and what it keeps and how much.</summary>
     private RenderFragment SlotField(string field, string label, string value, int rows, int limit, string note) => @<div class="field">
@@ -95,6 +172,30 @@
     </div>;
 
     private static string Name(string word) => char.ToUpperInvariant(word[0]) + word[1..];
+
+    private static string BaseName(string word) => word switch
+    {
+        "tangent" => "Tangent's own",
+        "simple" => "Simple.css",
+        "mvp" => "MVP.css",
+        "marx" => "Marx",
+        "sakura" => "Sakura",
+        "water" => "Water.css",
+        "new" => "new.css",
+        "concord" => "Concord",
+        _ => Name(word)
+    };
+
+    private static string BaseDetail(string word) => word switch
+    {
+        "tangent" => "Newsreader and Schibsted Grotesk",
+        "concord" => "A chat app's look, Tangent's own",
+        _ => "Classless, in your system's fonts"
+    };
+
+    private static string PaletteName(string word) => word == "base" ? "The base's own" : "Tangent's, in the accent";
+
+    private static string PaletteDetail(string word) => word == "base" ? "Tangent's own base wears Tangent's palette" : "Over any base";
 
     /// <summary>The frame the shell draws around the page: the place and its settings as crumbs, and who reads, or where
     /// a visitor signs in.</summary>

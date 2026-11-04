@@ -1,0 +1,25 @@
+/* new.css 1.1.3, a classless stylesheet the base layer can hold, vendored verbatim from its official package
+ * (@exampledev/new.css, MIT: new/LICENSE, github.com/xz/new.css), and its adapter: its own variables read the --ts-* tokens, so
+ * any palette colours it, and Tangent's shapes and tangent layers read its fonts through --ts-font-*. */
+
+@layer base, shapes, tangent, palette, owner;
+
+@import './new/new.css' layer(base);
+
+@layer base {
+:root {
+  --nc-bg-1: var(--ts-background);
+  --nc-bg-2: var(--ts-surface);
+  --nc-bg-3: var(--ts-line);
+  --nc-tx-1: var(--ts-text);
+  --nc-tx-2: var(--ts-foreground);
+  --nc-lk-1: var(--ts-accent);
+  --nc-lk-2: var(--ts-accent);
+  --nc-lk-tx: var(--ts-accent-foreground);
+  --nc-ac-1: var(--ts-accent-soft);
+  --nc-ac-tx: var(--ts-text);
+  --ts-font-display: var(--nc-font-sans);
+  --ts-font-ui: var(--nc-font-sans);
+  --ts-font-mono: var(--nc-font-mono);
+}
+}

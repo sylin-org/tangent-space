@@ -8,9 +8,9 @@
    reader may change of them inline (PeopleActions). No one found reads as one sentence. The next page and the first
    are a link away. A reader who may not read the people reads why, and a visitor the way to sign in; a refusal shows
    above the list. *@
-<div class="layout layout-settings">
+<main class="layout layout-settings">
     <SettingsRail Sections="@Model.Sections" />
-    <main>
+    <div class="layout-main">
         <section class="sign-in-panel post-form-panel" aria-labelledby="people-heading">
             <div class="sign-in-body">
                 <p class="post-form-where">Settings of <a href="@Model.Door">@Model.Place</a></p>
@@ -30,7 +30,7 @@
                 }
                 else
                 {
-                    <form class="sign-in-form people-search" method="get" action="@Model.Search" role="search">
+                    <form class="sign-in-form people-search read-people" method="get" action="@Model.Search" role="search">
                         <div class="field">
                             <label class="field-label" for="people-handle">Find by handle</label>
                             <span class="field-input">
@@ -82,8 +82,8 @@
                 }
             </div>
         </section>
-    </main>
-</div>
+    </div>
+</main>
 
 @code {
     [Parameter, EditorRequired] public PeoplePage Model { get; set; } = default!;

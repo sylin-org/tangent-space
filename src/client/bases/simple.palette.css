@@ -1,0 +1,18 @@
+/* Simple.css 2.3.7's own palette, which the palette layer holds when it is left to the base: the --ts-* values
+ * taken from its colours, for Light and Dark, in the reader's theme. What follows from them is Tangent's (tokens.css). */
+
+@layer base, shapes, tangent, palette, owner;
+
+@layer palette {
+:root {
+  --ts-page: light-dark(#ffffff, #212121);
+  --ts-surface: light-dark(#f5f7ff, #2b2b2b);
+  --ts-raised: light-dark(#ffffff, #2b2b2b);
+  --ts-text: light-dark(#212121, #dcdcdc);
+  --ts-text-2: light-dark(#585858, #ababab);
+  --ts-text-3: light-dark(#686868, #a0a0a0);
+  --ts-connector: light-dark(#898ea4, #898ea4);
+  --ts-accent: light-dark(#0d47a1, #ffb300);
+  --ts-on-accent: light-dark(#ffffff, #212121);
+}
+}

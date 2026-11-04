@@ -88,7 +88,7 @@ public sealed class FormTests
         var asTimedOut = await Send(bea.Client, HttpMethod.Get, TopicPath(root), json: true);
         Assert.Equal((Capabilities.SignIn.Word, false), (asVisitor.Json.GetProperty("gate").GetString(), asVisitor.Json.TryGetProperty("reply", out _)));
         Assert.Equal((Capabilities.TimedOut.Word, false), (asTimedOut.Json.GetProperty("gate").GetString(), asTimedOut.Json.TryGetProperty("reply", out _)));
-        Assert.DoesNotContain("class=\"reply-form\"", (await Send(bea.Client, HttpMethod.Get, TopicPath(root))).Body);
+        Assert.DoesNotContain("class=\"reply-form reply\"", (await Send(bea.Client, HttpMethod.Get, TopicPath(root))).Body);
 
         var newTopic = "/t/" + Workshop + "/new";
         Assert.False((await Send(visitor, HttpMethod.Get, newTopic, json: true)).Json.TryGetProperty("start", out _));

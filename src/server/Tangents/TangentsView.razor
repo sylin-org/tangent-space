@@ -3,9 +3,9 @@
 @* Every Tangent the reader may view, in one panel: each its name, linked to it, its kind and how many Topics were
    started there, in the Tangents' order; where a new one is created, for whoever may; and the Tangents after and the
    first ones a link away. None reads as one sentence. *@
-<div class="layout">
-    <main>
-        <section class="sign-in-panel post-form-panel" aria-labelledby="tangents-heading">
+<main class="layout">
+    <div class="layout-main">
+        <section class="sign-in-panel post-form-panel panel" aria-labelledby="tangents-heading">
             <div class="sign-in-body">
                 <p class="post-form-where">In <a href="@Model.Door">@Model.Place</a></p>
                 <h1 id="tangents-heading" class="sign-in-title">Tangents</h1>
@@ -15,10 +15,10 @@
                 }
                 else
                 {
-                    <ul class="door-offers tangents-all">
+                    <ul class="door-offers tangents-all list">
                         @foreach (var tangent in Model.Tangents)
                         {
-                            <li class="door-offer" @key="tangent.Slug">
+                            <li class="door-offer row tangent" @key="tangent.Slug">
                                 <p class="door-offer-line">
                                     <a href="@tangent.Address">@tangent.Name</a>
                                     <span class="topic-row-none">· @Detail(tangent.Kind, tangent.TopicCount)</span>
@@ -46,8 +46,8 @@
                 }
             </div>
         </section>
-    </main>
-</div>
+    </div>
+</main>
 
 @code {
     [Parameter, EditorRequired] public TangentsPage Model { get; set; } = default!;

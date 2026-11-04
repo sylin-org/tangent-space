@@ -1,0 +1,16 @@
+/* Tangent's own base, the base layer's default: its three typefaces, as the fonts every layer reads (--ts-font-*), and
+ * the plain elements in them (elements.css). A bundled stylesheet (bases/<name>.css) takes this file's place, and with it
+ * these fonts. */
+
+@layer base, shapes, tangent, palette, owner;
+
+@import './fonts.css' layer(base);
+@import './elements.css' layer(base);
+
+@layer base {
+:root {
+  --ts-font-display: 'Newsreader', Georgia, serif;
+  --ts-font-ui: 'Schibsted Grotesk', 'Helvetica Neue', Arial, sans-serif;
+  --ts-font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+}

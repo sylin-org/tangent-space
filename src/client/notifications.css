@@ -55,7 +55,8 @@
   list-style: none;
 }
 
-.notification {
+.notification,
+.search-hits > .post {
   align-items: flex-start;
 }
 

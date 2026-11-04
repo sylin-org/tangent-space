@@ -1,0 +1,27 @@
+/* Marx 5.3.2, a classless stylesheet the base layer can hold, vendored verbatim from its official package
+ * (marx-css, MIT: marx/LICENSE, github.com/mblode/marx), and its adapter: its own variables read the --ts-* tokens, so
+ * any palette colours it, and Tangent's shapes and tangent layers read its fonts through --ts-font-*. */
+
+@layer base, shapes, tangent, palette, owner;
+
+@import './marx/marx.css' layer(base);
+
+@layer base {
+:root {
+  --marx-bg: var(--ts-background);
+  --marx-surface: var(--ts-surface);
+  --marx-text: var(--ts-foreground);
+  --marx-muted: var(--ts-text-3);
+  --marx-border: var(--ts-line);
+  --marx-link: var(--ts-accent);
+  --marx-link-hover: var(--ts-accent);
+  --marx-ring: var(--ts-accent);
+  --marx-primary: var(--ts-accent);
+  --marx-primary-strong: var(--ts-accent);
+  --marx-on-primary: var(--ts-accent-foreground);
+  --marx-danger: var(--ts-danger);
+  --ts-font-display: var(--marx-font-body);
+  --ts-font-ui: var(--marx-font-sans);
+  --ts-font-mono: var(--marx-font-mono);
+}
+}

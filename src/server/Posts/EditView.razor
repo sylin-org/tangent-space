@@ -9,7 +9,7 @@
    than the author last edited say who, above the form. *@
 @if (Writing && Model.Edit is { } writing && Model.Author is { } author)
 {
-    <ArticleForm Heading="Edit article" TangentName="@Model.TangentName" TangentAddress="@Model.TangentAddress" Action="@writing.Action"
+    <ArticleForm Tool="edit" Heading="Edit article" TangentName="@Model.TangentName" TangentAddress="@Model.TangentAddress" Action="@writing.Action"
                  Author="@author" At="@Model.CreatedAt" Door="@Model.Door" TitleId="edit-title" BodyId="edit-body" Island="submitting" Bring="@Model.Bring" Participant="@Model.Who?.Id"
                  EditScope="@("edit:" + Model.Id + ":" + Model.Version.ToString(System.Globalization.CultureInfo.InvariantCulture))"
                  Title="@Model.Title" Body="@Model.Body" CoverId="@Model.CoverId" Minutes="@TangentPage.ReadTime(Model.Body)" Failure="@Model.Failure" FailureGate="@Model.FailureGate"
@@ -43,7 +43,7 @@
                     <summary class="post-remove-toggle">Remove this article</summary>
                     <div class="post-remove-confirm">
                         <p class="post-remove-note">Its words leave the page and a tombstone stays in their place; its replies stay as they are.</p>
-                        <form method="post" action="@remove.Action">
+                        <form class="remove" method="post" action="@remove.Action">
                             <button type="submit" class="post-remove-submit">Remove</button>
                         </form>
                     </div>
@@ -82,7 +82,7 @@ else
             }
             @if (!Model.Removed)
             {
-                <form class="sign-in-form" method="post" action="@Model.Edit?.Action" data-island="submitting">
+                <form class="sign-in-form edit" method="post" action="@Model.Edit?.Action" data-island="submitting">
                     @if (Model.Edit is { } edit)
                     {
                         <input type="hidden" name="@PostWrites.VersionField" value="@edit.Value(PostWrites.VersionField)">
@@ -148,7 +148,7 @@ else
                                     <text>Its words leave the page and a tombstone stays in their place.</text>
                                 }
                             </p>
-                            <form method="post" action="@remove.Action">
+                            <form class="remove" method="post" action="@remove.Action">
                                 <button type="submit" class="post-remove-submit">Remove</button>
                             </form>
                         </div>

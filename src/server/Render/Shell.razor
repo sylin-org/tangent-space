@@ -1,8 +1,10 @@
 @using System.Globalization
 @using System.Text.Json
 @using Tangent.Space
-@* The page around one resource's component: the place's accent on <html>, and the stylesheet and the two scripts every page loads, absolute from
-   the base URL. The theme script blocks in <head> so the reader's theme applies before the first paint; the
+@* The page around one resource's component: the place's accent, and any base other than Tangent's own, on <html>; the
+   stylesheets of the place's appearance in their layers — Tangent's components, then its base, whose arrangement, where it
+   has one, follows Tangent's own in the tangent layer, then its palette, and the place's own CSS as the owner layer, which
+   a management page leaves out — and the two scripts every page loads, absolute from the base URL. The theme script blocks in <head> so the reader's theme applies before the first paint; the
    page script is a module, deferred by nature, that mounts the islands once the document is parsed. A standalone page
    opens with no server and no script: the device decides its theme, and no island answers on it. A resource
    that names a frame is drawn inside it: the masthead with the place's mark and name, the search box, a form that works without JavaScript and suggests as someone types with it, and, for someone signed in, how
@@ -10,17 +12,23 @@
    new ones arrive, a button that opens them, marking them seen, and their account opening in the page with their name,
    handle and role, the same way to their notifications, the place's settings for whoever may change them, and the way to sign out, or for a visitor the way to
    sign in; the path bar whose elbow hangs from the mark, with a Tangent's crumb opening the list of Tangents
-   in the page, and where a new one is created for whoever may; and the footer with the appearance a visitor can choose. A page a visitor may
+   in the page, and where a new one is created for whoever may; and the footer with the theme a visitor can choose. A page a visitor may
    read carries in its head the card a link to it previews. A page of the place's archive opens with the one line that says it is retired. The place's own
    slots come through here: its head last in <head>, so what it sets wins, its masthead after the place's name and its footer first in the footer, each adding nothing while it is empty.
    Nothing here is a dialog. *@
 <!DOCTYPE html>
-<html lang="en" data-accent="@Accent">
+<html lang="en" data-accent="@Appearance.Word(Appearance.Accent)" data-base="@Appearance.BaseAttribute">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@Title</title>
     <link rel="stylesheet" href="@(BaseUrl + "/" + HtmlFormatter.Stylesheet)">
+    <link rel="stylesheet" href="@(BaseUrl + "/" + Appearance.BaseSheet)">
+    <link rel="stylesheet" href="@(BaseUrl + "/" + Appearance.PaletteSheet)">
+    @if (!Management && Appearance.CssLayer is { } owner)
+    {
+        <style>@((MarkupString)owner)</style>
+    }
     @if (!Standalone)
     {
         <script src="@(BaseUrl)/theme.js"></script>
@@ -50,15 +58,15 @@
 }
 @if (Frame is { } frame)
 {
-    <header class="masthead">
-        <a class="masthead-place" href="@frame.Door">
+    <header class="masthead bar place">
+        <a class="masthead-place chip place" href="@frame.Door">
             <span class="masthead-mark" aria-hidden="true">@frame.Initial</span>
             <span class="masthead-name">@frame.Place</span>
         </a>
         <Slot Name="masthead" Html="@Slots.Masthead" />
         @if (frame.Searchable && !Standalone)
         {
-            <form class="masthead-search" role="search" method="get" action="@frame.Search" data-island="search">
+            <form class="masthead-search search" role="search" method="get" action="@frame.Search" data-island="search">
                 <svg class="masthead-search-icon" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="9" r="5.5"></circle><path d="M13 13l3.5 3.5"></path></svg>
                 <input class="masthead-search-field" type="search" name="q" value="@frame.Searched" placeholder="Search" aria-label="Search this place" maxlength="200" autocomplete="off">
             </form>
@@ -68,7 +76,7 @@
             {
                 @if (who.Notifications is { } unseen)
                 {
-                    <form class="masthead-unseen-form" method="post" action="@unseen.Open.Action"><input type="hidden" name="@Events.Notifications.ThroughField" value="@unseen.Open.Value(Events.Notifications.ThroughField)">
+                    <form class="masthead-unseen-form seen-notifications" method="post" action="@unseen.Open.Action"><input type="hidden" name="@Events.Notifications.ThroughField" value="@unseen.Open.Value(Events.Notifications.ThroughField)">
                         <button class="masthead-unseen" hidden="@(unseen.Count == 0)" aria-label="@Unseen(unseen.Count, unseen.AtLeast)"
                                 data-island="unseen" data-props="@JsonSerializer.Serialize(new { reader = who.Id, count = unseen.Count, atLeast = unseen.AtLeast, through = unseen.Through, applications = unseen.Applications })">
                             <svg class="masthead-unseen-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">@((MarkupString)NotificationsIcon)</svg>
@@ -76,12 +84,12 @@
                         </button>
                     </form>
                 }
-                <details class="account">
+                <details class="account menu participant is-you">
                     <summary class="account-button" aria-label="@("Account, " + who.Name)">
                         @Mark(who)
                         <svg class="account-chevron" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"></path></svg>
                     </summary>
-                    <div class="account-panel">
+                    <div class="account-panel panel">
                         <div class="account-who">
                             @Mark(who)
                             <span class="account-names">
@@ -90,17 +98,17 @@
                             </span>
                         </div>
                         <div class="account-appearance appearance" data-island="appearance">
-                            <span class="account-appearance-label" id="account-appearance-label">@Icon(AppearanceIcon)Appearance</span>
+                            <span class="account-appearance-label" id="account-appearance-label">@Icon(ThemeIcon)Theme</span>
                             <div class="segmented" role="group" aria-labelledby="account-appearance-label">
                                 <button type="button" data-theme-choice="system" aria-pressed="true">System</button>
                                 <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
                                 <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
                             </div>
                         </div>
-                        <ul class="account-items">
+                        <ul class="account-items list">
                             @if (who.Notifications is { } notifications)
                             {
-                                <li><form method="post" action="@notifications.Open.Action"><input type="hidden" name="@Events.Notifications.ThroughField" value="@notifications.Open.Value(Events.Notifications.ThroughField)"><button class="account-item account-action">@Icon(NotificationsIcon)Notifications</button></form></li>
+                                <li><form class="seen-notifications" method="post" action="@notifications.Open.Action"><input type="hidden" name="@Events.Notifications.ThroughField" value="@notifications.Open.Value(Events.Notifications.ThroughField)"><button class="account-item account-action">@Icon(NotificationsIcon)Notifications</button></form></li>
                             }
                             @if (who.Settings is { } settings)
                             {
@@ -118,7 +126,7 @@
             }
         </div>
     </header>
-    <nav class="path-bar" aria-label="You are here">
+    <nav class="path" aria-label="You are here">
         <span class="path-elbow" aria-hidden="true"></span>
         <ol class="path-crumbs">
             @for (var index = 0; index < frame.Crumbs.Count; index++)
@@ -128,19 +136,19 @@
                 <li class="path-crumb">
                     @if (crumb.Switcher is { } switcher)
                     {
-                        <details class="switcher">
+                        <details class="switcher menu tangent">
                             <summary class="switcher-button" aria-current="@(last ? "page" : null)" aria-label="@(crumb.Label + ", switch Tangent")">
                                 <TangentTile Tile="@switcher.Tile" />
                                 <span class="switcher-label">@crumb.Label</span>
                                 <svg class="switcher-chevron" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"></path></svg>
                             </summary>
-                            <div class="switcher-panel">
+                            <div class="switcher-panel panel">
                                 <p class="switcher-heading">Tangents</p>
-                                <ul class="switcher-items">
+                                <ul class="switcher-items list">
                                     @foreach (var item in switcher.Tangents)
                                     {
                                         <li>
-                                            <a class="switcher-item" href="@item.Address" aria-current="@(item.Current ? "page" : null)">
+                                            <a class="@(item.Current ? "switcher-item row tangent is-current" : "switcher-item row tangent")" href="@item.Address" aria-current="@(item.Current ? "page" : null)">
                                                 <TangentTile Tile="@item.Tile" Size="menu" />
                                                 <span class="switcher-item-text">
                                                     <span class="switcher-item-name">@item.Name</span>
@@ -164,7 +172,7 @@
                     }
                     else if (last)
                     {
-                        <span aria-current="page" class="@(frame.Crumbs.Count == 1 ? "path-current path-only" : "path-current")">@crumb.Label</span>
+                        <span aria-current="page" class="@(frame.Crumbs.Count == 1 ? "path-current path-only is-current" : "path-current is-current")">@crumb.Label</span>
                     }
                     else
                     {
@@ -176,13 +184,13 @@
         </ol>
     </nav>
     <CascadingValue Name="@nameof(Standalone)" Value="@Standalone" IsFixed="true">@ChildContent</CascadingValue>
-    <footer class="footer">
+    <footer class="footer bar">
         <Slot Name="footer" Html="@Slots.Footer" />
         <span class="footer-powered">Powered by Tangent Space</span>
         @if (!Standalone)
         {
             <div class="footer-end appearance" data-island="appearance">
-                <span id="appearance-label">Appearance</span>
+                <span id="appearance-label">Theme</span>
                 <div class="segmented" role="group" aria-labelledby="appearance-label">
                     <button type="button" data-theme-choice="system" aria-pressed="true">System</button>
                     <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
@@ -204,7 +212,12 @@ else
 
     [Parameter, EditorRequired] public string BaseUrl { get; set; } = "";
 
-    [Parameter, EditorRequired] public string Accent { get; set; } = "";
+    /// <summary>How the place looks: the stylesheet of each of its layers, its accent and its own CSS.</summary>
+    [Parameter, EditorRequired] public Appearance Appearance { get; set; } = new();
+
+    /// <summary>Whether the page is one of the place's management pages, which leave out the owner layer, so no stylesheet
+    /// of the place's can hide the way back.</summary>
+    [Parameter] public bool Management { get; set; }
 
     /// <summary>The place's own HTML, sanitized when it was written, so the same on the site, in an export and in the archive.</summary>
     [Parameter, EditorRequired] public Slots Slots { get; set; } = new();
@@ -222,7 +235,7 @@ else
 
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
-    private const string AppearanceIcon = "<circle cx=\"10\" cy=\"10\" r=\"6.5\"></circle><path d=\"M10 3.5v13a6.5 6.5 0 0 0 0-13z\" fill=\"currentColor\" stroke=\"none\"></path>";
+    private const string ThemeIcon = "<circle cx=\"10\" cy=\"10\" r=\"6.5\"></circle><path d=\"M10 3.5v13a6.5 6.5 0 0 0 0-13z\" fill=\"currentColor\" stroke=\"none\"></path>";
     private const string SettingsIcon = "<circle cx=\"10\" cy=\"10\" r=\"2.5\"></circle><path d=\"M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4\"></path>";
     private const string SignOutIcon = "<path d=\"M8 4.5H5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h3\"></path><path d=\"M12.5 6.5L16 10l-3.5 3.5\"></path><path d=\"M16 10H8\"></path>";
     private const string NotificationsIcon = "<path d=\"M5.5 13.5V9a4.5 4.5 0 0 1 9 0v4.5l1.5 1.5H4z\"></path><path d=\"M8.5 17a1.5 1.5 0 0 0 3 0\"></path>";
@@ -245,7 +258,7 @@ else
         if (Monogram.Avatar(who.Avatar) is { } avatar)
         {
             builder.OpenElement(0, "img");
-            builder.AddAttribute(1, "class", "who-mark");
+            builder.AddAttribute(1, "class", "who-mark chip participant is-you");
             builder.AddAttribute(2, "src", avatar);
             builder.AddAttribute(3, "alt", "");
             builder.CloseElement();
@@ -253,7 +266,7 @@ else
         }
 
         builder.OpenElement(4, "span");
-        builder.AddAttribute(5, "class", "who-mark tone-" + Monogram.Tone(who.Id));
+        builder.AddAttribute(5, "class", "who-mark chip participant is-you tone-" + Monogram.Tone(who.Id));
         builder.AddAttribute(6, "aria-hidden", "true");
         builder.AddContent(7, Monogram.Letters(who.Handle));
         builder.CloseElement();

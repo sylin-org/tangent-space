@@ -1,0 +1,44 @@
+/* Water.css 2.1.1, a classless stylesheet the base layer can hold, vendored verbatim from its official package
+ * (water.css, MIT: water/LICENSE, github.com/kognise/water.css), and its adapter: its own variables read the --ts-* tokens, so
+ * any palette colours it, and Tangent's shapes and tangent layers read its fonts through --ts-font-*. */
+
+@layer base, shapes, tangent, palette, owner;
+
+@import './water/water.css' layer(base);
+
+@layer base {
+:root {
+  --background-body: var(--ts-background);
+  --background: var(--ts-surface);
+  --background-alt: var(--ts-surface);
+  --selection: var(--ts-selection);
+  --text-main: var(--ts-foreground);
+  --text-bright: var(--ts-text);
+  --text-muted: var(--ts-text-3);
+  --links: var(--ts-accent);
+  --focus: var(--ts-accent-line);
+  --border: var(--ts-connector);
+  --button-base: var(--ts-hover);
+  --button-hover: var(--ts-line);
+  --form-text: var(--ts-foreground);
+  --form-placeholder: var(--ts-text-3);
+  --code: var(--ts-foreground);
+  --variable: var(--ts-accent);
+  --highlight: var(--ts-accent-soft);
+  --scrollbar-thumb: var(--ts-connector);
+  --scrollbar-thumb-hover: var(--ts-text-3);
+  --select-arrow: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3e%3cpath d='M1 1l5 5 5-5' fill='none' stroke='%23161f27' stroke-width='1.6'/%3e%3c/svg%3e");
+  --ts-font-display: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  --ts-font-ui: var(--ts-font-display);
+  --ts-font-mono: Consolas, Menlo, ui-monospace, monospace;
+}
+
+/* Its select arrow is an image of one colour: here, an arrow of Tangent's own in Water's two, following the reader's theme
+   rather than the device. */
+:root[data-theme="dark"] { --select-arrow: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3e%3cpath d='M1 1l5 5 5-5' fill='none' stroke='%23efefef' stroke-width='1.6'/%3e%3c/svg%3e"); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]), :root[data-theme="system"] { --select-arrow: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3e%3cpath d='M1 1l5 5 5-5' fill='none' stroke='%23efefef' stroke-width='1.6'/%3e%3c/svg%3e"); }
+}
+html { scrollbar-color: var(--scrollbar-thumb) var(--background-body);
+}
+}

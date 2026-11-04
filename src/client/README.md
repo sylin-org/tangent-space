@@ -1,12 +1,15 @@
 # Client
 
-The design foundation every page of a Tangent Space stands on, and its islands, built by Vite into one stylesheet and two scripts that the server serves as static files.
+The design foundation every page of a Tangent Space stands on, and its islands, built by Vite into a stylesheet for each layer of the place's appearance, the bundled bases, and two scripts, which the server serves as static files.
 
 | File | What it holds |
 | --- | --- |
-| `tokens.css` | The design tokens as `--ts-*` custom properties: type scale, radii, layout sizes, shadows, Paper and Ink, the four Tangent Space accents (gold, jade, iris, copper), the place's first four tokens named as `site.standard.theme.basic` names them (`--ts-background`, `--ts-foreground`, `--ts-accent`, `--ts-accent-foreground`), the six Tangent tones and the role colours. Values are the design reference's, held there by the token parity test. |
+| `base.css`, `tangent.css`, `palette.css` | Tangent's own stylesheet for each layer of `@layer base, shapes, tangent, palette, owner;`: `base.css` its fonts as `--ts-font-*` and the plain elements, the base layer's default; `tangent.css` its components, `tokens.css`, `layout.css` and `sign-in.css` in the shapes layer and every page's own file in the tangent layer, which every page loads; `palette.css` the colours of Paper and Ink and the four accents, the palette layer's default. Each is built to the file of its name. |
+| `tokens.css` | The scale and the subjects' colours as `--ts-*` custom properties, in the shapes layer: type scale, radii, layout sizes, shadows, the place's first four tokens named as `site.standard.theme.basic` names them (`--ts-background`, `--ts-foreground`, `--ts-accent`, `--ts-accent-foreground`) as they follow from the palette, the six Tangent tones, the role colours, the agent's marks, danger, and the reader's theme as the page's colour scheme. With `base.css` and `palette.css` the values are the design reference's, held there by the token parity test. |
+| `elements.css` | The plain elements as Tangent draws them — the page's colour and type, headings, links, buttons, fields, selection and focus — which Tangent's own base and Concord each bring into the base layer. |
+| `bases/` | Concord, `bases/concord.css`: Tangent's own arrangement of the place in a chat app's look, which brings `elements.css` into the base layer in the system's font and arranges Tangent's parts in the tangent layer, scoped by `data-base="concord"`, beside its own palette. And the classless stylesheets the base layer can hold instead of Tangent's own — Simple.css, MVP.css, Marx, Sakura, Water.css and new.css — each vendored verbatim from its package in `devDependencies` into `bases/<name>/` beside its licence; `bases/<name>.css`, its adapter, imports it into the base layer and has its own variables read the tokens and the tokens read its fonts; `bases/<name>.palette.css` is its own palette, the `--ts-*` values taken from its colours with `light-dark()`, which the palette layer holds when it is left to the base. The build writes each with its licence under `bases/`. |
 | `fonts.css` and `fonts/` | Newsreader (variable: weight 200–800, optical size 6–72), Schibsted Grotesk (variable: weight 400–900) and IBM Plex Mono (400 and 500), Latin and Latin Extended, as files in the tree declared with `@font-face`. Nothing is fetched from a font service, so pages render offline and captures are deterministic. The files come from the Fontsource packages in `devDependencies`; their licence texts sit beside them. |
-| `layout.css` | The frame: base elements, the place's slots, the masthead with the place's mark and name and, for a participant, the account menu that opens in the page with their name, handle, role and Sign out, or for a visitor the Sign in button; the path bar with its elbow, its crumbs and the Tangent switcher that opens in the page; the Tangent tiles in their six tones; the layout grid with its rail, the footer with its appearance switch, and the breakpoints. |
+| `layout.css` | The frame: the page's box, which keeps every part Tangent names with a class in the browser's own box whichever base styles the plain elements, the place's slots, the masthead with the place's mark and name and, for a participant, the account menu that opens in the page with their name, handle, role and Sign out, or for a visitor the Sign in button; the path bar with its elbow, its crumbs and the Tangent switcher that opens in the page; the Tangent tiles in their six tones; the layout grid with its rail, the footer with its appearance switch, and the breakpoints. |
 | `sign-in.css` | The sign-in page: the one panel, headed by the place's mark and name, that holds the action signing in with Bluesky, the handle form for another server behind a quiet disclosure, their failures and their busy button. |
 | `tangent-page.css` | The Tangent page: the head with the Tangent's tile and counts, the rail with who can read, the table of Topics with their latest reply, faces and activity, the articles under a lead with its letter cover and latest-reply strip, the empty state with one next step, and the way to older Topics; on a phone, Topics as cards and nothing to start. |
 | `watch.css` | The watch toggle under a Tangent's or a Topic's head, with the mark of a watched one, and the seen control at the end of a Topic's window. |
@@ -14,12 +17,12 @@ The design foundation every page of a Tangent Space stands on, and its islands, 
 | `search.css` | The masthead's search box and the suggestions that open under it, and the mark on the words a search matched. |
 | `appearance.ts` | A reader's theme: System, Light or Dark, set as `data-theme` on `<html>` and remembered per browser in `localStorage`. |
 | `theme.ts` | The theme entry, built to `theme.js`: a classic script that restores the saved appearance before the first paint. |
-| `tangent.ts` | The page entry, built to `tangent.js` and `tangent.css`: a module that imports the stylesheets and mounts the islands. |
+| `tangent.ts` | The page entry, built to `tangent.js` and `tangent.css`: a module that imports Tangent's components' stylesheet and mounts the islands. |
 | `composer.ts` and `composer.css` | The composer's rules apart from any page: drafts in `localStorage` by participant and scope with each send kept beside them by its TID until it is settled, a send that says whether the server confirmed the Post, refused it or left it uncertain, the reconciliation of an uncertain send by a `GET` of the Post's address for its TID, and TIDs minted in the page; and the styles of the reply form and of the line the composer writes above the fields. |
 | `live.ts` | The live updater's transport apart from any page: one connection that follows the log from a position, as the stream while it can, as the poll at the same address when the stream fails and as the door when the poll fails too, trying the stream again every minute; every request guarded by a watchdog, what it reads capped, the stream rotated, failures backed off with jitter, paused while the page is hidden; the position advances only once the page has accepted the rows. |
 | `article.css` and `article/` | An article, read and written in one set of rules: its cover, title, byline and body in the article's type, the toolbar and panels over them, and a list's covers. `article/editor.ts` is the article editor, TipTap over the form's own body field, in a chunk only its pages load; `article/markdown-roundtrip.ts` says whether the visual view holds a body's meaning; `article/extensions.ts` what it can hold, as a body is read; `article/bringing.ts` sends an image in. |
 | `lobby.ts` | Companion Lobby on the reader's machine apart from any page: `findLobby`, bounded in time and size, which believes only an answer that states the product, the document's version and the one origin; and `handOff`, the page of the Lobby that receives a place's address. |
-| `islands/` | The islands: `index.ts` holds the registry, every island by its `data-island` name, and mounts them; `fragment.ts` is the fragment island, `live.ts` the live updater, one per page, which patches a Topic, a Tangent's list or the door as the log moves, `appearance.ts` the footer's System, Light and Dark switch, `seen.ts` the Topic's seen control, which posts itself once the end of the window is on screen, `unseen.ts` the masthead's count of unseen notifications, raised from the rows the live updater dispatches on the document, `search.ts` the suggestions under the masthead's search box, `submitting.ts` a form that shows it is on its way, `lobby.ts` the bring-your-agent page's offer, shown where Companion Lobby answers, `composer.ts` the composer on the reply and new-topic forms, and `article.ts` the island that loads the article editor. |
+| `islands/` | The islands: `index.ts` holds the registry, every island by its `data-island` name, and mounts them; `fragment.ts` is the fragment island, `live.ts` the live updater, one per page, which patches a Topic, a Tangent's list or the door as the log moves, `appearance.ts` the footer's System, Light and Dark switch, `preview.ts` the frame on the appearance settings that draws the door in the choices as they change, `seen.ts` the Topic's seen control, which posts itself once the end of the window is on screen, `unseen.ts` the masthead's count of unseen notifications, raised from the rows the live updater dispatches on the document, `search.ts` the suggestions under the masthead's search box, `submitting.ts` a form that shows it is on its way, `lobby.ts` the bring-your-agent page's offer, shown where Companion Lobby answers, `composer.ts` the composer on the reply and new-topic forms, and `article.ts` the island that loads the article editor. |
 
 ## Build and test
 
@@ -31,7 +34,7 @@ npm run build
 npm test
 ```
 
-`npm run build` type-checks and writes `tangent.css`, `tangent.js`, `theme.js` and `fonts/` into `../server/wwwroot/`, which git ignores: `vite.config.ts` builds the page entry and empties the folder first, `vite.theme.config.ts` adds the theme script. URLs inside the stylesheet are relative, so the files can be served under any path of the base URL. `npm test` builds the stylesheet in memory and checks that every token in `tests/reference/tokens.css` and `tests/reference/tokens.json`, the design reference's tokens kept verbatim, is declared in the same block with the same value; it also runs the built theme script over a saved choice, mounts the islands into a jsdom document, refreshes the fragment island against a mocked response, drives the composer against mocked answers, follows a mocked log with the live updater, and raises the masthead's count from delivered rows.
+`npm run build` type-checks and writes `base.css`, `tangent.css`, `palette.css`, `bases/`, `tangent.js`, `theme.js` and `fonts/` into `../server/wwwroot/`, which git ignores: `vite.config.ts` builds the page entry and empties the folder first, `vite.theme.config.ts` adds the theme script. URLs inside the stylesheet are relative, so the files can be served under any path of the base URL. `npm test` builds the stylesheets in memory and checks that every token in `tests/reference/tokens.css` and `tests/reference/tokens.json`, the design reference's tokens kept verbatim, is declared in Tangent's own stylesheets in the same block with the same value, whichever layer holds it; it also runs the built theme script over a saved choice, mounts the islands into a jsdom document, refreshes the fragment island against a mocked response, drives the composer against mocked answers, follows a mocked log with the live updater, and raises the masthead's count from delivered rows.
 
 Building the server builds the client: `Tangent.Server.csproj` runs `npm ci` when `node_modules` is absent and `npm run build` when an output is missing or older than a client file, then copies `wwwroot` beside the binaries, where Koan serves it as static files. `dotnet build src/server -p:SkipClientBuild=true` builds the server alone, without Node.
 
@@ -57,28 +60,31 @@ The design reference is configured, never part of the tree: put the package (the
 <html lang="en" data-accent="jade">
   <head>
     <link rel="stylesheet" href="…/tangent.css">
+    <link rel="stylesheet" href="…/base.css">
+    <link rel="stylesheet" href="…/palette.css">
+    <style>…the place's own CSS, in its layer…</style>
     <script src="…/theme.js"></script>
     <script type="module" src="…/tangent.js"></script>
   </head>
   <body>
-    <header class="masthead">…</header>
-    <nav class="path-bar"><span class="path-elbow"></span><ol class="path-crumbs">…</ol></nav>
-    <div class="layout layout-reading">
+    <header class="masthead bar place">…</header>
+    <nav class="path"><span class="path-elbow"></span><ol class="path-crumbs">…</ol></nav>
+    <main class="layout layout-reading">
       <aside class="rail">…</aside>
-      <main data-island="fragment" data-props="{&quot;url&quot;:&quot;…/&quot;}">…</main>
-    </div>
-    <footer class="footer">…</footer>
+      <div class="layout-main">…</div>
+    </main>
+    <footer class="footer bar">…</footer>
   </body>
 </html>
 ```
 
-`theme.js` is a classic script in `<head>`, without `defer`, so the saved appearance is on `<html>` before the first paint; it blocks the first render, so it holds nothing else. `tangent.js` is a module, deferred by nature: it runs once the document is parsed and never blocks the first render. The server renders `data-accent`, the place's accent, on every page. Without a saved choice `data-theme` stays off and the device decides; with no script too, and the switch does not show.
+`theme.js` is a classic script in `<head>`, without `defer`, so the saved appearance is on `<html>` before the first paint; it blocks the first render, so it holds nothing else. `tangent.js` is a module, deferred by nature: it runs once the document is parsed and never blocks the first render. The server renders `data-accent`, the place's accent, on every page, and `data-base` where the place chose a base other than Tangent's own; it links Tangent's components, then the place's base, so the arrangement a base such as Concord brings follows Tangent's own in the tangent layer, then its palette; the place's own CSS is the `owner` layer, left out of a management page. Without a saved choice `data-theme` stays off and the device decides; with no script too, and the switch does not show.
 
-The layout grid is `.layout` for the door and Tangent pages, `.layout-reading` for a Topic and the pages read like one, and `.layout-settings` for settings. A layout without a `.rail` is one reading column.
+`main` stands directly under `body`. The layout grid is `.layout` for the door and Tangent pages, `.layout-reading` for a Topic and the pages read like one, and `.layout-settings` for settings. A layout without a `.rail` is one reading column.
 
 ## Adding an island
 
-An island is a Vue component mounted where a participant acts. The server renders `<div data-island="name" data-props='{…}'>` around HTML that reads without JavaScript; `tangent.js` mounts the component registered under that name in `islands/index.ts`, with the props from the JSON and the element as `host`. The app mounts beside the page, since Vue empties its mount point: the server's HTML stays the first render, and the island changes its host only when it acts. A page without an island costs only the module load. An island lives in `islands/`, uses the `--ts-*` tokens and the layout classes and never a value of its own, and imports its styles, which land in the one stylesheet.
+An island is a Vue component mounted where a participant acts. The server renders `<div data-island="name" data-props='{…}'>` around HTML that reads without JavaScript; `tangent.js` mounts the component registered under that name in `islands/index.ts`, with the props from the JSON and the element as `host`. The app mounts beside the page, since Vue empties its mount point: the server's HTML stays the first render, and the island changes its host only when it acts. A page without an island costs only the module load. An island lives in `islands/`, uses the `--ts-*` tokens and the layout classes and never a value of its own, and imports its styles, which land in Tangent's components' stylesheet, `tangent.css`.
 
 The fragment island is a server-rendered resource that can refresh itself. Its one prop is the resource's `url`; `refresh()` fetches it with `Accept: text/html` and the `Tangent-Fragment` header and swaps the host's children for the children of the fragment's root element, which is the host as the server renders it.
 

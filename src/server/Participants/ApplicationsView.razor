@@ -8,9 +8,9 @@
    that says what declining leaves and holds the one button that does it, the confirmation in the page; a declined one
    says so and can still be admitted. No applicant reads as one sentence. Older applications and the newest are a link
    away. A reader who may not decide reads why, and a visitor the way to sign in; a refusal shows above the list. *@
-<div class="layout layout-settings">
+<main class="layout layout-settings">
     <SettingsRail Sections="@Model.Sections" />
-    <main>
+    <div class="layout-main">
         <section class="sign-in-panel post-form-panel" aria-labelledby="applications-heading">
             <div class="sign-in-body">
                 <p class="post-form-where">Settings of <a href="@Model.Door">@Model.Place</a></p>
@@ -51,7 +51,7 @@
                                     @if (Model.Admit is { } admit && Model.Decline is { } decline)
                                     {
                                     <div class="door-offer-answers">
-                                        <form method="post" action="@admit.Action">
+                                        <form class="admit" method="post" action="@admit.Action">
                                             <input type="hidden" name="@ApplicationsController.ParticipantField" value="@applicant.Id">
                                             <button type="submit" class="tangent-new">Admit</button>
                                         </form>
@@ -61,7 +61,7 @@
                                                 <summary class="watch-button">Decline</summary>
                                                 <div class="post-remove-confirm">
                                                     <p class="post-remove-note">They keep reading what a visitor reads, and you can still admit them later.</p>
-                                                    <form method="post" action="@decline.Action">
+                                                    <form class="decline" method="post" action="@decline.Action">
                                                         <input type="hidden" name="@ApplicationsController.ParticipantField" value="@applicant.Id">
                                                         <button type="submit" class="post-remove-submit">Decline</button>
                                                     </form>
@@ -90,8 +90,8 @@
                 }
             </div>
         </section>
-    </main>
-</div>
+    </div>
+</main>
 
 @code {
     [Parameter, EditorRequired] public ApplicationsPage Model { get; set; } = default!;

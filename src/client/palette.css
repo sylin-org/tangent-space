@@ -1,0 +1,70 @@
+/* Tangent's palette, the palette layer's default: the colours of Paper and Ink and the place's accent, from the design
+ * reference of 29 September 2026. Paper (light) is the default. Ink (dark) applies with data-theme="dark" on <html>,
+ * or with no data-theme when the device prefers dark (System, the default choice). The place's accent is chosen with
+ * data-accent="gold|jade|iris|copper" on <html>; the derived tones (accent-line, accent-soft, selection) follow it.
+ * Ink is written twice because one block answers the explicit choice and the other the device under System; the token
+ * parity test holds both to the reference; the place's first four tokens follow from these (tokens.css). A bundled
+ * base's own palette (bases/<name>.palette.css) takes this file's
+ * place when the palette is left to the base. */
+
+@layer base, shapes, tangent, palette, owner;
+
+@layer palette {
+:root {
+  --ts-accent-light: #8a5f12; --ts-accent-dark: #d9ab55;
+  /* Paper */
+  --ts-page: #f3eee3;
+  --ts-surface: #f9f6ef;
+  --ts-raised: #ffffff;
+  --ts-hover: #ebe5d8;
+  --ts-line: #dcd3c2;
+  --ts-connector: #bfb4a0;
+  --ts-text: #1d1b17;
+  --ts-text-2: #4a453c;
+  --ts-text-3: #6b6456;
+  --ts-on-accent: #ffffff;
+  --ts-accent: var(--ts-accent-light);
+  --ts-accent-line: color-mix(in srgb, var(--ts-accent) 50%, transparent);
+  --ts-accent-soft: color-mix(in srgb, var(--ts-accent) 14%, transparent);
+  --ts-selection: color-mix(in srgb, var(--ts-accent) 24%, transparent);
+}
+:root[data-accent="jade"] { --ts-accent-light: #2f6b5e; --ts-accent-dark: #7cc4b0; }
+:root[data-accent="iris"] { --ts-accent-light: #5a4fb0; --ts-accent-dark: #a99cf0; }
+:root[data-accent="copper"] { --ts-accent-light: #a4472a; --ts-accent-dark: #e58f6a; }
+
+:root[data-theme="dark"] {
+  --ts-page: #11100e;
+  --ts-surface: #171614;
+  --ts-raised: #1f1d1a;
+  --ts-hover: #24211d;
+  --ts-line: #2e2a24;
+  --ts-connector: #4a443b;
+  --ts-text: #efe9de;
+  --ts-text-2: #bdb4a4;
+  --ts-text-3: #948b7b;
+  --ts-on-accent: #16130d;
+  --ts-accent: var(--ts-accent-dark);
+  --ts-accent-line: color-mix(in srgb, var(--ts-accent) 55%, transparent);
+  --ts-accent-soft: color-mix(in srgb, var(--ts-accent) 18%, transparent);
+  --ts-selection: color-mix(in srgb, var(--ts-accent) 35%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]), :root[data-theme="system"] {
+    --ts-page: #11100e;
+    --ts-surface: #171614;
+    --ts-raised: #1f1d1a;
+    --ts-hover: #24211d;
+    --ts-line: #2e2a24;
+    --ts-connector: #4a443b;
+    --ts-text: #efe9de;
+    --ts-text-2: #bdb4a4;
+    --ts-text-3: #948b7b;
+    --ts-on-accent: #16130d;
+    --ts-accent: var(--ts-accent-dark);
+    --ts-accent-line: color-mix(in srgb, var(--ts-accent) 55%, transparent);
+    --ts-accent-soft: color-mix(in srgb, var(--ts-accent) 18%, transparent);
+    --ts-selection: color-mix(in srgb, var(--ts-accent) 35%, transparent);
+  }
+}
+}

@@ -56,7 +56,7 @@
   overflow-wrap: anywhere;
 }
 
-.topic-title .topic-flag {
+.topic-title .badge:where(.is-pinned, .is-locked) {
   vertical-align: 10px;
 }
 
@@ -70,11 +70,28 @@
   font-weight: 400;
 }
 
-/* One Post: the mark beside its head, body and actions. */
+/* One Post: the mark in the first column, beside everything else, its head, body and actions, in the second; an
+   article's root, which has no mark, reads as one column (article.css). */
 .post {
   padding-top: 16px;
   display: flex;
   gap: 12px;
+}
+
+article.post:not(.post-article) {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-content: start;
+  row-gap: 0;
+}
+
+article.post:not(.post-article) > .mark {
+  grid-row: 1 / span 9;
+}
+
+article.post:not(.post-article) > :not(.mark) {
+  grid-column: 2;
+  min-width: 0;
 }
 
 .post-root {
@@ -84,7 +101,7 @@
   border-bottom: 1px solid var(--ts-line);
 }
 
-.post.is-anchor {
+.post.is-current {
   margin: 12px -12px 0;
   padding: 12px;
   border-radius: var(--ts-radius-card);
@@ -104,11 +121,6 @@
   font-size: 14px;
 }
 
-.post-main {
-  flex: 1;
-  min-width: 0;
-}
-
 .post-head {
   display: flex;
   flex-wrap: wrap;
@@ -125,7 +137,7 @@
   font-size: 15px;
 }
 
-.post-head .agent-tag {
+.post-head .badge:where(.is-agent) {
   margin-left: 0;
 }
 
@@ -147,6 +159,7 @@
 
 .post-parent {
   margin-top: 2px;
+  justify-self: start;
   display: inline-block;
   color: var(--ts-text-3);
   font: var(--ts-type-meta);

@@ -48,7 +48,7 @@ public sealed class NotificationsTests
         {
             var page = await Send(ada.Client, HttpMethod.Get, path);
             Assert.Equal(HttpStatusCode.OK, page.Status);
-            Assert.Contains($"<form class=\"masthead-unseen-form\" method=\"post\" action=\"{BaseUrl}/notifications\"><input type=\"hidden\" name=\"through\"", page.Body);
+            Assert.Contains($"<form class=\"masthead-unseen-form seen-notifications\" method=\"post\" action=\"{BaseUrl}/notifications\"><input type=\"hidden\" name=\"through\"", page.Body);
             Assert.Contains("<button class=\"masthead-unseen\" aria-label=\"2 new notifications\"", Collapsed(page.Body));
             Assert.Contains("<span class=\"masthead-unseen-count\">2</span>", page.Body);
             Assert.Contains(AccountItem, page.Body);
@@ -85,7 +85,7 @@ public sealed class NotificationsTests
         Assert.Equal((2, BaseUrl + Notifications.Path), (door.GetProperty("news").GetProperty("notifications").GetProperty("count").GetInt32(),
             door.GetProperty("news").GetProperty("notifications").GetProperty("address").GetString()));
         var doorHtml = (await Send(ada.Client, HttpMethod.Get, "/")).Body;
-        Assert.Contains($"<form class=\"door-notifications\" method=\"post\" action=\"{BaseUrl}/notifications\"><input type=\"hidden\" name=\"through\" value=\"{(await Created(newest)).Seq}\" /><button class=\"watch-button\">2 new notifications</button></form>",
+        Assert.Contains($"<form class=\"door-notifications seen-notifications\" method=\"post\" action=\"{BaseUrl}/notifications\"><input type=\"hidden\" name=\"through\" value=\"{(await Created(newest)).Seq}\" /><button class=\"watch-button\">2 new notifications</button></form>",
             doorHtml);
 
         // Reading them marks nothing: both stay new, and the frame still counts them.
@@ -209,7 +209,7 @@ public sealed class NotificationsTests
         // The door names them in the same words.
         var news = (await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news");
         Assert.True(news.GetProperty("notifications").GetProperty("atLeast").GetBoolean());
-        Assert.Contains($"<form class=\"door-notifications\" method=\"post\" action=\"{BaseUrl}/notifications\"><input type=\"hidden\" name=\"through\"", html);
+        Assert.Contains($"<form class=\"door-notifications seen-notifications\" method=\"post\" action=\"{BaseUrl}/notifications\"><input type=\"hidden\" name=\"through\"", html);
         Assert.Contains($"<button class=\"watch-button\">At least {Notifications.CountLimit + 1} new notifications</button></form>", html);
     }
 
@@ -324,7 +324,7 @@ public sealed class NotificationsTests
         Assert.NotEmpty(offered.GetProperty("use").GetProperty("token").GetProperty("value").GetString()!);
         var html = WebUtility.HtmlDecode((await Send(leo.Client, HttpMethod.Get, Notifications.Path)).Body);
         Assert.Contains($"This place is being reached at <strong>{Origin}</strong> — 3 requests since", html);
-        Assert.Contains($"<form method=\"post\" action=\"{loopback}/offers/decline\">", html);
+        Assert.Contains($"<form class=\"decline-offer\" method=\"post\" action=\"{loopback}/offers/decline\">", html);
         Assert.Contains($"<input type=\"hidden\" name=\"origin\" value=\"{Origin}\" />", html);
         Assert.Empty(await Offer.All(Cancellation));
 
@@ -426,7 +426,7 @@ public sealed class NotificationsTests
     private const string Origin = "https://tangent.example.org";
 
     /// <summary>The account menu's way to the notifications: a form that opens them.</summary>
-    private const string AccountItem = $"<form method=\"post\" action=\"{BaseUrl}/notifications\"><input type=\"hidden\" name=\"through\"";
+    private const string AccountItem = $"<form class=\"seen-notifications\" method=\"post\" action=\"{BaseUrl}/notifications\"><input type=\"hidden\" name=\"through\"";
 
     /// <summary>The page's markup with each run of whitespace between tags taken out, so a tag spread over lines reads as
     /// one.</summary>

@@ -1,0 +1,18 @@
+/* Water.css 2.1.1's own palette, which the palette layer holds when it is left to the base: the --ts-* values
+ * taken from its colours, for Light and Dark, in the reader's theme. What follows from them is Tangent's (tokens.css). */
+
+@layer base, shapes, tangent, palette, owner;
+
+@layer palette {
+:root {
+  --ts-page: light-dark(#ffffff, #202b38);
+  --ts-surface: light-dark(#f7f7f7, #1a242f);
+  --ts-raised: light-dark(#ffffff, #161f27);
+  --ts-text: light-dark(#363636, #dbdbdb);
+  --ts-text-2: light-dark(#4c5157, #c3cad2);
+  --ts-text-3: light-dark(#70777f, #a9b1ba);
+  --ts-connector: light-dark(#dbdbdb, #526980);
+  --ts-accent: light-dark(#0076d1, #41adff);
+  --ts-on-accent: light-dark(#ffffff, #000000);
+}
+}

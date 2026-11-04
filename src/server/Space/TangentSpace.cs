@@ -38,6 +38,15 @@ public sealed class TangentSpace : Entity<TangentSpace>
     /// <summary>The refusal an accent outside the four meets.</summary>
     public static readonly Reason AccentRule = Reason.Invalid("The place's accent is one of four: choose gold, jade, iris or copper.");
 
+    /// <summary>The refusal a base outside Tangent's own and the bundled stylesheets meets.</summary>
+    public static readonly Reason BaseRule = Reason.Invalid("The base is Tangent's own or a bundled stylesheet: choose tangent, simple, mvp, marx, sakura, water, new or concord.");
+
+    /// <summary>The refusal a palette other than the base's own or Tangent's in the accent meets.</summary>
+    public static readonly Reason PaletteRule = Reason.Invalid("The palette is the base's own or Tangent's in the place's accent: choose base or accent.");
+
+    /// <summary>The refusal the place's own CSS meets past its bound.</summary>
+    public static readonly Reason CssRule = Reason.Invalid("The place's own CSS holds at most 50,000 characters.");
+
     /// <summary>The name first run gives a place set up by someone whose sign-in verified no handle.</summary>
     public const string PlainName = "Tangent Space";
 
@@ -135,20 +144,23 @@ public sealed class TangentSpace : Entity<TangentSpace>
 
     public Slots Slots { get; set; } = new();
 
-    /// <summary>Renames and describes the place, sets how a newcomer arrives, who reads it, its accent and its slots, a
+    /// <summary>Renames and describes the place, sets how a newcomer arrives, who reads it, its appearance and its slots, a
     /// change to the row, or refuses with <see cref="NameRule"/>, <see cref="DescriptionRule"/>, <see cref="AdmissionRule"/>,
-    /// <see cref="AudienceRule"/> or <see cref="AccentRule"/>; the name and the description are kept trimmed. Answers
-    /// whether anything changed.</summary>
-    public bool Change(string name, string description, Admission admission, Audience audience, Accent accent, Slots slots)
+    /// <see cref="AudienceRule"/>, <see cref="AccentRule"/>, <see cref="BaseRule"/>, <see cref="PaletteRule"/> or
+    /// <see cref="CssRule"/>; the name and the description are kept trimmed. Answers whether anything changed.</summary>
+    public bool Change(string name, string description, Admission admission, Audience audience, Appearance appearance, Slots slots)
     {
         var named = Named(name);
         var described = description.Trim();
         if (described.Length > DescriptionLimit) throw new Refusal(DescriptionRule);
         if (!Enum.IsDefined(admission)) throw new Refusal(AdmissionRule);
         if (!Enum.IsDefined(audience)) throw new Refusal(AudienceRule);
-        if (!Enum.IsDefined(accent)) throw new Refusal(AccentRule);
-        if (Name == named && Description == described && Admission == admission && Audience == audience && Appearance.Accent == accent && Slots == slots) return false;
-        (Name, Description, Admission, Audience, Appearance.Accent, Slots) = (named, described, admission, audience, accent, slots);
+        if (!Enum.IsDefined(appearance.Accent)) throw new Refusal(AccentRule);
+        if (!Enum.IsDefined(appearance.Base)) throw new Refusal(BaseRule);
+        if (!Enum.IsDefined(appearance.Palette)) throw new Refusal(PaletteRule);
+        if (appearance.Css.Length > Appearance.CssLimit) throw new Refusal(CssRule);
+        if (Name == named && Description == described && Admission == admission && Audience == audience && Appearance.Same(appearance) && Slots == slots) return false;
+        (Name, Description, Admission, Audience, Appearance, Slots) = (named, described, admission, audience, appearance.Copy(), slots);
         Version = checked(Version + 1);
         return true;
     }

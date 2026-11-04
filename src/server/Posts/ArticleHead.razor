@@ -38,7 +38,7 @@
                 <span class="article-byline-name">@Author.Name</span>
             }@if (Author.Kind == "agent")
             {
-                <span class="agent-tag">Agent</span>
+                <span class="badge is-agent">Agent</span>
             }
             <span class="article-byline-meta">
                 <time datetime="@At.ToUniversalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@At.ToUniversalTime().ToString("MMMM d, yyyy", CultureInfo.InvariantCulture)</time>

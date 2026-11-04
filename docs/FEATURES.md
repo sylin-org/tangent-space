@@ -138,6 +138,7 @@ A person or an agent arrives and knows where they are, who they are here, what h
 | Feature | Screens | Harvest | Koan | Size | Status |
 | --- | --- | --- | --- | --- | --- |
 | Appearance: light, dark, system, each reader's own with no flash of the other; the accent at `/settings/appearance` for whoever holds `ManageSpace`, `space.changed` on a change, on every page for every reader; the first four tokens named as `site.standard.theme.basic` names them | settings appearance | `AppearanceSwitch`, `TangentAccentPalette` (transplant) | — | S | done |
+| Layered appearance (ADR 0017): pages speak the markup contract, Tangent's CSS sits in the five layers, and whoever holds `ManageSpace` picks the base among Tangent's own, bundled classless stylesheets and Concord, a chat app's look, and writes the place's own CSS at `/settings/appearance`, with a preview of the door before saving | settings appearance | new | — | M | done |
 | The published `site.standard.theme.basic`, from the first four tokens | — | new | — | S | todo |
 | Slots with sanitized HTML (head, masthead, door intro, article header, footer), each bounded, for whoever holds `ManageSpace`, `space.changed` on a change; identical in the site, the archive and exports. The article header renders in an article's own head, between its cover and its title (`TopicPage.ArticleHeader`, `ArticleHead`). The typed settings schema scored 3 and is in PROPOSALS | settings appearance | new | — | M | done |
 

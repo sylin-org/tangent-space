@@ -70,7 +70,10 @@ public static class Holds
     public const string PlaceDescription = "The line under its name on the door, at most 300 characters." + Stays;
     public const string PlaceAudience = "public, where anyone reads the place, or private, where its participants alone do and a visitor finds the sign-in." + Stays;
     public const string Admission = "join, where a newcomer who signs in is admitted at once, or apply, where they wait to be admitted; everyone already here stays as they are.";
-    public const string Accent = "gold, jade, iris or copper: the colour links, buttons and what is new take on every page, for every reader." + Stays;
+    public const string Accent = "gold, jade, iris or copper: the colour links, buttons and what is new take on every page, for every reader, while the palette is accent or the base is tangent." + Stays;
+    public const string Base = "What styles the plain elements and sets the fonts, the base layer: tangent, Tangent's own, or a bundled classless stylesheet: simple, mvp, marx, sakura, water or new; or concord, Tangent's own arrangement of the place in a chat app's look." + Stays;
+    public const string Palette = "The palette layer: base, the base's own colours, or accent, Tangent's palette in the place's accent over any base." + Stays;
+    public const string Css = "The place's own CSS, the owner layer, over every other layer on every page but the settings, at most 50,000 characters; sent empty, none." + Stays;
     public const string HeadSlot = "HTML for every page's head, sanitized to meta and icon links, at most 4000 characters." + Stays;
     public const string MastheadSlot = "HTML beside the place's name on every page, sanitized to a line of links, images and words, at most 2000 characters." + Stays;
     public const string DoorIntroSlot = "HTML under the door's head, sanitized to prose, at most 8000 characters." + Stays;

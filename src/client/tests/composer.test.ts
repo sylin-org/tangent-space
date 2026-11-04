@@ -19,8 +19,8 @@ const attribute = (value: object) => JSON.stringify(value).replaceAll('"', '&quo
 function replyPage(id = servedId, who = participant) {
   const props = attribute({ participant: who, scope: `topic:${rootId}`, locate: `${topic}/`, noun: 'reply' })
   document.body.innerHTML =
-    `<article id="${rootId}" class="post post-root"><div class="post-main"><span class="post-author">Ada</span></div></article>` +
-    `<article id="${replyId}" class="post"><div class="post-main"><span class="post-author">Leo</span></div></article>` +
+    `<article id="${rootId}" class="post post-root"><header class="post-head"><span class="post-author">Ada</span></header></article>` +
+    `<article id="${replyId}" class="post"><header class="post-head"><span class="post-author">Leo</span></header></article>` +
     `<form class="reply-form" method="post" action="${topic}" data-island="composer" data-props="${props}">` +
     `<input type="hidden" name="id" value="${id}"><input type="hidden" name="parent">` +
     '<p class="reply-form-to" data-reply-to hidden>Replying to <a href="#" data-reply-to-post></a> · ' +

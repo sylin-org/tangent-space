@@ -17,7 +17,7 @@ public sealed class RefusalPageTests
 {
     private const string Leo = "did:plc:leo4refusals";
 
-    private const string Masthead = "class=\"masthead\"";
+    private const string Masthead = "class=\"masthead bar place\"";
 
     [Fact]
     public async Task A_value_that_cannot_bind_reads_in_the_places_frame_with_its_field_and_json_reads_a_problem()
@@ -36,7 +36,7 @@ public sealed class RefusalPageTests
         Assert.Contains("Field notes", page.Body);
         Assert.Contains("Not accepted", page.Body);
         Assert.Contains("Version: ", page.Body);
-        Assert.Contains("<footer class=\"footer\"", page.Body);
+        Assert.Contains("<footer class=\"footer bar\"", page.Body);
 
         var json = await Json(ada, edit, edit, new { body = "New words.", version = "not-a-number" });
         Assert.Equal((HttpStatusCode.BadRequest, "application/problem+json"), (json.Status, json.MediaType));

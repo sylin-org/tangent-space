@@ -455,7 +455,7 @@ export const screens: Readonly<Record<string, Screen>> = {
         values: { '#reply-form-id': '3mwfixedrep22' },
         fill: { '#reply-body': 'Fridays it is. I’ll bring a link about glue.' },
         click: '.post-form-submit',
-        waitFor: 'article.post.is-anchor',
+        waitFor: 'article.post.is-current',
       },
       {
         name: 'replied-mention',
@@ -466,7 +466,7 @@ export const screens: Readonly<Record<string, Screen>> = {
         values: { '#reply-form-id': '3mwfixedmen22' },
         fill: { '#reply-body': 'Index cards, @mara.bsky.social. A notebook replaced them in March.' },
         click: '.post-form-submit',
-        waitFor: 'article.post.is-anchor',
+        waitFor: 'article.post.is-current',
       },
       {
         name: 'taken-origin',

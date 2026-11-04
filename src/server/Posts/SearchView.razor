@@ -5,9 +5,9 @@
    it, the matched words marked, first saying who else edited them where someone did. The words are typed into the
    masthead's box, which holds them here. Words that can't be searched say why, none found reads as one sentence, and
    the pages either side are a link away. *@
-<div class="layout">
-    <main>
-        <section class="sign-in-panel post-form-panel" aria-labelledby="search-heading">
+<main class="layout">
+    <div class="layout-main">
+        <section class="sign-in-panel post-form-panel panel" aria-labelledby="search-heading">
             <div class="sign-in-body">
                 <p class="post-form-where">In <a href="@Model.Door">@Model.Place</a></p>
                 <h1 id="search-heading" class="sign-in-title">@(Model.Text is { } text ? "Search: " + text : "Search")</h1>
@@ -17,13 +17,13 @@
                 }
                 else
                 {
-                    <ul class="door-offers notifications search-hits">
+                    <ul class="door-offers notifications list search-hits">
                         @foreach (var hit in Model.Hits)
                         {
-                            <li class="door-offer notification" @key="hit.Id">
+                            <li class="door-offer row post" @key="hit.Id">
                                 <div class="notification-body">
                                     <p class="door-offer-line notification-line">
-                                        @TopicRow.Mark(hit.Author, "face")
+                                        @TopicRow.Mark(hit.Author, "face", Model.Who?.Id)
                                         <span class="notification-text"><strong>@hit.Author.Name</strong> in <a class="notification-link" href="@hit.Address">@hit.Topic</a> <span class="topic-row-none">· @hit.Tangent · <time datetime="@hit.At.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture)">@TopicRow.When(hit.At, Model.Day)</time></span></span>
                                     </p>
                                     @if (hit.Snippet.Count > 0 || hit.Edited is not null)
@@ -63,8 +63,8 @@
                 }
             </div>
         </section>
-    </main>
-</div>
+    </div>
+</main>
 
 @code {
     [Parameter, EditorRequired] public SearchPage Model { get; set; } = default!;

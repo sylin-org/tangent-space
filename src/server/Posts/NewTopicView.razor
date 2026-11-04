@@ -7,7 +7,7 @@
    the form. For a participant who may post, the composer island keeps the words as a draft and sends them. *@
 @if (Article && Model.Start is { } writing && Model.Who is { } author)
 {
-    <ArticleForm Heading="New article" TangentName="@Model.TangentName" TangentAddress="@Model.TangentAddress" Action="@writing.Action"
+    <ArticleForm Tool="start-topic" Heading="New article" TangentName="@Model.TangentName" TangentAddress="@Model.TangentAddress" Action="@writing.Action"
                  Author="@(new TangentPage.Author(author.Id, author.Handle, author.Name, "person", author.Avatar))" At="@(new DateTimeOffset(Model.Day, TimeOnly.MinValue, TimeSpan.Zero))"
                  Door="@Model.Door" TitleId="new-topic-title" BodyId="new-topic-body" Island="composer" IslandProps="@ComposerProps()" Bring="@Model.Bring" Participant="@author.Id"
                  Title="@Model.Title" Body="@Model.Body" CoverId="@Model.CoverId" Failure="@Model.Failure" TitleFailure="@Model.TitleFailure" BodyFailure="@Model.BodyFailure">
@@ -42,7 +42,7 @@ else
             {
                 <p class="sign-in-failure" id="new-topic-failure" role="alert">@failure</p>
             }
-            <form class="sign-in-form" method="post" action="@Model.Start?.Action" data-island="@(Composing ? "composer" : null)" data-props="@ComposerProps()">
+            <form class="sign-in-form start-topic" method="post" action="@Model.Start?.Action" data-island="@(Composing ? "composer" : null)" data-props="@ComposerProps()">
                 @if (Model.Start is { } start)
                 {
                     <input type="hidden" name="@PostWrites.IdField" value="@start.Value(PostWrites.IdField)">

@@ -5,7 +5,8 @@
    a table, an articles Tangent as articles under a lead. An empty list says so in one sentence with one next step: the
    start button for a reader who can start a Topic, signing in for a visitor, neither on a phone, which reads and
    replies. Zeros are said in words. *@
-<section class="tangent-head@(Articles ? " tangent-head-articles" : "")" aria-labelledby="tangent-title">
+<main class="frame-main">
+<section class="@("tangent-head tangent" + (Articles ? " tangent-head-articles" : "") + (Model.Audience == "public" ? "" : " is-private"))" aria-labelledby="tangent-title">
     <div class="tangent-head-inner">
         <TangentTile Tile="@Tile.For(Model.Slug, Model.Name)" Size="@(Articles ? "head-articles" : "head")" />
         <div class="tangent-head-text">
@@ -24,7 +25,7 @@
             @if (Model.Watching is not null || Model.Settings is not null)
             {
                 <div class="tangent-head-actions">
-                    <Tangent.Events.WatchForm Model="@Model.Watching" />
+                    <Tangent.Events.WatchForm Model="@Model.Watching" Tool="watch-tangent" />
                     @if (Model.Settings is { } settings)
                     {
                         <a class="watch-button tangent-settings" href="@settings">Settings</a>
@@ -37,7 +38,7 @@
 <div class="layout tangent-layout">
     <aside class="rail" aria-label="@(Articles ? "Articles" : "Topics") in this Tangent">
         <h2 class="rail-heading">@(Articles ? "Articles" : "Topics")</h2>
-        <ul class="rail-views">
+        <ul class="rail-views list">
             <li><a href="@Model.Address" aria-current="@(Model.Continued ? null : "page")">@(Articles ? "All articles" : "All topics")</a></li>
         </ul>
         <h2 class="rail-heading rail-heading-spaced">Who can read</h2>
@@ -49,7 +50,7 @@
             </span>
         </div>
     </aside>
-    <main class="tangent-main">
+    <div class="layout-main tangent-main">
         @if (Model.Topics.Count == 0)
         {
             <div class="topic-empty">
@@ -79,7 +80,7 @@
                 <div class="article-list">
                     @for (var index = 0; index < Model.Topics.Count; index++)
                     {
-                        <TopicRow Model="@Model.Topics[index]" Today="@Model.Day" Article="true" Lead="@(index == 0 && !Model.Continued)"
+                        <TopicRow Model="@Model.Topics[index]" Today="@Model.Day" Reader="@Model.Who?.Id" Article="true" Lead="@(index == 0 && !Model.Continued)"
                                   TangentName="@Model.Name" TangentTile="@Tile.For(Model.Slug, Model.Name)" />
                     }
                 </div>
@@ -93,10 +94,10 @@
                         <span class="topic-table-replies">Replies</span>
                         <span class="topic-table-latest">Latest</span>
                     </div>
-                    <ul class="topic-rows">
+                    <ul class="topic-rows list">
                         @foreach (var topic in Model.Topics)
                         {
-                            <li><TopicRow Model="@topic" Today="@Model.Day" /></li>
+                            <li><TopicRow Model="@topic" Today="@Model.Day" Reader="@Model.Who?.Id" /></li>
                         }
                     </ul>
                 </div>
@@ -115,9 +116,10 @@
                 }
             </nav>
         }
-    </main>
+    </div>
 </div>
 <Tangent.Events.Live Page="tangent" Tangent="@Model.Slug" />
+</main>
 
 @code {
     [Parameter, EditorRequired] public TangentPage Model { get; set; } = default!;
