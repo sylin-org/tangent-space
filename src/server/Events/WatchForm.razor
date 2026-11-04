@@ -7,7 +7,7 @@
         <input type="hidden" name="@CheckpointController.WatchField" value="@watching.Form.Value(CheckpointController.WatchField)">
         @if (watching.Watch)
         {
-            <span class="new-label">Watching</span>
+            <span class="badge is-new">Watching</span>
         }
         <button type="submit" class="watch-button">@(watching.Watch ? "Stop watching" : "Watch")</button>
     </form>

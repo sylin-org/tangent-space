@@ -5,10 +5,10 @@
    the way to the older window above them and to the newer below, and where the reader replies or why they may not. A
    Topic without replies says so in one sentence. Zeros are said in words. An article opens with its own head, which holds
    the proprietor's article header, where they wrote one. *@
-<div class="layout layout-reading topic-layout">
+<main class="layout layout-reading topic-layout">
     <aside class="rail" aria-label="In this Tangent">
         <h2 class="rail-heading">@Model.Tangent.Name</h2>
-        <ul class="rail-views">
+        <ul class="rail-views list">
             <li><a href="@Model.Tangent.Address">@(Article ? "All articles" : "All topics")</a></li>
             @if (Model.NewTopic is { } start)
             {
@@ -18,11 +18,11 @@
         @if (Model.Replies.Count > 0)
         {
             <h2 class="rail-heading rail-heading-spaced">In this window</h2>
-            <ul class="topic-rail-replies">
+            <ul class="topic-rail-replies list">
                 @foreach (var reply in Model.Replies)
                 {
                     <li>
-                        <a href="@("#" + reply.Id)" aria-current="@(reply.Id == Model.Anchor ? "true" : null)">
+                        <a class="@("row post" + (reply.Id == Model.Anchor ? " is-current" : "") + (reply.New ? " is-new" : ""))" href="@("#" + reply.Id)" aria-current="@(reply.Id == Model.Anchor ? "true" : null)">
                             @TopicRow.Mark(reply.Author, "author-mark")
                             <span class="topic-rail-reply-text">
                                 <span class="topic-rail-reply-name">@reply.Author.Name</span>
@@ -30,7 +30,7 @@
                             </span>
                             @if (reply.New)
                             {
-                                <span class="new-label">New</span>
+                                <span class="badge is-new">New</span>
                             }
                         </a>
                     </li>
@@ -38,13 +38,13 @@
             </ul>
         }
     </aside>
-    <main class="topic-main">
+    <div class="@("layout-main topic-main topic" + (Model.Pinned ? " is-pinned" : "") + (Model.Locked ? " is-locked" : ""))">
         @if (Article)
         {
             <article class="article">
                 <ArticleHead Title="@Model.Title" Cover="@Model.Cover" Author="@Model.Root.Author" At="@Model.Root.CreatedAt" Minutes="@Model.ReadMinutes" Flags="@Flags()" Header="@Model.ArticleHeader" />
                 <TakenFrom Model="@Model.TakenFrom" />
-                <TopicPost Model="@Model.Root" Today="@Model.Day" Root="true" Article="true" Door="@Model.Door" Anchor="@(Model.Anchor == Model.Root.Id)" />
+                <TopicPost Model="@Model.Root" Today="@Model.Day" Root="true" Article="true" Door="@Model.Door" Anchor="@(Model.Anchor == Model.Root.Id)" Reader="@Model.Who?.Id" />
             </article>
             <Tangent.Events.WatchForm Model="@Model.Watching" />
         }
@@ -58,7 +58,7 @@
             </p>
             <TakenFrom Model="@Model.TakenFrom" />
             <Tangent.Events.WatchForm Model="@Model.Watching" />
-            <TopicPost Model="@Model.Root" Today="@Model.Day" Root="true" Door="@Model.Door" Anchor="@(Model.Anchor == Model.Root.Id)" />
+            <TopicPost Model="@Model.Root" Today="@Model.Day" Root="true" Door="@Model.Door" Anchor="@(Model.Anchor == Model.Root.Id)" Reader="@Model.Who?.Id" />
         }
         <section class="topic-replies" aria-labelledby="topic-replies-title">
             <div class="topic-replies-head">
@@ -80,7 +80,7 @@
             }
             @foreach (var reply in Model.Replies)
             {
-                <TopicPost Model="@reply" Today="@Model.Day" Door="@Model.Door" Anchor="@(Model.Anchor == reply.Id)" ParentAuthor="@ParentAuthor(reply)" />
+                <TopicPost Model="@reply" Today="@Model.Day" Door="@Model.Door" Anchor="@(Model.Anchor == reply.Id)" ParentAuthor="@ParentAuthor(reply)" Reader="@Model.Who?.Id" />
             }
             <Tangent.Events.TopicSeenForm Model="@Model.Seen" />
             <Tangent.Events.Live Page="topic" Tangent="@Model.Tangent.Slug" Topic="@Model.Id" Address="@Model.Address" Newest="@(Model.Newer is null)" />
@@ -92,8 +92,8 @@
             }
         </section>
         <ReplyForm Model="@Model" />
-    </main>
-</div>
+    </div>
+</main>
 
 @code {
     [Parameter, EditorRequired] public TopicPage Model { get; set; } = default!;
@@ -119,7 +119,7 @@
 
     private RenderFragment Flags() => builder =>
     {
-        if (Model.Pinned) builder.AddMarkupContent(0, "<span class=\"topic-flag\">Pinned</span>");
-        if (Model.Locked) builder.AddMarkupContent(1, "<span class=\"topic-flag\">Locked</span>");
+        if (Model.Pinned) builder.AddMarkupContent(0, "<span class=\"badge is-pinned\">Pinned</span>");
+        if (Model.Locked) builder.AddMarkupContent(1, "<span class=\"badge is-locked\">Locked</span>");
     };
 }

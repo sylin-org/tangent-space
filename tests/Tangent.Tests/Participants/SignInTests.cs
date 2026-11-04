@@ -56,7 +56,7 @@ public sealed class SignInTests
             + Regex.Escape($"<input type=\"hidden\" name=\"failure\" value=\"{comeBack}\" data-carry=\"identifier\" data-carry-as=\"handle\" />") + @"\s*"
             + Regex.Escape("<button type=\"submit\" class=\"sign-in-submit\" data-busy-label=\"Continuing…\">Continue</button>") + @"\s*</form>\s*</details>", html);
         Assert.DoesNotContain("autofocus", html);
-        Assert.Contains("<span aria-current=\"page\" class=\"path-current path-only\">Sign in</span>", html);
+        Assert.Contains("<span aria-current=\"page\" class=\"path-current path-only is-current\">Sign in</span>", html);
         Assert.Contains("data-island=\"appearance\"", html);
         Assert.DoesNotContain("role=\"alert\"", html);
         Assert.DoesNotContain("<dialog", html);

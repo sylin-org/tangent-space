@@ -1,0 +1,25 @@
+/* Simple.css 2.3.7, a classless stylesheet the base layer can hold, vendored verbatim from its official package
+ * (simpledotcss, MIT: simple/LICENSE, github.com/kevquirk/simple.css), and its adapter: its own variables read the --ts-* tokens, so
+ * any palette colours it, and Tangent's shapes and tangent layers read its fonts through --ts-font-*. */
+
+@layer base, shapes, tangent, palette, owner;
+
+@import './simple/simple.css' layer(base);
+
+@layer base {
+:root {
+  --bg: var(--ts-background);
+  --accent-bg: var(--ts-surface);
+  --text: var(--ts-foreground);
+  --text-light: var(--ts-text-2);
+  --border: var(--ts-connector);
+  --accent: var(--ts-accent);
+  --accent-hover: var(--ts-accent);
+  --accent-text: var(--ts-accent-foreground);
+  --preformatted: var(--ts-text-2);
+  --disabled: var(--ts-hover);
+  --ts-font-display: var(--sans-font);
+  --ts-font-ui: var(--sans-font);
+  --ts-font-mono: var(--mono-font);
+}
+}

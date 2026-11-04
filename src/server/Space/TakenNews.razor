@@ -6,11 +6,11 @@
 @if (Model is { Count: > 0 } group)
 {
     <h3 class="rail-heading rail-heading-spaced">Taken on a tangent from your posts · @((group.AtLeast ? "at least " : "") + group.Count.ToString(CultureInfo.InvariantCulture))</h3>
-    <ul class="topic-rows door-taken">
+    <ul class="topic-rows door-taken list">
         @foreach (var post in group.Posts)
         {
             <li @key="post.PostId">
-                <a class="topic-row is-new" href="@post.Address">
+                <a class="row topic is-new" href="@post.Address">
                     <span class="topic-row-dot"><span class="new-dot" role="img" aria-label="Unread"></span></span>
                     <span class="topic-row-body">
                         <span class="topic-row-title">@post.Topic</span>

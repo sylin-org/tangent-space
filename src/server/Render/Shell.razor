@@ -1,8 +1,9 @@
 @using System.Globalization
 @using System.Text.Json
 @using Tangent.Space
-@* The page around one resource's component: the place's accent on <html>, and the stylesheet and the two scripts every page loads, absolute from
-   the base URL. The theme script blocks in <head> so the reader's theme applies before the first paint; the
+@* The page around one resource's component: the place's accent on <html>, the stylesheets of the place's appearance in
+   their layers — its base, Tangent's components and its palette, each one stylesheet, and the place's own CSS as the owner
+   layer, which a management page leaves out — and the two scripts every page loads, absolute from the base URL. The theme script blocks in <head> so the reader's theme applies before the first paint; the
    page script is a module, deferred by nature, that mounts the islands once the document is parsed. A standalone page
    opens with no server and no script: the device decides its theme, and no island answers on it. A resource
    that names a frame is drawn inside it: the masthead with the place's mark and name, the search box, a form that works without JavaScript and suggests as someone types with it, and, for someone signed in, how
@@ -15,12 +16,18 @@
    slots come through here: its head last in <head>, so what it sets wins, its masthead after the place's name and its footer first in the footer, each adding nothing while it is empty.
    Nothing here is a dialog. *@
 <!DOCTYPE html>
-<html lang="en" data-accent="@Accent">
+<html lang="en" data-accent="@Appearance.Word(Appearance.Accent)">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@Title</title>
+    <link rel="stylesheet" href="@(BaseUrl + "/" + Appearance.BaseSheet)">
     <link rel="stylesheet" href="@(BaseUrl + "/" + HtmlFormatter.Stylesheet)">
+    <link rel="stylesheet" href="@(BaseUrl + "/" + Appearance.PaletteSheet)">
+    @if (!Management && Appearance.CssLayer is { } owner)
+    {
+        <style>@((MarkupString)owner)</style>
+    }
     @if (!Standalone)
     {
         <script src="@(BaseUrl)/theme.js"></script>
@@ -50,15 +57,15 @@
 }
 @if (Frame is { } frame)
 {
-    <header class="masthead">
-        <a class="masthead-place" href="@frame.Door">
+    <header class="masthead bar place">
+        <a class="masthead-place chip place" href="@frame.Door">
             <span class="masthead-mark" aria-hidden="true">@frame.Initial</span>
             <span class="masthead-name">@frame.Place</span>
         </a>
         <Slot Name="masthead" Html="@Slots.Masthead" />
         @if (frame.Searchable && !Standalone)
         {
-            <form class="masthead-search" role="search" method="get" action="@frame.Search" data-island="search">
+            <form class="masthead-search search" role="search" method="get" action="@frame.Search" data-island="search">
                 <svg class="masthead-search-icon" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="9" r="5.5"></circle><path d="M13 13l3.5 3.5"></path></svg>
                 <input class="masthead-search-field" type="search" name="q" value="@frame.Searched" placeholder="Search" aria-label="Search this place" maxlength="200" autocomplete="off">
             </form>
@@ -68,7 +75,7 @@
             {
                 @if (who.Notifications is { } unseen)
                 {
-                    <form class="masthead-unseen-form" method="post" action="@unseen.Open.Action"><input type="hidden" name="@Events.Notifications.ThroughField" value="@unseen.Open.Value(Events.Notifications.ThroughField)">
+                    <form class="masthead-unseen-form seen-notifications" method="post" action="@unseen.Open.Action"><input type="hidden" name="@Events.Notifications.ThroughField" value="@unseen.Open.Value(Events.Notifications.ThroughField)">
                         <button class="masthead-unseen" hidden="@(unseen.Count == 0)" aria-label="@Unseen(unseen.Count, unseen.AtLeast)"
                                 data-island="unseen" data-props="@JsonSerializer.Serialize(new { reader = who.Id, count = unseen.Count, atLeast = unseen.AtLeast, through = unseen.Through, applications = unseen.Applications })">
                             <svg class="masthead-unseen-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">@((MarkupString)NotificationsIcon)</svg>
@@ -76,12 +83,12 @@
                         </button>
                     </form>
                 }
-                <details class="account">
+                <details class="account menu participant is-you">
                     <summary class="account-button" aria-label="@("Account, " + who.Name)">
                         @Mark(who)
                         <svg class="account-chevron" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"></path></svg>
                     </summary>
-                    <div class="account-panel">
+                    <div class="account-panel panel">
                         <div class="account-who">
                             @Mark(who)
                             <span class="account-names">
@@ -97,10 +104,10 @@
                                 <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
                             </div>
                         </div>
-                        <ul class="account-items">
+                        <ul class="account-items list">
                             @if (who.Notifications is { } notifications)
                             {
-                                <li><form method="post" action="@notifications.Open.Action"><input type="hidden" name="@Events.Notifications.ThroughField" value="@notifications.Open.Value(Events.Notifications.ThroughField)"><button class="account-item account-action">@Icon(NotificationsIcon)Notifications</button></form></li>
+                                <li><form class="seen-notifications" method="post" action="@notifications.Open.Action"><input type="hidden" name="@Events.Notifications.ThroughField" value="@notifications.Open.Value(Events.Notifications.ThroughField)"><button class="account-item account-action">@Icon(NotificationsIcon)Notifications</button></form></li>
                             }
                             @if (who.Settings is { } settings)
                             {
@@ -118,7 +125,7 @@
             }
         </div>
     </header>
-    <nav class="path-bar" aria-label="You are here">
+    <nav class="path" aria-label="You are here">
         <span class="path-elbow" aria-hidden="true"></span>
         <ol class="path-crumbs">
             @for (var index = 0; index < frame.Crumbs.Count; index++)
@@ -128,19 +135,19 @@
                 <li class="path-crumb">
                     @if (crumb.Switcher is { } switcher)
                     {
-                        <details class="switcher">
+                        <details class="switcher menu tangent">
                             <summary class="switcher-button" aria-current="@(last ? "page" : null)" aria-label="@(crumb.Label + ", switch Tangent")">
                                 <TangentTile Tile="@switcher.Tile" />
                                 <span class="switcher-label">@crumb.Label</span>
                                 <svg class="switcher-chevron" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"></path></svg>
                             </summary>
-                            <div class="switcher-panel">
+                            <div class="switcher-panel panel">
                                 <p class="switcher-heading">Tangents</p>
-                                <ul class="switcher-items">
+                                <ul class="switcher-items list">
                                     @foreach (var item in switcher.Tangents)
                                     {
                                         <li>
-                                            <a class="switcher-item" href="@item.Address" aria-current="@(item.Current ? "page" : null)">
+                                            <a class="@(item.Current ? "switcher-item row tangent is-current" : "switcher-item row tangent")" href="@item.Address" aria-current="@(item.Current ? "page" : null)">
                                                 <TangentTile Tile="@item.Tile" Size="menu" />
                                                 <span class="switcher-item-text">
                                                     <span class="switcher-item-name">@item.Name</span>
@@ -164,7 +171,7 @@
                     }
                     else if (last)
                     {
-                        <span aria-current="page" class="@(frame.Crumbs.Count == 1 ? "path-current path-only" : "path-current")">@crumb.Label</span>
+                        <span aria-current="page" class="@(frame.Crumbs.Count == 1 ? "path-current path-only is-current" : "path-current is-current")">@crumb.Label</span>
                     }
                     else
                     {
@@ -176,7 +183,7 @@
         </ol>
     </nav>
     <CascadingValue Name="@nameof(Standalone)" Value="@Standalone" IsFixed="true">@ChildContent</CascadingValue>
-    <footer class="footer">
+    <footer class="footer bar">
         <Slot Name="footer" Html="@Slots.Footer" />
         <span class="footer-powered">Powered by Tangent Space</span>
         @if (!Standalone)
@@ -204,7 +211,12 @@ else
 
     [Parameter, EditorRequired] public string BaseUrl { get; set; } = "";
 
-    [Parameter, EditorRequired] public string Accent { get; set; } = "";
+    /// <summary>How the place looks: the stylesheet of each of its layers, its accent and its own CSS.</summary>
+    [Parameter, EditorRequired] public Appearance Appearance { get; set; } = new();
+
+    /// <summary>Whether the page is one of the place's management pages, which leave out the owner layer, so no stylesheet
+    /// of the place's can hide the way back.</summary>
+    [Parameter] public bool Management { get; set; }
 
     /// <summary>The place's own HTML, sanitized when it was written, so the same on the site, in an export and in the archive.</summary>
     [Parameter, EditorRequired] public Slots Slots { get; set; } = new();

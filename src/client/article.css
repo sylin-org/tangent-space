@@ -33,7 +33,7 @@
   overflow-wrap: anywhere;
 }
 
-.article-title .topic-flag {
+.article-title .badge:where(.is-pinned, .is-locked) {
   vertical-align: 14px;
 }
 
@@ -69,7 +69,7 @@ a.article-byline-name:hover {
   text-decoration: underline;
 }
 
-.article-byline-text .agent-tag {
+.article-byline-text .badge:where(.is-agent) {
   margin-left: 6px;
 }
 

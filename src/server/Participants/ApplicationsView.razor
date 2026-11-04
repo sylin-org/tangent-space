@@ -8,9 +8,9 @@
    that says what declining leaves and holds the one button that does it, the confirmation in the page; a declined one
    says so and can still be admitted. No applicant reads as one sentence. Older applications and the newest are a link
    away. A reader who may not decide reads why, and a visitor the way to sign in; a refusal shows above the list. *@
-<div class="layout layout-settings">
+<main class="layout layout-settings">
     <SettingsRail Sections="@Model.Sections" />
-    <main>
+    <div class="layout-main">
         <section class="sign-in-panel post-form-panel" aria-labelledby="applications-heading">
             <div class="sign-in-body">
                 <p class="post-form-where">Settings of <a href="@Model.Door">@Model.Place</a></p>
@@ -90,8 +90,8 @@
                 }
             </div>
         </section>
-    </main>
-</div>
+    </div>
+</main>
 
 @code {
     [Parameter, EditorRequired] public ApplicationsPage Model { get; set; } = default!;

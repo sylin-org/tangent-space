@@ -1,16 +1,13 @@
-/* Tangent Space design tokens, from the design reference of 29 September 2026.
- * Paper (light) is the default. Ink (dark) applies with data-theme="dark" on <html>,
- * or with no data-theme when the device prefers dark (System, the default choice).
- * The Tangent Space accent is chosen with data-accent="gold|jade|iris|copper" on <html>.
- * The derived tones (accent-line, accent-soft, selection) follow the accent.
- * Ink is written twice because one block answers the explicit choice and the other the
- * device under System; the token parity test holds both to the reference. */
+/* Tangent's scale and the colours of its own subjects, in the shapes layer: the type scale, radii, layout sizes and
+ * shadows from the design reference of 29 September 2026, the six Tangent tones, the role colours, the agent's marks,
+ * danger, and the reader's theme as the page's colour scheme. Paper (light) is the default; Ink (dark) applies with
+ * data-theme="dark" on <html>, or with no data-theme when the device prefers dark (System, the default choice). Ink is
+ * written twice because one block answers the explicit choice and the other the device under System; the token parity
+ * test holds both to the reference. The palette layer, above, may give any of them another value; the fonts are the
+ * base's (base.css), the place's colours and accent the palette's (palette.css). */
 
 :root {
-  /* type */
-  --ts-font-display: 'Newsreader', Georgia, serif;
-  --ts-font-ui: 'Schibsted Grotesk', 'Helvetica Neue', Arial, sans-serif;
-  --ts-font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  /* type, in the base's fonts */
   --ts-type-article-title: 500 54px/1.04 var(--ts-font-display);
   --ts-type-tangent-title: 500 44px/1.05 var(--ts-font-display);
   --ts-type-topic-title: 500 40px/1.1 var(--ts-font-display);
@@ -63,20 +60,19 @@
   --ts-image-band: #1a1712;
   --ts-image-ink: #f3eee3;
   --ts-image-edge: rgba(10, 9, 8, 0.25);
-  /* Tangent Space accent tones (gold by default) */
-  --ts-accent-light: #8a5f12; --ts-accent-dark: #d9ab55;
+  /* What the palette's own colours make: the place's first four tokens, with --ts-accent, named as
+     site.standard.theme.basic names them, and the tones drawn from the accent and the text. A palette may give any of
+     them a value of its own. */
+  --ts-background: var(--ts-page);
+  --ts-foreground: var(--ts-text);
+  --ts-accent-foreground: var(--ts-on-accent);
+  --ts-hover: color-mix(in srgb, var(--ts-text) 7%, var(--ts-page));
+  --ts-line: color-mix(in srgb, var(--ts-text) 14%, var(--ts-page));
+  --ts-accent-line: color-mix(in srgb, var(--ts-accent) 50%, transparent);
+  --ts-accent-soft: color-mix(in srgb, var(--ts-accent) 14%, transparent);
+  --ts-selection: color-mix(in srgb, var(--ts-accent) 24%, transparent);
   /* Paper */
   color-scheme: light;
-  --ts-page: #f3eee3;
-  --ts-surface: #f9f6ef;
-  --ts-raised: #ffffff;
-  --ts-hover: #ebe5d8;
-  --ts-line: #dcd3c2;
-  --ts-connector: #bfb4a0;
-  --ts-text: #1d1b17;
-  --ts-text-2: #4a453c;
-  --ts-text-3: #6b6456;
-  --ts-on-accent: #ffffff;
   --ts-agent: #3d5a73;
   --ts-agent-line: #9fb0bf;
   --ts-agent-ring: #6f8aa3;
@@ -85,15 +81,6 @@
   --ts-toolbar-on: #45403a;
   --ts-shadow: rgba(40, 30, 15, 0.18);
   --ts-scrim: rgba(29, 27, 23, 0.4);
-  --ts-accent: var(--ts-accent-light);
-  /* The place's first four tokens, with --ts-accent, named as site.standard.theme.basic names them; they follow the
-     theme and the accent through the tokens they stand for. */
-  --ts-background: var(--ts-page);
-  --ts-foreground: var(--ts-text);
-  --ts-accent-foreground: var(--ts-on-accent);
-  --ts-accent-line: color-mix(in srgb, var(--ts-accent) 50%, transparent);
-  --ts-accent-soft: color-mix(in srgb, var(--ts-accent) 14%, transparent);
-  --ts-selection: color-mix(in srgb, var(--ts-accent) 24%, transparent);
   --ts-tangent-amber: #c8931f; --ts-tangent-amber-tint: #f0e3c4; --ts-tangent-amber-ink: #7a5410;
   --ts-tangent-coral: #c2542f; --ts-tangent-coral-tint: #efdcd2; --ts-tangent-coral-ink: #a4432a;
   --ts-tangent-jade: #3f8f78; --ts-tangent-jade-tint: #d7ebe3; --ts-tangent-jade-ink: #2f6b5e;
@@ -105,22 +92,9 @@
   --ts-role-gold: #b8860b;
   --ts-role-teal: #1f8f7a;
 }
-:root[data-accent="jade"] { --ts-accent-light: #2f6b5e; --ts-accent-dark: #7cc4b0; }
-:root[data-accent="iris"] { --ts-accent-light: #5a4fb0; --ts-accent-dark: #a99cf0; }
-:root[data-accent="copper"] { --ts-accent-light: #a4472a; --ts-accent-dark: #e58f6a; }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --ts-page: #11100e;
-  --ts-surface: #171614;
-  --ts-raised: #1f1d1a;
-  --ts-hover: #24211d;
-  --ts-line: #2e2a24;
-  --ts-connector: #4a443b;
-  --ts-text: #efe9de;
-  --ts-text-2: #bdb4a4;
-  --ts-text-3: #948b7b;
-  --ts-on-accent: #16130d;
   --ts-agent: #a8c0d3;
   --ts-agent-line: #3b4a57;
   --ts-agent-ring: #56708a;
@@ -129,10 +103,6 @@
   --ts-toolbar-on: #c9c0b0;
   --ts-shadow: rgba(0, 0, 0, 0.5);
   --ts-scrim: rgba(0, 0, 0, 0.58);
-  --ts-accent: var(--ts-accent-dark);
-  --ts-accent-line: color-mix(in srgb, var(--ts-accent) 55%, transparent);
-  --ts-accent-soft: color-mix(in srgb, var(--ts-accent) 18%, transparent);
-  --ts-selection: color-mix(in srgb, var(--ts-accent) 35%, transparent);
   --ts-tangent-amber: #e9b949; --ts-tangent-amber-tint: #29220f; --ts-tangent-amber-ink: #e9b949;
   --ts-tangent-coral: #e0795a; --ts-tangent-coral-tint: #2a211d; --ts-tangent-coral-ink: #e0795a;
   --ts-tangent-jade: #6cc3a6; --ts-tangent-jade-tint: #15241f; --ts-tangent-jade-ink: #6cc3a6;
@@ -148,16 +118,6 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]), :root[data-theme="system"] {
     color-scheme: dark;
-    --ts-page: #11100e;
-    --ts-surface: #171614;
-    --ts-raised: #1f1d1a;
-    --ts-hover: #24211d;
-    --ts-line: #2e2a24;
-    --ts-connector: #4a443b;
-    --ts-text: #efe9de;
-    --ts-text-2: #bdb4a4;
-    --ts-text-3: #948b7b;
-    --ts-on-accent: #16130d;
     --ts-agent: #a8c0d3;
     --ts-agent-line: #3b4a57;
     --ts-agent-ring: #56708a;
@@ -166,10 +126,6 @@
     --ts-toolbar-on: #c9c0b0;
     --ts-shadow: rgba(0, 0, 0, 0.5);
     --ts-scrim: rgba(0, 0, 0, 0.58);
-    --ts-accent: var(--ts-accent-dark);
-    --ts-accent-line: color-mix(in srgb, var(--ts-accent) 55%, transparent);
-    --ts-accent-soft: color-mix(in srgb, var(--ts-accent) 18%, transparent);
-    --ts-selection: color-mix(in srgb, var(--ts-accent) 35%, transparent);
     --ts-tangent-amber: #e9b949; --ts-tangent-amber-tint: #29220f; --ts-tangent-amber-ink: #e9b949;
     --ts-tangent-coral: #e0795a; --ts-tangent-coral-tint: #2a211d; --ts-tangent-coral-ink: #e0795a;
     --ts-tangent-jade: #6cc3a6; --ts-tangent-jade-tint: #15241f; --ts-tangent-jade-ink: #6cc3a6;

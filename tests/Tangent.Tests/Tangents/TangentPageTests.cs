@@ -39,15 +39,15 @@ public sealed class TangentPageTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
         using var browser = new Browser(tangentSpace);
         (await browser.SignIn("reader", Reader, Cancellation)).Dispose();
-        Assert.Contains("<details class=\"account\">", await Html(browser.Client, "/"));
+        Assert.Contains("<details class=\"account menu participant is-you\">", await Html(browser.Client, "/"));
 
         using (var image = await browser.Client.GetAsync("/auth/logout", Cancellation))
             Assert.Equal(HttpStatusCode.NotFound, image.StatusCode);
-        Assert.Contains("<details class=\"account\">", await Html(browser.Client, "/"));
+        Assert.Contains("<details class=\"account menu participant is-you\">", await Html(browser.Client, "/"));
 
         using (var form = await browser.Client.PostAsync("/auth/logout", null, Cancellation))
             Assert.True(form.IsSuccessStatusCode || form.StatusCode == HttpStatusCode.Redirect);
-        Assert.DoesNotContain("<details class=\"account\">", await Html(browser.Client, "/"));
+        Assert.DoesNotContain("<details class=\"account menu participant is-you\">", await Html(browser.Client, "/"));
     }
 
     [Fact]
@@ -94,7 +94,7 @@ public sealed class TangentPageTests
         var order = new[] { "Read this first", "An older question", "A newer question" }.Select(title => html.IndexOf(title, StringComparison.Ordinal)).ToList();
         Assert.All(order, index => Assert.True(index > 0));
         Assert.Equal(order.Order().ToList(), order);
-        Assert.Contains("<span class=\"topic-flag\">Pinned</span>", html);
+        Assert.Contains("<span class=\"badge is-pinned\">Pinned</span>", html);
         Assert.DoesNotContain("<dialog", html);
     }
 
@@ -174,9 +174,9 @@ public sealed class TangentPageTests
             Assert.Equal((true, 1L), Marks(json.RootElement)[seen.Id]);
         var html = await Html(browser.Client, "/t/" + Workshop);
         Assert.Contains("<span class=\"new-dot\" role=\"img\" aria-label=\"Unread\"></span>", html);
-        Assert.Contains("<span class=\"new-label\">1 new</span>", html);
+        Assert.Contains("<span class=\"badge is-new\">1 new</span>", html);
         // The reader's account opens in the page, with the way to sign out and come back here.
-        Assert.Contains("<details class=\"account\">", html);
+        Assert.Contains("<details class=\"account menu participant is-you\">", html);
         Assert.Contains($"<form method=\"post\" action=\"{BaseUrl}/auth/logout?return={Uri.EscapeDataString("/t/" + Workshop)}\"><button class=\"account-item account-action\">", html);
         Assert.Contains("</svg>Sign out</button></form>", html);
 
@@ -332,7 +332,7 @@ public sealed class TangentPageTests
         Assert.Contains($"<li><form method=\"post\" action=\"{BaseUrl}/auth/logout?return={Uri.EscapeDataString("/t/" + Workshop)}\">", readerHtml);
         Assert.Contains("data-theme-choice=\"dark\"", readerHtml[..readerHtml.IndexOf("account-items", StringComparison.Ordinal)]);
         Assert.DoesNotContain("The studio", readerHtml);
-        Assert.Contains("<span class=\"new-label new-beside\">New</span>", readerHtml);
+        Assert.Contains("<span class=\"badge is-new new-beside\">New</span>", readerHtml);
     }
 
     [Fact]

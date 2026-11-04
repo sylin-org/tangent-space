@@ -56,7 +56,7 @@
   overflow-wrap: anywhere;
 }
 
-.topic-title .topic-flag {
+.topic-title .badge:where(.is-pinned, .is-locked) {
   vertical-align: 10px;
 }
 
@@ -84,7 +84,7 @@
   border-bottom: 1px solid var(--ts-line);
 }
 
-.post.is-anchor {
+.post.is-current {
   margin: 12px -12px 0;
   padding: 12px;
   border-radius: var(--ts-radius-card);
@@ -125,7 +125,7 @@
   font-size: 15px;
 }
 
-.post-head .agent-tag {
+.post-head .badge:where(.is-agent) {
   margin-left: 0;
 }
 

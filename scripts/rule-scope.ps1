@@ -3,7 +3,10 @@
 
 $script:ExcludedTopFolders = '.git', '.local', '.dream-loop', 'poc', 'publish'
 $script:ExcludedDirectories = '.git', 'node_modules', 'bin', 'obj'
-$script:ExcludedRelativePaths = 'docs/adr', 'docs/HARVEST.md', 'docs/LANGUAGE.md', 'src/server/wwwroot'
+# The bundled classless stylesheets are their authors' text, vendored verbatim beside their licences.
+$script:ExcludedRelativePaths = 'docs/adr', 'docs/HARVEST.md', 'docs/LANGUAGE.md', 'src/server/wwwroot',
+    'src/client/bases/simple', 'src/client/bases/mvp', 'src/client/bases/marx', 'src/client/bases/sakura', 'src/client/bases/water',
+    'src/client/bases/new'
 $script:TextExtensions = '.md', '.cs', '.razor', '.ts', '.vue', '.js', '.mjs', '.json', '.ps1', '.yaml', '.yml', '.css', '.html',
     '.csproj', '.props', '.targets', '.sln', '.sh', '.cmd', '.bat', '.xml'
 $script:TextNames = 'Dockerfile'

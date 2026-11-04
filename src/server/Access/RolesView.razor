@@ -8,9 +8,9 @@
    delete it, which opens in place to say what deleting does and holds the one button that does it, never a dialog. The
    pages beside this one are a link away. A reader who may not shape the roles reads why, and a visitor the way to sign
    in; a refusal shows above the list. *@
-<div class="layout layout-settings">
+<main class="layout layout-settings">
     <SettingsRail Sections="@Model.Sections" />
-    <main>
+    <div class="layout-main">
         <section class="sign-in-panel post-form-panel" aria-labelledby="roles-heading">
             <div class="sign-in-body">
                 <p class="post-form-where">Settings of <a href="@Model.Door">@Model.Place</a></p>
@@ -129,8 +129,8 @@
                 }
             </div>
         </section>
-    </main>
-</div>
+    </div>
+</main>
 
 @code {
     [Parameter, EditorRequired] public RolesPage Model { get; set; } = default!;

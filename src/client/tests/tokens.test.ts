@@ -5,13 +5,14 @@ import catalog from './reference/tokens.json'
 
 // The design reference's tokens, kept verbatim in reference/tokens.css and reference/tokens.json, are
 // the yardstick: every token either file defines, in every block (Paper, each accent, Ink, Ink under
-// System), is declared in the built stylesheet in the same block with the same value.
+// System), is declared in Tangent's own stylesheets as built — its base, its components and its palette — in the
+// same block with the same value, whichever layer holds it.
 
 const paper = ':root'
 const ink = [':root[data-theme="dark"]', '@media (prefers-color-scheme: dark) :root:not([data-theme]), :root[data-theme="system"]']
 
 // Reads every --ts-* declaration as "context | name" -> value, where the context is the selector,
-// preceded by its at-rule when there is one.
+// preceded by its at-rule when there is one; a layer is no context.
 function tokens(css: string): Map<string, string> {
   const found = new Map<string, string>()
   const walk = (body: string, context: string) => {
@@ -28,14 +29,15 @@ function tokens(css: string): Map<string, string> {
       const selector = body.slice(index, open).trim().replace(/\s+/g, ' ')
       const prelude = context + selector
       const inner = body.slice(open + 1, close - 1)
-      if (selector.startsWith('@')) walk(inner, `${prelude} `)
+      if (selector.startsWith('@layer')) walk(inner, context)
+      else if (selector.startsWith('@')) walk(inner, `${prelude} `)
       else
         for (const [, name, value] of inner.matchAll(/(--ts-[\w-]+)\s*:\s*([^;]+);/g))
           found.set(`${prelude} | ${name}`, value.trim().replace(/\s+/g, ' '))
       index = close
     }
   }
-  walk(css.replace(/\/\*[\s\S]*?\*\//g, ''), '')
+  walk(css.replace(/\/\*[\s\S]*?\*\//g, '').replace(/@layer[^{;]*;/g, ''), '')
   return found
 }
 
@@ -82,7 +84,8 @@ let built: Promise<Map<string, string>> | undefined
 function builtTokens(): Promise<Map<string, string>> {
   built ??= build({ logLevel: 'silent', build: { write: false } }).then((result) => {
     const { output } = result as { output: { fileName: string; source?: string | Uint8Array }[] }
-    return tokens(String(output.find((file) => file.fileName === 'tangent.css')?.source ?? ''))
+    const own = ['base.css', 'tangent.css', 'palette.css'].map((name) => String(output.find((file) => file.fileName === name)?.source ?? ''))
+    return tokens(own.join(' '))
   })
   return built
 }

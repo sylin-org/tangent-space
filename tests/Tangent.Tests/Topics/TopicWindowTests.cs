@@ -188,7 +188,7 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
         }
 
         var html = await Html(tangentSpace.Client, $"/t/{Workshop}/around-a-reply/{anchor.Id}");
-        Assert.Contains($"<article id=\"{anchor.Id}\" class=\"post is-anchor\" aria-current=\"true\">", html);
+        Assert.Contains($"<article id=\"{anchor.Id}\" class=\"post is-current\" aria-current=\"true\">", html);
         Assert.Single(Regex.Matches(html, "<article [^>]*aria-current=\"true\""));
 
         var missing = await Problem(tangentSpace.Client, $"/t/{Workshop}/nothing-here");

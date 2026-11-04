@@ -225,7 +225,7 @@ public sealed class SearchTests
         await using var space = tangentSpace;
 
         var door = await Send(tangentSpace.Client, HttpMethod.Get, "/");
-        Assert.Contains($"<form class=\"masthead-search\" role=\"search\" method=\"get\" action=\"{BaseUrl}/search\" data-island=\"search\"", door.Body);
+        Assert.Contains($"<form class=\"masthead-search search\" role=\"search\" method=\"get\" action=\"{BaseUrl}/search\" data-island=\"search\"", door.Body);
         Assert.Contains("name=\"q\"", door.Body);
         Assert.Contains("value=\"copper &amp; glass\"", (await Send(tangentSpace.Client, HttpMethod.Get, Path("copper & glass"))).Body);
         Assert.DoesNotContain("masthead-search", (await Send(tangentSpace.Client, HttpMethod.Get, "/sign-in")).Body);

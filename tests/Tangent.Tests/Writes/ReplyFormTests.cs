@@ -144,10 +144,10 @@ public sealed partial class ReplyFormTests
         var (visiting, _) = await Page(visitor, TopicPath(open));
         var (locked, _) = await Page(bea.Client, TopicPath(closed));
 
-        Assert.DoesNotContain("class=\"reply-form\"", visiting);
+        Assert.DoesNotContain("class=\"reply-form reply\"", visiting);
         Assert.Contains($"<p class=\"topic-closed\" data-gate=\"{Capabilities.SignIn.Word}\">", visiting);
         Assert.Matches(Regex.Escape(Capabilities.SignIn.Text) + " <a href=\"[^\"]*/sign-in\\?return=[^\"]+\">Sign in</a>", visiting);
-        Assert.DoesNotContain("class=\"reply-form\"", locked);
+        Assert.DoesNotContain("class=\"reply-form reply\"", locked);
         Assert.Contains($"<p class=\"topic-closed\" data-gate=\"{Capabilities.Locked.Word}\">", locked);
         Assert.Contains(Capabilities.Locked.Text, locked);
     }
@@ -166,6 +166,6 @@ public sealed partial class ReplyFormTests
         ? match.Value
         : throw new InvalidOperationException("The page holds no reply form.");
 
-    [GeneratedRegex("<form class=\"reply-form\".*?</form>", RegexOptions.Singleline)]
+    [GeneratedRegex("<form class=\"reply-form reply\".*?</form>", RegexOptions.Singleline)]
     private static partial Regex ReplyForm();
 }

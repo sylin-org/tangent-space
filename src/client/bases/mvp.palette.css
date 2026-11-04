@@ -1,0 +1,18 @@
+/* MVP.css 1.18.0's own palette, which the palette layer holds when it is left to the base: the --ts-* values
+ * taken from its colours, for Light and Dark, in the reader's theme. What follows from them is Tangent's (tokens.css). */
+
+@layer base, shapes, tangent, palette, owner;
+
+@layer palette {
+:root {
+  --ts-page: light-dark(#ffffff, #333333);
+  --ts-surface: light-dark(#f4f4f4, #3b3b3b);
+  --ts-raised: light-dark(#ffffff, #3b3b3b);
+  --ts-text: light-dark(#000000, #f7f7f7);
+  --ts-text-2: light-dark(#444444, #d6d6d6);
+  --ts-text-3: light-dark(#6e6e6e, #aaaaaa);
+  --ts-connector: light-dark(#c9c9c9, #666666);
+  --ts-accent: light-dark(#118bee, #0097fc);
+  --ts-on-accent: light-dark(#ffffff, #333333);
+}
+}

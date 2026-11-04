@@ -84,9 +84,9 @@ test('at the newest window a new reply is fetched as its fragment and appended, 
     if (streamed(init)) return stream([row(11, 'post.created', 'r2'), row(12, 'post.edited', 'r1', { version: 2 })])
     if (url === `${topic}/r2` && fragmentOf(init))
       return html('<div class="layout"><main><article id="root1" class="post post-root">Root</article><section class="topic-replies">' +
-        '<article id="r1" class="post">I do, at six.</article><article id="r2" class="post is-anchor is-new" aria-current="true">Then the harbour.</article></section></main></div>')
+        '<article id="r1" class="post">I do, at six.</article><article id="r2" class="post is-current is-new" aria-current="true">Then the harbour.</article></section></main></div>')
     if (url === `${topic}/r1` && fragmentOf(init))
-      return html('<div class="layout"><main><section class="topic-replies"><article id="r1" class="post is-anchor" aria-current="true">I do, at seven.</article></section></main></div>')
+      return html('<div class="layout"><main><section class="topic-replies"><article id="r1" class="post is-current" aria-current="true">I do, at seven.</article></section></main></div>')
     return new Response('', { status: 404 })
   })
 
@@ -97,10 +97,10 @@ test('at the newest window a new reply is fetched as its fragment and appended, 
   expect(replies).toEqual(['r1', 'r2', 'form', 'div'])
   const added = document.getElementById('r2')!
   expect(added.textContent).toBe('Then the harbour.')
-  expect(added.classList.contains('is-anchor')).toBe(false)
+  expect(added.classList.contains('is-current')).toBe(false)
   expect(added.hasAttribute('aria-current')).toBe(false)
   expect(added.classList.contains('is-new')).toBe(true)
-  expect(document.getElementById('r1')!.classList.contains('is-anchor')).toBe(false)
+  expect(document.getElementById('r1')!.classList.contains('is-current')).toBe(false)
   expect(calls[0].url).toBe(`${events}?since=10`)
   expect(document.querySelector('nav')!.hidden).toBe(true)
   onlyReads()
@@ -221,18 +221,18 @@ test('a frame with an id and no row moves the position past a scan of hidden row
 test('on a Tangent the island falls back to the door and fetches the list of Topics again when the door has moved', async () => {
   vi.spyOn(Math, 'random').mockReturnValue(0)
   document.body.innerHTML =
-    '<section class="tangent-head"><h1>The workshop</h1></section><div class="layout"><main class="tangent-main"><p>No topics yet.</p></main></div>' +
+    '<main class="frame-main"><section class="tangent-head"><h1>The workshop</h1></section><div class="layout"><div class="layout-main tangent-main"><p>No topics yet.</p></div></div></main>' +
     `<div class="live" data-island="live" data-props="${props({ page: 'tangent', tangent: 'workshop' })}"></div>`
   serve((url, init) => {
     if (url === door && !fragmentOf(init)) return json({ poll: { through: 14, next: `${events}?since=14` } })
     if (url === location.href && fragmentOf(init))
-      return html('<section class="tangent-head"></section><div class="layout"><main class="tangent-main"><ul><li class="is-new">Lanterns at dusk</li></ul></main></div>')
+      return html('<main class="frame-main"><section class="tangent-head"></section><div class="layout"><div class="layout-main tangent-main"><ul><li class="is-new">Lanterns at dusk</li></ul></div></div></main>')
     return new Response('', { status: 503 })
   })
 
   mounted = mountIslands(document).filter((island) => island.name === 'live')
 
-  await vi.waitFor(() => expect(document.querySelector('main')!.innerHTML).toBe('<ul><li class="is-new">Lanterns at dusk</li></ul>'), { timeout: 8000 })
+  await vi.waitFor(() => expect(document.querySelector('.tangent-main')!.innerHTML).toBe('<ul><li class="is-new">Lanterns at dusk</li></ul>'), { timeout: 8000 })
   expect(calls.slice(0, 3).map((call) => call.url)).toEqual([`${events}?since=10`, `${events}?since=10`, door])
   onlyReads()
 })

@@ -1,0 +1,28 @@
+/* Water.css 2.1.1, a classless stylesheet the base layer can hold, vendored verbatim from its official package
+ * (water.css, MIT: water/LICENSE, github.com/kognise/water.css), and its adapter: its own variables read the --ts-* tokens, so
+ * any palette colours it, and Tangent's shapes and tangent layers read its fonts through --ts-font-*. */
+
+@layer base, shapes, tangent, palette, owner;
+
+@import './water/water.css' layer(base);
+
+@layer base {
+:root {
+  --background-body: var(--ts-background);
+  --background: var(--ts-surface);
+  --background-alt: var(--ts-surface);
+  --selection: var(--ts-selection);
+  --text-main: var(--ts-foreground);
+  --text-bright: var(--ts-text);
+  --text-muted: var(--ts-text-3);
+  --links: var(--ts-accent);
+  --focus: var(--ts-accent-line);
+  --border: var(--ts-connector);
+  --button-base: var(--ts-hover);
+  --button-hover: var(--ts-line);
+  --form-text: var(--ts-foreground);
+  --ts-font-display: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  --ts-font-ui: var(--ts-font-display);
+  --ts-font-mono: Consolas, Menlo, ui-monospace, monospace;
+}
+}

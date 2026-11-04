@@ -4,14 +4,14 @@
    in its place at its size, the byline, then the body in the article's type. It is an ordinary form: without script the
    title and the body are plain fields that post, and the cover it holds stays. With script the article island turns the
    body's field into the visual editor, which writes its Markdown back there, and brings a cover and images in the page. *@
-<div class="layout layout-reading topic-layout article-writing">
+<main class="layout layout-reading topic-layout article-writing">
     <aside class="rail" aria-label="In this Tangent">
         <h2 class="rail-heading">@TangentName</h2>
         <ul class="rail-views">
             <li><a href="@TangentAddress">All articles</a></li>
         </ul>
     </aside>
-    <main class="topic-main">
+    <div class="layout-main topic-main">
         <h1 class="visually-hidden">@Heading</h1>
         @if (Failure is not null)
         {
@@ -39,8 +39,8 @@
             </div>
         </form>
         @After
-    </main>
-</div>
+    </div>
+</main>
 
 @code {
     [Parameter, EditorRequired] public string Heading { get; set; } = "";

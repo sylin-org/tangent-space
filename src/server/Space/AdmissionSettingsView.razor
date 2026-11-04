@@ -4,9 +4,9 @@
    them the choice of how a newcomer arrives, two cards, each saying in a sentence what it means for them, and a note that
    everyone already here stays as they are. A reader who may not change it reads why above the form, whose choices are
    disabled and which has no button, and a visitor the way to sign in; a refusal shows above the form. *@
-<div class="layout layout-settings">
+<main class="layout layout-settings">
     <SettingsRail Sections="@Model.Sections" />
-    <main>
+    <div class="layout-main">
         <section class="sign-in-panel post-form-panel" aria-labelledby="space-admission-heading">
             <div class="sign-in-body">
                 <p class="post-form-where">Settings of <a href="@Model.Door">@Model.Place</a></p>
@@ -59,8 +59,8 @@
                 </form>
             </div>
         </section>
-    </main>
-</div>
+    </div>
+</main>
 
 @code {
     [Parameter, EditorRequired] public AdmissionSettingsPage Model { get; set; } = default!;

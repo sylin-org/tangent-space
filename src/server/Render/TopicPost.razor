@@ -5,7 +5,9 @@
    the body's Markdown as safe HTML, each mention a link reading the participant's current handle; who other than its
    author last edited it, and when, under the body; and "Edit" where the reader may edit or remove it. A removed Post is a tombstone in the same place: its author and time, who removed
    it, and no body. The root reads larger; an article's root is its body alone, in the article's type, its author and
-   time in the head above it. The Post the address named is marked. *@
+   time in the head above it. The Post the address named is marked. In the markup contract it is an article, its meta line
+   its header and its actions its footer, classed by what the record holds: the root, new to the reader, removed, the one
+   the address named, and written by the reader or by an agent. *@
 <article id="@Model.Id" class="@Classes()" aria-current="@(Anchor ? "true" : null)">
     @if (!Article)
     {
@@ -14,7 +16,7 @@
     <div class="post-main">
         @if (!Article)
         {
-            <div class="post-head">
+            <header class="post-head">
                 @if (Model.Author.Profile is { } profile)
                 {
                     <a class="post-author" href="@profile">@Model.Author.Name</a>
@@ -26,10 +28,10 @@
                 <span class="post-handle">@("@" + Model.Author.Handle)</span>
                 @if (Model.New)
                 {
-                    <span class="new-label">New</span>
+                    <span class="badge is-new">New</span>
                 }
                 <a class="post-time" href="@Model.Address" title="@Full(Model.CreatedAt)"><time datetime="@Iso(Model.CreatedAt)">@TopicRow.When(Model.CreatedAt, Today)</time></a>
-            </div>
+            </header>
         }
         @if (Model.Parent is { } parent)
         {
@@ -47,14 +49,19 @@
                 <p class="post-edited">Edited by @edited.By.Name <time datetime="@Iso(edited.At)" title="@Full(edited.At)">@TopicRow.When(edited.At, Today)</time></p>
             }
         }
-        @if (Model.Edit is { } edit)
+        @if (Model.Edit is not null || Model.TakeOnATangent is not null || Model.Taken is not null || Model.Report is not null)
         {
-            <div class="post-actions">
-                <a class="post-action" href="@edit">Edit</a>
-            </div>
+            <footer class="post-footer">
+                @if (Model.Edit is { } edit)
+                {
+                    <div class="post-actions">
+                        <a class="post-action" href="@edit">Edit</a>
+                    </div>
+                }
+                <TakeOnATangent Model="@Model" />
+                <ReportForm Model="@Model" />
+            </footer>
         }
-        <TakeOnATangent Model="@Model" />
-        <ReportForm Model="@Model" />
     </div>
 </article>
 
@@ -79,12 +86,16 @@
     /// <summary>The name of the author of the Post this one replies to, where the page holds it.</summary>
     [Parameter] public string? ParentAuthor { get; set; }
 
-    private string Classes() => "post" + (Root ? " post-root" : "") + (Article ? " post-article" : "") + (Anchor ? " is-anchor" : "")
-        + (Model.Removed is not null ? " is-removed" : "") + (Model.New ? " is-new" : "");
+    /// <summary>Who reads the page, where someone signed in does.</summary>
+    [Parameter] public string? Reader { get; set; }
+
+    private string Classes() => "post" + (Root ? " post-root" : "") + (Article ? " post-article" : "") + (Anchor ? " is-current" : "")
+        + (Model.Removed is not null ? " is-removed" : "") + (Model.New ? " is-new" : "")
+        + (Model.Author.Id == Reader ? " by-you" : "") + (Model.Author.Kind == "agent" ? " by-agent" : "");
 
     private RenderFragment AgentTag() => builder =>
     {
-        if (Model.Author.Kind == "agent") builder.AddMarkupContent(0, "<span class=\"agent-tag\">Agent</span>");
+        if (Model.Author.Kind == "agent") builder.AddMarkupContent(0, "<span class=\"badge is-agent\">Agent</span>");
     };
 
     private static string Iso(DateTimeOffset at) => at.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);

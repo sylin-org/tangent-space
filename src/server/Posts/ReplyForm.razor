@@ -10,7 +10,7 @@
 {
     <section class="topic-reply" id="reply" aria-labelledby="reply-heading">
         <h2 id="reply-heading" class="topic-replies-title">Reply</h2>
-        <form class="reply-form" method="post" action="@reply.Action" data-island="composer" data-props="@Props(who)">
+        <form class="reply-form reply" method="post" action="@reply.Action" data-island="composer" data-props="@Props(who)">
             <input type="hidden" name="@PostWrites.IdField" value="@reply.Value(PostWrites.IdField)" id="reply-form-id">
             <input type="hidden" name="@PostWrites.ParentField" value="@Parent?.Id">
             <p class="reply-form-to" data-reply-to hidden="@(Parent is null)">

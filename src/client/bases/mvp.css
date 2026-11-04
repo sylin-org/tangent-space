@@ -1,0 +1,25 @@
+/* MVP.css 1.18.0, a classless stylesheet the base layer can hold, vendored verbatim from its official package
+ * (mvp.css, MIT: mvp/LICENSE, github.com/andybrewer/mvp), and its adapter: its own variables read the --ts-* tokens, so
+ * any palette colours it, and Tangent's shapes and tangent layers read its fonts through --ts-font-*. */
+
+@layer base, shapes, tangent, palette, owner;
+
+@import './mvp/mvp.css' layer(base);
+
+@layer base {
+:root {
+  --color-bg: var(--ts-background);
+  --color-bg-secondary: var(--ts-surface);
+  --color-link: var(--ts-accent);
+  --color-accent: var(--ts-accent-soft);
+  --color-secondary: var(--ts-accent);
+  --color-secondary-accent: var(--ts-accent-soft);
+  --color-shadow: var(--ts-shadow);
+  --color-table: var(--ts-accent);
+  --color-text: var(--ts-foreground);
+  --color-text-secondary: var(--ts-text-3);
+  --ts-font-display: var(--font-family);
+  --ts-font-ui: var(--font-family);
+  --ts-font-mono: Consolas, Menlo, ui-monospace, monospace;
+}
+}

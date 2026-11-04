@@ -60,9 +60,9 @@ export const live = defineComponent({
     }
 
     async function refreshTangent(): Promise<void> {
-      const list = document.querySelector<HTMLElement>('main.tangent-main')
+      const list = document.querySelector<HTMLElement>('.tangent-main')
       if (!list) return
-      const fresh = (await fetchFragment(location.href)).querySelector('main.tangent-main')
+      const fresh = (await fetchFragment(location.href)).querySelector('.tangent-main')
       if (fresh) list.replaceChildren(...fresh.childNodes)
     }
 
@@ -71,7 +71,7 @@ export const live = defineComponent({
     async function post(id: string): Promise<HTMLElement | null> {
       const found = (await fetchFragment(props.address + '/' + encodeURIComponent(id))).querySelector<HTMLElement>(`article[id="${id}"]`)
       if (!found) return null
-      found.classList.remove('is-anchor')
+      found.classList.remove('is-current')
       found.removeAttribute('aria-current')
       return found
     }
@@ -114,8 +114,8 @@ export const live = defineComponent({
         const article = await post(event.post)
         const existing = shown(event.post)
         if (!article || !existing) return
-        if (existing.classList.contains('is-anchor')) {
-          article.classList.add('is-anchor')
+        if (existing.classList.contains('is-current')) {
+          article.classList.add('is-current')
           article.setAttribute('aria-current', 'true')
         }
         existing.replaceWith(article)

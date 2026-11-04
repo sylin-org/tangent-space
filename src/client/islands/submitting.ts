@@ -3,7 +3,8 @@ import { defineComponent, type PropType } from 'vue'
 // A form that says it is on its way: once submitted, the form is busy, its text fields are read-only, and its button
 // reads its busy label and takes no second press, until the page is left. A page restored from the back-forward
 // cache is ready again. A hidden field with data-carry is an address that takes another field's value along, under
-// the name data-carry-as, so a failed sign-in comes back with the handle that was typed.
+// the name data-carry-as, so a failed sign-in comes back with the handle that was typed. A send into a frame, such as a
+// preview, leaves the page where it is, and the form ready.
 export const submitting = defineComponent({
   name: 'SubmittingIsland',
   props: {
@@ -21,6 +22,7 @@ export const submitting = defineComponent({
     }
     const fields = () => props.host.querySelectorAll<HTMLInputElement>('input:not([type="hidden"])')
     props.host.addEventListener('submit', (event) => {
+      if (event.submitter?.hasAttribute('formtarget')) return
       if (props.host.getAttribute('aria-busy') === 'true') {
         event.preventDefault()
         return

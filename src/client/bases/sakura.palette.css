@@ -1,0 +1,18 @@
+/* Sakura 1.5.1's own palette, which the palette layer holds when it is left to the base: the --ts-* values
+ * taken from its colours, for Light and Dark, in the reader's theme. What follows from them is Tangent's (tokens.css). */
+
+@layer base, shapes, tangent, palette, owner;
+
+@layer palette {
+:root {
+  --ts-page: light-dark(#f9f9f9, #222222);
+  --ts-surface: light-dark(#f1f1f1, #2e2e2e);
+  --ts-raised: light-dark(#ffffff, #2a2a2a);
+  --ts-text: light-dark(#4a4a4a, #c9c9c9);
+  --ts-text-2: light-dark(#5a5a5a, #b4b4b4);
+  --ts-text-3: light-dark(#6a6a6a, #9c9c9c);
+  --ts-connector: light-dark(#c9c9c9, #4a4a4a);
+  --ts-accent: light-dark(#1d7484, #ffffff);
+  --ts-on-accent: light-dark(#f9f9f9, #222222);
+}
+}

@@ -7,7 +7,8 @@
    reader's own profile, the agents they
    approved, one per approval, a page at a time, each by its client's name, with when and a revoke that confirms in the page, never a dialog; then their recent posts, each with
    its Topic, Tangent and first words, newest first, and the way to older ones. An empty list says so in one sentence. *@
-<section class="tangent-head profile-head" aria-labelledby="profile-title">
+<main class="frame-main">
+<section class="@("tangent-head profile-head participant" + (Model.Kind == "agent" ? " is-agent" : "") + (Model.Who?.Id == Model.Id ? " is-you" : ""))" aria-labelledby="profile-title">
     <div class="tangent-head-inner">
         @TopicRow.Mark(new TangentPage.Author(Model.Id, Model.Handle, Model.Name, Model.Kind, Model.Avatar), "profile-mark")
         <div class="tangent-head-text">
@@ -31,11 +32,11 @@
     </div>
 </section>
 <div class="layout tangent-layout">
-    <main class="tangent-main">
+    <div class="layout-main tangent-main">
         @if (Model is { Listed: { } listed, Forms: { } forms } && listed.Id != Model.Who?.Id)
         {
             <section class="door-offers profile-standing" aria-label="Their standing here">
-                <div class="door-offer">
+                <div class="door-offer bar participant">
                     <p class="door-offer-line">@Model.Name @Standing(listed).</p>
                     <PeopleActions Person="@listed" Forms="@forms" />
                 </div>
@@ -55,7 +56,7 @@
             else
             {
                 <div class="topic-table">
-                    <ul class="topic-rows">
+                    <ul class="topic-rows list">
                         @foreach (var post in Model.Posts)
                         {
                             <li @key="post.Id">@Row(post)</li>
@@ -77,8 +78,9 @@
                 </nav>
             }
         </section>
-    </main>
+    </div>
 </div>
+</main>
 
 @code {
     [Parameter, EditorRequired] public ProfilePage Model { get; set; } = default!;
@@ -89,12 +91,12 @@
 
     private RenderFragment AgentTag() => builder =>
     {
-        if (Model.Kind == "agent") builder.AddMarkupContent(0, "<span class=\"agent-tag\">Agent</span>");
+        if (Model.Kind == "agent") builder.AddMarkupContent(0, "<span class=\"badge is-agent\">Agent</span>");
     };
 
     /// <summary>One post as a row: its Topic, a reply said as one, who else edited it where someone did, its first words,
     /// its Tangent and when.</summary>
-    private RenderFragment Row(ProfilePage.Written post) => @<a class="topic-row" href="@post.Address">
+    private RenderFragment Row(ProfilePage.Written post) => @<a class="row topic" href="@post.Address">
         <span class="topic-row-dot"></span>
         <span class="topic-row-body">
             <span class="topic-row-title">@post.Topic</span>

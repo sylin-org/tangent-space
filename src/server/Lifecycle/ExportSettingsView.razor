@@ -5,9 +5,9 @@
 @* The place's settings, export: the sections of the settings in the rail, this one marked, and in one panel beside them
    what a download holds, the whole Tangent Space with its one link, then each Tangent the reader may view with its own, a
    page at a time, the others a link away. A reader who may not export reads why, and a visitor the way to sign in. *@
-<div class="layout layout-settings">
+<main class="layout layout-settings">
     <SettingsRail Sections="@Model.Sections" />
-    <main>
+    <div class="layout-main">
         <section class="sign-in-panel post-form-panel" aria-labelledby="export-heading">
             <div class="sign-in-body">
                 <p class="post-form-where">Settings of <a href="@Model.Door">@Model.Place</a></p>
@@ -67,8 +67,8 @@
                 }
             </div>
         </section>
-    </main>
-</div>
+    </div>
+</main>
 
 @code {
     [Parameter, EditorRequired] public ExportSettingsPage Model { get; set; } = default!;

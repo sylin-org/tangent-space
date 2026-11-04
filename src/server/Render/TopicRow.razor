@@ -67,7 +67,7 @@
 }
 else
 {
-    <a class="topic-row@(Model.New ? " is-new" : "")" href="@Model.Address">
+    <a class="@("row topic" + States())" href="@Model.Address">
         <span class="topic-row-dot">
             @if (Model.New)
             {
@@ -83,11 +83,11 @@ else
                     @Mark(latest.Author, "reply-mark")
                     <span class="topic-row-latest-line"><b>@latest.Author.Name</b>@Edited(latest.Edited) @Clip(latest.Line, PreviewLimit)@if (latest.New)
                         {
-                            <span class="new-label new-inline">New</span>
+                            <span class="badge is-new new-inline">New</span>
                         }</span>
                     @if (latest.New)
                     {
-                        <span class="new-label new-beside">New</span>
+                        <span class="badge is-new new-beside">New</span>
                     }
                 </span>
             }
@@ -110,7 +110,7 @@ else
             @if (NewCount > 0)
             {
                 <span class="topic-row-new-separator" aria-hidden="true">·</span>
-                <span class="new-label">@NewWords()</span>
+                <span class="badge is-new">@NewWords()</span>
             }
         </span>
         <span class="topic-row-activity">
@@ -175,7 +175,10 @@ else
 
     private string Replies() => Count(Model.ReplyCount, "reply", "replies", "No replies yet");
 
-    private string ArticleClass() => (Lead ? "article-card article-lead" : Model.Cover is null ? "article-card" : "article-card article-card-covered") + (Model.New ? " is-new" : "");
+    private string ArticleClass() => (Lead ? "article-card article-lead" : Model.Cover is null ? "article-card" : "article-card article-card-covered") + " card topic" + States();
+
+    /// <summary>What the Topic's record holds of it, as the contract's states: new to the reader, pinned, locked.</summary>
+    private string States() => (Model.New ? " is-new" : "") + (Model.Pinned ? " is-pinned" : "") + (Model.Locked ? " is-locked" : "");
 
     private static string Iso(DateTimeOffset at) => at.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
 
@@ -187,18 +190,18 @@ else
 
     private RenderFragment NewReplies() => builder =>
     {
-        if (NewCount > 0) builder.AddMarkupContent(0, "<span class=\"new-label\">" + NewWords() + "</span>");
+        if (NewCount > 0) builder.AddMarkupContent(0, "<span class=\"badge is-new\">" + NewWords() + "</span>");
     };
 
     private static RenderFragment AgentTag(TangentPage.Author author) => builder =>
     {
-        if (author.Kind == "agent") builder.AddMarkupContent(0, "<span class=\"agent-tag\">Agent</span>");
+        if (author.Kind == "agent") builder.AddMarkupContent(0, "<span class=\"badge is-agent\">Agent</span>");
     };
 
     private RenderFragment Flags() => builder =>
     {
-        if (Model.Pinned) builder.AddMarkupContent(0, "<span class=\"topic-flag\">Pinned</span>");
-        if (Model.Locked) builder.AddMarkupContent(1, "<span class=\"topic-flag\">Locked</span>");
+        if (Model.Pinned) builder.AddMarkupContent(0, "<span class=\"badge is-pinned\">Pinned</span>");
+        if (Model.Locked) builder.AddMarkupContent(1, "<span class=\"badge is-locked\">Locked</span>");
     };
 
     /// <summary>Beside a Post's first words, right after its author, who else edited them, so they never read as the
@@ -216,11 +219,11 @@ else
     /// person, square with a ring for an agent.</summary>
     public static RenderFragment Mark(TangentPage.Author author, string size) => builder =>
     {
-        var shape = author.Kind == "agent" ? " mark-agent" : "";
+        var shape = author.Kind == "agent" ? " is-agent" : "";
         if (Monogram.Avatar(author.Avatar) is { } avatar)
         {
             builder.OpenElement(0, "img");
-            builder.AddAttribute(1, "class", "mark " + size + shape);
+            builder.AddAttribute(1, "class", "mark chip participant " + size + shape);
             builder.AddAttribute(2, "src", avatar);
             builder.AddAttribute(3, "alt", "");
             builder.CloseElement();
@@ -228,7 +231,7 @@ else
         else
         {
             builder.OpenElement(4, "span");
-            builder.AddAttribute(5, "class", "mark " + size + shape + " tone-" + Monogram.Tone(author.Id));
+            builder.AddAttribute(5, "class", "mark chip participant " + size + shape + " tone-" + Monogram.Tone(author.Id));
             builder.AddAttribute(6, "aria-hidden", "true");
             // One letter where the mark is too small for two to read.
             var letters = Monogram.Letters(author.Handle);

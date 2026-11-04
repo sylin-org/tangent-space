@@ -15,77 +15,47 @@ html {
   scroll-padding-top: calc(var(--ts-header-height) + var(--ts-pathbar-height) + 24px);
 }
 
+/* The frame owns the page's box, whichever base styles its elements: the masthead, the path, the layout and the footer
+   run edge to edge and size themselves. */
 body {
+  max-width: none;
   margin: 0;
+  padding: 0;
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  background: var(--ts-background);
-  color: var(--ts-foreground);
-  font: var(--ts-type-ui);
 }
 
 [hidden] {
   display: none !important;
 }
 
-button,
-input,
-select,
-textarea {
-  font: inherit;
+/* An element Tangent names with a class is a part it builds, and it keeps the browser's own box whichever base styles
+   the plain elements: the masthead, the path, the rail, the footer, a page's head, its sections, forms, menus and
+   disclosures. Each starts there at no specificity, so Tangent's rules for it decide the rest; an element left plain, a
+   Post's own words among them, is the base's to style. */
+:where(header, footer, nav, aside, section, form, details, main)[class] {
+  display: block;
+  float: none;
+  width: auto;
+  min-width: auto;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  text-align: inherit;
 }
 
-button,
-summary {
-  cursor: pointer;
+:where(ul, ol)[class] > li {
+  list-style: inherit;
 }
 
-button:disabled {
-  cursor: default;
-  opacity: 0.5;
-}
-
-a {
-  color: var(--ts-accent);
-  text-underline-offset: 3px;
-}
-
-h1,
-h2,
-h3,
-h4,
-p {
-  margin-top: 0;
-}
-
-h1,
-h2,
-h3,
-h4 {
-  color: var(--ts-text);
-  letter-spacing: -0.015em;
-}
-
-h1 {
-  font: var(--ts-type-page-title);
-}
-
-h2 {
-  font: var(--ts-type-section);
-}
-
-h3 {
-  font: var(--ts-type-shelf);
-}
-
-::selection {
-  background: var(--ts-selection);
-}
-
-:focus-visible {
-  outline: 2px solid var(--ts-accent);
-  outline-offset: 3px;
+/* A page whose head stands above its layout is one main around both, which grows to fill the frame as the layout does. */
+.frame-main {
+  flex: 1;
 }
 
 .visually-hidden {
@@ -131,7 +101,7 @@ h3 {
 }
 
 .masthead:has([open], [aria-expanded="true"]),
-.path-bar:has([open]) {
+.path:has([open]) {
   z-index: 50;
 }
 
@@ -343,7 +313,7 @@ h3 {
 .tone-iris { --tone: var(--ts-tangent-iris); --tone-tint: var(--ts-tangent-iris-tint); --tone-ink: var(--ts-tangent-iris-ink); }
 .tone-rose { --tone: var(--ts-tangent-rose); --tone-tint: var(--ts-tangent-rose-tint); --tone-ink: var(--ts-tangent-rose-ink); }
 
-.tangent-tile {
+.tile:where(.tangent) {
   --tile: 18px;
   --tile-edge: 2px;
   width: var(--tile);
@@ -524,7 +494,7 @@ h3 {
 }
 
 /* The path bar: sticky under the masthead; the elbow hangs from the centre of the 28px mark. */
-.path-bar {
+.path {
   position: sticky;
   top: var(--ts-header-height);
   z-index: 40;
@@ -627,7 +597,7 @@ h3 {
   max-width: var(--ts-reading-column);
 }
 
-.layout > main {
+.layout > .layout-main {
   min-width: 0;
   width: 100%;
 }
@@ -814,7 +784,7 @@ h3 {
     gap: 0;
   }
 
-  .path-bar {
+  .path {
     top: var(--ts-phone-header-height);
     height: var(--ts-phone-pathbar-height);
     padding: 0 var(--ts-phone-gutter);

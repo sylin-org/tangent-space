@@ -54,7 +54,7 @@ public sealed class Export
     private readonly TangentSpace _space;
     private readonly string _base;
     private readonly string _origin;
-    private readonly string _accent;
+    private readonly Appearance _appearance;
     private readonly DateTimeOffset _asOf = DateTimeOffset.UtcNow;
     private readonly IServiceProvider _services;
     private readonly ResourceComponents _components;
@@ -76,7 +76,7 @@ public sealed class Export
         _space = space;
         _base = baseAddress;
         _origin = new Uri(baseAddress).GetLeftPart(UriPartial.Authority);
-        _accent = Appearance.Word(space.Appearance.Accent);
+        _appearance = space.Appearance;
         _services = services;
         _components = services.GetRequiredService<ResourceComponents>();
         _json = services.GetRequiredService<IOptions<MvcNewtonsoftJsonOptions>>().Value.SerializerSettings;
@@ -103,12 +103,13 @@ public sealed class Export
         await zip.Finish();
     }
 
-    /// <summary>What a page's stylesheet needs, from where the place serves it.</summary>
+    /// <summary>What a page's stylesheets need, from where the place serves them: its base, Tangent's components and its
+    /// palette, the base's licence where it is a bundled one, and the fonts.</summary>
     internal async Task Assets(CancellationToken ct)
     {
         var root = _services.GetRequiredService<IWebHostEnvironment>().WebRootFileProvider;
-        var stylesheet = root.GetFileInfo(HtmlFormatter.Stylesheet);
-        if (stylesheet.Exists) await Copied(HtmlFormatter.Stylesheet, stylesheet, ct);
+        foreach (var path in new[] { _appearance.BaseSheet, HtmlFormatter.Stylesheet, _appearance.PaletteSheet, _appearance.Licence }.OfType<string>())
+            if (root.GetFileInfo(path) is { Exists: true } file) await Copied(path, file, ct);
         foreach (var font in root.GetDirectoryContents(HtmlFormatter.Fonts).Where(file => !file.IsDirectory))
             await Copied(HtmlFormatter.Fonts + "/" + font.Name, font, ct);
     }
@@ -430,7 +431,7 @@ public sealed class Export
         var resource = _components.For(typeof(TResource));
         string html;
         await using (var renderer = new HtmlRenderer(_services, _logs))
-            html = await HtmlFormatter.Whole(renderer, resource, model, up, _accent, _space.Slots.Placed(_base + "/"), frame ?? resource.Frame?.Invoke(model), standalone: true, retired: _retired);
+            html = await HtmlFormatter.Whole(renderer, resource, model, up, _appearance, _space.Slots.Placed(_base + "/"), frame ?? resource.Frame?.Invoke(model), standalone: true, retired: _retired);
         await _files.Write(path + ".html", Encoding.UTF8.GetBytes(await WithImages(Render.Feed.Rooted(html, _origin), up, ct)), ct);
         if (!Retired) await _files.Write(path + ".json", Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(model, _json)), ct);
     }

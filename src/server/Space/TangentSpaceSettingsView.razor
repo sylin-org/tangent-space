@@ -5,9 +5,9 @@
    each saying in a sentence what it means. A reader who may not change them reads why above the form, whose fields are
    read-only, whose choices are disabled and which has no button, and a visitor the way to sign in; a refusal of a field
    shows under that field, and any other above the form. *@
-<div class="layout layout-settings">
+<main class="layout layout-settings">
     <SettingsRail Sections="@Model.Sections" />
-    <main>
+    <div class="layout-main">
         <section class="sign-in-panel post-form-panel" aria-labelledby="space-settings-heading">
             <div class="sign-in-body">
                 <p class="post-form-where">Settings of <a href="@Model.Door">@Model.Place</a></p>
@@ -85,8 +85,8 @@
                 </form>
             </div>
         </section>
-    </main>
-</div>
+    </div>
+</main>
 
 @code {
     [Parameter, EditorRequired] public TangentSpaceSettingsPage Model { get; set; } = default!;

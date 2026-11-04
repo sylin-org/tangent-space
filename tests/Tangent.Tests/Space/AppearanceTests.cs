@@ -8,8 +8,9 @@ using static Tangent.Posts.Writing;
 
 namespace Tangent.Space;
 
-/// <summary>The place's appearance at <c>/settings/appearance</c>: whoever holds ManageSpace sets its accent, as a form or
-/// as JSON, appending space.changed; anyone else is refused; and every page, for every reader, carries it.</summary>
+/// <summary>The place's appearance at <c>/settings/appearance</c>: whoever holds ManageSpace sets its accent, its base, its
+/// palette and its own CSS, as a form or as JSON, appending space.changed, and previews the door in them first; anyone else
+/// is refused; and every page, for every reader, carries it, the settings without the place's own CSS.</summary>
 public sealed class AppearanceTests
 {
     private const string Leo = "did:plc:leo4appearance";
@@ -111,6 +112,60 @@ public sealed class AppearanceTests
 
         Assert.Equal(Space.Accent.Gold, await Held());
         Assert.Equal(before, await Event.Count.Exact(Cancellation));
+    }
+
+    [Fact]
+    public async Task The_place_fills_its_layers_with_a_base_a_palette_and_its_own_css_which_every_page_but_the_settings_carries()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
+        using var leo = await SignedIn(tangentSpace, Leo);
+        using var visitor = Agent(tangentSpace);
+
+        // Every layer at its default: Tangent's own base and palette around its components, and no owner layer.
+        var door = (await Send(visitor, HttpMethod.Get, "/")).Body;
+        Assert.Contains($"href=\"{BaseUrl}/base.css\"", door);
+        Assert.Contains($"href=\"{BaseUrl}/tangent.css\"", door);
+        Assert.Contains($"href=\"{BaseUrl}/palette.css\"", door);
+        Assert.DoesNotContain("@layer owner", door);
+        var page = await Send(leo.Client, HttpMethod.Get, Path, json: true);
+        Assert.Equal(("tangent", "base", ""), (page.Json.GetProperty("base").GetString(), page.Json.GetProperty("palette").GetString(), page.Json.GetProperty("css").GetString()));
+        Assert.Equal(["tangent", "simple", "mvp", "marx", "sakura", "water", "new"], page.Json.GetProperty("bases").EnumerateArray().Select(word => word.GetString()));
+
+        // Sakura, in its own palette, under the place's own CSS, which stays CSS whatever it holds.
+        var sakura = await Json(leo, Path, Path, new { @base = "sakura", css = "article.post.by-agent > header { color: teal; } </style>" });
+        Assert.Equal((HttpStatusCode.OK, "sakura", "base"), (sakura.Status, sakura.Json.GetProperty("base").GetString(), sakura.Json.GetProperty("palette").GetString()));
+        foreach (var body in new[] { (await Send(visitor, HttpMethod.Get, "/")).Body, (await Send(leo.Client, HttpMethod.Get, "/t/" + Workshop)).Body })
+        {
+            Assert.Contains($"href=\"{BaseUrl}/bases/sakura.css\"", body);
+            Assert.Contains($"href=\"{BaseUrl}/bases/sakura.palette.css\"", body);
+            Assert.Contains("<style>@layer owner {\narticle.post.by-agent > header { color: teal; } <\\/style>\n}</style>", body);
+        }
+
+        // The settings wear the place's base and palette and leave its own CSS out, so it can hide no way back.
+        var settings = (await Send(leo.Client, HttpMethod.Get, Path)).Body;
+        Assert.Contains($"href=\"{BaseUrl}/bases/sakura.css\"", settings);
+        Assert.DoesNotContain("@layer owner", settings);
+
+        // Tangent's palette over the base; a stylesheet Tangent does not bundle is refused.
+        Assert.Equal(HttpStatusCode.OK, (await Json(leo, Path, Path, new { palette = "accent" })).Status);
+        Assert.Contains($"href=\"{BaseUrl}/palette.css\"", (await Send(visitor, HttpMethod.Get, "/")).Body);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Json(leo, Path, Path, new { @base = "bootstrap" })).Status);
+
+        // The preview draws the door in what it is sent and saves nothing.
+        var preview = await Form(leo, Path, TangentSpaceSettingsController.PreviewPath, new() { [TangentSpaceSettingsController.BaseField] = "water", [TangentSpaceSettingsController.PaletteField] = "base" });
+        Assert.Equal(HttpStatusCode.OK, preview.Status);
+        Assert.Contains($"href=\"{BaseUrl}/bases/water.css\"", preview.Body);
+        Assert.Contains($"href=\"{BaseUrl}/bases/water.palette.css\"", preview.Body);
+        Assert.Equal(Space.Base.Sakura, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Appearance.Base);
+
+        // Each layer returns to its default by sending it.
+        Assert.Equal(HttpStatusCode.OK, (await Json(leo, Path, Path, new { @base = "tangent", palette = "base", css = "" })).Status);
+        door = (await Send(visitor, HttpMethod.Get, "/")).Body;
+        Assert.Contains($"href=\"{BaseUrl}/base.css\"", door);
+        Assert.Contains($"href=\"{BaseUrl}/palette.css\"", door);
+        Assert.DoesNotContain("@layer owner", door);
     }
 
     private static (HttpStatusCode, string?) Refused(Answered answered) => (answered.Status, answered.Gate);

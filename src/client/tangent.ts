@@ -1,19 +1,6 @@
-// The page entry: the one stylesheet and the islands. Pages load it as a module, which runs once the
+// The page entry: Tangent's components' stylesheet and the islands. Pages load it as a module, which runs once the
 // document is parsed, so every island's element is already in the document.
-import './fonts.css'
-import './tokens.css'
-import './layout.css'
-import './sign-in.css'
-import './first-run.css'
-import './post-form.css'
-import './tangent-page.css'
-import './topic.css'
-import './composer.css'
-import './article.css'
-import './watch.css'
-import './profile.css'
-import './notifications.css'
-import './search.css'
+import './tangent.css'
 import { mountIslands } from './islands'
 
 mountIslands(document)

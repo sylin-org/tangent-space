@@ -10,9 +10,9 @@
    reason's, first saying who else edited them where someone did and the line above does not. None reads as one
    sentence, and a page that shows none but has older ones says so above the way to them. Older notifications and the
    newest are a link away. *@
-<div class="layout">
-    <main>
-        <section class="sign-in-panel post-form-panel" aria-labelledby="notifications-heading">
+<main class="layout">
+    <div class="layout-main">
+        <section class="sign-in-panel post-form-panel panel" aria-labelledby="notifications-heading">
             <div class="sign-in-body">
                 <p class="post-form-where">In <a href="@Model.Door">@Model.Place</a></p>
                 <h1 id="notifications-heading" class="sign-in-title">Notifications</h1>
@@ -28,10 +28,10 @@
                 }
                 else
                 {
-                    <ul class="door-offers notifications">
+                    <ul class="door-offers notifications list">
                         @foreach (var entry in Model.Entries)
                         {
-                            <li class="@(entry.New ? "door-offer notification is-new" : "door-offer notification")" @key="entry.Seq">
+                            <li class="@(entry.New ? "door-offer row notification is-new" : "door-offer row notification")" @key="entry.Seq">
                                 <div class="notification-body">
                                     <p class="door-offer-line notification-line">
                                         @if (entry.New)
@@ -71,8 +71,8 @@
                 }
             </div>
         </section>
-    </main>
-</div>
+    </div>
+</main>
 
 @code {
     [Parameter, EditorRequired] public NotificationsPage Model { get; set; } = default!;

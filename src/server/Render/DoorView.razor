@@ -14,8 +14,8 @@
    the featured Topics and the ones alive now. A reader with nothing new reads that in one sentence above the front
    page, with how many notifications they have not seen, a button that opens them, while there are some. A count the door could not finish reads "at least". The whole door is the
    fragment island's host, so it refreshes itself from its own address, unless it stands alone, with nothing to refresh from. *@
-<main data-island="@(Standalone ? null : "fragment")" data-props="@(Standalone ? null : JsonSerializer.Serialize(new { url = Model.Address }))">
-    <section class="tangent-head" aria-labelledby="door-title">
+<main class="door" data-island="@(Standalone ? null : "fragment")" data-props="@(Standalone ? null : JsonSerializer.Serialize(new { url = Model.Address }))">
+    <section class="tangent-head place" aria-labelledby="door-title">
         <div class="tangent-head-inner">
             <TangentTile Tile="@(new Tile(Tile.Tones[0], Initial))" Size="head" />
             <div class="tangent-head-text">
@@ -39,14 +39,14 @@
     <div class="layout tangent-layout">
         <aside class="rail" aria-label="In this Tangent Space">
             <h2 class="rail-heading">Tangents</h2>
-            <ul class="rail-views">
+            <ul class="rail-views list">
                 @foreach (var tangent in Model.Tangents)
                 {
-                    <li>
+                    <li class="row tangent">
                         <a href="@tangent.Address">@tangent.Name</a>
                         @if (tangent.New > 0)
                         {
-                            <span class="new-label">@tangent.New.ToString(CultureInfo.InvariantCulture) new</span>
+                            <span class="badge is-new">@tangent.New.ToString(CultureInfo.InvariantCulture) new</span>
                         }
                     </li>
                 }
@@ -88,7 +88,7 @@
             @if (Model.Gate == Access.Capabilities.Apply.Word || Model.Gate == Access.Capabilities.Declined.Word)
             {
                 <section class="door-offers" aria-label="Your application">
-                    <div class="door-offer door-application" data-gate="@Model.Gate">
+                    <div class="@(Model.Gate == Access.Capabilities.Apply.Word ? "door-offer door-application bar application is-waiting" : "door-offer door-application bar application")" data-gate="@Model.Gate">
                         <p class="door-offer-line">@Access.Capabilities.Sentence(Model.Gate!)</p>
                     </div>
                 </section>
@@ -96,7 +96,7 @@
             @if (Model.Gate == Access.Capabilities.TimedOut.Word && Model.Until is { } until)
             {
                 <section class="door-offers" aria-label="Your timeout">
-                    <div class="door-offer door-application" data-gate="@Model.Gate">
+                    <div class="door-offer door-application bar participant is-you" data-gate="@Model.Gate">
                         <p class="door-offer-line">You’re timed out until <time datetime="@until.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture)">@(global::Tangent.Participants.PeopleView.Until(until))</time>: you can read and report here, and post again then.</p>
                     </div>
                 </section>
@@ -110,7 +110,7 @@
             @if (Model.Applications is { } applications)
             {
                 <section class="door-offers" aria-label="Applications">
-                    <div class="door-offer door-applications">
+                    <div class="door-offer door-applications bar application is-waiting">
                         <p class="door-offer-line">@Waiting(applications)</p>
                         <div class="door-offer-answers">
                             <a class="tangent-new" href="@applications.Address">Applications</a>
@@ -126,7 +126,7 @@
                         <p class="topic-empty-title">@(news.First ? $"Welcome to {Model.Name}." : "Nothing new since you were here.")</p>
                         @if (news.Notifications is { } notifications)
                         {
-                            <form class="tangent-description" method="post" action="@notifications.Open.Action"><input type="hidden" name="@Events.Notifications.ThroughField" value="@notifications.Open.Value(Events.Notifications.ThroughField)"><button class="watch-button">@Shell.Unseen(notifications.Count, notifications.AtLeast)</button></form>
+                            <form class="tangent-description seen-notifications" method="post" action="@notifications.Open.Action"><input type="hidden" name="@Events.Notifications.ThroughField" value="@notifications.Open.Value(Events.Notifications.ThroughField)"><button class="watch-button">@Shell.Unseen(notifications.Count, notifications.AtLeast)</button></form>
                         }
                     </div>
                 }
@@ -137,11 +137,11 @@
                             <h2 id="door-news-title" class="topic-list-title">@(news.First ? $"Welcome to {Model.Name}" : "Since you were here")</h2>
                             @if (news.Notifications is { } notifications)
                             {
-                                <form class="door-notifications" method="post" action="@notifications.Open.Action"><input type="hidden" name="@Events.Notifications.ThroughField" value="@notifications.Open.Value(Events.Notifications.ThroughField)"><button class="watch-button">@Shell.Unseen(notifications.Count, notifications.AtLeast)</button></form>
+                                <form class="door-notifications seen-notifications" method="post" action="@notifications.Open.Action"><input type="hidden" name="@Events.Notifications.ThroughField" value="@notifications.Open.Value(Events.Notifications.ThroughField)"><button class="watch-button">@Shell.Unseen(notifications.Count, notifications.AtLeast)</button></form>
                             }
                             @if (news.CaughtUp is { } caughtUp)
                             {
-                                <form method="post" action="@caughtUp.Action">
+                                <form class="caught-up" method="post" action="@caughtUp.Action">
                                     <input type="hidden" name="@DoorController.Through" value="@caughtUp.Value(DoorController.Through)">
                                     <button type="submit" class="tangent-new">Mark all seen</button>
                                 </form>
@@ -170,10 +170,10 @@
                         @if (news.PerTangent.Count > 0)
                         {
                             <h3 class="rail-heading rail-heading-spaced">New in each Tangent</h3>
-                            <ul class="rail-views">
+                            <ul class="rail-views list">
                                 @foreach (var tangent in news.PerTangent)
                                 {
-                                    <li><a href="@tangent.Address">@tangent.Name</a> <span class="new-label">@InTangent(tangent)</span></li>
+                                    <li class="row tangent"><a href="@tangent.Address">@tangent.Name</a> <span class="badge is-new">@InTangent(tangent)</span></li>
                                 }
                             </ul>
                         }
@@ -264,11 +264,11 @@
         @if (group is { Count: > 0 })
         {
             <h3 class="rail-heading rail-heading-spaced">@title · @((group.AtLeast ? "at least " : "") + group.Count.ToString(CultureInfo.InvariantCulture))</h3>
-            <ul class="topic-rows">
+            <ul class="topic-rows list">
                 @foreach (var post in group.Posts)
                 {
                     <li @key="post.PostId">
-                        <a class="topic-row is-new" href="@post.Address">
+                        <a class="row topic is-new" href="@post.Address">
                             <span class="topic-row-dot"><span class="new-dot" role="img" aria-label="Unread"></span></span>
                             <span class="topic-row-body">
                                 <span class="topic-row-title">@post.Topic</span>
@@ -289,7 +289,7 @@
         @if (group.Count > 0)
         {
             <h3 class="rail-heading rail-heading-spaced">@title · @((group.AtLeast ? "at least " : "") + group.Count.ToString(CultureInfo.InvariantCulture))</h3>
-            <ul class="topic-rows">
+            <ul class="topic-rows list">
                 @foreach (var post in group.Posts)
                 {
                     <li @key="post.PostId">@Row(post)</li>
@@ -298,7 +298,7 @@
         }
     </text>;
 
-    private RenderFragment Row(Door.NewPost post) => @<a class="topic-row is-new" href="@post.Address">
+    private RenderFragment Row(Door.NewPost post) => @<a class="row topic is-new" href="@post.Address">
         <span class="topic-row-dot"><span class="new-dot" role="img" aria-label="Unread"></span></span>
         <span class="topic-row-body">
             <span class="topic-row-title">@post.Topic</span>
@@ -319,7 +319,7 @@
                     <span class="topic-list-order">latest activity first</span>
                 </div>
                 <div class="topic-table">
-                    <ul class="topic-rows">
+                    <ul class="topic-rows list">
                         @foreach (var shown in topics)
                         {
                             <li @key="shown.Topic.Id"><TopicRow Model="@shown.Topic" Today="@Model.Day" /></li>
