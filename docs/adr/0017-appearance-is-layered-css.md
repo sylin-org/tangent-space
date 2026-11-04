@@ -29,6 +29,10 @@ No standard defines themes for HTML. Several existing collections fit the work a
    - Native elements carry the structure: `header`, `nav`, `main`, `article`, `aside`, `section`, `footer`, `form`, `button` and `details`.
    - `main` sits directly under `body`. A Post is an `article` whose meta line is its `header` and whose actions are its `footer`.
    - Any classless stylesheet therefore styles every page as it stands, and assistive technology reads the same structure.
+   - A page says everything it means, as far as is ergonomically sensible, and the stylesheet chooses what to show and how. Three rules keep that sound:
+     - **A stylesheet chooses what shows, never what a reader may see.** Everything in a page reaches its reader, hidden or not, so what a reader may see decides what goes into the page.
+     - **Text is for reading, attributes are for facts.** A classless stylesheet shows every element it meets. So a fact a page carries for styling, such as an exact time, a count or an edit, goes in an attribute: `<time datetime>`, `<data value>` or `data-*`. A stylesheet that wants it brings it into view with `attr()`.
+     - **The page's order is its reading order.** Assistive technology and the keyboard follow the page, whatever a stylesheet moves. So the markup comes in the order that makes sense, and a stylesheet rearranges it from there.
 
 2. **Classes name three things, in the product's words.**
    - **Shape:** how a thing is built. `chip`, `card`, `row`, `list`, `tile`, `badge`, `panel`, `bar`, `path`, `menu`. These follow Bootstrap's names where Bootstrap has the same idea.
