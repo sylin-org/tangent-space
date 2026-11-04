@@ -34,7 +34,7 @@ Date: 28 October 2026. Status: accepted.
 
 ## Consequences
 
-- [ARCHITECTURE](../ARCHITECTURE.md) describes the tree this record shapes; [FEATURES](../FEATURES.md) orders the slices around it.
+- [ARCHITECTURE](../ARCHITECTURE.md) describes the tree this record shapes; [FEATURES](../FEATURES.md) lists the open work.
 - ADR 0014's earlier records read with one amendment: ADR 0010's public HTML as the renderer of every page, not a second one.
 - The protocol contract is recorded in a record of its own when slice 4 writes it from code; the door's record follows slice 1.
 - Two Koan dependencies sit on the critical path: SQLite posture and the base URL before slice 0 closes, overwrites with deny before slice 1 closes. Until the second ships, Tangent evaluates its overwrites beside Koan's facts in the same function.
