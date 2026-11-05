@@ -157,8 +157,10 @@ public sealed class TypedMentionTests
         var events = await Event.Query(e => e.Kind == EventKind.Mention, Cancellation);
         Assert.Equal([(replyId, Bea, Ada), (agentReplyId, Mo, Ada)],
             events.OrderBy(e => e.Seq).Select(e => (e.PostId!, e.TargetId!, e.ActorId!)).ToList());
-        var moHeard = Assert.Single((await Send(mo.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news").GetProperty("mentions").GetProperty("posts").EnumerateArray());
-        Assert.Equal(Ada, moHeard.GetProperty("who").GetProperty("id").GetString());
+        // Both replies go to Mo's own Topic, so the one that mentions him is one thing for him: a reply to him.
+        var moNews = (await Send(mo.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news");
+        Assert.Equal([agentReplyId, replyId], moNews.GetProperty("replies").GetProperty("posts").EnumerateArray().Select(post => post.GetProperty("postId").GetString()!).ToList());
+        Assert.Equal(0, moNews.GetProperty("mentions").GetProperty("count").GetInt32());
     }
 
     [Fact]

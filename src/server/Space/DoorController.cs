@@ -188,25 +188,26 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
         if (open.Any(tangent => tangent.TopicCount > 0)) return null;
         return new Door.Welcome(
             open.FirstOrDefault() is { } first ? PostWrites.TangentAddress(baseAddress, first.Id) + "/" + TangentPageController.NewTopicSegment : null,
-            baseAddress + TangentSpaceSettingsController.Path,
+            baseAddress + TangentSpaceSettingsController.AppearancePath + "#space-appearance-" + TangentSpaceSettingsController.DescriptionField,
             baseAddress + TangentSpaceSettingsController.AdmissionPath,
             baseAddress + BringYourAgentController.Path);
     }
 
-    /// <summary>The shelves of the first <see cref="ShelfLimit"/> Tangents that hold a Topic: each Tangent's latest
-    /// <see cref="ShelfTopicLimit"/> Topics past those <paramref name="above"/> holds, one bounded read of its topic list
-    /// each, then one keyed read of their latest replies and one of the people they name whom <paramref name="known"/>
-    /// does not hold.</summary>
+    /// <summary>The shelves of the first <see cref="ShelfLimit"/> Tangents that hold a Topic those <paramref name="above"/>
+    /// does not: each Tangent's latest <see cref="ShelfTopicLimit"/> Topics past those, at most one bounded read of the
+    /// topic list of each Tangent the door lists, so a Tangent whose every Topic the front page shows gets no shelf, then one keyed
+    /// read of their latest replies and one of the people they name whom <paramref name="known"/> does not hold.</summary>
     private static async Task<List<Door.Shelf>> Shelves(IReadOnlyList<Tangents.Tangent> tangents, IReadOnlySet<string> above,
         IReadOnlyDictionary<string, TangentPage.Author> known, string baseAddress, CancellationToken ct)
     {
         var read = new List<(Tangents.Tangent Tangent, List<Post> Topics)>();
-        foreach (var tangent in tangents.Where(tangent => tangent.TopicCount > 0).Take(ShelfLimit))
+        foreach (var tangent in tangents.Where(tangent => tangent.TopicCount > 0))
         {
+            if (read.Count == ShelfLimit) break;
             var size = Math.Min(TopicList.PageSize, ShelfTopicLimit + above.Count);
             var topics = (await TopicList.Read(tangent.Id, null, ct, size)).Topics.Where(root => !root.Removed && !above.Contains(root.Id))
                 .Take(ShelfTopicLimit).ToList();
-            read.Add((tangent, topics));
+            if (topics.Count > 0) read.Add((tangent, topics));
         }
 
         var roots = read.SelectMany(shelf => shelf.Topics).ToList();
@@ -306,14 +307,18 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
     {
         var partial = LogWindow.Partial(window, unread.Floor);
         Door.Group Group(IReadOnlyList<Event> events, bool atLeast) => this.Group(events, atLeast, posts, tangents, people);
+        var forReader = groups.Replies.Concat(groups.Taken).Concat(groups.Mentions).Concat(groups.Reports)
+            .Select(e => e.PostId).OfType<string>().ToHashSet(StringComparer.Ordinal);
         return new Door.Since(
             unread.Floor,
             through,
             Group(groups.Replies, forYou.AtLeast),
             Group(groups.Mentions, forYou.AtLeast),
             fresh.GroupBy(e => e.TangentId!, StringComparer.Ordinal)
-                .Select(byTangent => new Door.InTangent(byTangent.Key, Name(tangents, byTangent.Key), Address(byTangent.Key),
-                    byTangent.Count(e => e.PostId == e.TopicId), byTangent.Count(e => e.PostId != e.TopicId), partial))
+                .Select(byTangent => new Door.InTangent(byTangent.Key, Name(tangents, byTangent.Key),
+                    tangents.TryGetValue(byTangent.Key, out var tangent) ? Word(tangent.DefaultKind) : Word(PostKind.Topic), Address(byTangent.Key),
+                    byTangent.Count(e => e.PostId == e.TopicId), byTangent.Count(e => e.PostId != e.TopicId),
+                    byTangent.Count(e => !forReader.Contains(e.PostId!) && !Article(e, posts)), partial))
                 .ToList(),
             Group(fresh.Where(e => Article(e, posts)).ToList(), partial),
             null,

@@ -81,7 +81,7 @@ public sealed record Door(
     public Welcome? Welcoming { get; init; }
 
     /// <summary>For a visitor and a reader with nothing new, a shelf for each of the first Tangents the reader may view
-    /// that holds a Topic, the moderators' Tangent aside; absent otherwise.</summary>
+    /// that holds a Topic the front page does not show above, the moderators' Tangent aside; absent otherwise.</summary>
     public IReadOnlyList<Shelf>? Shelves { get; init; }
 
     /// <summary>Where every Tangent the reader may view is listed, present where more follow those the door lists.</summary>
@@ -161,8 +161,10 @@ public sealed record Door(
     public sealed record NewPost(string PostId, TangentPage.Author Who, string Topic, string Tangent, string Address, string Line, DateTimeOffset At,
         TangentPage.Edited? Edited = null);
 
-    /// <summary>What is new in one Tangent: its Topics and its replies.</summary>
-    public sealed record InTangent(string Slug, string Name, string Address, int Topics, int Replies, bool AtLeast);
+    /// <summary>What is new in one Tangent of its kind: its Topics and its replies, and how many of them no other part of
+    /// the news counts (<see cref="Others"/>) — neither for the reader nor a new article — so a sentence that adds the
+    /// parts counts each new Post once.</summary>
+    public sealed record InTangent(string Slug, string Name, string Kind, string Address, int Topics, int Replies, int Others, bool AtLeast);
 
     /// <summary>The open Offer as its decider reads it: what it would do (<c>address</c>: use <see cref="Subject"/>, an
     /// origin, as the place's address), and the evidence Koan holds since this process started — how many requests arrived
@@ -173,9 +175,9 @@ public sealed record Door(
     /// the applications, where each is admitted or declined.</summary>
     public sealed record Waiting(int Count, bool AtLeast, string Address);
 
-    /// <summary>Where the place's manager makes it theirs: the first Topic, in its first Tangent where it has one; its
-    /// name and line; who comes in; and bringing their agent.</summary>
-    public sealed record Welcome(string? FirstTopic, string Settings, string Admission, string BringYourAgent);
+    /// <summary>Where the place's manager makes it theirs: the first Topic, in its first Tangent where it has one; the
+    /// line that says what the place is, at its field (<see cref="Describe"/>); who comes in; and bringing their agent.</summary>
+    public sealed record Welcome(string? FirstTopic, string Describe, string Admission, string BringYourAgent);
 
     /// <summary>A Tangent the reader may view: its slug, name, kind, address, how many Topics were started there, and
     /// how many of its Posts are new to the reader.</summary>

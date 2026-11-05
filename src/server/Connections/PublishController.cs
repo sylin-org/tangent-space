@@ -20,9 +20,11 @@ namespace Tangent.Connections;
 /// article's author alone and only while it is public: where their account already lets the place write, their
 /// Connection publishes from now on and the article waits to be published, and the answer goes back to the article;
 /// where it does not, the answer is atproto's request for that permission, for this account alone, which comes back to
-/// <see cref="GrantedPath"/> with a sealed note of which article, and publishes it there. Permission is asked here,
-/// the first time someone chooses to publish, never at sign-in. <see cref="NotNowPath"/> answers the first offer not
-/// now.</summary>
+/// <see cref="GrantedPath"/> with a sealed note of which article, and publishes it there. A permission not given — declined
+/// on Bluesky's page, or a request that could not start — comes back to the Connections page, which says why
+/// (<see cref="Why"/>); a JSON or tool caller whose request could not start is refused with <see cref="NotGranted"/>'s
+/// word and why instead. Permission is asked here, the first time someone chooses to publish, never at sign-in.
+/// <see cref="NotNowPath"/> answers the first offer not now.</summary>
 public sealed class PublishController(KoanWebBaseUrl baseUrl, AtprotoAdapter atproto, EventStream stream, Nudge nudge,
     IDataProtectionProvider protection) : ControllerBase
 {
@@ -51,12 +53,26 @@ public sealed class PublishController(KoanWebBaseUrl baseUrl, AtprotoAdapter atp
     public static readonly Reason OnlyPublic = Reason.Gated("private", "Only a public article is published: members alone read this one.");
     public static readonly Reason GrantExpired = Reason.Invalid("That permission came back too late or for someone else; publish the article again.");
 
+    /// <summary>The word a permission request that could not start is refused with.</summary>
+    public const string NotGranted = "not-granted";
+
+    /// <summary>Why a permission was not given, in a sentence, from Koan's code for it; an unknown code reads as one
+    /// Bluesky did not confirm.</summary>
+    public static string Why(string? code) => code switch
+    {
+        _ when code == SignInFailureReturn.Code(SignInFailure.AccessDenied) => "You declined the permission on Bluesky’s page.",
+        _ when code == SignInFailureReturn.Code(SignInFailure.ProviderUnreachable) => "Your account’s provider couldn’t be reached; try again in a moment.",
+        _ when code == SignInFailureReturn.Code(SignInFailure.HandleUnresolved) => "Your account couldn’t be found on the network just now; try again in a moment.",
+        _ when code == SignInFailureReturn.Code(SignInFailure.CallbackMismatch) => "Bluesky’s answer came back without the request it began with; try again.",
+        _ => "Bluesky didn’t confirm the permission; try again, then approve it there."
+    };
+
     private const string GrantPurpose = "Tangent.Connections.Grant.v1";
 
     [HttpPost(Route)]
     [Tool(Name = "publish", Destructive = false, Idempotent = true, OpenWorld = true)]
     [Needs(Bit.View, Participant = true)]
-    [Description("Publish your own public article under your own atproto account: a site.standard.document in your repository and a Bluesky post that embeds it, kept in step with your edits and removed with it. The first time, the answer is atproto's request for permission to write to your repository, to open as its Location; after that, your new public articles publish on their own.")]
+    [Description("Publish your own public article under your own atproto account: a site.standard.document in your repository and a Bluesky post that embeds it, kept in step with your edits and removed with it. The first time, the answer is atproto's request for permission to write to your repository, for you to open as its Location in a browser, or, where it cannot be asked, a refusal not-granted saying why; after that, your new public articles publish on their own.")]
     public async Task<IActionResult> Publish([FromRoute, Description(Holds.Tangent)] string tangent, [FromRoute, Description(Holds.Topic)] string topic,
         CancellationToken ct)
     {
@@ -67,7 +83,7 @@ public sealed class PublishController(KoanWebBaseUrl baseUrl, AtprotoAdapter atp
         if (await Refusal(root, personId, here.Rows.Space, ct) is { } refusal) return Answers.Refused(HttpContext, refusal);
 
         if (!await atproto.MayWrite(personId, here.Rows.Space, ct))
-            return Asked(personId, root.Id, PostWrites.TopicAddress(baseUrl.PathBase, root.TangentId, root.Slug ?? root.Id), here.Rows.Space);
+            return Asked(personId, root.Id, ConnectionsController.Path + "?" + ConnectionsController.ArticleQuery + "=" + root.Id, here.Rows.Space);
         return await Chosen(personId, root, baseUrl.Resolve(HttpContext), ct);
     }
 
@@ -95,7 +111,7 @@ public sealed class PublishController(KoanWebBaseUrl baseUrl, AtprotoAdapter atp
         Response.Headers.CacheControl = "no-store";
         if (PostWrites.PersonId(User) is not { } personId) return Answers.Refused(HttpContext, Capabilities.SignIn);
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
-        return Asked(personId, null, baseUrl.PathBase + ConnectionsController.Path, space);
+        return Asked(personId, null, ConnectionsController.Path, space);
     }
 
     /// <summary>Not now, to the first offer to publish under one's own account: no article offers it again until the
@@ -118,9 +134,10 @@ public sealed class PublishController(KoanWebBaseUrl baseUrl, AtprotoAdapter atp
     public static string Back(string articleAddress, string baseAddress) => articleAddress[baseAddress.Length..];
 
     /// <summary>atproto's request for permission to write to <paramref name="personId"/>'s repository, asking that
-    /// account alone, coming back to <see cref="GrantedPath"/> with the article sealed in, or to <paramref name="failed"/>
-    /// where they refuse it.</summary>
-    private ChallengeResult Asked(string personId, string? postId, string failed, TangentSpace space)
+    /// account alone, coming back to <see cref="GrantedPath"/> with the article sealed in, or to <paramref name="failed"/>,
+    /// a path Koan places under the path base, where it is not given; for a JSON or tool caller, a request that cannot
+    /// start is a refusal (<see cref="Unstarted"/>).</summary>
+    private IActionResult Asked(string personId, string? postId, string failed, TangentSpace space)
     {
         var properties = new AuthenticationProperties
         {
@@ -128,7 +145,27 @@ public sealed class PublishController(KoanWebBaseUrl baseUrl, AtprotoAdapter atp
         };
         properties.Items[AuthConstants.Items.FailurePath] = failed;
         AtprotoChallenge.WithScopes(properties, [.. AtprotoAdapter.ScopesFor(personId, space)]);
-        return Challenge(AtprotoChallenge.ForAccount(properties, personId), "atproto");
+        var challenge = Challenge(AtprotoChallenge.ForAccount(properties, personId), "atproto");
+        return PostWrites.WantsJson(Request) ? new Unstarted(challenge) : challenge;
+    }
+
+    /// <summary>atproto's request for a JSON or tool caller: where it starts, the request itself, to open as its
+    /// <c>Location</c>; where it cannot, and Koan sends the caller to the failure landing with its code, a refusal with
+    /// <see cref="NotGranted"/> and why, so nothing reads it as done.</summary>
+    private sealed class Unstarted(ChallengeResult challenge) : IActionResult
+    {
+        public async Task ExecuteResultAsync(ActionContext context)
+        {
+            await challenge.ExecuteResultAsync(context);
+            var http = context.HttpContext;
+            var location = http.Response.Headers.Location.ToString();
+            if (http.Response.HasStarted || !location.StartsWith('/')) return;
+            var query = location.IndexOf('?') is var at and >= 0 ? location[at..] : "";
+            if (!Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(query).TryGetValue(SignInFailureReturn.CodeParameter, out var code)) return;
+            http.Response.Clear();
+            http.Response.Headers.CacheControl = "no-store";
+            await Answers.Refused(http, Reason.Gated(NotGranted, "Bluesky’s permission couldn’t be asked. " + Why(code.ToString()))).ExecuteResultAsync(context);
+        }
     }
 
     private async Task<IActionResult> Chosen(string personId, Post? root, string address, CancellationToken ct)
