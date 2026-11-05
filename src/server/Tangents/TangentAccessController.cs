@@ -25,7 +25,7 @@ public sealed record ChangeAccessInput(
 /// <c>access</c>, one of <see cref="Accesses"/>, as a form or a JSON object, and sends <see cref="ChangeAccess"/>: a form
 /// is sent back to the access, and a JSON request reads the role as the page now lists it; a refusal reads the page again
 /// with the reason above the list, or a problem. Both resolve the address as the Tangent page does
-/// (<see cref="PostWrites.Locate"/>) before anything else is judged, so a Tangent the reader may not view and one no row
+/// (<see cref="Here.Find"/>) before anything else is judged, so a Tangent the reader may not view and one no row
 /// has answer alike.</summary>
 public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, RoleCollection roles) : ControllerBase
 {
@@ -51,10 +51,10 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, RoleCollecti
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, null, null, ct);
-        if (found is null) return unseen!;
+        var (found, refused) = await Here.Find(personId, tangent, null, null, ct);
+        if (refused is not null) return this.Refused(refused);
         var read = await Page(found, personId, RolesController.Numbered(page), ct);
-        return TangentWrites.ManageGate(found.Capabilities) is { } gate ? new ObjectResult(read) { StatusCode = Answers.Status(HttpContext, gate) } : Ok(read);
+        return found.Capabilities.Gate(Bit.ManageTangent) is { } gate ? new ObjectResult(read) { StatusCode = Answers.Status(HttpContext, gate) } : Ok(read);
     }
 
     [HttpPost(Route)]
@@ -65,29 +65,29 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, RoleCollecti
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, null, null, ct);
-        if (found is null) return unseen!;
+        var (found, refused) = await Here.Find(personId, tangent, null, null, ct);
+        if (refused is not null) return this.Refused(refused);
 
         if (TangentWrites.Choice(input.Access, Accesses, out _) is not { } chosen) return await Refused(found, personId, AccessRule, ct);
         if (Roles.KeyOf(input.Role) is not { } key) return await Refused(found, personId, RoleSettings.NoRole, ct);
-        var outcome = await new ChangeAccess(found.Tangent.Id, personId ?? "", key, Enum.GetValues<RoleAccess>()[chosen]).Send();
+        var outcome = await new ChangeAccess(found.Tangent!.Id, personId ?? "", key, Enum.GetValues<RoleAccess>()[chosen]).Send();
         switch (outcome)
         {
             case Outcome<Tangent>.Done:
-                var address = PostWrites.TangentAddress(BaseAddress(), found.Tangent.Id) + "/" + TangentWrites.SettingsSegment + "/" + Segment;
+                var address = PostWrites.TangentAddress(BaseAddress(), found.Tangent!.Id) + "/" + TangentWrites.SettingsSegment + "/" + Segment;
                 if (!PostWrites.WantsJson(Request))
                 {
                     Response.Headers.Location = address;
                     return StatusCode(StatusCodes.Status303SeeOther);
                 }
 
-                var (again, gone) = await PostWrites.Locate(HttpContext, personId, found.Tangent.Id, null, null, ct);
-                if (again is null) return gone!;
+                var (again, gone) = await Here.Find(personId, found.Tangent!.Id, null, null, ct);
+                if (gone is not null) return this.Refused(gone);
                 var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
                 var place = await Capabilities.Load(personId, null, null, ct);
                 var role = await roles.Get(key, ct);
                 return role is null
-                    ? PostWrites.Absent()
+                    ? this.Refused(Capabilities.Absent)
                     : new ObjectResult(await Listed(role, again, place, personId, space, ct)) { ContentTypes = { "application/json" } };
             case Outcome<Tangent>.Refused { Reason: var reason } when reason != ChangeTangent.NoTangent:
                 return await Refused(found, personId, reason, ct);
@@ -98,27 +98,27 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, RoleCollecti
 
     /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the page again, read afresh,
     /// with the reason above the list.</summary>
-    private async Task<IActionResult> Refused(PostWrites.Located found, string? personId, Reason reason, CancellationToken ct)
+    private async Task<IActionResult> Refused(Here found, string? personId, Reason reason, CancellationToken ct)
     {
         if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
 
-        var (again, unseen) = await PostWrites.Locate(HttpContext, personId, found.Tangent.Id, null, null, ct);
-        if (again is null) return unseen!;
+        var (again, gone) = await Here.Find(personId, found.Tangent!.Id, null, null, ct);
+        if (gone is not null) return this.Refused(gone);
         var page = await Page(again, personId, 1, ct);
         if (page.Gate is null) page = page with { Failure = reason.Text };
         return new ObjectResult(page) { StatusCode = Answers.Status(HttpContext, reason) };
     }
 
-    private async Task<TangentAccessPage> Page(PostWrites.Located found, string? personId, int number, CancellationToken ct)
+    private async Task<TangentAccessPage> Page(Here found, string? personId, int number, CancellationToken ct)
     {
-        var row = found.Tangent;
+        var row = found.Tangent!;
         var baseAddress = BaseAddress();
         var address = PostWrites.TangentAddress(baseAddress, row.Id);
         var settings = address + "/" + TangentWrites.SettingsSegment;
         var here = baseUrl.PathBase + "/t/" + row.Id + "/" + TangentWrites.SettingsSegment + "/" + Segment;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
         var place = await Capabilities.Load(personId, null, null, ct);
-        var gate = TangentWrites.ManageGate(found.Capabilities)?.Word;
+        var gate = found.Capabilities.Gate(Bit.ManageTangent)?.Word;
         var read = gate is null ? await roles.Page(page: number, pageSize: RolesController.PageSize, ct: ct) : null;
         var listed = new List<TangentAccessPage.Listed>();
         foreach (var role in read?.Items.Where(Listable) ?? []) listed.Add(await Listed(role, found, place, personId, space, ct));
@@ -152,11 +152,11 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, RoleCollecti
 
     /// <summary>One role as the access lists it for the reader, from one keyed read of its overwrite here: what it holds,
     /// and, where the reader may manage the Tangent and manages the role, the access they may set it to instead.</summary>
-    private static async Task<TangentAccessPage.Listed> Listed(Role role, PostWrites.Located found, Capabilities place, string? personId,
+    private static async Task<TangentAccessPage.Listed> Listed(Role role, Here found, Capabilities place, string? personId,
         TangentSpace space, CancellationToken ct)
     {
-        var access = Overwrites.AccessOf(await Overwrites.Of(found.Tangent.Id, role.Key, ct));
-        var offered = TangentWrites.MayManage(found.Capabilities) && space.ModeratorsTangentId != found.Tangent.Id
+        var access = Overwrites.AccessOf(await Overwrites.Of(found.Tangent!.Id, role.Key, ct));
+        var offered = found.Capabilities.Holds(Bit.ManageTangent) && space.ModeratorsTangentId != found.Tangent!.Id
                       && People.Manages(place, personId, space, role)
             ? Enum.GetValues<RoleAccess>().Where(other => other != access).Select(Word).ToList()
             : [];

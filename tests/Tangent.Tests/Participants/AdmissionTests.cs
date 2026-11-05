@@ -119,7 +119,7 @@ public sealed class AdmissionTests
         Assert.Equal((HttpStatusCode.OK, "join"), (joined.Status, joined.Json.GetProperty("admission").GetString()));
         Assert.Equal(before + 2, await Event.Count.Exact(Cancellation));
         var unknown = await Json(leo, path, path, new { admission = "invite" });
-        Assert.Equal((HttpStatusCode.BadRequest, (string?)null), (unknown.Status, unknown.Gate));
+        Assert.Equal((HttpStatusCode.BadRequest, "invalid"), (unknown.Status, unknown.Word));
         Assert.Equal(HttpStatusCode.OK, (await Json(leo, path, path, new { admission = "join" })).Status);
         Assert.Equal(before + 2, await Event.Count.Exact(Cancellation));
 
@@ -128,7 +128,7 @@ public sealed class AdmissionTests
         Assert.Equal((HttpStatusCode.OK, Capabilities.NoRoleGrants(Bit.ManageSpace).Word), (read.Status, read.Json.GetProperty("gate").GetString()));
         Assert.Equal(0, read.Json.GetProperty("sections").GetArrayLength());
         var refused = await Json(ada, "/t/" + Workshop, path, new { admission = "apply" });
-        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageSpace).Word), (refused.Status, refused.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageSpace).Word), (refused.Status, refused.Word));
         Assert.Equal(Admission.Join, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Admission);
         Assert.Equal(before + 2, await Event.Count.Exact(Cancellation));
     }
@@ -148,7 +148,7 @@ public sealed class AdmissionTests
         Assert.False(await IsMember(tangentSpace, Grace));
         Assert.Equal([nameof(Bit.View)], await Can(grace, "/t/" + General));
         var started = await StartIn(grace, General, "Hello?");
-        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.Apply.Word), (started.Status, started.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.Apply.Word), (started.Status, started.Word));
         Assert.Equal(0, await Post.Count.Exact(Cancellation));
 
         var door = await Send(grace.Client, HttpMethod.Get, "/", json: true);
@@ -214,7 +214,7 @@ public sealed class AdmissionTests
         Assert.Equal(Capabilities.Declined.Word, halDoor.Json.GetProperty("gate").GetString());
         Assert.Contains("Your application was declined", (await Send(hal.Client, HttpMethod.Get, "/")).Body);
         var halStarted = await StartIn(hal, General, "Still here");
-        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.Declined.Word), (halStarted.Status, halStarted.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.Declined.Word), (halStarted.Status, halStarted.Word));
 
         // The declined application stays listed, and a later admission reverses it.
         var after = await Send(mo.Client, HttpMethod.Get, path, json: true);
@@ -241,7 +241,7 @@ public sealed class AdmissionTests
         Assert.DoesNotContain("Applications", (await Send(ada.Client, HttpMethod.Get, TangentSpaceSettingsController.Path, json: true)).Json
             .GetProperty("sections").EnumerateArray().Select(section => section.GetProperty("name").GetString()));
         var refused = await Json(ada, "/t/" + General, ApplicationsController.AdmitPath, new { participant = Ivy });
-        Assert.Equal((HttpStatusCode.Forbidden, gate), (refused.Status, refused.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, gate), (refused.Status, refused.Word));
         Assert.Equal(Standing.Applied, (await Participant.Get(Ivy, Cancellation))!.Standing);
         using var visitor = Agent(tangentSpace);
         var visiting = await Send(visitor, HttpMethod.Get, path, json: true);

@@ -81,7 +81,7 @@ public sealed class TangentSpaceSettingsTests
         Assert.Contains(">Still fired weekly.</textarea>", refused.Body);
         var tooLong = await Json(leo, TangentSpaceSettingsController.Path, TangentSpaceSettingsController.Path,
             new { description = new string('w', TangentSpace.DescriptionLimit + 1) });
-        Assert.Equal((HttpStatusCode.BadRequest, (string?)null), (tooLong.Status, tooLong.Gate));
+        Assert.Equal((HttpStatusCode.BadRequest, "invalid"), (tooLong.Status, tooLong.Word));
         Assert.Equal(("Lantern Works", "Fired weekly."), ((await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Name,
             (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Description));
         Assert.Equal(before + 2, await Event.Count.Exact(Cancellation));
@@ -109,15 +109,15 @@ public sealed class TangentSpaceSettingsTests
         // The settings offer Ada no form, so her session's token comes from the workshop's page, which carries one.
         var refused = await Form(ada, "/t/" + Workshop, TangentSpaceSettingsController.Path, General("Ada's place", ""));
         Assert.Equal(HttpStatusCode.Forbidden, refused.Status);
-        Assert.Contains($"data-gate=\"{gate}\"", refused.Body);
+        Assert.Contains($"data-word=\"{gate}\"", refused.Body);
         var asJson = await Json(ada, "/t/" + Workshop, TangentSpaceSettingsController.Path, new { name = "Ada's place" });
-        Assert.Equal((HttpStatusCode.Forbidden, gate), (asJson.Status, asJson.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, gate), (asJson.Status, asJson.Word));
 
         using var visitor = Agent(tangentSpace);
         var read = await Send(visitor, HttpMethod.Get, TangentSpaceSettingsController.Path, json: true);
         Assert.Equal(Capabilities.SignIn.Word, read.Json.GetProperty("gate").GetString());
         var posted = await Send(visitor, HttpMethod.Post, TangentSpaceSettingsController.Path, JsonBody(new { name = "Nobody's place" }), json: true);
-        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (posted.Status, posted.Gate));
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (posted.Status, posted.Word));
 
         Assert.Equal("Field notes", (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Name);
         Assert.Equal(before, await Event.Count.Exact(Cancellation));
@@ -214,9 +214,9 @@ public sealed class TangentSpaceSettingsTests
         }
 
         var asJson = await Send(visitor, HttpMethod.Get, "/t/" + Workshop, json: true);
-        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (asJson.Status, asJson.Gate));
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (asJson.Status, asJson.Word));
         var posted = await Send(visitor, HttpMethod.Post, "/t/" + Workshop + "/new", JsonBody(new { title = "Hello" }), json: true);
-        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (posted.Status, posted.Gate));
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (posted.Status, posted.Word));
         Assert.Equal(HttpStatusCode.OK, (await Page(visitor, "/sign-in")).Status);
         Assert.Equal(HttpStatusCode.OK, (await Send(visitor, HttpMethod.Get, "/tangent.json", json: true)).Status);
 

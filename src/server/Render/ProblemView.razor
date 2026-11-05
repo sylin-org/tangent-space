@@ -1,9 +1,9 @@
 @using Koan.Web.Controllers
 @using Tangent.Access
 @* A refusal as a person reads it: one panel in the place's frame, its heading, its sentence, what each field sent was
-   refused for and, where the gate is signing in, the way to sign in and come back. The frame's masthead is the way back
+   refused for and, where its word is signing in, the way to sign in and come back. The frame's masthead is the way back
    to the door. *@
-<main class="sign-in post-form" data-gate="@Model.Gate" data-kind="@Model.Kind">
+<main class="sign-in post-form" data-word="@Model.Word" data-kind="@Model.Kind">
     <section class="sign-in-panel post-form-panel" aria-labelledby="problem-heading">
         <div class="sign-in-body">
             <h1 id="problem-heading" class="sign-in-title">@Heading(Model)</h1>
@@ -13,7 +13,10 @@
             }
             @foreach (var (field, refused) in Model.Errors ?? new Dictionary<string, string[]>())
             {
-                <p class="sign-in-lede">@(field.Length > 0 ? field + ": " : "")@string.Join(" ", refused)</p>
+                @if (string.Join(" ", refused) != Model.Detail)
+                {
+                    <p class="sign-in-lede">@(field.Length > 0 ? field + ": " : "")@string.Join(" ", refused)</p>
+                }
             }
             @if (SignIn is { } signIn)
             {
@@ -28,15 +31,15 @@
 @code {
     [Parameter, EditorRequired] public Problem Model { get; set; } = default!;
 
-    /// <summary>Where signing in starts and comes back from, for a refusal whose gate is signing in.</summary>
+    /// <summary>Where signing in starts and comes back from, for a refusal whose word is signing in.</summary>
     [Parameter] public string? SignIn { get; set; }
 
-    /// <summary>The heading of a refusal: the place's own title, where it gave one; its gate's, where it names one; and
-    /// otherwise what a person reads of its kind and status: a value that could not bind is not accepted, a body past its
-    /// limit too large, any other invalid write or one that failed not written, and one that never ran is to try
-    /// again.</summary>
+    /// <summary>The heading of a refusal: the place's own title, where it gave one; its word's, where standing, audience or
+    /// state decided it; and otherwise what a person reads of its kind and status: a value that could not bind is not
+    /// accepted, a body past its limit too large, any other invalid write or one that failed not written, and one that
+    /// never ran is to try again.</summary>
     public static string Heading(Problem problem) => !string.Equals(problem.Title, problem.Kind, StringComparison.OrdinalIgnoreCase) ? problem.Title
-        : problem.Gate is { } gate ? Capabilities.Heading(gate)
+        : Capabilities.Worded(problem.Word) ? Capabilities.Heading(problem.Word)
         : problem switch
         {
             { Errors.Count: > 0 } => "Not accepted",

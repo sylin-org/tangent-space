@@ -78,8 +78,8 @@ internal static partial class Writing
     {
         public JsonElement Json => JsonDocument.Parse(Body).RootElement.Clone();
 
-        /// <summary>The problem's gate, for a JSON answer that carries one.</summary>
-        public string? Gate => MediaType is "application/problem+json" && Json.TryGetProperty("gate", out var gate) ? gate.GetString() : null;
+        /// <summary>The problem's word, which every problem carries.</summary>
+        public string? Word => MediaType is "application/problem+json" && Json.TryGetProperty("word", out var word) ? word.GetString() : null;
 
         public string? Title => MediaType is "application/problem+json" && Json.TryGetProperty("title", out var title) ? title.GetString() : null;
 

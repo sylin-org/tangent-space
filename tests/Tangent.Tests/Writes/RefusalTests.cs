@@ -12,7 +12,7 @@ namespace Tangent.Posts;
 public sealed class RefusalTests
 {
     [Fact]
-    public async Task A_visitor_is_refused_with_sign_in_as_a_problem_and_on_the_form_with_the_reason_inline_and_nothing_is_written()
+    public async Task A_visitor_is_told_to_sign_in_before_anything_they_sent_is_read_as_a_problem_and_as_a_page_and_nothing_is_written()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
@@ -28,24 +28,26 @@ public sealed class RefusalTests
         var edit = await Send(visitor, HttpMethod.Post, PostPath(root, root) + "/edit", JsonBody(new { body = "Mine now.", version = 1 }), json: true);
         var editForm = await Send(visitor, HttpMethod.Post, PostPath(root, root) + "/edit", FormBody(new Dictionary<string, string> { ["body"] = "Mine now.", ["version"] = "1" }));
 
-        Assert.Equal(HttpStatusCode.OK, page.Status);
-        Assert.Contains("data-gate=\"sign-in\"", page.Body);
-        Assert.Contains("href=\"" + BaseUrl + "/sign-in?return=%2Ft%2Fworkshop%2Fnew\"", page.Body);
+        Assert.Equal(HttpStatusCode.Unauthorized, page.Status);
+        Assert.Contains("data-word=\"sign-in\"", page.Body);
+        Assert.Contains(Capabilities.SignIn.Text, page.Body);
+        Assert.Contains("/sign-in?return=%2Ft%2Fworkshop%2Fnew\"", page.Body);
         Assert.DoesNotContain("type=\"submit\"", page.Body);
-        Assert.Equal((HttpStatusCode.Unauthorized, "application/problem+json", Capabilities.SignIn.Word), (asJson.Status, asJson.MediaType, asJson.Gate));
+        Assert.Equal((HttpStatusCode.Unauthorized, "application/problem+json", Capabilities.SignIn.Word), (asJson.Status, asJson.MediaType, asJson.Word));
         Assert.Equal(HttpStatusCode.Unauthorized, onForm.Status);
-        Assert.Contains("data-gate=\"sign-in\"", onForm.Body);
-        Assert.Contains("Sign in to write here.", onForm.Body);
-        Assert.Contains("value=\"Hello\"", onForm.Body);
-        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (reply.Status, reply.Gate));
-        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (edit.Status, edit.Gate));
+        Assert.Contains("data-word=\"sign-in\"", onForm.Body);
+        Assert.Contains(Capabilities.SignIn.Text, onForm.Body);
+        Assert.DoesNotContain("write", Capabilities.SignIn.Text);
+        Assert.DoesNotContain("value=\"Hello\"", onForm.Body);
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (reply.Status, reply.Word));
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (edit.Status, edit.Word));
         Assert.Equal(HttpStatusCode.Unauthorized, editForm.Status);
-        Assert.Contains("data-gate=\"sign-in\"", editForm.Body);
+        Assert.Contains("data-word=\"sign-in\"", editForm.Body);
         Assert.Equal(before, await Counted());
     }
 
     [Fact]
-    public async Task Another_participant_editing_or_removing_is_refused_with_not_yours_as_a_problem_and_on_the_form_and_nothing_is_written()
+    public async Task Another_participant_editing_or_removing_is_refused_with_not_yours_as_a_problem_and_as_a_page_and_nothing_is_written()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
@@ -62,18 +64,18 @@ public sealed class RefusalTests
         var removeJson = await Json(bea, TopicPath(root), remove, new { });
         var removeForm = await Form(bea, TopicPath(root), remove, new Dictionary<string, string>());
 
-        Assert.Equal(HttpStatusCode.OK, page.Status);
-        Assert.Contains("data-gate=\"not yours\"", page.Body);
+        Assert.Equal(HttpStatusCode.Forbidden, page.Status);
+        Assert.Contains("data-word=\"not yours\"", page.Body);
         Assert.DoesNotContain("type=\"submit\"", page.Body);
         Assert.DoesNotContain("post-remove", page.Body);
-        Assert.Equal((HttpStatusCode.Forbidden, "application/problem+json", Capabilities.NotYours.Word), (editJson.Status, editJson.MediaType, editJson.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, "application/problem+json", Capabilities.NotYours.Word), (editJson.Status, editJson.MediaType, editJson.Word));
         Assert.Equal(HttpStatusCode.Forbidden, editForm.Status);
-        Assert.Contains("data-gate=\"not yours\"", editForm.Body);
+        Assert.Contains("data-word=\"not yours\"", editForm.Body);
         Assert.Contains("Only its author, or a moderator, can change this post.", editForm.Body);
-        Assert.Contains(">Mine now.</textarea>", editForm.Body);
-        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NotYours.Word), (removeJson.Status, removeJson.Gate));
+        Assert.DoesNotContain("Mine now.", editForm.Body);
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NotYours.Word), (removeJson.Status, removeJson.Word));
         Assert.Equal(HttpStatusCode.Forbidden, removeForm.Status);
-        Assert.Contains("data-gate=\"not yours\"", removeForm.Body);
+        Assert.Contains("data-word=\"not yours\"", removeForm.Body);
         Assert.Equal(before, await Counted());
         var stored = await Post.Get(root.Id, Cancellation);
         Assert.Equal(("How do you hang yours?", 1L, false), (stored?.Body, stored?.Version, stored?.Removed));
@@ -93,10 +95,10 @@ public sealed class RefusalTests
         var asJson = await Json(ada, "/t/" + Workshop + "/new", TopicPath(removed), new { id = Tids.Mint(), body = "Still?" });
         var onForm = await Form(ada, "/t/" + Workshop + "/new", TopicPath(removed), new Dictionary<string, string> { ["id"] = Tids.Mint(), ["body"] = "Still?" });
 
-        Assert.Equal((HttpStatusCode.Forbidden, "application/problem+json", Capabilities.Removed.Word), (asJson.Status, asJson.MediaType, asJson.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, "application/problem+json", Capabilities.Removed.Word), (asJson.Status, asJson.MediaType, asJson.Word));
         Assert.Equal("gated", asJson.Kind);
         Assert.Equal(("text/html", HttpStatusCode.Forbidden), (onForm.MediaType, onForm.Status));
-        Assert.Contains("data-gate=\"removed\"", onForm.Body);
+        Assert.Contains("data-word=\"removed\"", onForm.Body);
         Assert.Contains(Capabilities.Removed.Text, System.Net.WebUtility.HtmlDecode(onForm.Body));
         Assert.Contains(">Removed</h1>", onForm.Body);
         Assert.DoesNotContain(">removed<", onForm.Body);
@@ -112,7 +114,7 @@ public sealed class RefusalTests
         var seen = new Dictionary<string, string> { [Events.SeenController.ThroughField] = "1" };
 
         var asJson = await Send(visitor, HttpMethod.Post, Events.SeenController.Path, FormBody(seen), json: true);
-        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (asJson.Status, asJson.Gate));
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (asJson.Status, asJson.Word));
 
         var asPage = await Send(visitor, HttpMethod.Post, Events.SeenController.Path, FormBody(seen));
         Assert.Equal(HttpStatusCode.Unauthorized, asPage.Status);

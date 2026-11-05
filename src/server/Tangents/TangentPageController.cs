@@ -15,10 +15,10 @@ using Tangent.Space;
 namespace Tangent.Tangents;
 
 /// <summary>The Tangent page, one resource both ways: the Tangent, its <c>can</c>, and one bounded page of its Topics
-/// with what is new to the reader marked, left to the formatter as HTML, a fragment or JSON. A reader without
-/// <see cref="Bit.View"/> on the Tangent receives its gate instead, and one for whom the Tangent is absent receives
-/// what an address with no Tangent receives. Every read is bounded and keyed: the Tangent, then capability's rows, at
-/// one read of Topics, their latest replies by Id, the people on the page, the reader's place mark and their marks on
+/// with what is new to the reader marked, left to the formatter as HTML, a fragment or JSON. It needs
+/// <see cref="Bit.View"/>, which the Doorway judges before anything else (<see cref="Access.Doorway"/>), so a reader without it
+/// receives its gate, and one for whom the Tangent is absent what an address with no Tangent receives. Every read is bounded
+/// and keyed: the Tangent and capability's rows, which the Doorway read, one read of Topics, their latest replies by Id, the people on the page, the reader's place mark and their marks on
 /// those Topics, which say what is new to them (<see cref="Unread"/>), the first <see cref="SwitcherLimit"/>
 /// Tangents the reader may view for the switcher (<see cref="ViewableTangents"/>), and, for a signed-in reader, what they
 /// hold in the place, which says whether the switcher offers a new Tangent.</summary>
@@ -37,16 +37,14 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
     [HttpGet("/t/{tangent}")]
     [HttpHead("/t/{tangent}")]
     [Tool(Name = "read_tangent")]
+    [Needs(Bit.View)]
     [Description("Read a Tangent: its Topics a page at a time, what is new to you marked. Follow with read_topic on a Topic's slug, or start_topic to begin one.")]
     public async Task<IActionResult> Get([Description(Holds.Tangent)] string tangent, [FromQuery(Name = After), Description(Holds.After)] string? after, CancellationToken ct)
     {
-        var personId = User.Identity?.IsAuthenticated == true ? User.FindFirst(ClaimTypes.NameIdentifier)?.Value : null;
-        // The Tangent's row is read before its overwrites: a Tangent found here committed after its audience was written.
-        // A missing Tangent's overwrites are not read, so an address no Tangent has takes no place in Koan's cache.
-        var found = await Tangent.Get(tangent, ct);
-        var capabilities = await Capabilities.Load(personId, found?.Id, null, ct);
-        if (!capabilities.Exists) return DoorController.Gated(HttpContext, capabilities.Gate(Bit.View) ?? Capabilities.Absent);
-        if (found is not { } row) return DoorController.Gated(HttpContext, Capabilities.Absent);
+        var here = Here.Of(HttpContext);
+        var personId = here.PersonId;
+        var row = here.Tangent!;
+        var capabilities = here.Capabilities;
 
         TopicList.Cursor? cursor = null;
         if (after is not null && (cursor = TopicList.Cursor.Parse(after)) is null)
@@ -54,12 +52,12 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
                 $"The {After} parameter is the cursor a page of this Tangent names as its next.") { Title = "Not a page of this Tangent" }.ToResult();
 
         var page = await TopicList.Read(row.Id, cursor, ct);
-        var reader = personId is null ? null : await Participant.Get(personId, ct);
+        var reader = here.Rows.Participant;
         var latest = await LatestReplies(page.Topics, ct);
         var people = await People(page.Topics, latest.Values, ct);
         var unread = reader is null ? null : await Unread.Of(reader, ct);
         var marks = unread is null ? new Dictionary<string, long>() : await unread.Marks(page.Topics.Select(topic => topic.Id), ct);
-        var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
+        var space = here.Rows.Space;
         var audience = space.Audience == Audience.Private || await Overwrites.AudienceOf(row.Id, ct) == Audience.Private
             ? Audience.Private
             : Audience.Public;
@@ -92,7 +90,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
                 baseAddress + AuthConstants.Routes.Logout + "?return=" + back, place is null ? null : TangentSpaceSettingsController.Entry(place, baseAddress),
                 await unread!.BadgeNow(baseAddress + "/", ct)),
             DateOnly.FromDateTime(DateTime.UtcNow),
-            TangentWrites.MayManage(capabilities) ? address + "/" + TangentWrites.SettingsSegment : null,
+            capabilities.Holds(Bit.ManageTangent) ? address + "/" + TangentWrites.SettingsSegment : null,
             creates ? baseAddress + NewTangentController.Route : null,
             audience == Audience.Public ? Feeds.TangentLinks(baseAddress, row.Id, row.Name, space.Name) : null));
     }

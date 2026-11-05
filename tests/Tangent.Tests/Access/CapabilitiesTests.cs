@@ -1,3 +1,4 @@
+using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Tangent.Participants;
 using Tangent.Posts;
@@ -21,7 +22,11 @@ public sealed class CapabilitiesTests
     private static readonly DateTimeOffset Now = new(2026, 10, 29, 10, 0, 0, TimeSpan.Zero);
 
     /// <summary>A member's bits on a Tangent, where no Post is theirs to edit or remove.</summary>
-    private const Bit OnTangent = Roles.MemberBits & ~(Bit.EditOwn | Bit.RemoveOwn);
+    /// <summary>What a member holds on a Tangent: authorship is asked only of a Post.</summary>
+    private const Bit OnTangent = Roles.MemberBits;
+
+    /// <summary>What a member holds on someone else's Post.</summary>
+    private const Bit OnAnothers = Roles.MemberBits & ~(Bit.EditOwn | Bit.RemoveOwn);
 
     /// <summary>A visitor's bag: Koan's anonymous bag, which holds everyone alone.</summary>
     private static readonly List<string> Visitor = [RoleTokens.Everyone];
@@ -133,9 +138,12 @@ public sealed class CapabilitiesTests
         Assert.Equal((Bit.None, false, Capabilities.Absent), (banned.Held, banned.Exists, banned.Gate(Bit.View)));
         Assert.Equal((Bit.View, true, Capabilities.TimedOut), (timedOut.Held, timedOut.Exists, timedOut.Gate(Bit.Post)));
         Assert.Equal((Bit.View, Capabilities.Apply), (appliedPublic.Held, appliedPublic.Gate(Bit.Post)));
-        Assert.Equal((Bit.None, false, Capabilities.Apply), (appliedPrivate.Held, appliedPrivate.Exists, appliedPrivate.Gate(Bit.View)));
+        Assert.Equal((Bit.None, false, Capabilities.ApplyToRead), (appliedPrivate.Held, appliedPrivate.Exists, appliedPrivate.Gate(Bit.View)));
         Assert.Equal((Bit.View, true, Capabilities.SignIn), (visitorPublic.Held, visitorPublic.Exists, visitorPublic.Gate(Bit.Post)));
-        Assert.Equal((Bit.None, false, Capabilities.SignIn), (visitorPrivate.Held, visitorPrivate.Exists, visitorPrivate.Gate(Bit.View)));
+        Assert.Equal((Bit.None, false, Capabilities.SignInToRead), (visitorPrivate.Held, visitorPrivate.Exists, visitorPrivate.Gate(Bit.View)));
+        Assert.Equal(Capabilities.SignInToRead, visitorPrivate.Gate(Bit.Post));
+        Assert.DoesNotContain("write", Capabilities.SignIn.Text);
+        Assert.DoesNotContain("write", Capabilities.SignInToRead.Text);
         Assert.Equal(Bit.View, visitorWidened.Held);
         Assert.Equal(["View"], visitorPublic.Can);
     }
@@ -197,10 +205,23 @@ public sealed class CapabilitiesTests
 
         Assert.True(mine.Holds(Bit.EditOwn | Bit.RemoveOwn));
         Assert.Equal((Capabilities.NotYours, Capabilities.NotYours), (another.Gate(Bit.EditOwn), another.Gate(Bit.RemoveOwn)));
-        Assert.Equal(OnTangent, another.Held);
-        Assert.Equal(Capabilities.NotYours, noPost.Gate(Bit.EditOwn));
+        Assert.Equal(OnAnothers, another.Held);
+        Assert.True(noPost.Holds(Bit.EditOwn | Bit.RemoveOwn), "of a Tangent, a bit of authorship says what the reader may do to their own");
         // A removed Post is a tombstone the reader finds, with nothing to do on it.
         Assert.Equal((Bit.None, true, Capabilities.Removed), (removed.Held, removed.Exists, removed.Gate(Bit.Moderate)));
+    }
+
+    [Fact]
+    public void Manage_space_implies_every_tangents_manage_tangent_and_moderate_implies_editing_and_removing_any_post()
+    {
+        var keeper = Capabilities.For(Participant(), Bag(Roles.MemberBits | Bit.ManageSpace, Roles.Member), PublicPlace, Workshop,
+            [Over(Roles.Member, deny: Bit.ManageTangent)], Now);
+        var moderator = Capabilities.For(Participant(), Moderator(), PublicPlace, Workshop, [], Now, Root(Ada));
+        var member = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, [], Now, Root(Ada));
+
+        Assert.Equal((true, (Reason?)null), (keeper.Holds(Bit.ManageTangent), keeper.Gate(Bit.ManageTangent)));
+        Assert.Equal((true, (Reason?)null, (Reason?)null), (moderator.Holds(Bit.EditOwn | Bit.RemoveOwn), moderator.Gate(Bit.EditOwn), moderator.Gate(Bit.RemoveOwn)));
+        Assert.Equal(Capabilities.NotYours, member.Gate(Bit.EditOwn));
     }
 
     [Fact]
@@ -219,7 +240,7 @@ public sealed class CapabilitiesTests
 
         Assert.Equal(Capabilities.TimedOut, timedOutOnRemoved.Gate(Bit.Post));
         Assert.Equal(Capabilities.SignIn, visitorOnRemoved.Gate(Bit.Post));
-        Assert.Equal(Capabilities.Apply, appliedOnRemoved.Gate(Bit.Post));
+        Assert.Equal(Capabilities.ApplyToRead, appliedOnRemoved.Gate(Bit.Post));
         Assert.Equal(Capabilities.Absent, unseenRemoved.Gate(Bit.View));
         Assert.Equal(Capabilities.Removed, memberOnRemoved.Gate(Bit.Post));
         Assert.Equal(Capabilities.Removed, deniedOnRemoved.Gate(Bit.Post));

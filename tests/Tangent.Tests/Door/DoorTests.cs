@@ -360,7 +360,7 @@ public sealed class DoorTests(ITestOutputHelper output)
             using var gated = await tangentSpace.Client.SendAsync(request, Cancellation);
             using var problem = JsonDocument.Parse(await gated.Content.ReadAsStringAsync(Cancellation));
             Assert.Equal((HttpStatusCode.Unauthorized, "application/problem+json", Capabilities.SignIn.Word),
-                (gated.StatusCode, gated.Content.Headers.ContentType?.MediaType, problem.RootElement.GetProperty("gate").GetString()));
+                (gated.StatusCode, gated.Content.Headers.ContentType?.MediaType, problem.RootElement.GetProperty("word").GetString()));
         }
 
         using (var request = new HttpRequestMessage(HttpMethod.Get, "/"))

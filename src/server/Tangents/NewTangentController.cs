@@ -44,7 +44,7 @@ public sealed class NewTangentController(KoanWebBaseUrl baseUrl) : ControllerBas
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
+        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
         return Ok(await Page(place, personId, ct));
     }
 
@@ -57,7 +57,7 @@ public sealed class NewTangentController(KoanWebBaseUrl baseUrl) : ControllerBas
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
+        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
 
         var name = input.Name ?? "";
         var description = input.Description ?? "";

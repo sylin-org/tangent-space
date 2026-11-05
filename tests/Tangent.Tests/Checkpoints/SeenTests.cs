@@ -55,7 +55,7 @@ public sealed class SeenTests
         Assert.Equal(((long?)2, (long?)3), (await SeenThrough(Ada, root), await SeenThrough(Bea, root)));
 
         var visitor = await Send(Agent(tangentSpace), HttpMethod.Post, SeenController.Path, JsonBody(new { topic = root.Id, through = 2 }), json: true);
-        Assert.Equal((HttpStatusCode.Unauthorized, Access.Capabilities.SignIn.Word), (visitor.Status, visitor.Gate));
+        Assert.Equal((HttpStatusCode.Unauthorized, Access.Capabilities.SignIn.Word), (visitor.Status, visitor.Word));
     }
 
     [Fact]

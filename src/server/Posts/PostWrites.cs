@@ -14,7 +14,7 @@ namespace Tangent.Posts;
 /// <summary>What the write routes of a Post share. A write comes as a form a page posted, as JSON an agent sent or as a
 /// tool's call, to the same address and the same typed input, and is answered in kind: a form is sent on to the Post's
 /// address (<c>303</c>) or, refused, reads its page again with the reason inline; a JSON request reads the Post with its
-/// <c>can</c>, or a problem carrying the gate. Refusals answer by their kind, in Koan's one mapping (<see cref="Answers"/>). A
+/// <c>can</c>, or a problem carrying its word. Refusals answer by their kind, in Koan's one mapping (<see cref="Answers"/>). A
 /// write answers to its sender's session cookie; one a page of another site sent is refused before it reaches
 /// here.</summary>
 public static class PostWrites
@@ -57,41 +57,6 @@ public static class PostWrites
         return accept.Any(type => string.Equals(type.MediaType.Value, "application/json", StringComparison.OrdinalIgnoreCase)
                                   || string.Equals(type.Suffix.Value, "json", StringComparison.OrdinalIgnoreCase))
                && !accept.Any(type => string.Equals(type.MediaType.Value, "text/html", StringComparison.OrdinalIgnoreCase));
-    }
-
-    /// <summary>A write route's address as it stands for the reader: its Tangent, the rows what the reader holds there is
-    /// computed from, and the Topic's root and the Post the address names, where it names them.</summary>
-    public sealed record Located(Tangents.Tangent Tangent, Capabilities.Rows Rows, Post? Root, Post? Post)
-    {
-        /// <summary>What the reader holds on the Post the address names, a reply judged by its Topic's root; on the
-        /// Tangent where the address names no Post.</summary>
-        public Capabilities Capabilities => Rows.For(Post, Post is { ParentId: not null } ? Root : null);
-    }
-
-    /// <summary>Resolves a write route's address in the Topic page's order, before anything is judged of the request
-    /// itself: the Tangent's row first, so an address no Tangent has reads no overwrites; capability's rows, once; the
-    /// gate of the place or the Tangent, the same for every address under it, so a visitor of a private place reads one
-    /// sign-in whether an address holds something or nothing; then the missing resource's answer for a Tangent no row
-    /// has, a slug no Topic of it has, or an Id no Post of that Topic has. Answers the address found, or what it answers
-    /// instead. The reads are the Topic page's: the Tangent, capability's rows, the root by slug and the Post by Id.</summary>
-    public static async Task<(Located? Found, IActionResult? Unseen)> Locate(HttpContext http, string? personId, string tangent, string? topic, string? post,
-        CancellationToken ct)
-    {
-        var row = Slug.IsValid(tangent) ? await Tangents.Tangent.Get(tangent, ct) : null;
-        var rows = await Capabilities.LoadRows(personId, row?.Id, ct);
-        var here = rows.For(null);
-        if (!here.Exists) return (null, Unseen(http, here.Gate(Bit.View)));
-        if (row is null) return (null, Absent());
-        Post? root = null;
-        if (topic is not null && (!Slug.IsValid(topic) || (root = await TopicWindow.Topic(row.Id, topic, ct)) is null)) return (null, Absent());
-        Post? named = null;
-        if (post is not null)
-        {
-            named = root is null || !Tid.IsValid(post) ? null : post == root.Id ? root : await Post.Get(post, ct);
-            if (named is null || named.TopicId != root!.Id) return (null, Absent());
-        }
-
-        return (new Located(row, rows, root, named), null);
     }
 
     public static string Word(PostKind kind) => kind.ToString().ToLowerInvariant();
@@ -192,13 +157,6 @@ public static class PostWrites
             ContentTypes = { "application/json" }
         };
     }
-
-    /// <summary>What an address answers that holds nothing the reader may see: the one answer of a missing resource.</summary>
-    public static IActionResult Absent() => new Problem(StatusCodes.Status404NotFound, Answers.Nothing).ToResult();
-
-    /// <summary>What a reader without <see cref="Bit.View"/> where they ask receives: the missing resource's answer where
-    /// it is absent to them, otherwise the one step between them and it.</summary>
-    public static IActionResult Unseen(HttpContext http, Reason? gate) => gate is null ? Absent() : Answers.Refused(http, gate);
 
     /// <summary>Who is signed in, as the shell's account menu shows them, signing out back to <paramref name="back"/>, a
     /// path under the base URL, with the place's settings where they hold <see cref="Bit.ManageSpace"/>,

@@ -49,7 +49,7 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
+        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
 
         Applications.Cursor? cursor = null;
         if (after is not null && (cursor = Applications.Cursor.Parse(after)) is null)
@@ -77,7 +77,7 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
+        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
 
         var applicantId = input.Participant ?? "";
         ICommand<Participant> command = admitting
@@ -122,7 +122,7 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
         if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
 
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
+        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
         var page = await Page(place, personId, null, ct);
         if (reason.Kind != ReasonKind.Gated) page = page with { Failure = reason.Text };
         return new ObjectResult(page) { StatusCode = Answers.Status(HttpContext, reason) };

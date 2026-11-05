@@ -17,7 +17,7 @@ public sealed record BringInput([Description(Holds.BroughtImage)] string? File =
 /// may start a Topic or reply there. It takes <c>file</c>, the image as a file of a multipart form or its bytes in
 /// base64 in one JSON object, keeps it (<see cref="Media.Keep"/>) and answers with its Id, its address, and the reference
 /// a body names it by (<see cref="WrittenMedia"/>). The address resolves as every write's does, before anything is judged
-/// of the request (<see cref="PostWrites.Locate"/>).</summary>
+/// of the request (<see cref="Here.Find"/>).</summary>
 public sealed class NewMediaController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
     /// <summary>The segment under a Tangent's address where an image comes in.</summary>
@@ -40,8 +40,8 @@ public sealed class NewMediaController(KoanWebBaseUrl baseUrl) : ControllerBase
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, null, null, ct);
-        if (found is null) return unseen!;
+        var (found, refused) = await Here.Find(personId, tangent, null, null, ct);
+        if (refused is not null) return this.Refused(refused);
         var here = found.Capabilities;
         if (personId is null || (!here.Holds(Bit.Topic) && !here.Holds(Bit.Post))) return Answers.Refused(HttpContext, here.Gate(Bit.Topic) ?? Capabilities.SignIn);
 

@@ -25,10 +25,9 @@ public sealed record RemovePost(string PostId, string RemoverId, DateTimeOffset?
         var capabilities = rows.For(post);
         if (!capabilities.Exists) return new Outcome<Post>.Refused(NoPost);
         // Nothing applies to a tombstone, so whether the remover may remove it is asked of the Post as it stood: its
-        // author, holding RemoveOwn, or anyone holding Moderate.
+        // author, holding RemoveOwn, or anyone holding Moderate, which implies it.
         var asItStood = post.Removed ? rows.For(new Post { Id = post.Id, TangentId = post.TangentId, TopicId = post.TopicId, AuthorId = post.AuthorId }) : capabilities;
-        if (!asItStood.Holds(Bit.RemoveOwn) && !asItStood.Holds(Bit.Moderate))
-            return new Outcome<Post>.Refused(capabilities.Gate(Bit.RemoveOwn)!);
+        if (!asItStood.Holds(Bit.RemoveOwn)) return new Outcome<Post>.Refused(capabilities.Gate(Bit.RemoveOwn)!);
         if (post.Removed) return new Outcome<Post>.Done(post);
 
         var at = At ?? DateTimeOffset.UtcNow;

@@ -203,7 +203,7 @@ public sealed partial class ExportTests
             Assert.Equal(HttpStatusCode.Forbidden, answer.Status);
             Assert.Equal("application/problem+json", answer.MediaType);
             var asked = await Send(visitor, HttpMethod.Get, zip, json: true);
-            Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (asked.Status, asked.Gate));
+            Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (asked.Status, asked.Word));
         }
 
         var visiting = await Send(visitor, HttpMethod.Get, Path);

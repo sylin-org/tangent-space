@@ -26,7 +26,7 @@ public sealed record ChangeTangentInput(
 /// the change closed the Tangent to its sender, reads that it is saved (<see cref="TangentClosed"/>), as a JSON request
 /// does; a JSON
 /// request reads the Tangent (<c>200</c>); a refusal reads the form again with the reason inline, or a problem with the
-/// gate. Both resolve the address as the Tangent page does (<see cref="PostWrites.Locate"/>) before anything else is
+/// gate. Both resolve the address as the Tangent page does (<see cref="Here.Find"/>) before anything else is
 /// judged, so a Tangent the reader may not view and one no row has answer alike.</summary>
 public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
@@ -39,8 +39,8 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, null, null, ct);
-        if (found is null) return unseen!;
+        var (found, refused) = await Here.Find(personId, tangent, null, null, ct);
+        if (refused is not null) return this.Refused(refused);
         return Ok(await Page(found, personId, ct));
     }
 
@@ -52,8 +52,8 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, null, null, ct);
-        if (found is null) return unseen!;
+        var (found, refused) = await Here.Find(personId, tangent, null, null, ct);
+        if (refused is not null) return this.Refused(refused);
 
         var kind = TangentWrites.Choice(input.Kind, TangentWrites.Kinds, out var kindValid);
         if (!kindValid) return await Refused(found, personId, input, TangentWrites.KindRule, ct);
@@ -63,7 +63,7 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
         if (!moveValid) return await Refused(found, personId, input, TangentWrites.MoveRule, ct);
 
         var outcome = await new ChangeTangent(
-            found.Tangent.Id,
+            found.Tangent!.Id,
             personId ?? "",
             input.Name,
             input.Description,
@@ -97,11 +97,11 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
 
     /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the form again, read afresh,
     /// keeping what was sent, with the reason where it belongs.</summary>
-    private async Task<IActionResult> Refused(PostWrites.Located found, string? personId, ChangeTangentInput input, Reason reason, CancellationToken ct)
+    private async Task<IActionResult> Refused(Here found, string? personId, ChangeTangentInput input, Reason reason, CancellationToken ct)
     {
         if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
-        var (again, unseen) = await PostWrites.Locate(HttpContext, personId, found.Tangent.Id, null, null, ct);
-        if (again is null) return unseen!;
+        var (again, gone) = await Here.Find(personId, found.Tangent!.Id, null, null, ct);
+        if (gone is not null) return this.Refused(gone);
         var page = await Page(again, personId, ct);
         page = page with
         {
@@ -122,9 +122,9 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
         return new ObjectResult(page) { StatusCode = Answers.Status(HttpContext, reason) };
     }
 
-    private async Task<TangentSettingsPage> Page(PostWrites.Located found, string? personId, CancellationToken ct)
+    private async Task<TangentSettingsPage> Page(Here found, string? personId, CancellationToken ct)
     {
-        var row = found.Tangent;
+        var row = found.Tangent!;
         var capabilities = found.Capabilities;
         var baseAddress = BaseAddress();
         var address = PostWrites.TangentAddress(baseAddress, row.Id);
@@ -145,11 +145,11 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
             movable,
             address,
             address + "/" + TangentWrites.SettingsSegment + "/" + TangentAccessController.Segment,
-            TangentWrites.MayManage(capabilities)
+            capabilities.Holds(Bit.ManageTangent)
                 ? TangentWrites.ChangeForm(address + "/" + TangentWrites.SettingsSegment, moderators, movable)
                 : null,
             capabilities.Can,
-            TangentWrites.ManageGate(capabilities)?.Word,
+            capabilities.Gate(Bit.ManageTangent)?.Word,
             TangentWrites.Kinds,
             moderators ? [] : TangentWrites.Audiences,
             personId is null ? baseAddress + Participants.SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,

@@ -100,8 +100,8 @@ public sealed class ProfileTests
 
         var held = await Send(visitor, HttpMethod.Get, "/p/" + AdaHandle, json: true);
         var unheld = await Send(visitor, HttpMethod.Get, "/p/nobody.example", json: true);
-        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (held.Status, held.Gate));
-        Assert.Equal((held.Status, held.Title, held.Gate), (unheld.Status, unheld.Title, unheld.Gate));
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (held.Status, held.Word));
+        Assert.Equal((held.Status, held.Title, held.Word), (unheld.Status, unheld.Title, unheld.Word));
         Assert.DoesNotContain("Wicks", (await Send(visitor, HttpMethod.Get, "/p/" + AdaHandle)).Body);
     }
 

@@ -82,7 +82,7 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
+        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
         var read = await Page(place, personId, Numbered(page), ct);
         return place.Gate(Bit.ManageRoles) is { } gate ? new ObjectResult(read) { StatusCode = Answers.Status(HttpContext, gate) } : Ok(read);
     }
@@ -137,7 +137,7 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
+        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
 
         if (built is Reason refused) return await Refused(personId, name, permissions, refused, created, ct);
         var sent = (ICommand<Role>)built;
@@ -174,7 +174,7 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
         if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
 
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
+        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
         var page = await Page(place, personId, 1, ct);
         if (page.Gate is null)
         {

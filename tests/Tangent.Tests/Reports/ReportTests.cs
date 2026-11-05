@@ -207,9 +207,9 @@ public sealed partial class ReportTests
         var absent = await Json(ada, TopicPath(topic), PostPath(studio, studio) + "/report", new { id = Tids.Mint(), body = "Unkind." });
         var visitorForm = await Send(visitor, HttpMethod.Get, action);
 
-        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (refused.Status, refused.Gate));
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (refused.Status, refused.Word));
         Assert.Equal(HttpStatusCode.NotFound, absent.Status);
-        Assert.Contains("data-gate=\"sign-in\"", visitorForm.Body);
+        Assert.Contains("data-word=\"sign-in\"", visitorForm.Body);
         Assert.DoesNotContain("name=\"id\"", visitorForm.Body);
         Assert.Equal(counted, await Counted());
 

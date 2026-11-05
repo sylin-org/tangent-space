@@ -49,8 +49,7 @@ public sealed class PostSearchTests
         return await PostSearch.Run(text, whole.Tangents.Select(tangent => tangent.Id).ToHashSet(StringComparer.Ordinal), whole.Others, page, size, Cancellation);
     }
 
-    private static async Task<IReadOnlyList<PostSearch.Hit>> Found(string text, int page = 1, int size = 20) =>
-        Assert.IsType<PostSearch.Answer.Found>(await Run(text, page, size)).Hits;
+    private static async Task<IReadOnlyList<PostSearch.Hit>> Found(string text, int page = 1, int size = 20) => (await Run(text, page, size)).Hits;
 
     [Fact]
     public async Task A_post_is_found_by_a_word_of_its_title_and_by_a_word_of_its_body_and_not_by_a_word_in_neither()
@@ -83,23 +82,24 @@ public sealed class PostSearchTests
     }
 
     [Fact]
-    public async Task A_query_past_its_bound_or_a_page_past_fifty_is_refused_with_a_reason_and_two_pages_neither_overlap_nor_skip()
+    public async Task A_search_past_its_bounds_is_held_within_them_and_two_pages_neither_overlap_nor_skip()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Writing(tangentSpace);
         var ids = new List<string>();
         for (var number = 0; number < 5; number++) ids.Add((await Topic("Lantern " + number, "A lantern.")).Id);
 
-        Assert.Equal(PostSearch.TextTooLong, Assert.IsType<PostSearch.Answer.Refused>(await Run(new string('a', PostSearch.TextLimit + 1))).Reason);
-        Assert.IsType<PostSearch.Answer.Found>(await Run(new string('a', PostSearch.TextLimit)));
-        Assert.Equal(PostSearch.NeedsSize, Assert.IsType<PostSearch.Answer.Refused>(await Run("lantern", 1, PostSearch.PageLimit + 1)).Reason);
-        Assert.Equal(PostSearch.NeedsSize, Assert.IsType<PostSearch.Answer.Refused>(await Run("lantern", 1, 0)).Reason);
-        Assert.Equal(PostSearch.NeedsPage, Assert.IsType<PostSearch.Answer.Refused>(await Run("lantern", 0, 2)).Reason);
-        Assert.Equal(PostSearch.NeedsText, Assert.IsType<PostSearch.Answer.Refused>(await Run(" -- ")).Reason);
-        Assert.IsType<PostSearch.Answer.Found>(await Run("lantern", 1, PostSearch.PageLimit));
-        Assert.Equal(PostSearch.NeedsPage, Assert.IsType<PostSearch.Answer.Refused>(await Run("lantern", PostSearch.PageNumberLimit + 1, PostSearch.PageLimit)).Reason);
-        Assert.Equal(PostSearch.NeedsPage, Assert.IsType<PostSearch.Answer.Refused>(await Run("lantern", 50_000_000, PostSearch.PageLimit)).Reason);
-        Assert.Empty(Assert.IsType<PostSearch.Answer.Found>(await Run("lantern", PostSearch.PageNumberLimit, PostSearch.PageLimit)).Hits);
+        Assert.Equal(new string('a', PostSearch.TextLimit), PostSearch.Words(" " + new string('a', PostSearch.TextLimit + 300) + " "));
+        Assert.Null(PostSearch.Words("   "));
+        Assert.Equal(5, (await Found("lantern " + new string('x', 500))).Count);
+        Assert.Equal(5, (await Found("lantern", 1, PostSearch.PageLimit + 1)).Count);
+        Assert.Single(await Found("lantern", 1, 0));
+        Assert.Equal(2, (await Found("lantern", 0, 2)).Count);
+        Assert.Empty(await Found(" -- "));
+        Assert.Empty(await Found("lantern", PostSearch.PageNumberLimit + 1, PostSearch.PageLimit));
+        Assert.Empty(await Found("lantern", 50_000_000, PostSearch.PageLimit));
+        Assert.Equal((1, 100, 1, 1), (PostSearch.Number("0"), PostSearch.Number("101"), PostSearch.Number("x"), PostSearch.Number("-1")));
+        Assert.Equal((true, true, false), ((await Run("lantern", 1, 4)).More, (await Run("lantern", 2, 2)).More, (await Run("lantern", 1, 5)).More));
 
         var first = await Found("lantern", 1, 2);
         var second = await Found("lantern", 2, 2);

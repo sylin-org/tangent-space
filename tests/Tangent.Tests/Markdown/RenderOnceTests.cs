@@ -77,7 +77,7 @@ public sealed class RenderOnceTests
         Assert.Equal(parses, MarkdownHtml.Parses);
 
         Assert.Equal([Capabilities.SignIn.Word, Capabilities.SignIn.Word, Capabilities.SignIn.Word, Capabilities.NotYours.Word],
-            new[] { started, replied, edited, notYours }.Select(answer => answer.Gate).ToList());
+            new[] { started, replied, edited, notYours }.Select(answer => answer.Word).ToList());
         Assert.Equal(before, await Counted());
     }
 }

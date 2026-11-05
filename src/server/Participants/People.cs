@@ -115,14 +115,11 @@ public static class People
             : actor.Bag.Manages(role, to);
 
     /// <summary>Null where <paramref name="actor"/> holds every permission <paramref name="role"/> grants, in the place,
-    /// so they may give or take it; <see cref="NotHeld"/> otherwise. A bit of authorship, which holds only on one's own
-    /// Post, counts as held where nothing but authorship withholds it in the place.</summary>
+    /// so they may give or take it; <see cref="NotHeld"/> otherwise.</summary>
     public static Reason? Holding(Capabilities actor, Role role) => Holds(actor, Bits.InTokens(role.Permissions)) ? null : NotHeld;
 
-    /// <summary>Whether <paramref name="actor"/> holds each of <paramref name="bits"/> in the place, a bit of authorship
-    /// counting as held where nothing but authorship withholds it.</summary>
-    public static bool Holds(Capabilities actor, Bit bits)
-        => Bits.Each.Where(bit => bits.HasFlag(bit)).All(bit => actor.Holds(bit) || actor.Gate(bit) == Capabilities.NotYours);
+    /// <summary>Whether <paramref name="actor"/> holds each of <paramref name="bits"/> in the place.</summary>
+    public static bool Holds(Capabilities actor, Bit bits) => actor.Holds(bits);
 
     /// <summary>What a reader may do to one participant, by <see cref="Refusal"/>: the standing verbs (<see cref="Verb"/>),
     /// in <c>can</c>, and the roles they may give and take, by word.</summary>

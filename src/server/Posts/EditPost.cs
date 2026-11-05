@@ -41,8 +41,7 @@ public sealed record EditPost(
         if (await Post.Get(PostId, ct) is not { } post) return new Outcome<Post>.Refused(NoPost);
         var capabilities = await Capabilities.Load(EditorId, post.TangentId, post, ct);
         if (!capabilities.Exists) return new Outcome<Post>.Refused(NoPost);
-        if (!capabilities.Holds(Bit.EditOwn) && !capabilities.Holds(Bit.Moderate))
-            return new Outcome<Post>.Refused(capabilities.Gate(Bit.EditOwn)!);
+        if (capabilities.Gate(Bit.EditOwn) is { } gate) return new Outcome<Post>.Refused(gate);
 
         if (post.Unchanged(Body.Text, Title, CoverId) || post.MadeBy(Version, Body, Title, CoverId)) return new Outcome<Post>.Done(post);
         if (post.Version != Version) return new Outcome<Post>.Refused(Stale(post.Version));

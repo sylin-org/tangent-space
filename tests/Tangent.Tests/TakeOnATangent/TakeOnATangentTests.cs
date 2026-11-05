@@ -164,7 +164,7 @@ public sealed class TakeOnATangentTests
         Assert.DoesNotContain("Quiet planning", absent.Body + absentPost.Body);
         Assert.Equal(HttpStatusCode.OK, listed.Status);
         Assert.Equal([Articles, Workshop], listed.Json.GetProperty("tangents").EnumerateArray().Select(choice => choice.GetProperty("slug").GetString()!).Order());
-        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.Denied(RoleTokens.Everyone, Bit.Topic).Word), (refused.Status, refused.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.Denied(RoleTokens.Everyone, Bit.Topic).Word), (refused.Status, refused.Word));
         Assert.Equal(HttpStatusCode.Forbidden, refusedForm.Status);
         Assert.Contains(Capabilities.Denied(RoleTokens.Everyone, Bit.Topic).Text, WebUtility.HtmlDecode(refusedForm.Body));
         Assert.Equal((HttpStatusCode.BadRequest, HttpStatusCode.BadRequest), (intoAbsent.Status, intoNothing.Status));

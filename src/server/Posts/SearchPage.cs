@@ -5,8 +5,8 @@ namespace Tangent.Posts;
 
 /// <summary>A search of what the place has said, one resource both ways: <see cref="Text"/>, the words searched for, null
 /// before anyone has; one bounded page of <see cref="Hits"/>, best first, only ever Posts the reader may view;
-/// <see cref="Next"/> and <see cref="Previous"/>, the addresses of the pages either side, each absent where there is none;
-/// and <see cref="Refused"/>, why these words or this page can't be searched, where they can't. <see cref="Place"/>,
+/// and <see cref="Next"/> and <see cref="Previous"/>, the addresses of the pages either side, each absent where there is none.
+/// <see cref="Place"/>,
 /// <see cref="Door"/>, <see cref="SignIn"/> and <see cref="Who"/> say where the page is and who reads it, and
 /// <see cref="Day"/> is the UTC day its times are written for.</summary>
 public sealed record SearchPage(
@@ -17,7 +17,6 @@ public sealed record SearchPage(
     IReadOnlyList<SearchPage.Hit> Hits,
     string? Next,
     string? Previous,
-    string? Refused,
     string? SignIn,
     Who? Who,
     DateOnly Day)

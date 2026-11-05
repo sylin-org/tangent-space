@@ -87,7 +87,7 @@ public sealed class NewTangentTests
         Assert.Contains($"data-gate=\"{gate}\"", refused.Body);
         Assert.Contains("value=\"Mine\"", refused.Body);
         var asJson = await Json(ada, "/t/workshop", "/t/new", new { name = "Mine" });
-        Assert.Equal((HttpStatusCode.Forbidden, gate), (asJson.Status, asJson.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, gate), (asJson.Status, asJson.Word));
         Assert.Null(await Tangent.Get("mine", Cancellation));
         Assert.Equal(Capabilities.SignIn.Word, (await Send(Agent(tangentSpace), HttpMethod.Get, "/t/new", json: true)).Json.GetProperty("gate").GetString());
     }

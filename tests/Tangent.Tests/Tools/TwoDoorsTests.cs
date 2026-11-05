@@ -120,7 +120,7 @@ public sealed class TwoDoorsTests
 
         using var visitor = await ToolClient.Connect(tangentSpace);
         var page = await Send(http, HttpMethod.Get, TopicPath(root), json: true);
-        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (page.Status, page.Gate));
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (page.Status, page.Word));
         SameRefusal(page, await visitor.Call("read_topic", new { tangent = Workshop, topic = root.Slug }));
 
         using var ada = await SignedIn(tangentSpace, Ada);
@@ -143,7 +143,7 @@ public sealed class TwoDoorsTests
         var http = await doors.Posted("/t/new", new { name = "Mine" });
         var tool = await doors.AdaTools.Call("create_tangent", new { name = "Mine" });
         Assert.Equal(HttpStatusCode.Forbidden, http.Status);
-        Assert.False(string.IsNullOrEmpty(http.Gate));
+        Assert.False(string.IsNullOrEmpty(http.Word));
         SameRefusal(http, tool);
         Assert.Equal("gated", tool.ErrorCode);
 
@@ -153,7 +153,7 @@ public sealed class TwoDoorsTests
         await row!.Remove(Cancellation);
         var signIn = await doors.Posted(TopicPath(root), new { body = "Anyone?" });
         var asked = await doors.AdaTools.Call("reply", new { tangent = root.TangentId, topic = root.Slug, body = "Anyone?" });
-        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.SignIn.Word), (signIn.Status, signIn.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.SignIn.Word), (signIn.Status, signIn.Word));
         SameRefusal(signIn, asked);
     }
 
@@ -207,7 +207,7 @@ public sealed class TwoDoorsTests
     {
         await using var tangentSpace = await Starting();
         using var doors = await Open(tangentSpace);
-        var root = doors.Root;
+        var root = await Started(Ada, "Hooks", "Brass or iron?");
         var before = await Counted();
 
         var http = await doors.Posted(PostPath(root, root) + "/edit", new { body = "New words.", version = "not a number" });
@@ -225,13 +225,13 @@ public sealed class TwoDoorsTests
         Assert.Equal(PostWrites.VersionRule.Text, unnamed.Json.GetProperty("detail").GetString());
         SameRefusal(unnamed, named);
 
-        // A body of neither shape says so, and says nothing of what the address holds.
+        // A body of neither shape says so where the sender may write, and an address that holds nothing says only that.
         using var array = new StringContent("[]", System.Text.Encoding.UTF8, "application/json");
         var malformed = await Send(doors.AdaBrowser.Client, HttpMethod.Post, TopicPath(root), array, json: true);
         using var elsewhere = new StringContent("[]", System.Text.Encoding.UTF8, "application/json");
         var nowhere = await Send(doors.AdaBrowser.Client, HttpMethod.Post, "/t/nowhere/nothing", elsewhere, json: true);
-        Assert.Equal(HttpStatusCode.BadRequest, malformed.Status);
-        Assert.Equal((malformed.Status, malformed.Body), (nowhere.Status, nowhere.Body));
+        Assert.Equal((HttpStatusCode.BadRequest, "invalid"), (malformed.Status, malformed.Kind));
+        Assert.Equal((HttpStatusCode.NotFound, "absent"), (nowhere.Status, nowhere.Kind));
         Assert.Equal(before, await Counted());
     }
 

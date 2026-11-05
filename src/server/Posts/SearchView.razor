@@ -74,8 +74,6 @@
     public static Frame Frame(SearchPage page)
         => new(page.Place, page.Door, [new Crumb(page.Place, page.Door), new Crumb("Search")], page.Who, page.SignIn, Searched: page.Text);
 
-    /// <summary>What a page without a Post to show says: why the words can't be searched, that nothing here holds them, or
-    /// what the box is for.</summary>
-    private string Empty() => Model.Refused
-        ?? (Model.Text is null ? "Type the words you’re looking for in the box at the top of the page." : "Nothing you can read here holds those words.");
+    /// <summary>What a page without a Post to show says: that nothing here holds the words, or what the box is for.</summary>
+    private string Empty() => Model.Text is null ? "Type the words you’re looking for in the box at the top of the page." : "Nothing you can read here holds those words.";
 }

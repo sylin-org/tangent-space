@@ -34,7 +34,7 @@ public sealed class ExportController(KoanWebBaseUrl baseUrl, IDataProtectionProv
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
+        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
 
         ViewableTangents.Cursor? cursor = null;
         if (after is not null && (cursor = ViewableTangents.Cursor.Open(after, protection)) is null)
@@ -76,15 +76,15 @@ public sealed class ExportController(KoanWebBaseUrl baseUrl, IDataProtectionProv
     {
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
+        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
         if (place.Gate(Bit.ManageSpace) is { } gate) return Answers.Refused(HttpContext, gate);
 
         Tangents.Tangent? only = null;
         if (slug is not null)
         {
             // The Tangent's row is read before its overwrites, so an address no Tangent has takes no place in Koan's cache.
-            if (!Slug.IsValid(slug) || await Tangents.Tangent.Get(slug, ct) is not { } row) return PostWrites.Absent();
-            if (!(await Capabilities.Load(personId, row.Id, null, ct)).Exists) return PostWrites.Absent();
+            if (!Slug.IsValid(slug) || await Tangents.Tangent.Get(slug, ct) is not { } row) return this.Refused(Capabilities.Absent);
+            if (!(await Capabilities.Load(personId, row.Id, null, ct)).Exists) return this.Refused(Capabilities.Absent);
             only = row;
         }
 

@@ -258,9 +258,9 @@ public sealed class SlotsTests
         Assert.Contains($"data-gate=\"{gate}\"", form.Body);
         Assert.DoesNotContain("type=\"submit\"", form.Body);
         var json = await Json(ada, "/t/" + Workshop, Path, new { footer = Footer });
-        Assert.Equal((HttpStatusCode.Forbidden, gate), (json.Status, json.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, gate), (json.Status, json.Word));
         var posted = await Send(visitor, HttpMethod.Post, Path, JsonBody(new { footer = Footer }), json: true);
-        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (posted.Status, posted.Gate));
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (posted.Status, posted.Word));
 
         Assert.Equal(new Slots(), await Held());
         Assert.Equal(before, await Event.Count.Exact(Cancellation));

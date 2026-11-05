@@ -104,7 +104,7 @@ public sealed class PeopleTests
         // Timed out, she reads and reports, posts nothing, and her door says until when.
         Assert.Equal([nameof(Bit.View)], await Can(ada, "/t/" + Workshop));
         var refused = await StartIn(ada, "While timed out");
-        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.TimedOut.Word), (refused.Status, refused.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.TimedOut.Word), (refused.Status, refused.Word));
         var reportAction = PostPath(topic, topic) + "/report";
         var reportId = Tids.Mint();
         Assert.Equal(HttpStatusCode.OK, (await Json(ada, reportAction, reportAction, new { id = reportId, body = "This needs a look." })).Status);
@@ -214,11 +214,11 @@ public sealed class PeopleTests
             foreach (var verb in new[] { PeopleController.BanPath, PeopleController.LiftPath })
             {
                 var refused = await Json(mo, path, verb, new { participant = target });
-                Assert.Equal((HttpStatusCode.Forbidden, reason), (refused.Status, refused.Gate));
+                Assert.Equal((HttpStatusCode.Forbidden, reason), (refused.Status, refused.Word));
             }
 
             var timed = await Json(mo, path, PeopleController.TimeOutPath, new { participant = target, @for = "hour" });
-            Assert.Equal((HttpStatusCode.Forbidden, reason), (timed.Status, timed.Gate));
+            Assert.Equal((HttpStatusCode.Forbidden, reason), (timed.Status, timed.Word));
             Assert.Equal(Standing.Admitted, (await Participant.Get(target, Cancellation))!.Standing);
         }
 
@@ -234,7 +234,7 @@ public sealed class PeopleTests
         Assert.Empty(await Since(before));
     }
 
-    private static (HttpStatusCode, string?) Refusal(Answered answered) => (answered.Status, answered.Gate);
+    private static (HttpStatusCode, string?) Refusal(Answered answered) => (answered.Status, answered.Word);
 
     [Fact]
     public async Task A_participant_whose_timeout_has_ended_reads_as_admitted_in_every_decision_and_their_next_sign_in_puts_back_a_missing_member_role()
@@ -281,14 +281,14 @@ public sealed class PeopleTests
         // A moderator holds no ManageRoles: no role is offered, and giving one is refused with its gate.
         Assert.Empty(Strings(Row((await Send(mo.Client, HttpMethod.Get, path, json: true)).Json, Bea), "give"));
         var gated = await Json(mo, path, PeopleController.GivePath, new { participant = Bea, role = People.Moderator });
-        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageRoles).Word), (gated.Status, gated.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageRoles).Word), (gated.Status, gated.Word));
 
         // The administrator is offered the moderator role on a member, never their own highest, and gives it from the
         // people page.
         var beaRow = Row((await Send(leo.Client, HttpMethod.Get, path, json: true)).Json, Bea);
         Assert.Equal([People.Moderator], Strings(beaRow, "give"));
         var notManaged = await Json(leo, path, PeopleController.GivePath, new { participant = Bea, role = People.Administrator });
-        Assert.Equal((HttpStatusCode.Forbidden, People.NotManaged.Word), (notManaged.Status, notManaged.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, People.NotManaged.Word), (notManaged.Status, notManaged.Word));
         Assert.Contains("Make moderator", (await Send(leo.Client, HttpMethod.Get, path)).Body);
         var before = await Head();
         var given = await Form(leo, path, PeopleController.GivePath, new Dictionary<string, string>
@@ -318,14 +318,14 @@ public sealed class PeopleTests
         Assert.DoesNotContain("Moderator", Strings(taken.Json, "roles"));
         Assert.Contains("took your moderator role", (await Send(bea.Client, HttpMethod.Get, "/")).Body);
         var refused = await Json(bea, "/t/" + Workshop, PeopleController.LiftPath, new { participant = Ada });
-        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageStanding).Word), (refused.Status, refused.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageStanding).Word), (refused.Status, refused.Word));
         // The member role is admission's, never given here.
         Assert.Equal(HttpStatusCode.BadRequest, (await Json(leo, path, PeopleController.TakePath, new { participant = Ada, role = "member" })).Status);
 
         // An administrator never takes another's role, nor the operator's; the operator, above every role, takes theirs.
         Assert.Empty(Strings(Row((await Send(leo.Client, HttpMethod.Get, path, json: true)).Json, Otto), "take"));
         var operatorRefused = await Json(leo, path, PeopleController.TakePath, new { participant = Otto, role = People.Administrator });
-        Assert.Equal((HttpStatusCode.Forbidden, People.Operator.Word), (operatorRefused.Status, operatorRefused.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, People.Operator.Word), (operatorRefused.Status, operatorRefused.Word));
         Assert.Equal([People.Administrator], Strings(Row((await Send(otto.Client, HttpMethod.Get, path, json: true)).Json, Leo), "take"));
         Assert.Equal(HttpStatusCode.OK, (await Json(otto, path, PeopleController.TakePath, new { participant = Leo, role = People.Administrator })).Status);
         Assert.False((await roles.Bag(Leo, authenticated: true, Cancellation)).InRole(Roles.Administrator));
