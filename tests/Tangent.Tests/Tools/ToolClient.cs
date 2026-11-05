@@ -65,7 +65,8 @@ internal sealed class ToolClient : IDisposable
             result.GetProperty("content")[0].GetProperty("text").GetString() ?? "",
             result.TryGetProperty("structuredContent", out var structured) && structured.ValueKind == JsonValueKind.Object ? structured.Clone() : null,
             meta.TryGetProperty("location", out var location) ? location.GetString() : null,
-            meta.TryGetProperty("errorCode", out var code) ? code.GetString() : null);
+            meta.TryGetProperty("errorCode", out var code) ? code.GetString() : null,
+            meta.Clone());
     }
 
     public void Dispose()
@@ -102,5 +103,5 @@ internal sealed class ToolClient : IDisposable
 }
 
 /// <summary>A tool's answer: the status the route answered, whether the call failed, its text, what the route answered as
-/// a JSON object, where it went, and the kind of refusal.</summary>
-internal sealed record Called(int Status, bool Failed, string Text, JsonElement? Structured, string? Location, string? ErrorCode);
+/// a JSON object, where it went, the kind of refusal, and the whole of its <c>_meta</c>.</summary>
+internal sealed record Called(int Status, bool Failed, string Text, JsonElement? Structured, string? Location, string? ErrorCode, JsonElement Meta);

@@ -39,6 +39,7 @@ public sealed class TangentModule : KoanModule
         // The address the place accepts lives on its row; Koan reads it before the host serves.
         services.AddSingleton<IApplicationUrlStore, PlaceAddress>();
         services.AddSingleton<Offers.AddressOffers>();
+        services.AddSingleton<Koan.Mcp.Hosting.IMcpInstructions, ToolDoor.Instructions>();
 
         services.AddOptions<SqliteOptions>()
             .PostConfigure<IOptions<TangentSpaceOptions>, IHostEnvironment>((sqlite, tangent, environment) =>
