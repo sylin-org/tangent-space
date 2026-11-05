@@ -18,7 +18,7 @@
                 Replying to <a href="@("#" + Parent?.Id)" data-reply-to-post>@Parent?.Author.Name</a> ·
                 <a href="@(Model.Address + "#reply")" data-reply-to-topic>reply to the topic instead</a>
             </p>
-            <div class="reply-body-field" data-island="article" data-props="@EditorProps(who)">
+            <div class="post-body-field" data-island="article" data-props="@EditorProps(who)">
                 <label class="field-label" for="reply-body">Your reply</label>
                 <textarea class="post-form-body" id="reply-body" name="@PostWrites.BodyField" rows="5" required></textarea>
             </div>
@@ -60,7 +60,7 @@ else if (Model.Gate is { } gate)
         bring = PostWrites.MediaForm(Model.Tangent.Address).Action,
         participant = who.Id,
         suggest = SuggestionsController.Address(Model.Tangent.Address, Model.Slug),
-        reply = true
+        post = true
     });
 
     /// <summary>The composer's props: whose drafts these are, the Topic they are kept under, and the prefix of a reply's

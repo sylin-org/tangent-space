@@ -24,8 +24,9 @@ export interface ArticleProps {
   participant: string | null
   edit: string | null
   suggest?: string | null
-  // A reply is written with the same editor and fewer tools: no headings and no divider, in a Post's own type.
-  reply?: boolean
+  // A Post that is not an article — a reply, a discussion's opening, an edit of one — is written with the same editor and
+  // fewer tools: no headings and no divider, in a Post's own type.
+  post?: boolean
 }
 
 const noImages = 'Images come in where the place lets you write them.'
@@ -144,6 +145,7 @@ export function writeArticle(props: ArticleProps): () => void {
   let lastEmitted = source.value
 
   const label = host.querySelector('label')
+  const named = label?.textContent?.trim() || 'Post'
   if (label) label.hidden = true
   source.required = false
 
@@ -198,10 +200,10 @@ export function writeArticle(props: ArticleProps): () => void {
     extensions: [...articleExtensions(props.door), ImagesComing],
     editorProps: {
       attributes: {
-        class: props.reply ? 'post-body article-surface reply-surface' : 'article-prose article-surface',
+        class: props.post ? 'post-body article-surface post-surface' : 'article-prose article-surface',
         role: 'textbox',
         'aria-multiline': 'true',
-        'aria-label': props.reply ? 'Your reply' : 'Article',
+        'aria-label': props.post ? named : 'Article',
       },
       handlePaste(_view, event) {
         // Word and Excel put a picture of what was copied beside its text: the text is what was meant.
@@ -282,7 +284,7 @@ export function writeArticle(props: ArticleProps): () => void {
   toolbar.setAttribute('aria-label', 'Text formatting')
   type Tool = { element: HTMLButtonElement; active?: () => boolean }
   const tool = (name: string, title: string, run: () => void, active?: () => boolean): Tool => ({ element: button(name, title, run), active })
-  const article = !props.reply
+  const article = !props.post
   const tools: Tool[] = [
     tool('B', 'Bold', () => chain().toggleBold().run(), () => editor.isActive('bold')),
     tool('I', 'Italic', () => chain().toggleItalic().run(), () => editor.isActive('italic')),

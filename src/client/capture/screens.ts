@@ -31,6 +31,9 @@ export interface State {
   values?: Readonly<Record<string, string>>
   /** Reloaded once the fields are filled, before any click, so the state is what the page keeps of them. */
   reload?: boolean
+  /** A selector a picture is dropped on, at its end, once the fields are filled and before any click, as a person drops a file from
+   *  their desktop: a PNG the capture paints, so the state shows an image brought into the words. */
+  drop?: string
   /** A selector clicked once the page has settled; the state is what the click shows in the page. */
   click?: string
   /** A selector the page shows once the click is answered, for a click the page answers in place or by a navigation
@@ -407,7 +410,25 @@ export const screens: Readonly<Record<string, Screen>> = {
     path: '/t/discussions/is-a-visible-repair-a-better-repair',
     states: [
       { name: 'history-open', seed: 'topic', signedIn: true, cancel: '/seen', click: '.post-history > summary', waitFor: '.post-history-versions' },
-      { name: 'reply-toolbar', seed: 'topic', signedIn: true, cancel: '/seen', waitFor: '.reply-body-field.is-visual' },
+      { name: 'reply-toolbar', seed: 'topic', signedIn: true, cancel: '/seen', waitFor: '.post-body-field.is-visual' },
+      {
+        name: 'reply-picture-dropped',
+        seed: 'topic',
+        signedIn: true,
+        cancel: '/seen',
+        fill: { '.post-surface': 'Here is the bowl after the second firing:' },
+        drop: '.post-surface',
+        waitFor: '.post-surface img[src*="/media/"]',
+      },
+      {
+        name: 'new-topic-picture-dropped',
+        seed: 'topic',
+        signedIn: true,
+        path: '/t/discussions/new',
+        fill: { '#new-topic-title': 'What a seam remembers', '.post-surface': 'A bowl we mended last week, seam and all:' },
+        drop: '.post-surface',
+        waitFor: '.post-surface img[src*="/media/"]',
+      },
       { name: 'article-outline', seed: 'article', signedIn: true, cancel: '/seen', path: '/t/articles/mending-with-gold' },
     ],
   },

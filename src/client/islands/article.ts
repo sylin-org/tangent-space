@@ -1,6 +1,6 @@
 import { defineComponent, onBeforeUnmount, type PropType } from 'vue'
 
-// The article island: the visual editor over an article form's body field, or a reply's, loaded only where a page has one, since it
+// The article island: the visual editor over the body field of every form a Post is written in, loaded only where a page has one, since it
 // is by far the heaviest thing the client holds. Until it arrives, and without script, the field is a plain field that
 // posts.
 export const article = defineComponent({
@@ -12,7 +12,7 @@ export const article = defineComponent({
     participant: { type: String, default: null },
     edit: { type: String, default: null },
     suggest: { type: String, default: null },
-    reply: { type: Boolean, default: false },
+    post: { type: Boolean, default: false },
   },
   setup(props) {
     let stop: (() => void) | null = null

@@ -103,11 +103,10 @@ else
                             }
                         </div>
                     }
-                    <div class="field">
+                    <div class="field post-body-field" data-island="@(Model.Gate is null && Model.Edit is not null ? "article" : null)" data-props="@EditorProps()">
                         <label class="field-label" for="edit-body">Post</label>
                         <textarea class="post-form-body" id="edit-body" name="@PostWrites.BodyField" rows="12" required="@(!Model.BodyOptional)"
                                   autofocus="@(Model.Gate is null && Focus == "edit-body")" readonly="@(Model.Gate is not null)"
-                                  data-island="@(Model.Gate is null ? "suggest" : null)" data-props="@SuggestionsController.Props(Model.TangentAddress, Model.TopicSlug)"
                                   aria-invalid="@(Model.BodyFailure is null ? "false" : "true")"
                                   aria-describedby="@(Model.BodyFailure is null ? null : "edit-body-failure")">@Model.Body</textarea>
                         @if (Model.BodyFailure is { } bodyFailure)
@@ -165,6 +164,20 @@ else
     [Parameter, EditorRequired] public EditPage Model { get; set; } = default!;
 
     /// <summary>Whether this is an article that stands, edited in the article's own layout.</summary>
+    /// <summary>The editor's props, for an editor who may edit: where the place's images live, where a picture is brought
+    /// in, whose draft of this version it keeps, and where the suggestions of this Topic are read.</summary>
+    private string? EditorProps() => Model.Gate is null && Model.Edit is not null
+        ? System.Text.Json.JsonSerializer.Serialize(new
+        {
+            door = Model.Door,
+            bring = Model.Bring?.Action,
+            participant = Model.Who?.Id,
+            edit = Model.Who is null ? null : "edit:" + Model.Id + ":" + Model.Version.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            suggest = SuggestionsController.Address(Model.TangentAddress, Model.TopicSlug),
+            post = true
+        })
+        : null;
+
     private bool Writing => Model.Root && !Model.Removed && Model.Kind == PostWrites.Word(PostKind.Article);
 
     /// <summary>The field the page opens on: the first one a refusal concerns, else the first there is.</summary>

@@ -4,7 +4,8 @@
    Post's Id rides in a hidden field, minted when the page was rendered, so a form sent twice starts one Topic. A reader
    who may not start a Topic here reads why above the form, whose fields are read-only and which has no button, and a
    visitor the way to sign in; a refusal of a field shows under that field, which takes the focus, and any other above
-   the form. For a participant who may post, the composer island keeps the words as a draft and sends them. *@
+   the form. For a participant who may post, the composer island keeps the words as a draft and sends them, and the
+   article island makes the body the visual editor, with its tools for a Post, pictures and @ and # pickers. *@
 @if (Article && Model.Start is { } writing && Model.Who is { } author)
 {
     <ArticleForm Tool="start-topic" Heading="New article" TangentName="@Model.TangentName" TangentAddress="@Model.TangentAddress" Action="@writing.Action"
@@ -60,11 +61,10 @@ else
                         <p class="field-failure" id="new-topic-title-failure">@titleFailure</p>
                     }
                 </div>
-                <div class="field">
+                <div class="field post-body-field" data-island="@(Composing ? "article" : null)" data-props="@EditorProps()">
                     <label class="field-label" for="new-topic-body">@(Article ? "Article" : "Post")</label>
                     <textarea class="post-form-body" id="new-topic-body" name="@PostWrites.BodyField" rows="12" required
                               autofocus="@(Model.Gate is null && Focus == "new-topic-body")" readonly="@(Model.Gate is not null)"
-                              data-island="@(Model.Gate is null ? "suggest" : null)" data-props="@SuggestionsController.Props(Model.TangentAddress)"
                               aria-invalid="@(Model.BodyFailure is null ? "false" : "true")"
                               aria-describedby="@(Model.BodyFailure is null ? null : "new-topic-body-failure")">@Model.Body</textarea>
                     @if (Model.BodyFailure is { } bodyFailure)
@@ -105,6 +105,19 @@ else
             scope = "tangent:" + Model.Tangent,
             locate = Model.TangentAddress + "/",
             noun = Article ? "article" : "topic"
+        })
+        : null;
+
+    /// <summary>The editor's props, for a participant who may start a Topic here: where the place's images live, where a
+    /// picture is brought in, whose words these are and where the suggestions of this Tangent are read.</summary>
+    private string? EditorProps() => Composing
+        ? System.Text.Json.JsonSerializer.Serialize(new
+        {
+            door = Model.Door,
+            bring = Model.Bring?.Action,
+            participant = Model.Who!.Id,
+            suggest = SuggestionsController.Address(Model.TangentAddress),
+            post = true
         })
         : null;
 

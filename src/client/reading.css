@@ -53,19 +53,20 @@
   display: none;
 }
 
-/* A reply written in the article's editor: its toolbar on the field's frame, the words in a Post's own type. */
-.reply-body-field.is-visual {
+/* A Post written in the article's editor — a reply, a discussion's opening, an edit: its toolbar on the field's frame,
+ * the words in a Post's own type. */
+.post-body-field.is-visual {
   border: 1px solid var(--ts-line);
   border-radius: 10px;
   background: var(--ts-page);
 }
 
-.reply-body-field.is-visual:focus-within {
+.post-body-field.is-visual:focus-within {
   border-color: var(--ts-accent);
   box-shadow: 0 0 0 3px var(--ts-accent-soft);
 }
 
-.reply-body-field .article-toolbar {
+.post-body-field .article-toolbar {
   position: static;
   margin: 0;
   padding: 4px 6px;
@@ -73,17 +74,17 @@
   background: transparent;
 }
 
-.reply-body-field .article-panel,
-.reply-body-field .article-status {
+.post-body-field .article-panel,
+.post-body-field .article-status {
   margin: 10px 12px 0;
 }
 
-.reply-surface {
+.post-surface {
   min-height: 140px;
   padding: 10px 12px;
 }
 
-.reply-body-field:not(.is-visual) .post-form-body {
+.post-body-field:not(.is-visual) .post-form-body {
   min-height: 140px;
 }
 

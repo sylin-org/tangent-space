@@ -128,7 +128,7 @@ public sealed class NewTopicController(KoanWebBaseUrl baseUrl) : ControllerBase
             space.Name,
             baseAddress + "/",
             await PostWrites.Reader(personId, capabilities, baseAddress, here, ct),
-            Bring: gate is null && row.DefaultKind == PostKind.Article ? PostWrites.MediaForm(address) : null,
+            Bring: gate is null ? PostWrites.MediaForm(address) : null,
             Day: DateOnly.FromDateTime(DateTime.UtcNow));
     }
 
