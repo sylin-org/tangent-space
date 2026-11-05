@@ -92,7 +92,7 @@ public sealed class Post : Entity<Post>
     public string? CoverId { get; set; }
 
     /// <summary>Markdown, rendered to safe HTML where it is shown (<see cref="MarkdownHtml"/>); a mention is a link to
-    /// <c>at://</c> and a DID (<see cref="Mentions"/>). Found by its words.</summary>
+    /// <c>/p/</c> and a participant's id (<see cref="Mentions"/>). Found by its words.</summary>
     [Lexical]
     public string Body { get; set; } = "";
 
@@ -100,7 +100,7 @@ public sealed class Post : Entity<Post>
     /// <see cref="MediaLimit"/>; empty on a tombstone.</summary>
     public List<string> MediaIds { get; set; } = [];
 
-    /// <summary>The DIDs the body mentions, each once, in the order of their first mention, at most
+    /// <summary>The ids of the participants the body mentions, each once, in the order of their first mention, at most
     /// <see cref="Mentions.Limit"/>; empty on a tombstone.</summary>
     public List<string> MentionedIds { get; set; } = [];
 

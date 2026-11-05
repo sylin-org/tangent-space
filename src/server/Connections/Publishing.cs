@@ -31,6 +31,9 @@ public sealed record Publishing(string State, string Sentence, string? Detail, F
         var connection = await Connection.Get(readerId, ct);
         var connections = baseAddress + ConnectionsController.Path;
         var elsewhere = receipt?.Note is { } note ? Bluesky(note) : null;
+        if (!shown && receipt!.Repository() != reader!.Did)
+            return (new Publishing(ConnectionsController.Word(ArticleState.Earlier), receipt.Stays ? StaysSentence : LeavingSentence, null, null, null,
+                elsewhere, connections), document);
         if (!shown)
             return (connection is null ? null : new Publishing(ConnectionsController.Word(ArticleState.Remains), RemainsSentence, Undoing(connection),
                 connection.NeedsGrant ? Form.Posting(baseAddress + PublishController.GrantPath) : null, null, elsewhere, connections), document);
@@ -68,6 +71,13 @@ public sealed record Publishing(string State, string Sentence, string? Detail, F
     /// <summary>What the author of an article written as a Bluesky account they are no longer bound to reads: it, and any
     /// copy of it, stays with that account, and their Connection publishes only what they write as the one they hold.</summary>
     public const string EarlierSentence = "Written as your earlier Bluesky account, so it stays with that account.";
+
+    /// <summary>What the author reads of a copy out under an earlier account of theirs that should no longer be out, while
+    /// their Connection takes it down through that account's grant.</summary>
+    public const string LeavingSentence = "This is still public on Bluesky under your earlier account, though it no longer is here. It is being taken down.";
+
+    /// <summary>What the author reads of such a copy once that account's grant no longer lets the place take it down.</summary>
+    public const string StaysSentence = "This stays public on Bluesky under your earlier account, which no longer lets this place take it down.";
 
     /// <summary>What the author of an article that is no longer public here, or is removed, reads while its copy is still
     /// out.</summary>

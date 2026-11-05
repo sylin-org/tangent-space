@@ -63,8 +63,12 @@ public sealed class ConnectionsController(KoanWebBaseUrl baseUrl, Nudge nudge) :
         var articles = receipts.Where(receipt => posts.ContainsKey(receipt.PostId)).Select(receipt =>
         {
             var post = posts[receipt.PostId];
-            var state = Receipt.StateOf(receipt, post, connection!, open[post.TangentId] && !post.Removed, participant?.Did ?? "");
-            return new ConnectionsPage.Article(post.Title ?? "", address + AtprotoAdapter.Path(post), Word(state), Sentence(state, connection!),
+            var shown = open[post.TangentId] && !post.Removed;
+            var state = Receipt.StateOf(receipt, post, connection!, shown, participant?.Did ?? "");
+            var sentence = state != ArticleState.Earlier ? Sentence(state, connection!)
+                : !shown && receipt.IsLive() ? (receipt.Stays ? Publishing.StaysSentence : Publishing.LeavingSentence)
+                : Sentence(state, connection!);
+            return new ConnectionsPage.Article(post.Title ?? "", address + AtprotoAdapter.Path(post), Word(state), sentence,
                 receipt.IsLive() && receipt.Note is { } note ? Publishing.Bluesky(note) : null, receipt.At);
         }).ToList();
 

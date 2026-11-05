@@ -19,7 +19,8 @@ namespace Tangent.Participants;
 /// kind, the roles they hold here, when they arrived, and their recent Posts in the Tangents the reader may view, left to
 /// the formatter as HTML, a fragment or JSON. A reader without <see cref="Bit.View"/> on the place receives its gate, the
 /// same for every handle, held or not; a handle no participant holds now answers as a missing resource. The address
-/// takes a handle, matched as the participant's row keeps it, or a participant's DID. Every read is bounded and keyed:
+/// takes a handle, matched as the participant's row keeps it, a participant's id, as a mention links to them, or the DID of
+/// the account they are bound to. Every read is bounded and keyed:
 /// capability's rows for the place; the participant by handle or Id; Koan's roles of theirs and their person's row; the
 /// Tangents the reader may view (<see cref="ViewableTangents.All"/>), every Tangent judged from Koan's compiled state, so
 /// as many as the place holds; one page of their Posts in those (<see cref="RecentPosts"/>); the roots of the replies

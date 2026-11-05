@@ -36,7 +36,7 @@ public sealed class PostBody
     /// again, whoever its typed handles name by then (<see cref="Post.SentHash"/>).</summary>
     public string SentHash { get; }
 
-    /// <summary>The DIDs the body mentions, each once, in the order of their first mention.</summary>
+    /// <summary>The ids of the participants the body mentions, each once, in the order of their first mention.</summary>
     public IReadOnlyList<string> Mentioned { get; }
 
     /// <summary>The roles the body mentions, by key, each once, in the order of their first mention.</summary>

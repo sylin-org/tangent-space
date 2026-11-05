@@ -8,17 +8,18 @@ Every stored participant whose id is the DID of their Bluesky account gets a fre
 as the account they are bound to, and every row that names them by id names the new one. In one transaction of the
 folder's tangent.db, through the sqlite3 command line, for each of them:
 - Koan's rows: their person, their logins, the roles they hold and their own permission overwrites, each composed id
-  composed again; the audit events about them; the jobs that run on their participant and their Connection. Their
-  sessions are deleted, so everyone signs in again.
+  composed again; the audit events about them. Their sessions are deleted, so everyone signs in again, and so are the
+  jobs of their participant and their Connection, which their next sign-in and the next write submit again.
 - Tangent's rows: their participant, bound to the DID; the place's proprietor and operator; the log's actors and targets;
   every Post and every Post's earlier version — author, editor, remover, latest replier, recent authors, the participants
   it mentions and each mention's target in its body, now /p/ and their id — with the DID each was written as; their
   marks of what they have seen, their Connection, its receipts, what came back for their articles, the publication they
   put, now under the DID it is under, the images they brought, and their asks to join a Tangent.
 Copies already published stay where their at:// addresses say, and Koan's atproto grants stay keyed by DID. A row of
-another kind that names one of them stops the script before anything changes, saying which. It takes a backup first,
-beside the database, refuses a folder a running Tangent Space holds, moves nothing a second time, and prints what it
-moved.
+another kind that names one of them stops the script before anything changes, saying which; one with no login is
+moved with a warning, since their next sign-in arrives as someone new. It copies the database first, beside the data
+folder and never inside it, so no later backup carries the copy, and says where; it refuses a folder a running Tangent
+Space holds, moves nothing a second time, and prints what it moved.
 
 .EXAMPLE
 pwsh scripts/once/a-person-is-the-places-own.ps1 -DataFolder .local/run-real/tangent-data
@@ -29,6 +30,11 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# sqlite3 reads and writes UTF-8: a role's word or a Tangent's slug in any script reaches it, and comes back, unchanged.
+$utf8 = [Text.UTF8Encoding]::new($false)
+[Console]::OutputEncoding = $utf8
+$OutputEncoding = $utf8
 
 $database = Join-Path $DataFolder 'tangent.db'
 if (-not (Test-Path -LiteralPath $database)) { throw "No tangent.db is in $DataFolder." }
@@ -90,6 +96,9 @@ foreach ($person in $people) {
     $o = Quote $old
     $n = Quote $new
     $statements.Add("SELECT $(Quote "$old becomes $new");")
+    if ((Read-Rows "SELECT COUNT(*) AS n FROM `"Koan.Identity.ExternalIdentityLink`" WHERE json_extract(Json, '$.IdentityId') = $o;")[0].n -eq 0) {
+        Write-Warning "$old has no login here: they move, and their next sign-in arrives as someone new."
+    }
 
     # Koan's rows.
     Step 'person' "UPDATE `"Koan.Identity.Identity`" SET Id = $n WHERE Id = $o"
@@ -110,7 +119,7 @@ UPDATE "Koan.Identity.AuditEvent" SET Json = json_set(Json,
     '$.Target', replace(json_extract(Json, '$.Target'), $(Quote ('Identity/' + $old)), $(Quote ('Identity/' + $new))))
 WHERE json_extract(Json, '$.Subject') = $o OR json_extract(Json, '$.Actor') = $o OR json_extract(Json, '$.Target') = $(Quote ('Identity/' + $old))
 "@
-    Step 'jobs' "UPDATE `"Koan.Jobs.JobRecord`" SET Json = json_set(Json, '$.WorkId', $n, '$.CoalesceKey', replace(json_extract(Json, '$.CoalesceKey'), $o, $n)) WHERE json_extract(Json, '$.WorkId') = $o AND json_extract(Json, '$.WorkType') IN ('Tangent.Participants.Participant', 'Tangent.Connections.Connection')"
+    Step 'jobs dropped' "DELETE FROM `"Koan.Jobs.JobRecord`" WHERE json_extract(Json, '$.WorkId') = $o AND json_extract(Json, '$.WorkType') IN ('Tangent.Participants.Participant', 'Tangent.Connections.Connection')"
 
     # Tangent's rows.
     Step 'participant' "UPDATE `"Tangent.Participants.Participant`" SET Id = $n, Json = json_set(Json, '$.Did', $o) WHERE Id = $o"
@@ -142,10 +151,12 @@ WHERE EXISTS (SELECT 1 FROM json_each("$posts".Json, '$.$list') AS each WHERE ea
     Step 'asks to join' "UPDATE `"Tangent.Tangents.Ask`" SET Id = substr(Id, 1, length(Id) - $($old.Length)) || $n, Json = json_set(Json, '$.PersonId', $n) WHERE json_extract(Json, '$.PersonId') = $o"
 }
 
-$backup = Join-Path $DataFolder ('tangent.db.before-a-person-is-the-places-own-' + (Get-Date -Format 'yyyyMMddHHmmss'))
+$folder = [IO.Path]::TrimEndingDirectorySeparator((Resolve-Path -LiteralPath $DataFolder).Path)
+$backup = $folder + '.before-a-person-is-the-places-own-' + (Get-Date -Format 'yyyyMMddHHmmss') + '.db'
+if (Test-Path -LiteralPath $backup) { throw "$backup is there already; nothing changed." }
 "VACUUM INTO $(Quote $backup);" | & $sqlite.Source $database
 if ($LASTEXITCODE -ne 0) { throw "The backup to $backup failed; nothing changed." }
-Write-Output "Backed up to $backup."
+Write-Output "Copied the database to $backup, beside the data folder."
 
 $sql = (@('.bail on', 'BEGIN IMMEDIATE;') + $statements + @('COMMIT;')) -join "`n"
 $sql | & $sqlite.Source $database

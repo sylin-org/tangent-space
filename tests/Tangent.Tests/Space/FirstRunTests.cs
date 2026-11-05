@@ -263,7 +263,7 @@ public sealed class FirstRunTests
     }
 
     [Fact]
-    public async Task Once_established_a_start_under_another_configured_operator_starts_and_warns_once_and_one_naming_the_operator_does_not()
+    public async Task Once_established_a_start_under_another_configured_operator_starts_and_warns_once_and_one_naming_the_operator_by_handle_or_did_does_not()
     {
         var dataFolder = Path.Combine(Path.GetTempPath(), "tangent-data-" + Guid.CreateVersion7().ToString("n"));
         try
@@ -279,10 +279,15 @@ public sealed class FirstRunTests
             await using (var third = await TangentSpaceFixture.StartAsync(Settings(dataFolder, BaseUrl, (FirstRun.OperatorSetting, "@Leo.Example")),
                 services => services.AddSingleton<ILoggerProvider>(new Lines(same)), Cancellation))
                 Assert.Equal(Leo, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.OperatorId);
+            var byDid = new ConcurrentQueue<string>();
+            await using (var fourth = await TangentSpaceFixture.StartAsync(Settings(dataFolder, BaseUrl, (FirstRun.OperatorSetting, Persona.Did(Leo))),
+                services => services.AddSingleton<ILoggerProvider>(new Lines(byDid)), Cancellation))
+                Assert.Equal(Leo, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.OperatorId);
 
             var warning = Assert.Single(other, line => line.StartsWith(FirstRun.OperatorSetting + " names ", StringComparison.Ordinal));
             Assert.Equal($"{FirstRun.OperatorSetting} names ada.example, but this Tangent Space's operator is {Leo}; the setting matters only before setup, so this start ignores it", warning);
             Assert.DoesNotContain(same, line => line.StartsWith(FirstRun.OperatorSetting + " names ", StringComparison.Ordinal));
+            Assert.DoesNotContain(byDid, line => line.StartsWith(FirstRun.OperatorSetting + " names ", StringComparison.Ordinal));
         }
         finally
         {

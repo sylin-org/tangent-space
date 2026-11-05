@@ -67,6 +67,56 @@ public sealed class PublishTests
         Assert.Equal(HttpStatusCode.NotFound, (await Send(Agent(tangentSpace), HttpMethod.Get, PublicationController.Path)).Status);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_copy_out_under_an_earlier_account_comes_down_through_its_grant_or_is_said_to_stay(bool earlierGrantHolds)
+    {
+        var repository = new Repository();
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(),
+            services => services.AddSingleton<IAtprotoRepository>(repository), Cancellation);
+        await Place(tangentSpace);
+        var space = (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!;
+        space.ProprietorId = Ada;
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(Cancellation));
+        var article = await Started(Ada, "Mending with gold", "A cracked bowl tells you where it was weak.", Articles);
+        var page = TopicPath(article);
+        using var ada = await SignedIn(tangentSpace, Ada);
+        await Form(ada, page, page + "/" + PublishController.Segment, []);
+        var earlier = Persona.Did(Ada);
+        var document = $"at://{earlier}/{AtprotoAdapter.Documents}/{article.Id}";
+        await Until(() => repository.Records.ContainsKey(document));
+        var placed = repository.Records.Keys.Single(key => key.StartsWith($"at://{earlier}/{AtprotoAdapter.Publications}/", StringComparison.Ordinal));
+
+        const string later = "did:plc:ada4later";
+        repository.Holding = did => did == later || earlierGrantHolds;
+        (await ada.UseAnotherAccount(later, "ada.later.example", Cancellation)).Dispose();
+        Assert.Equal(later, (await Participants.Participant.Get(Ada, Cancellation))?.Did);
+        Assert.IsType<Outcome<Post>.Done>(await new RemovePost(article.Id, Ada).Send(Cancellation));
+        await ReadThrough(tangentSpace);
+        // The place's publication moves to the account its proprietor holds now, withdrawn from the earlier one where it may be.
+        Assert.Contains(repository.Records.Keys, key => key.StartsWith($"at://{later}/{AtprotoAdapter.Publications}/", StringComparison.Ordinal));
+        Assert.Equal(!earlierGrantHolds, repository.Records.ContainsKey(placed));
+        var receipt = await Receipt.Get(Receipt.Key(Ada, article.Id), Cancellation);
+        var connections = (await Send(ada.Client, HttpMethod.Get, ConnectionsController.Path)).Body;
+        if (earlierGrantHolds)
+        {
+            Assert.DoesNotContain(document, repository.Records.Keys);
+            Assert.Contains(earlier, repository.Deleted);
+            Assert.True(receipt?.Retracted);
+        }
+        else
+        {
+            Assert.Contains(document, repository.Records.Keys);
+            Assert.True(receipt is { Stays: true, Retracted: false });
+            Assert.Contains(System.Net.WebUtility.HtmlEncode(Publishing.StaysSentence), connections);
+            Assert.Contains(System.Net.WebUtility.HtmlEncode(Publishing.StaysSentence), (await Send(ada.Client, HttpMethod.Get, page)).Body);
+        }
+
+        Assert.DoesNotContain("It is being taken down", connections);
+        Assert.DoesNotContain(later, repository.Records.Keys.Where(key => key.Contains(AtprotoAdapter.Documents, StringComparison.Ordinal)));
+    }
+
     /// <summary>Waits until Ada's Connection has read the log through its head.</summary>
     private static async Task ReadThrough(TangentSpaceFixture tangentSpace)
     {
@@ -90,7 +140,13 @@ public sealed class PublishTests
 
         public ConcurrentDictionary<string, JsonObject> Records { get; } = new(StringComparer.Ordinal);
 
-        public Task<bool> Holds(string did, IReadOnlyCollection<string> scopes, CancellationToken ct = default) => Task.FromResult(true);
+        /// <summary>Whose grant it holds: everyone's unless a proof says otherwise.</summary>
+        public Func<string, bool> Holding { get; set; } = _ => true;
+
+        /// <summary>Every DID a record was deleted from.</summary>
+        public ConcurrentBag<string> Deleted { get; } = [];
+
+        public Task<bool> Holds(string did, IReadOnlyCollection<string> scopes, CancellationToken ct = default) => Task.FromResult(Holding(did));
 
         public Task<AtprotoRecord> Put(string did, string collection, string rkey, JsonObject record, CancellationToken ct = default)
         {
@@ -101,6 +157,8 @@ public sealed class PublishTests
 
         public Task Delete(string did, string collection, string rkey, CancellationToken ct = default)
         {
+            if (!Holding(did)) throw new AtprotoRepositoryException(HttpStatusCode.Unauthorized, null, "com.atproto.repo.deleteRecord");
+            Deleted.Add(did);
             Records.TryRemove($"at://{did}/{collection}/{rkey}", out _);
             return Task.CompletedTask;
         }

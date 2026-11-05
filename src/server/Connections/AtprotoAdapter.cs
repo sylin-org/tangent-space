@@ -44,6 +44,10 @@ public sealed class AtprotoAdapter(IAtprotoRepository repository, KoanWebBaseUrl
     public Task<bool> MayWrite(string personId, string did, TangentSpace space, CancellationToken ct)
         => repository.Holds(did, ScopesFor(personId, space), ct);
 
+    /// <summary>Whether the account <paramref name="did"/>, one its participant was bound to before, still lets the place
+    /// change what <paramref name="scopes"/> cover there, through the grant Koan keeps for that DID.</summary>
+    public Task<bool> MayChange(string did, IReadOnlyList<string> scopes, CancellationToken ct) => repository.Holds(did, scopes, ct);
+
     /// <summary>The address of an article's page, canonical wherever it is published.</summary>
     public string Canonical(Post root) => Base() + Path(root);
 

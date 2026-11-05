@@ -44,6 +44,10 @@ public sealed class Receipt : Entity<Receipt>
 
     public bool Retracted { get; set; }
 
+    /// <summary>Whether its copy, out under an account its participant is no longer bound to, stays there: that account's
+    /// grant no longer lets the place take it down.</summary>
+    public bool Stays { get; set; }
+
     [Index(Name = "ix_receipt_connections", Order = 1)]
     public DateTimeOffset At { get; set; }
 

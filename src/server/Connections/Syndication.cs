@@ -16,8 +16,10 @@ namespace Tangent.Connections;
 /// arrived after the Connection began, or one they chose — and one that is removed or private is retracted. Only the
 /// author's own words go out as theirs: a version someone else edited waits until they choose it (<see cref="Receipt.Theirs"/>).
 /// An article that goes out starts hearing what the network says about it (<see cref="Elsewhere"/>).
-/// The proprietor's Connection first puts the place as their publication where it is missing or has changed, and a
-/// Connection withdraws the publication it put once the place is private or someone else is its proprietor. Every
+/// An article written as an account the participant is no longer bound to is only ever taken down, from the repository
+/// its receipt names, through that account's grant where it still holds (<see cref="Earlier"/>). The proprietor's
+/// Connection first puts the place as their publication where it is missing or has changed, and a Connection withdraws
+/// the publication it put, from the account it is under, once the place is private or someone else is its proprietor. Every
 /// write is a put at a fixed key, so a run repeated after a failure lands once. The network is read and written outside
 /// any hold, and each receipt is sent as a command. A failure stops the run, leaves the cursor where it was, says what
 /// it could not do on the Connection and tries again later, sooner at first; a refusal that needs the grant again waits
@@ -60,7 +62,7 @@ public static class Syndication
             .Select(row => row.PostId!);
         var ids = named.Concat(receipts.Keys).Distinct(StringComparer.Ordinal).ToList();
         var articles = ids.Count == 0 ? [] : (await Post.Get(ids, ct)).OfType<Post>()
-            .Where(post => post.ParentId is null && post.Kind == PostKind.Article && post.AuthorId == connection.Id && post.AuthorDid == did)
+            .Where(post => post.ParentId is null && post.Kind == PostKind.Article && post.AuthorId == connection.Id)
             .ToList();
 
         try
@@ -70,13 +72,12 @@ public static class Syndication
             if (publication is not null && publication.Proprietor == connection.Id
                                         && (space.Audience != Audience.Public || space.ProprietorId != connection.Id))
             {
-                if (publication.Did == did) await adapter.Withdraw(publication, ct);
-                await Sent(new ForgetPublication(), ct);
+                await Withdrawn(publication, did, adapter, context, ct);
                 publication = null;
             }
 
             if (space.ProprietorId == connection.Id && space.Audience == Audience.Public)
-                publication = await Placed(space, did, publication, adapter, ct);
+                publication = await Placed(space, did, publication, adapter, context, ct);
 
             var audiences = new Dictionary<string, bool>(StringComparer.Ordinal);
             foreach (var article in articles)
@@ -84,7 +85,8 @@ public static class Syndication
                 if (!audiences.TryGetValue(article.TangentId, out var open))
                     audiences[article.TangentId] = open = await Publishing.Open(space, article.TangentId, ct);
                 var receipt = receipts.GetValueOrDefault(article.Id);
-                await Compare(connection, article, receipt, open && !article.Removed, publication, adapter, ct);
+                if (article.AuthorDid == did) await Compare(connection, article, receipt, open && !article.Removed, publication, adapter, ct);
+                else await Earlier(connection, article, receipt, open && !article.Removed, adapter, ct);
             }
         }
         catch (Exception failure) when (failure is AtprotoRepositoryException or HttpRequestException or TimeoutException
@@ -131,14 +133,61 @@ public static class Syndication
         await Sent(new KeepReceipt(connection.Id, article.Id, article.TangentId, receipt.Version, null, DateTimeOffset.UtcNow), ct);
     }
 
+    /// <summary>An article its author wrote as an account they are no longer bound to: its copy, where it should no longer
+    /// be out, is taken down from the repository its receipt names, through that account's grant; where that grant no
+    /// longer lets the place, the receipt says the copy stays there, and nothing tries again. Nothing goes out under the
+    /// earlier account, and nothing moves to the new one.</summary>
+    private static async Task Earlier(Connection connection, Post article, Receipt? receipt, bool open, AtprotoAdapter adapter, CancellationToken ct)
+    {
+        if (open || receipt is null || !receipt.IsLive() || receipt.Stays) return;
+        var retracted = await adapter.MayChange(receipt.Repository()!, AtprotoAdapter.Scopes, ct);
+        if (retracted)
+        {
+            try
+            {
+                await adapter.Retract(receipt, ct);
+            }
+            catch (AtprotoRepositoryException refused) when (refused.NeedsGrant)
+            {
+                retracted = false;
+            }
+        }
+
+        await Sent(new KeepReceipt(connection.Id, article.Id, article.TangentId, receipt.Version, null, DateTimeOffset.UtcNow, Stays: !retracted), ct);
+    }
+
+    /// <summary>Withdraws the place's publication from the account it is under, through that account's grant where it is
+    /// one its proprietor was bound to before; where that grant no longer lets the place, the record stays there. Either
+    /// way the place forgets it.</summary>
+    private static async Task Withdrawn(Publication publication, string did, AtprotoAdapter adapter, JobContext context, CancellationToken ct)
+    {
+        try
+        {
+            if (publication.Did == did || await adapter.MayChange(publication.Did, AtprotoAdapter.ProprietorScopes, ct)) await adapter.Withdraw(publication, ct);
+            else context.Logger.LogInformation("The publication {Uri} stays under an earlier account of its proprietor", publication.Uri);
+        }
+        catch (AtprotoRepositoryException refused) when (refused.NeedsGrant && publication.Did != did)
+        {
+            context.Logger.LogInformation("The publication {Uri} stays under an earlier account of its proprietor", publication.Uri);
+        }
+
+        await Sent(new ForgetPublication(), ct);
+    }
+
     /// <summary>The place as the proprietor's publication under the account <paramref name="did"/> they are bound to: put
     /// where it is missing, under someone else or another account, or says something else now. One under an earlier
-    /// account of theirs stays there.</summary>
-    private static async Task<Publication> Placed(TangentSpace space, string did, Publication? publication, AtprotoAdapter adapter, CancellationToken ct)
+    /// account of theirs is withdrawn from it first, where its grant still lets the place.</summary>
+    private static async Task<Publication> Placed(TangentSpace space, string did, Publication? publication, AtprotoAdapter adapter, JobContext context,
+        CancellationToken ct)
     {
         var fingerprint = adapter.Fingerprint(space);
         var ours = publication is not null && publication.Proprietor == space.ProprietorId && publication.Did == did;
         if (ours && publication!.Fingerprint == fingerprint) return publication;
+        if (publication is not null && publication.Proprietor == space.ProprietorId && publication.Did != did)
+        {
+            await Withdrawn(publication, did, adapter, context, ct);
+            publication = null;
+        }
         var key = ours ? publication!.Key : Tid.Mint(DateTimeOffset.UtcNow);
         var written = await adapter.Publish(space, did, key, ct);
         var placed = new Publication { Proprietor = space.ProprietorId!, Did = did, Key = key, Uri = written.Uri, Cid = written.Cid, Fingerprint = fingerprint };
