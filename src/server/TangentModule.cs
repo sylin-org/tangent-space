@@ -77,6 +77,7 @@ public sealed class TangentModule : KoanModule
             .Add<Tangents.TangentSettingsPage, Tangents.TangentSettingsView>(page => "Settings · " + page.Name, frame: Tangents.TangentSettingsView.Frame, management: true)
             .Add<Tangents.TangentClosed, Tangents.TangentClosedView>(page => "Saved · " + page.Name, frame: Tangents.TangentClosedView.Frame, management: true)
             .Add<Tangents.TangentAccessPage, Tangents.TangentAccessView>(page => "Access · " + page.Name, frame: Tangents.TangentAccessView.Frame, management: true)
+            .Add<Tangents.TangentPeoplePage, Tangents.TangentPeopleView>(page => "People · " + page.Name, frame: Tangents.TangentPeopleView.Frame, management: true)
             .Add<Posts.TopicPage, Posts.TopicView>(page => page.Title + " · " + page.Tangent.Name, Posts.TopicPage.Version, Posts.TopicView.Frame, Posts.TopicPage.Card)
             .Add<Posts.NewTopicPage, Posts.NewTopicView>(page => (page.Kind == Posts.PostWrites.Word(Posts.PostKind.Article) ? "New article · " : "New topic · ") + page.TangentName, frame: Posts.NewTopicView.Frame)
             .Add<Posts.EditPage, Posts.EditView>(page => (!page.Root ? "Edit post · " : page.Kind == Posts.PostWrites.Word(Posts.PostKind.Article) ? "Edit article · " : "Edit topic · ") + page.TopicTitle, frame: Posts.EditView.Frame)

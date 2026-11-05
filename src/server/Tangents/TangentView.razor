@@ -45,6 +45,16 @@
                 <span class="rail-audience-note">@(Model.Audience == "public" ? "Anyone can read this Tangent, signed in or not." : "Only participants it is open to can read this Tangent.")</span>
             </span>
         </div>
+        @if (Model.Leave is { } leave)
+        {
+            <details class="tangent-leave">
+                <summary>Leave this Tangent</summary>
+                <form method="post" action="@leave.Action">
+                    <p class="rail-audience-note">Your posts stay. You stop reading it unless you join again.</p>
+                    <button type="submit" class="button">Leave</button>
+                </form>
+            </details>
+        }
     </aside>
     <div class="layout-main tangent-main">
         @if (Model.Topics.Count == 0)

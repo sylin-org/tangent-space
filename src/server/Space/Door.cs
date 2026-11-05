@@ -64,6 +64,10 @@ public sealed record Door(
     /// <c>ManageStanding</c> in the place, and only while one waits.</summary>
     public Waiting? Applications { get; init; }
 
+    /// <summary>The asks to join that wait in the members-only Tangents the reader manages, by Tangent, each with where it
+    /// is decided: present only while one waits.</summary>
+    public IReadOnlyList<Asking>? Asks { get; init; }
+
     /// <summary>Where every Tangent the reader may view is listed, present where more follow those the door lists.</summary>
     public string? AllTangents { get; init; }
 
@@ -105,13 +109,23 @@ public sealed record Door(
         Group? Reports = null,
         Decision? TimedOut = null,
         Decision? Declined = null,
-        Waiting? Applications = null)
+        Waiting? Applications = null,
+        IReadOnlyList<Let>? Let = null)
     {
         /// <summary>Whether nothing is new to the reader, so nothing is counted for them either.</summary>
         public bool Quiet => Replies.Count == 0 && Mentions.Count == 0 && PerTangent.Count == 0 && Articles.Count == 0 && (Taken?.Count ?? 0) == 0
                              && Admitted is null && Lifted is null && TimedOut is null && Declined is null && (Roles?.Count ?? 0) == 0
-                             && (Edited?.Count ?? 0) == 0 && (Removed?.Count ?? 0) == 0 && (Reports?.Count ?? 0) == 0 && Applications is null;
+                             && (Edited?.Count ?? 0) == 0 && (Removed?.Count ?? 0) == 0 && (Reports?.Count ?? 0) == 0 && Applications is null
+                             && (Let?.Count ?? 0) == 0;
     }
+
+    /// <summary>A decision about the reader's ask to join a members-only Tangent, or their being let in: who, when, the
+    /// Tangent's name and address, and whether they were let in.</summary>
+    public sealed record Let(TangentPage.Author Who, DateTimeOffset At, string Tangent, string Address, bool Given);
+
+    /// <summary>The asks to join that wait in one Tangent the reader manages: its name, how many, whether that is a lower
+    /// bound, and its people, where each is decided.</summary>
+    public sealed record Asking(string Tangent, int Count, bool AtLeast, string Address);
 
     /// <summary>A decision about the reader's standing: who made it, and when; for a lift, the standing it lifted
     /// (<c>timed-out</c> or <c>banned</c>) in <see cref="Was"/>; for a timeout, when it ends, or ended, in

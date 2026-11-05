@@ -102,7 +102,8 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             // event in a Tangent they may not view moves nothing they can see.
             var newestViewable = window.Where(e => Viewable(e.TangentId)).Select(e => e.Seq).DefaultIfEmpty(0).Max();
             through = new[] { unread.Floor, newestViewable, forYou.Through }.Max();
-            news = News(unread, forYou, forYouGroups, fresh, window, posts, tangents, people, through, baseAddress);
+            news = News(unread, forYou, forYouGroups, fresh, window, posts, tangents, people, through, baseAddress)
+                with { Let = await Tangents.Asking.Decided(forYouGroups.Let, people, baseAddress, ct) };
             // A door that carries a form is never stored, so a browser's Back after sign-out redisplays nothing of it; any
             // other door of a signed-in reader is theirs alone to cache.
             if (!news.Quiet && through > unread.Floor) news = news with { Seen = SeenController.DoorForm(baseAddress, through) };
@@ -116,6 +117,8 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
         var waiting = reader is not null && place.Holds(Bit.ManageStanding)
             ? await Applications.Waiting(0, long.MaxValue, Unread.CountLimit + 1, ct)
             : [];
+
+        var asking = reader is null ? [] : await Tangents.Asking.For(reader.Id, baseAddress, ct);
 
         var freshIn = fresh.GroupBy(e => e.TopicId!, StringComparer.Ordinal).ToDictionary(topic => topic.Key, topic => topic.Count(), StringComparer.Ordinal);
         var newIn = news?.PerTangent.ToDictionary(tangent => tangent.Slug, tangent => tangent.Topics + tangent.Replies, StringComparer.Ordinal);
@@ -151,6 +154,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             Applications = waiting.Count == 0
                 ? null
                 : new Door.Waiting(waiting.Count, waiting.Count > Unread.CountLimit, baseAddress + ApplicationsController.Path),
+            Asks = asking.Count == 0 ? null : asking,
             AllTangents = page.Next is null ? null : baseAddress + TangentsController.Route,
             Gate = place.Gate(Bit.Post)?.Word,
             Until = reader is not null && reader.StandingAt(now) == Standing.TimedOut ? reader.StandingUntil : null
@@ -190,10 +194,11 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
         Event? Lifted,
         Event? TimedOut,
         Event? Declined,
-        IReadOnlyList<Event> Roles)
+        IReadOnlyList<Event> Roles,
+        IReadOnlyList<Event> Let)
     {
         /// <summary>Who the groups name.</summary>
-        public IEnumerable<string?> People() => Replies.Concat(Taken).Concat(Mentions).Concat(Reports).Concat(Edited).Concat(Removed).Concat(Roles)
+        public IEnumerable<string?> People() => Replies.Concat(Taken).Concat(Mentions).Concat(Reports).Concat(Edited).Concat(Removed).Concat(Roles).Concat(Let)
             .Concat(new[] { Admitted, Lifted, TimedOut, Declined }.OfType<Event>()).Select(e => e.ActorId);
 
         /// <summary>The rows the door shows with a Post's first words.</summary>
@@ -221,7 +226,8 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             decided is { Standing: Standing.Admitted, Before: Standing.TimedOut or Standing.Banned } ? decided : null,
             decided is { Standing: Standing.TimedOut } ? decided : null,
             decided is { Standing: Standing.Declined } ? decided : null,
-            rows.Where(e => e is { Kind: EventKind.RoleChanged, Given: not null }).ToList());
+            rows.Where(e => e is { Kind: EventKind.RoleChanged, Given: not null }).ToList(),
+            rows.Where(e => e is { Kind: EventKind.TangentLet, Given: not null }).ToList());
     }
 
     /// <summary>What is new to the reader, said: what is for them, then what is new in each Tangent and the new

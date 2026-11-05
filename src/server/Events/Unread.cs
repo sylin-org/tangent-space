@@ -125,6 +125,7 @@ public sealed class Unread
                 EventKind.PostRemoved or EventKind.Mention => post is not null && root is not null && (row.Kind == EventKind.PostRemoved || !post.Removed),
                 EventKind.StandingChanged => !standing && (standing = true),
                 EventKind.RoleChanged => row.Role is { } role && roles.Add(role),
+                EventKind.TangentLet => true,
                 _ => false
             };
             if (holds) kept.Add(row);

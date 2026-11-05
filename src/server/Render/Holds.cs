@@ -60,6 +60,10 @@ public static class Holds
     public const string ChangedTangentAudience = "Who reads it: public or private." + Stays;
     public const string TangentMove = "earlier or later, to move it one place among the Tangents; sent alone, it changes nothing else.";
     public const string AccessRole = "The word of a role listed here with the access in its offered.";
+    public const string Joining = "closed, only as its managers let people in; join, anyone who takes part in the place joins at once; or ask, people ask and its managers decide.";
+    public const string Member = "The id of the participant, as the people tab lists them.";
+    public const string Letting = "in, to let them in, or out, to decline their ask or take them out.";
+    public const string Find = "The start of a participant's handle.";
     public const string Access = "default, as its role allows in the place; read, reading alone; or post, reading and posting.";
 
     public const string PlaceName = "The place's name, 1 to 120 characters on one line." + Stays;

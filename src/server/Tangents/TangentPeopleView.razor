@@ -1,0 +1,165 @@
+@using global::Tangent.Render
+@* A Tangent's people: one panel that says how someone outside it comes in, with a choice for each way; the asks that
+   wait, each let in or declined with one button; who reads and posts here by role, linked to the access, and by
+   person, each taken out with one button; and a search by the start of a handle, each found participant let in. The
+   moderators' Tangent says instead that its access stays. A refusal shows above it all. *@
+<main class="sign-in post-form">
+    <section class="sign-in-panel post-form-panel" aria-labelledby="people-heading">
+        <div class="sign-in-body">
+            <p class="post-form-where">Settings of <a href="@Model.Address">@Model.Name</a></p>
+            <h1 id="people-heading" class="sign-in-title">People</h1>
+            @if (Model.Failure is { } failure)
+            {
+                <p class="sign-in-failure" id="people-failure" role="alert">@failure</p>
+            }
+            @if (Model.Fixed)
+            {
+                <p class="post-form-note">Only moderators read this Tangent, and its access stays as it is.</p>
+            }
+            else
+            {
+                <p class="post-form-note">@AudienceLine()</p>
+                @if (Model.ChangeJoining is { } joining)
+                {
+                    <form class="change-tangent-joining door-offer-answers people-answers" method="post" action="@joining.Action">
+                        @foreach (var way in Model.Joinings)
+                        {
+                            <button type="submit" class="button" name="@TangentPeopleController.JoiningField" value="@way"
+                                    aria-pressed="@(way == Model.Joining ? "true" : "false")" disabled="@(way == Model.Joining)">@JoiningButton(way)</button>
+                        }
+                    </form>
+                }
+            }
+
+            @if (Model.Asking.Count > 0)
+            {
+                <h2 class="rail-heading rail-heading-spaced">Asking to join</h2>
+                <ul class="door-offers applications people tangent-asks">
+                    @foreach (var person in Model.Asking)
+                    {
+                        <li class="door-offer" @key="person.Id">
+                            <p class="door-offer-line"><a href="@person.Profile">@person.Name</a> <span class="topic-row-none">· @@@person.Handle@Agent(person)</span></p>
+                            @Choices(person, ("in", "Let in"), ("out", "Decline"))
+                        </li>
+                    }
+                </ul>
+            }
+
+            <h2 class="rail-heading rail-heading-spaced">Who reads and posts here</h2>
+            <ul class="door-offers applications people tangent-people">
+                <li class="door-offer"><p class="door-offer-line">Administrators <span class="topic-row-none">· read and post in every Tangent</span></p></li>
+                @foreach (var role in Model.Roles)
+                {
+                    <li class="door-offer" @key="role.Word">
+                        <p class="door-offer-line">@role.Name <span class="topic-row-none">· @(role.Access == "post" ? "read and post here" : "read here") · <a href="@Model.Access">change</a></span></p>
+                    </li>
+                }
+                @foreach (var person in Model.People)
+                {
+                    <li class="door-offer" @key="person.Id">
+                        <p class="door-offer-line"><a href="@person.Profile">@person.Name</a> <span class="topic-row-none">· @@@person.Handle@Agent(person) · reads and posts here</span></p>
+                        @Choices(person, ("out", "Take out"))
+                    </li>
+                }
+            </ul>
+            @if (Model.People.Count == 0)
+            {
+                <p class="post-form-note">No one is in by joining or being let in yet.</p>
+            }
+            @if (Model.Next is { } next)
+            {
+                <nav class="topic-pages" aria-label="More people"><a class="topic-pages-next" href="@next">More people →</a></nav>
+            }
+
+            @if (!Model.Fixed)
+            {
+                <form class="find-people" method="get" action="">
+                    <label class="field-label" for="people-find">Find someone by handle</label>
+                    <span class="field-row">
+                        <input id="people-find" class="field-input" type="search" name="@TangentPeopleController.FindQuery" value="@Model.Find" placeholder="ada.example" autocomplete="off" spellcheck="false">
+                        <button type="submit" class="button">Find</button>
+                    </span>
+                </form>
+                @if (Model.Found is { } found)
+                {
+                    @if (found.Count == 0)
+                    {
+                        <p class="post-form-note">No one here has a handle that starts with @Model.Find.</p>
+                    }
+                    <ul class="door-offers applications people tangent-found">
+                        @foreach (var person in found)
+                        {
+                            <li class="door-offer" @key="person.Id">
+                                <p class="door-offer-line"><a href="@person.Profile">@person.Name</a> <span class="topic-row-none">· @@@person.Handle@Agent(person) · @StateLine(person.State)</span></p>
+                                @if (person.State == "in")
+                                {
+                                    @Choices(person, ("out", "Take out"))
+                                }
+                                else if (person.State == "asked")
+                                {
+                                    @Choices(person, ("in", "Let in"), ("out", "Decline"))
+                                }
+                                else
+                                {
+                                    @Choices(person, ("in", "Let in"))
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            }
+            <div class="post-form-actions">
+                <a class="post-form-cancel" href="@Model.Settings">Back to the settings</a>
+            </div>
+        </div>
+    </section>
+</main>
+
+@code {
+    [Parameter, EditorRequired] public TangentPeoplePage Model { get; set; } = default!;
+
+    /// <summary>The buttons that let one person in or out, each its own small form.</summary>
+    private RenderFragment Choices(TangentPeoplePage.Person person, params (string Choice, string Label)[] choices) => @<div class="door-offer-answers people-answers">
+        @if (Model.Change is { } change)
+        {
+            @foreach (var (choice, label) in choices)
+            {
+                <form class="let-into-tangent" method="post" action="@change.Action">
+                    <input type="hidden" name="@TangentPeopleController.PersonField" value="@person.Id">
+                    <button type="submit" class="button" name="@TangentPeopleController.ChoiceField" value="@choice">@label</button>
+                </form>
+            }
+        }
+    </div>;
+
+    private static string Agent(TangentPeoplePage.Person person) => person.Kind == "agent" ? " · agent" : "";
+
+    private string AudienceLine() => Model.Audience == "public"
+        ? "It is public: everyone who reads the place reads it. Make it private in its settings to keep it to its members."
+        : Model.Joining switch
+        {
+            "join" => "It is members-only: anyone who takes part in the place may join it.",
+            "ask" => "It is members-only: people ask to join, and you decide.",
+            _ => "It is private: only the roles and people below read it, and no one else finds it."
+        };
+
+    private static string JoiningButton(string way) => way switch
+    {
+        "join" => "Anyone joins",
+        "ask" => "People ask to join",
+        _ => "Only who you let in"
+    };
+
+    private static string StateLine(string state) => state switch
+    {
+        "in" => "reads and posts here",
+        "asked" => "asked to join",
+        "declined" => "ask declined",
+        _ => "not in"
+    };
+
+    /// <summary>The frame the shell draws around the page: the place; the Tangent, its settings and its people as crumbs;
+    /// and who reads.</summary>
+    public static Frame Frame(TangentPeoplePage page)
+        => new(page.Place, page.Door, [new Crumb(page.Name, page.Address), new Crumb("Settings", page.Settings), new Crumb("People")], page.Who);
+}

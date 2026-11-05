@@ -14,7 +14,8 @@ namespace Tangent.Tangents;
 /// <see cref="Door"/> and <see cref="Who"/> say where the page is and who reads it; <see cref="Day"/> is the UTC day
 /// its times are written for. <see cref="Settings"/> is where the Tangent's settings are changed, present only for a
 /// reader who may change them; <see cref="NewTangent"/> is where a Tangent is created, present only for a reader who
-/// may create one. <see cref="Feeds"/> are the Tangent's feeds, present only where a visitor may read it.</summary>
+/// may create one. <see cref="Feeds"/> are the Tangent's feeds, present only where a visitor may read it. <see cref="Leave"/> is where a
+/// participant who joined a private Tangent leaves it, present only for them.</summary>
 public sealed partial record TangentPage(
     string Slug,
     string Name,
@@ -35,7 +36,8 @@ public sealed partial record TangentPage(
     DateOnly Day,
     string? Settings = null,
     string? NewTangent = null,
-    IReadOnlyList<Render.FeedLink>? Feeds = null)
+    IReadOnlyList<Render.FeedLink>? Feeds = null,
+    Render.Form? Leave = null)
 {
     /// <summary>The most characters of a body the page carries as a Topic's <see cref="Topic.Opening"/> or a reply's
     /// <see cref="Latest.Line"/>.</summary>
@@ -82,8 +84,13 @@ public sealed partial record TangentPage(
     /// the page links their name, their profile's address.</summary>
     public sealed record Author(string Id, string Handle, string Name, string Kind, string? Avatar, string? Profile = null);
 
-    /// <summary>A Tangent the reader may view: its slug, name, kind, address and how many Topics were started there.</summary>
-    public sealed record Listed(string Slug, string Name, string Kind, string Address, int TopicCount);
+    /// <summary>A Tangent the reader may view: its slug, name, kind, address and how many Topics were started there. A
+    /// members-only Tangent the reader is outside of lists what it is about (<see cref="Description"/>), how they come in
+    /// (<see cref="Joining"/>: <c>join</c>, <c>ask</c>, or <c>asked</c> or <c>declined</c> once they asked) and, while
+    /// they may, the form that joins or asks (<see cref="Join"/>), or that withdraws a waiting ask
+    /// (<see cref="Withdraw"/>).</summary>
+    public sealed record Listed(string Slug, string Name, string Kind, string Address, int TopicCount, string? Description = null,
+        string? Joining = null, Render.Form? Join = null, Render.Form? Withdraw = null);
 
     /// <summary>The signed-in participant reading the page: their id, the name to show, their handle, the highest role
     /// they hold where they hold one, their avatar, where they sign out, coming back to this page, and the place's

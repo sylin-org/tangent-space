@@ -19,10 +19,46 @@
                         @foreach (var tangent in Model.Tangents)
                         {
                             <li class="door-offer row tangent" @key="tangent.Slug">
-                                <p class="door-offer-line">
-                                    <a href="@tangent.Address">@tangent.Name</a>
-                                    <span class="topic-row-none">· @Detail(tangent.Kind, tangent.TopicCount)</span>
-                                </p>
+                                @if (tangent.Joining is { } joining)
+                                {
+                                    <p class="door-offer-line">
+                                        @tangent.Name
+                                        <span class="topic-row-none">· Members only · @Detail(tangent.Kind, tangent.TopicCount)</span>
+                                    </p>
+                                    @if (tangent.Description is { Length: > 0 } about)
+                                    {
+                                        <p class="post-form-note">@about</p>
+                                    }
+                                    <div class="door-offer-answers">
+                                        @if (tangent.Join is { } join)
+                                        {
+                                            <form class="join-tangent" method="post" action="@join.Action">
+                                                <button type="submit" class="button">@(joining == "join" ? "Join" : "Ask to join")</button>
+                                            </form>
+                                        }
+                                        else if (joining == "asked")
+                                        {
+                                            <p class="post-form-note">You asked to join; whoever manages it will decide, and your door will tell you.</p>
+                                        }
+                                        else
+                                        {
+                                            <p class="post-form-note">Your ask to join was declined.</p>
+                                        }
+                                        @if (tangent.Withdraw is { } withdraw)
+                                        {
+                                            <form class="withdraw-ask" method="post" action="@withdraw.Action">
+                                                <button type="submit" class="button">Withdraw</button>
+                                            </form>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <p class="door-offer-line">
+                                        <a href="@tangent.Address">@tangent.Name</a>
+                                        <span class="topic-row-none">· @Detail(tangent.Kind, tangent.TopicCount)</span>
+                                    </p>
+                                }
                             </li>
                         }
                     </ul>

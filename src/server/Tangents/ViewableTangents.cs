@@ -65,7 +65,12 @@ public static class ViewableTangents
 
     /// <summary>The page of at most <paramref name="take"/> Tangents where <paramref name="keep"/> holds for the reader,
     /// after <paramref name="after"/>, or the first page.</summary>
-    public static async Task<Page> Read(string? personId, Func<Capabilities, bool> keep, Cursor? after, int take, CancellationToken ct)
+    public static Task<Page> Read(string? personId, Func<Capabilities, bool> keep, Cursor? after, int take, CancellationToken ct)
+        => Read(personId, (_, capabilities) => keep(capabilities), after, take, ct);
+
+    /// <summary>The page of at most <paramref name="take"/> Tangents where <paramref name="keep"/> holds for the row and
+    /// what the reader holds on it, after <paramref name="after"/>, or the first page.</summary>
+    public static async Task<Page> Read(string? personId, Func<Tangent, Capabilities, bool> keep, Cursor? after, int take, CancellationToken ct)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(take, 1);
         var kept = new List<Tangent>();
@@ -79,7 +84,7 @@ public static class ViewableTangents
             var judged = await Capabilities.LoadEach(personId, fresh.Select(row => row.Id).ToList(), ct);
             foreach (var row in fresh)
             {
-                if (!keep(judged[row.Id])) continue;
+                if (!keep(row, judged[row.Id])) continue;
                 if (kept.Count == take) return new Page(kept, each, Cursor.After(kept[^1]));
                 kept.Add(row);
                 each[row.Id] = judged[row.Id];

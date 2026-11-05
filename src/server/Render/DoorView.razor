@@ -117,6 +117,17 @@
                     </div>
                 </section>
             }
+            @foreach (var asking in Model.Asks ?? [])
+            {
+                <section class="door-offers" aria-label="Asks to join">
+                    <div class="door-offer door-applications bar application is-waiting">
+                        <p class="door-offer-line">@(asking.Count == 1 && !asking.AtLeast ? "Someone asks" : (asking.Count + (asking.AtLeast ? "+" : "") + " people ask")) to join @asking.Tangent.</p>
+                        <div class="door-offer-answers">
+                            <a class="tangent-new" href="@asking.Address">People</a>
+                        </div>
+                    </div>
+                </section>
+            }
             @if (Model.News is { } news)
             {
                 @if (news.Quiet)
@@ -149,6 +160,19 @@
                         @if (news.Declined is { } declined)
                         {
                             <p class="tangent-description door-admitted">@declined.Who.Name declined your application: you read here what a visitor reads.</p>
+                        }
+                        @foreach (var let in news.Let ?? [])
+                        {
+                            <p class="tangent-description door-admitted">
+                                @if (let.Given)
+                                {
+                                    @(let.Who.Name + " let you into ")<a href="@let.Address">@let.Tangent</a>@(": you can read and post there.")
+                                }
+                                else
+                                {
+                                    @(let.Who.Name + " declined your ask to join " + let.Tangent + ".")
+                                }
+                            </p>
                         }
                         @foreach (var change in news.Roles ?? [])
                         {
@@ -246,6 +270,8 @@
         if (news.TimedOut is not null) parts.Add("you were timed out");
         if (news.Declined is not null) parts.Add("your application was declined");
         if (news.Roles is { Count: > 0 }) parts.Add("your roles changed");
+        if (news.Let?.Any(let => let.Given) == true) parts.Add("you were let into a Tangent");
+        if (news.Let?.Any(let => !let.Given) == true) parts.Add("an ask to join was declined");
         if (news.Edited is { Count: > 0 } edited) parts.Add(Words(edited.Count, edited.AtLeast, "post of yours edited", "posts of yours edited"));
         if (news.Removed is { Count: > 0 } removed) parts.Add(Words(removed.Count, removed.AtLeast, "post of yours removed", "posts of yours removed"));
         if (news.Replies.Count > 0) parts.Add(Words(news.Replies.Count, news.Replies.AtLeast, "reply", "replies") + " to you");
