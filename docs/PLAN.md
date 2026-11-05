@@ -1,6 +1,6 @@
 # Development plan
 
-PLAN holds the roles, the order of the packages and the decisions they wait on. A decision that a package of the order builds a default for is a line of Open for Leo; an idea not built, waiting on his yes, is a row of [PROPOSALS](PROPOSALS.md). [FEATURES](FEATURES.md) says what the tree does and its status, and the [`work-split` skill](../.claude/skills/work-split/SKILL.md) runs one package. Models are those released on 28 October 2026; the role table is re-read when the lineup changes.
+PLAN holds the roles, the order of the packages and the decisions they wait on. A decision that a package of the order builds a default for is a line of Open for Leo; an idea not built, waiting on his yes, is a row of [PROPOSALS](PROPOSALS.md). [FEATURES](FEATURES.md) lists the open work, a package's Closes naming the rows it removes in its commit, and the [`work-split` skill](../.claude/skills/work-split/SKILL.md) runs one package. Models are those released on 28 October 2026; the role table is re-read when the lineup changes.
 
 ## Roles
 

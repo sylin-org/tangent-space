@@ -5,7 +5,7 @@ description: Score a Tangent screen against the design reference and the rubric,
 
 # Visual loop
 
-A screen is done when an independent scorer rates fixed captures of it at or above the gate. The builder never scores its own work. The loop runs at the polish stage, which Leo calls; before it, screens are captured and listed in `docs/SCREENS.md` as owing the gate.
+A screen is done when an independent scorer rates fixed captures of it at or above the gate. The builder never scores its own work. The loop runs at the polish stage, which Leo calls; before it, screens are captured, and a screen that owes the gate joins the visual gate row of `docs/FEATURES.md`.
 
 Settled decisions are named to the scorer as settled — the panel instead of a dialog, a shared component's shape, a choice Leo made — so it judges their execution and does not reopen them; without that, its advice swings between rounds.
 
@@ -45,4 +45,4 @@ Spawn the `scorer` agent (`.claude/agents/scorer.md`: Opus 5.5 at high, a fresh 
 
 ## Record
 
-When a screen passes, add or update its row in `docs/SCREENS.md`: screen, mean, lowest dimension, widths, themes, commit, date. The file holds current scores only.
+When a screen passes, it leaves the visual gate row of `docs/FEATURES.md`, and its mean, lowest dimension, widths, themes and date go in the commit message and the package report.

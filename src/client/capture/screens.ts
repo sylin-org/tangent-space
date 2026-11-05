@@ -74,8 +74,8 @@ const offerSettings = { 'Koan:Web:ApplicationUrl': '', ASPNETCORE_ENVIRONMENT: '
 // where atproto sign-in has a loopback http client.
 const localSettings = { 'Koan:Web:ApplicationUrl': 'http://localhost', ASPNETCORE_ENVIRONMENT: 'Development' } as const
 
-// A screen's name is its name in docs/FEATURES.md "Screens", lowercase, with hyphens between words:
-// "Tangent Space settings (general)" is tangent-space-settings-general. The door's two screens are the
+// A screen's name is its key here, lowercase words joined by hyphens, and the visual gate row of
+// docs/FEATURES.md names each screen of this registry by that key. The door's two screens are the
 // door's states.
 export const screens: Readonly<Record<string, Screen>> = {
   // A visitor's front page; the capture persona with news since her place checkpoint — replies to her Topic, a
