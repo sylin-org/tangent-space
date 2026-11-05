@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Koan.Core.Hosting.App;
 using Koan.Data.Abstractions;
 using Koan.Data.Core;
@@ -51,15 +50,13 @@ public sealed class SuggestionsController : ControllerBase
         => System.Text.Json.JsonSerializer.Serialize(new { address = Address(tangentAddress, topic) });
 
     [HttpGet("/t/{tangent}/" + Segment)]
+    [Needs(Bit.View)]
     public async Task<IActionResult> Suggest(string tangent, [FromQuery(Name = Typed)] string? typed,
         [FromQuery(Name = InTopic)] string? topic, CancellationToken ct)
     {
-        var personId = User.Identity?.IsAuthenticated == true ? User.FindFirst(ClaimTypes.NameIdentifier)?.Value : null;
-        var inTangent = await Tangents.Tangent.Get(tangent, ct);
-        var rows = await Capabilities.LoadRows(personId, inTangent?.Id, ct);
-        var here = rows.For(null);
-        if (!here.Exists) return DoorController.Gated(HttpContext, here.Gate(Bit.View) ?? Capabilities.Absent);
-        if (inTangent is not { } tangentRow) return DoorController.Gated(HttpContext, Capabilities.Absent);
+        var here = Here.Of(HttpContext);
+        var personId = here.PersonId;
+        var tangentRow = here.Tangent!;
         if (typed is not { Length: > 0 } || typed[0] is not ('@' or '#'))
             return new Problem(StatusCodes.Status400BadRequest, "Send what was typed from its @ or #, as q=@ad or q=#gar.").ToResult();
 
