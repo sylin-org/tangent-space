@@ -148,6 +148,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             Intro = space.Slots.DoorIntro.Length > 0 ? Media.Placed(space.Slots.DoorIntro, baseAddress + "/") : null,
             Feeds = space.Audience == Audience.Public ? Feeds.ArticlesLinks(baseAddress, space.Name) : null,
             Offer = offered,
+            Welcoming = Welcome(place, space, listed, page.Next is not null, baseAddress),
             Applications = waiting.Count == 0
                 ? null
                 : new Door.Waiting(waiting.Count, waiting.Count > Unread.CountLimit, baseAddress + ApplicationsController.Path),
@@ -155,6 +156,20 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             Gate = place.Gate(Bit.Post)?.Word,
             Until = reader is not null && reader.StandingAt(now) == Standing.TimedOut ? reader.StandingUntil : null
         });
+    }
+
+    /// <summary>The steps that make the place its manager's own, for a reader who holds <see cref="Bit.ManageSpace"/>
+    /// while no Tangent but the moderators' holds a Topic, judged from the Tangents the door already read.</summary>
+    private static Door.Welcome? Welcome(Capabilities place, TangentSpace space, IReadOnlyList<Tangents.Tangent> listed, bool more, string baseAddress)
+    {
+        if (!place.Holds(Bit.ManageSpace) || more) return null;
+        var open = listed.Where(tangent => tangent.Id != space.ModeratorsTangentId).ToList();
+        if (open.Any(tangent => tangent.TopicCount > 0)) return null;
+        return new Door.Welcome(
+            open.FirstOrDefault() is { } first ? PostWrites.TangentAddress(baseAddress, first.Id) + "/" + TangentPageController.NewTopicSegment : null,
+            baseAddress + TangentSpaceSettingsController.Path,
+            baseAddress + TangentSpaceSettingsController.AdmissionPath,
+            baseAddress + BringYourAgentController.Path);
     }
 
     /// <summary>The Posts the window's new Topics and replies brought that are new to the reader by the one rule: in a

@@ -110,6 +110,27 @@ public sealed class DoorTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task The_places_manager_is_welcomed_with_its_first_steps_until_a_topic_is_written()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
+        await Place(tangentSpace);
+        using var browser = new Browser(tangentSpace);
+        (await browser.SignIn("leo", "leo", Cancellation)).Dispose();
+
+        using (var json = await Json(browser.Client, "/"))
+        {
+            var welcome = json.RootElement.GetProperty("welcoming");
+            Assert.Equal(BaseUrl + "/t/" + Articles + "/new", welcome.GetProperty("firstTopic").GetString());
+            Assert.Equal(BaseUrl + "/bring-your-agent", welcome.GetProperty("bringYourAgent").GetString());
+        }
+        Assert.Contains("Welcome to Lantern Works", WebUtility.HtmlDecode(await Html(browser.Client, "/")));
+
+        await Started(Workshop, "A question", "ada");
+        using var after = await Json(browser.Client, "/");
+        Assert.False(after.RootElement.TryGetProperty("welcoming", out var left) && left.ValueKind != JsonValueKind.Null);
+    }
+
+    [Fact]
     public async Task A_waiting_applicants_news_begins_at_their_arrival_so_what_the_place_held_is_not_new_to_them()
     {
         const string applicant = "did:plc:applicant4door";

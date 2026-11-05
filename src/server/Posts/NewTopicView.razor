@@ -75,7 +75,7 @@ else
                 </div>
                 <div class="field">
                     <label class="field-label" for="new-topic-body">@(Model.Origin is not null ? "Your words (optional)" : Article ? "Article" : "Post")</label>
-                    <textarea class="post-form-body" id="new-topic-body" name="@PostWrites.BodyField" rows="@(Model.Origin is null ? 12 : 6)" required="@(Model.Origin is null)"
+                    <textarea class="post-form-body" id="new-topic-body" name="@PostWrites.BodyField" rows="12" required="@(Model.Origin is null)"
                               autofocus="@(Model.Gate is null && Focus == "new-topic-body")" readonly="@(Model.Gate is not null)"
                               data-island="@(Model.Gate is null ? "suggest" : null)" data-props="@SuggestionsController.Props(Model.TangentAddress)"
                               aria-invalid="@(Model.BodyFailure is null ? "false" : "true")"

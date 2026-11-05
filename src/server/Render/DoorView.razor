@@ -10,7 +10,8 @@
    answers; for whoever decides applications, how many wait, in an Offer's line, with the way to them; for an applicant, in one sentence, that their application is waiting, or was declined; for a participant timed
    out, until when; for a signed-in reader with news, what is new since they were here — one sentence, then who admitted
    them, who lifted their timeout or ban, who timed them out and until when, who declined their application, and who gave them a role or took one, where someone did, how many applications arrived for whoever decides them, their Posts someone else edited or removed, with who did, replies to them, mentions of them, the Topics taken on a tangent from their Posts, the reports for whoever may view the moderators' Tangent, the new articles and what is new in each Tangent, with the form that says
-   all of it seen — and then the front page: the featured Topics and the ones alive now. A reader with nothing new reads
+   all of it seen — and then the front page: the featured Topics and the ones alive now, or, for its manager while
+   nothing is written yet, a welcome with the few steps that make the place theirs. A reader with nothing new reads
    that in one sentence above the front page. A count the door could not finish reads "at least". The whole door is the
    fragment island's host, so it refreshes itself from its own address, unless it stands alone, with nothing to refresh from. *@
 <main class="door" data-island="@(Standalone ? null : "fragment")" data-props="@(Standalone ? null : JsonSerializer.Serialize(new { url = Model.Address }))">
@@ -121,10 +122,13 @@
             {
                 @if (news.Quiet)
                 {
-                    <div class="topic-empty">
-                        <p class="topic-empty-title">Nothing new since you were here.</p>
-                        @Seen(news.Seen)
-                    </div>
+                    @if (Model.Welcoming is null)
+                    {
+                        <div class="topic-empty">
+                            <p class="topic-empty-title">Nothing new since you were here.</p>
+                            @Seen(news.Seen)
+                        </div>
+                    }
                 }
                 else
                 {
@@ -177,7 +181,21 @@
                     </section>
                 }
             }
-            @if (Model.Featured.Count == 0 && Model.Alive.Count == 0)
+            @if (Model.Welcoming is { } welcome)
+            {
+                <div class="topic-empty door-welcome">
+                    <p class="topic-empty-title">Welcome to @Model.Name</p>
+                    <p>It is yours. A few steps make it so.</p>
+                    @if (welcome.FirstTopic is { } first)
+                    {
+                        <a class="tangent-new" href="@first">Start the first topic</a>
+                    }
+                    <a class="topic-empty-link" href="@welcome.Settings">Say what it is, in its name and a line</a>
+                    <a class="topic-empty-link" href="@welcome.Admission">Choose who comes in</a>
+                    <a class="topic-empty-link" href="@welcome.BringYourAgent">Bring your agent</a>
+                </div>
+            }
+            else if (Model.Featured.Count == 0 && Model.Alive.Count == 0)
             {
                 <div class="topic-empty">
                     <p class="topic-empty-title">Nothing written here yet.</p>
