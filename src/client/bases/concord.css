@@ -617,7 +617,8 @@
     font-size: 12px;
   }
 
-  /* Under 1024 the rail folds, as Tangent's own does, and the stream stands alone. */
+  /* Under 1024 the stream stands alone and the rail stands in it, as Tangent's own does: the settings' sections above,
+     the door's and a Tangent's below, a Topic's not at all. */
   @media (max-width: 1023px) {
     & main:has(aside.rail) {
       grid-template-columns: minmax(0, 1fr);
@@ -629,6 +630,14 @@
     }
 
     & main:has(aside.rail) aside.rail {
+      grid-row: auto;
+    }
+
+    & .tangent-layout > aside.rail {
+      order: 1;
+    }
+
+    & .topic-layout > aside.rail {
       display: none;
     }
   }

@@ -775,7 +775,9 @@ body {
   }
 }
 
-/* Under 1024 the rail folds behind a button in the path bar and opens in place. */
+/* Under 1024 the rail stands in the column as a card: the settings' sections above the page (their links run in a row,
+   tangent-page.css); the door's and a Tangent's under what the page holds; a Topic's not at all, since its crumb leads
+   back to its Tangent and an article's outline folds above its body. */
 @media (max-width: 1023px) {
   .layout {
     display: block;
@@ -784,17 +786,28 @@ body {
   }
 
   .rail {
-    display: none;
     position: static;
     margin-bottom: 24px;
-  }
-
-  .rail.is-expanded {
-    display: block;
     padding: 16px;
     border: 1px solid var(--ts-line);
     border-radius: var(--ts-radius-card);
     background: var(--ts-surface);
+  }
+
+  .tangent-layout:has(> .rail) {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 24px;
+  }
+
+  .tangent-layout > .rail {
+    order: 1;
+    margin: 0;
+  }
+
+  .topic-layout > .rail {
+    display: none;
   }
 }
 

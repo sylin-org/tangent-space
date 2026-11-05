@@ -3,6 +3,10 @@ import { createLiveTransport, type LiveEvent, type LiveTransport } from '../live
 import { fetchFragment } from './fragment'
 import { logEvent } from './unseen'
 
+// What the live island dispatches on the document with each Post it places in the page, appended or in place of its
+// earlier self: the Post's article as the server renders it, its islands not yet mounted.
+export const postPlaced = 'post-placed'
+
 // The live updater, one per page: it follows the log from where the page's request found it (live.ts) and patches the
 // page as rows that concern it arrive, fetching what changed as the server renders it. On a Topic's page, a new reply
 // in the Topic is fetched as its Post's fragment and appended when the page shows the newest window, and otherwise
@@ -10,8 +14,10 @@ import { logEvent } from './unseen'
 // again in place. On a Tangent's page, its list of Topics is fetched again, which marks what is new. On the door, the
 // door is fetched again from its own fragment. When the transport has fallen back to the door, which names no rows,
 // the Tangent's list and the door are fetched again and a Topic's notice says there may be new replies. Every run of
-// rows is also dispatched on the document (logEvent), where the masthead's count of what is new for the reader reads it. It
-// only ever reads: a checkpoint moves where the reader says so (the seen island), never here.
+// rows is also dispatched on the document (logEvent), where the masthead's count of what is new for the reader reads it,
+// and each Post placed in the page (postPlaced), whose islands the page entry mounts and to which the composer offers a
+// reply; an appended reply also brings the Topic's count, the window's range and the rail's row for it. It only ever
+// reads: a checkpoint moves where the reader says so (the seen island), never here.
 export const live = defineComponent({
   name: 'LiveIsland',
   props: {
@@ -67,13 +73,45 @@ export const live = defineComponent({
     }
 
     // A Post of this Topic as the server renders it at its own address, without the marks of being that address's
-    // anchor; null when the page there does not hold it.
-    async function post(id: string): Promise<HTMLElement | null> {
-      const found = (await fetchFragment(props.address + '/' + encodeURIComponent(id))).querySelector<HTMLElement>(`article[id="${id}"]`)
-      if (!found) return null
-      found.classList.remove('is-current')
-      found.removeAttribute('aria-current')
-      return found
+    // anchor, with the page it stands in there; null when that page does not hold it.
+    async function post(id: string): Promise<{ article: HTMLElement; page: DocumentFragment } | null> {
+      const page = await fetchFragment(props.address + '/' + encodeURIComponent(id))
+      const article = page.querySelector<HTMLElement>(`article[id="${id}"]`)
+      if (!article) return null
+      unmark(article)
+      return { article, page }
+    }
+
+    function unmark(element: Element): void {
+      element.classList.remove('is-current')
+      element.removeAttribute('aria-current')
+    }
+
+    function placed(article: HTMLElement): void {
+      document.dispatchEvent(new CustomEvent(postPlaced, { detail: article }))
+    }
+
+    // What the page says of its replies, brought to the page an appended one was fetched from: the Topic's count in its
+    // head, the window's range through the new reply, and the reply's row in the rail.
+    function counted(page: DocumentFragment, id: string): void {
+      const meta = page.querySelector('.topic-meta')
+      if (meta) document.querySelector('.topic-meta')?.replaceWith(meta)
+      const range = page.querySelector('.topic-replies-range')
+      const shownRange = document.querySelector('.topic-replies-range')
+      if (range && shownRange) shownRange.textContent = `${shownRange.textContent!.split('–')[0]}–${range.textContent!.split('–').at(-1)!.replace('#', '')}`
+      else if (range) document.querySelector('.topic-replies-head')?.append(range)
+      const row = page.querySelector(`.topic-rail-replies a[href="#${id}"]`)
+      if (!row?.parentElement) return
+      unmark(row)
+      const list = document.querySelector('.topic-rail-replies')
+      if (list) return list.append(row.parentElement)
+      // The first reply brings the rail's list too, holding only itself.
+      const fresh = row.closest('ul')!
+      fresh.replaceChildren(row.parentElement)
+      const rail = document.querySelector('aside.rail')
+      const heading = fresh.previousElementSibling
+      rail?.insertBefore(fresh, rail.querySelector('.article-outline'))
+      if (heading) rail?.insertBefore(heading, fresh)
     }
 
     function shown(id: string): HTMLElement | null {
@@ -103,22 +141,26 @@ export const live = defineComponent({
       if (event.kind === 'post.created' && event.post !== event.topic) {
         if (shown(event.post) || waiting.includes(event.post)) return
         if (props.newest) {
-          const article = await post(event.post)
-          if (article && !shown(event.post)) append(article)
+          const found = await post(event.post)
+          if (!found || shown(event.post)) return
+          append(found.article)
+          counted(found.page, event.post)
+          placed(found.article)
           return
         }
         waiting.push(event.post)
         notice(`${waiting.length} new ${waiting.length === 1 ? 'reply' : 'replies'} →`, props.address + '/' + encodeURIComponent(waiting[0]))
       } else if (event.kind === 'post.edited' || event.kind === 'post.removed') {
         if (!shown(event.post)) return
-        const article = await post(event.post)
+        const found = await post(event.post)
         const existing = shown(event.post)
-        if (!article || !existing) return
+        if (!found || !existing) return
         if (existing.classList.contains('is-current')) {
-          article.classList.add('is-current')
-          article.setAttribute('aria-current', 'true')
+          found.article.classList.add('is-current')
+          found.article.setAttribute('aria-current', 'true')
         }
-        existing.replaceWith(article)
+        existing.replaceWith(found.article)
+        placed(found.article)
       }
     }
 
