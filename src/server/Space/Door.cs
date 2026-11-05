@@ -52,7 +52,7 @@ public sealed record Door(
     public string Description { get; init; } = "";
 
     /// <summary>The description as the door draws it, its Markdown rendered as a Post's body is; absent while it is empty.</summary>
-    [System.Text.Json.Serialization.JsonIgnore]
+    [Newtonsoft.Json.JsonIgnore]
     public string? DescriptionHtml { get; init; }
 
     /// <summary>The place's welcome under the door's head, its Markdown rendered as a Post's body is; present only where the
@@ -105,7 +105,7 @@ public sealed record Door(
     /// <see cref="Roles"/>, the roles someone gave them or took from them since, the newest change of each;
     /// <see cref="Edited"/>, their Posts someone else edited since that still stand, each once, and
     /// <see cref="Removed"/>, those someone else removed, each with who did it. Then what is new in each Tangent
-    /// (<see cref="PerTangent"/>) and the new <see cref="Articles"/>. A Post's entry stays while the Post is new, so
+    /// (<see cref="PerTangent"/>) and the new <see cref="Articles"/>, past those for the reader. A Post's entry stays while the Post is new, so
     /// reading its Topic clears it here. <see cref="Seen"/> is the form that says all of it is seen, through
     /// <see cref="Through"/>, present while there is news.</summary>
     public sealed record Since(
@@ -148,9 +148,9 @@ public sealed record Door(
     /// <see cref="Until"/>.</summary>
     public sealed record Decision(TangentPage.Author Who, DateTimeOffset At, string? Was = null, DateTimeOffset? Until = null);
 
-    /// <summary>A role someone gave the reader or took from them: who, when, the role (<c>moderator</c> or
-    /// <c>administrator</c>) and whether it was given.</summary>
-    public sealed record RoleChange(TangentPage.Author Who, DateTimeOffset At, string Role, bool Given);
+    /// <summary>A role someone gave the reader or took from them: who, when, the role by its word (<c>moderator</c>),
+    /// whether it was given, and the role's name now, its word where the role is gone.</summary>
+    public sealed record RoleChange(TangentPage.Author Who, DateTimeOffset At, string Role, bool Given, string Name);
 
     /// <summary>How many of a kind are new, whether that is a lower bound because a read the door made was full, and
     /// the newest of them, a few at most.</summary>

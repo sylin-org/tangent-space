@@ -20,9 +20,10 @@ public sealed class Post : Entity<Post>
 
     /// <summary>The most UTF-8 bytes a body holds as the Post keeps it: what was sent, within <see cref="BodyLimit"/>,
     /// grown by at most <see cref="Mentions.Limit"/> typed handles written as mentions, each adding at most
-    /// <see cref="Mentions.TypedWeight"/>, and as many typed Tangents written as links, each adding at most
-    /// <see cref="Mentions.LinkedWeight"/>.</summary>
-    public const int KeptBodyLimit = BodyLimit + Mentions.Limit * (Mentions.TypedWeight + Mentions.LinkedWeight);
+    /// <see cref="Mentions.TypedWeight"/>, as many typed Tangents written as links, each adding at most
+    /// <see cref="Mentions.LinkedWeight"/>, and as many typed roles written as mentions, each adding at most
+    /// <see cref="Mentions.RoleWeight"/>.</summary>
+    public const int KeptBodyLimit = BodyLimit + Mentions.Limit * (Mentions.TypedWeight + Mentions.LinkedWeight + Mentions.RoleWeight);
 
     public const int TitleLimit = 200;
 

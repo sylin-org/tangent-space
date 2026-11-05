@@ -193,7 +193,7 @@
                         }
                         @foreach (var change in news.Roles ?? [])
                         {
-                            <p class="tangent-description door-admitted">@change.Who.Name @Roles.Changed(change.Role, change.Given).</p>
+                            <p class="tangent-description door-admitted">@change.Who.Name @Roles.Changed(Spoken(change.Name), change.Given).</p>
                         }
                         @Changed("Your posts someone else edited", "edited your post", news.Edited)
                         @Changed("Your posts someone else removed", "removed your post", news.Removed)
@@ -336,8 +336,14 @@
         return string.Join(", ", parts);
     }
 
+    /// <summary>A role's name as a sentence speaks it: its first letter in lower case, unless the name opens with
+    /// capitals, as an acronym does.</summary>
+    private static string Spoken(string name)
+        => name.Length > 1 && char.IsUpper(name[1]) ? name : name.Length > 0 ? char.ToLowerInvariant(name[0]) + name[1..] : name;
+
     /// <summary>The news in one sentence: each group that holds something, in the order the door shows them, each new Post
-    /// counted once — a Tangent's part counts only what no group before it does.</summary>
+    /// counted once, in the first group that holds it — what is for the reader wins, so a Tangent's part counts only what
+    /// neither that nor a new article holds, and the new articles only what is not for the reader.</summary>
     private static string Sentence(Door.Since news)
     {
         var parts = new List<string>();

@@ -71,7 +71,7 @@ public sealed record Publishing(string State, string Sentence, string? Detail, F
             : "It is being taken down.";
 
     /// <summary>Whether the line's form publishes the article, rather than asking for the grant again.</summary>
-    [System.Text.Json.Serialization.JsonIgnore]
+    [Newtonsoft.Json.JsonIgnore]
     public bool Publishes => State == Offer || State == ConnectionsController.Word(ArticleState.EditedByOthers);
 
     /// <summary>Whether a visitor reads the Tangent <paramref name="tangentId"/> of a place of <paramref name="space"/>: the

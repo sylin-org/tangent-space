@@ -35,7 +35,7 @@ public sealed class ConnectionsController(KoanWebBaseUrl baseUrl, Nudge nudge) :
 
     [HttpGet(Path)]
     [Tool(Name = "read_connections")]
-    [Description("Read your Connections: whether your public articles publish under your own atproto account, and where each one stands there — publishing, published, updated, edited by someone else, still out though no longer public here, or what could not be done and when it is tried again.")]
+    [Description("Read your Connections: whether your public articles publish under your own atproto account, and where each one stands there — publishing, published, updated, edited by someone else, still out though no longer public here, held back while it is not public here, or what could not be done and when it is tried again.")]
     public async Task<IActionResult> Get(CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
@@ -139,6 +139,7 @@ public sealed class ConnectionsController(KoanWebBaseUrl baseUrl, Nudge nudge) :
         ArticleState.NeedsGrant => "Waiting for permission",
         ArticleState.EditedByOthers => "Edited by someone else; your copy stays as you wrote it",
         ArticleState.Remains => "Still public on Bluesky, though it no longer is here. " + Publishing.Undoing(connection),
+        ArticleState.Held => "Not published, since it isn't public here",
         _ => "Retracted"
     };
 }

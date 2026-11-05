@@ -55,11 +55,11 @@ public sealed class Receipt : Entity<Receipt>
 
     /// <summary>The state of an article against what its Connection delivered, as its author reads it; <paramref name="open"/>
     /// says whether it should be out, public and standing (<see cref="Publishing.Open"/>), so a copy still out of one that
-    /// should not be remains, and says so, until its retraction lands.</summary>
+    /// should not be remains, and says so, until its retraction lands, and one that never went out is held.</summary>
     public static ArticleState StateOf(Receipt receipt, Post? post, Connection connection, bool open)
     {
-        if (receipt.Retracted) return ArticleState.Retracted;
-        if (!open) return receipt.IsLive() ? ArticleState.Remains : ArticleState.Retracted;
+        if (!open) return receipt.IsLive() ? ArticleState.Remains : receipt.Document is null ? ArticleState.Held : ArticleState.Retracted;
+        if (receipt.Retracted && receipt.Document is not null) return ArticleState.Retracted;
         var behind = post is not null && receipt.Version < post.Version;
         if (behind && !Theirs(post!, receipt)) return ArticleState.EditedByOthers;
         if (behind && connection.NeedsGrant) return ArticleState.NeedsGrant;
@@ -86,5 +86,8 @@ public enum ArticleState
     /// <summary>It is no longer public here, or is removed, and its copy is still out: taken down at the next run, or once
     /// the grant comes back.</summary>
     Remains,
+
+    /// <summary>It never went out, and does not while it is not public here or is removed.</summary>
+    Held,
     Retracted
 }

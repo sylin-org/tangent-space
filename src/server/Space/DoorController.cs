@@ -110,7 +110,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             // event in a Tangent they may not view moves nothing they can see.
             var newestViewable = window.Where(e => Viewable(e.TangentId)).Select(e => e.Seq).DefaultIfEmpty(0).Max();
             through = new[] { unread.Floor, newestViewable, forYou.Through }.Max();
-            news = News(unread, forYou, forYouGroups, fresh, window, posts, tangents, people, through, baseAddress)
+            news = News(unread, forYou, forYouGroups, fresh, window, posts, tangents, people, await RoleNames(forYouGroups.Roles, ct), through, baseAddress)
                 with { Let = await Tangents.Asking.Decided(forYouGroups.Let, people, baseAddress, ct) };
             // A door that carries a form is never stored, so a browser's Back after sign-out redisplays nothing of it; any
             // other door of a signed-in reader is theirs alone to cache.
@@ -300,10 +300,12 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
     }
 
     /// <summary>What is new to the reader, said: what is for them, then what is new in each Tangent and the new
-    /// articles, each count a lower bound where a read it came from was full.</summary>
+    /// articles, each count a lower bound where a read it came from was full. What is for the reader wins: a new article
+    /// that replies to them, is taken from their Post, mentions them or is a report counts there and not among the new
+    /// articles.</summary>
     private Door.Since News(Unread unread, Unread.ForYou forYou, ForYouGroups groups, IReadOnlyList<Event> fresh, IReadOnlyList<Event> window,
         IReadOnlyDictionary<string, Post> posts, IReadOnlyDictionary<string, Tangents.Tangent> tangents,
-        IReadOnlyDictionary<string, TangentPage.Author> people, long through, string baseAddress)
+        IReadOnlyDictionary<string, TangentPage.Author> people, IReadOnlyDictionary<string, string> roleNames, long through, string baseAddress)
     {
         var partial = LogWindow.Partial(window, unread.Floor);
         Door.Group Group(IReadOnlyList<Event> events, bool atLeast) => this.Group(events, atLeast, posts, tangents, people);
@@ -320,18 +322,29 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
                     byTangent.Count(e => e.PostId == e.TopicId), byTangent.Count(e => e.PostId != e.TopicId),
                     byTangent.Count(e => !forReader.Contains(e.PostId!) && !Article(e, posts)), partial))
                 .ToList(),
-            Group(fresh.Where(e => Article(e, posts)).ToList(), partial),
+            Group(fresh.Where(e => Article(e, posts) && !forReader.Contains(e.PostId!)).ToList(), partial),
             null,
             Group(groups.Taken, forYou.AtLeast),
             groups.Admitted is { } admitted ? new Door.Decision(Person(people, admitted.ActorId!), admitted.At) : null,
             groups.Lifted is { } lifted ? new Door.Decision(Person(people, lifted.ActorId!), lifted.At, Participants.People.Word(lifted.Before!.Value)) : null,
-            groups.Roles.Select(e => new Door.RoleChange(Person(people, e.ActorId!), e.At, Roles.Word(e.Role!), e.Given!.Value)).ToList(),
+            groups.Roles.Select(e => new Door.RoleChange(Person(people, e.ActorId!), e.At, Roles.Word(e.Role!), e.Given!.Value,
+                roleNames.GetValueOrDefault(e.Role!) ?? Roles.Word(e.Role!))).ToList(),
             Group(groups.Edited, forYou.AtLeast),
             Group(groups.Removed, forYou.AtLeast),
             Group(groups.Reports, forYou.AtLeast),
             groups.TimedOut is { } timedOut ? new Door.Decision(Person(people, timedOut.ActorId!), timedOut.At, Until: unread.Reader.StandingUntil) : null,
             groups.Declined is { } declined ? new Door.Decision(Person(people, declined.ActorId!), declined.At) : null,
             forYou.Waiting > 0 ? new Door.Waiting(forYou.Waiting, forYou.AtLeast, baseAddress + ApplicationsController.Path) : null);
+    }
+
+    /// <summary>The name each role these changes name holds now, by key, in one keyed read; a role since deleted has
+    /// none.</summary>
+    private static async Task<IReadOnlyDictionary<string, string>> RoleNames(IReadOnlyList<Event> changes, CancellationToken ct)
+    {
+        var keys = changes.Select(e => e.Role).OfType<string>().Distinct(StringComparer.Ordinal).ToList();
+        if (keys.Count == 0) return new Dictionary<string, string>();
+        return (await Koan.Identity.Roles.Role.Get(keys.Select(Koan.Identity.Roles.Role.KeyFor).ToList(), ct)).OfType<Koan.Identity.Roles.Role>()
+            .ToDictionary(role => role.Key, role => role.Name, StringComparer.Ordinal);
     }
 
     /// <summary>Whether a new Post is an article's root.</summary>
