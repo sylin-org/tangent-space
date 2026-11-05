@@ -100,7 +100,7 @@ public sealed class DoorTests(ITestOutputHelper output)
         }
 
         var html = await Html(browser.Client, "/");
-        Assert.Contains("Since you were here: 1 reply to you, 1 mention of you, 1 new post in Articles, 2 new posts in The workshop, 1 new article.",
+        Assert.Contains("Since you were here: 1 reply to you, 1 mention of you, 1 new article.",
             WebUtility.HtmlDecode(html));
         Assert.Contains($"name=\"{SeenController.ThroughField}\" value=\"{through.ToString(CultureInfo.InvariantCulture)}\"", html);
         Assert.Contains("Mark all seen", html);
@@ -346,10 +346,10 @@ public sealed class DoorTests(ITestOutputHelper output)
 
         using (var json = await Json(tangentSpace.Client, "/"))
         {
+            // The one article is featured above, so its Tangent has no shelf rather than an empty one.
             var shelves = json.RootElement.GetProperty("shelves");
-            Assert.Equal([Articles, Workshop], shelves.EnumerateArray().Select(shelf => shelf.GetProperty("slug").GetString()!).ToList());
-            Assert.Empty(shelves[0].GetProperty("topics").EnumerateArray());
-            var workshop = shelves[1];
+            Assert.Equal([Workshop], shelves.EnumerateArray().Select(shelf => shelf.GetProperty("slug").GetString()!).ToList());
+            var workshop = shelves[0];
             Assert.Equal((DoorController.AliveLimit + 2, $"{BaseUrl}/t/{Workshop}"), (workshop.GetProperty("topicCount").GetInt32(), workshop.GetProperty("address").GetString()));
             Assert.Equal([topics[1].Id, topics[0].Id], workshop.GetProperty("topics").EnumerateArray().Select(topic => topic.GetProperty("id").GetString()!).ToList());
         }

@@ -25,8 +25,8 @@ public sealed class PostBody
         Refusal = refusal;
     }
 
-    /// <summary>The Markdown the Post keeps: the words sent, each typed handle of a participant here written as their
-    /// mention and each typed Tangent as its link.</summary>
+    /// <summary>The Markdown the Post keeps: the words sent, each typed handle of a participant here and each typed role
+    /// written as their mention, and each typed Tangent as its link.</summary>
     public string Text { get; }
 
     /// <summary>The Markdown as its sender sent it, which <see cref="Post.BodyLimit"/> bounds.</summary>
@@ -39,7 +39,7 @@ public sealed class PostBody
     /// <summary>The DIDs the body mentions, each once, in the order of their first mention.</summary>
     public IReadOnlyList<string> Mentioned { get; }
 
-    /// <summary>The roles the body mentions, by key, each once, in the order typed (<see cref="Mentions.Typed"/>).</summary>
+    /// <summary>The roles the body mentions, by key, each once, in the order of their first mention.</summary>
     public IReadOnlyList<string> Roles { get; }
 
     /// <summary>The <see cref="Posts.Media"/> the body's images name, each once, in the order of their first image.</summary>
@@ -58,21 +58,20 @@ public sealed class PostBody
     public static PostBody Unjudged(string text) => new(text ?? "", text ?? "", [], Post.BodyNotJudged);
 
     /// <summary>A body as a participant wrote it: each handle typed in its prose that names a participant here written
-    /// as their mention, each Tangent as its link, and each role it names kept (<see cref="Mentions.Typed"/>), then
+    /// as their mention, each Tangent as its link, and each role it names as its mention (<see cref="Mentions.Typed"/>), then
     /// judged, so the body kept is the one judged. The rules of a glance read what was sent; a body they or the structure
     /// check refuse is judged as it was sent.</summary>
     public static async Task<PostBody> Written(string text, CancellationToken ct)
     {
         if (!Glanced(text) || !MarkdownHtml.Tractable(text)) return Of(text);
-        var written = await Mentions.Typed(text, ct);
-        return Judged(written.Body, text, written.Roles);
+        return Judged(await Mentions.Typed(text, ct), text);
     }
 
-    public static PostBody Of(string text) => Judged(text ?? "", text ?? "", []);
+    public static PostBody Of(string text) => Judged(text ?? "", text ?? "");
 
     /// <summary>The verdict on <paramref name="text"/>, the Markdown the Post would keep, written from
-    /// <paramref name="sent"/>, mentioning <paramref name="roles"/>.</summary>
-    private static PostBody Judged(string text, string sent, IReadOnlyList<string> roles)
+    /// <paramref name="sent"/>.</summary>
+    private static PostBody Judged(string text, string sent)
     {
         if (!Glanced(sent)) return new PostBody(text, sent, [], null);
         if (!MarkdownHtml.Tractable(text)) return new PostBody(text, sent, [], Post.BodyTooIntricate);
@@ -87,6 +86,7 @@ public sealed class PostBody
         }
 
         var mentioned = rendered.Held.Select(Mentions.Identity).OfType<string>().Distinct(StringComparer.Ordinal).ToList();
+        var roles = rendered.Held.Select(Mentions.RoleOf).OfType<string>().Distinct(StringComparer.Ordinal).ToList();
         if (!rendered.Fits) return new PostBody(text, sent, mentioned, Post.BodyRendersTooLong);
         var media = rendered.Images.Select(Posts.Media.IdIn).OfType<string>().Distinct(StringComparer.Ordinal).ToList();
         return new PostBody(text, sent, mentioned,

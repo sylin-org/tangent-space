@@ -31,6 +31,7 @@ public static class RenderedBodies
         return rendered;
     }
 
-    /// <summary>One parse of a body, every mention held.</summary>
-    public static MarkdownHtml.Rendered Render(string body) => MarkdownHtml.Render(body, target => Mentions.Identity(target) is not null);
+    /// <summary>One parse of a body, every mention held, of a participant or of a role.</summary>
+    public static MarkdownHtml.Rendered Render(string body)
+        => MarkdownHtml.Render(body, target => Mentions.Identity(target) is not null || Mentions.RoleOf(target) is not null);
 }

@@ -58,8 +58,18 @@ public sealed class MentionPickerTests
 
         var root = await Started(Ada, "Lanterns", "Who lights theirs first?");
         var page = TopicPath(root);
-        var replied = await Json(ada, page, page, new { id = Tids.Mint(), body = "@moderators could you pin this? cc @mo4writes.example" });
+        var replyId = Tids.Mint();
+        var replied = await Json(ada, page, page, new { id = replyId, body = "@moderators could you pin this? cc @mo4writes.example" });
         Assert.Equal(HttpStatusCode.Created, replied.Status);
+
+        // The role's mention is a link to its key, like a person's to their DID: the page marks it and the JSON names it.
+        var reply = (await Post.Get(replyId, Cancellation))!;
+        Assert.StartsWith("[@moderators](role:moderator) could you pin this?", reply.Body);
+        Assert.Equal([Access.Roles.Moderator], reply.MentionedRoles);
+        Assert.Contains("<strong>@moderators</strong> could you pin this?", (await Send(bea.Client, HttpMethod.Get, page)).Body);
+        var shown = (await Send(bea.Client, HttpMethod.Get, page, json: true)).Json.GetProperty("replies")[0].GetProperty("mentions");
+        Assert.Contains(shown.EnumerateArray(), mention => mention.GetProperty("id").GetString() == Access.Roles.Moderator
+            && mention.GetProperty("handle").GetString() == "moderator");
 
         var roleRows = await Event.Query(e => e.Kind == EventKind.Mention && e.Role == Access.Roles.Moderator, Cancellation);
         Assert.Single(roleRows);
