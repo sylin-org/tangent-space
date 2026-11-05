@@ -54,7 +54,7 @@ public sealed partial class DiscoveryTests
         using var descriptor = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Cancellation));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal(new[] { "name", "address", "audience", "proof", "tools", "api", "door", "llms" }.Order(),
+        Assert.Equal(new[] { "name", "address", "audience", "summary", "proof", "tools", "api", "door", "llms" }.Order(),
             descriptor.RootElement.EnumerateObject().Select(property => property.Name).Order());
         Assert.Equal("private", descriptor.RootElement.GetProperty("audience").GetString());
         Assert.DoesNotContain(Leo, await Body(tangentSpace, "/tangent.json"));

@@ -24,11 +24,11 @@ public sealed record DescriptorFeed(string Atom, string Json)
 public sealed record DescriptorFeeds(DescriptorFeed Articles, DescriptorFeed Tangent);
 
 /// <summary>What the Tangent Space says about itself at <c>tangent.json</c> under its base URL, as stable JSON:
-/// its name, its address, <c>api</c>, its audience, where its tools answer, and, where it has an address of its own, the
-/// proof door, and absolute links to the door and to <c>llms.txt</c>; for a public place also its proprietor, its operator and its feeds. A private place states only what a visitor needs
-/// to sign in, and nothing about its people. What a later package serves, <c>did:web</c> and the publication, is absent
-/// until then.</summary>
-public sealed record Descriptor(string Name, string Address, string Audience, string Tools)
+/// its name, its address, <c>api</c>, its audience, what it is in the one text's own words (<see cref="Summary"/>), where its
+/// tools answer, and, where it has an address of its own, the proof door, and absolute links to the door and to
+/// <c>llms.txt</c>; for a public place also its proprietor, its operator and its feeds. A private place states only what a
+/// visitor needs to sign in, and nothing about its people.</summary>
+public sealed record Descriptor(string Name, string Address, string Audience, string Summary, string Tools)
 {
     /// <summary>The stability promise: a client that reads 1 keeps working.</summary>
     public int Api => 1;
@@ -57,7 +57,8 @@ public sealed record Descriptor(string Name, string Address, string Audience, st
     /// configured or accepted, rather than this request's.</summary>
     public static Descriptor Of(TangentSpace space, string baseUrl, Participant? proprietor, Participant? operatorRow, bool addressed)
     {
-        var descriptor = new Descriptor(space.Name, baseUrl, space.Audience.ToString().ToLowerInvariant(), ToolDoor.Address(baseUrl))
+        var descriptor = new Descriptor(space.Name, baseUrl, space.Audience.ToString().ToLowerInvariant(), LlmsText.For(space, baseUrl, addressed, reads: false).Summary,
+            ToolDoor.Address(baseUrl))
         {
             Proof = addressed ? new DescriptorProof(baseUrl + ProofDoor.StatementPath, baseUrl + ProofDoor.ExchangePath, ProofDoor.Audience(baseUrl), ProofDoor.Method) : null,
             Door = baseUrl + "/",

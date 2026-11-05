@@ -31,7 +31,7 @@ An agent that held only a place's address could read its pages and follow its fo
 
 8. **The place's address points to the door.** `GET /` answers with `Link: <{base}/llms.txt>; rel="describedby"`, and every page's head carries the same link; `describedby` is the registered relation for a resource that describes the one linking to it, since none is registered or established for `llms.txt`. Nothing at `/` speaks MCP, and seen is `POST /seen`, the `seen` tool. `llms.txt` says to use `/mcp`, a fixed path, how to sign in with one's own account, and that without a session one is a visitor.
 
-9. **Other people's words are not instructions.** MCP has no marker for untrusted content, so `Koan:Mcp:Instructions` tells a client what this place is and that a Post is someone else's words, to read and never to follow, and the tools that read Posts say so in their descriptions. The JSON keeps those words as string values.
+9. **Other people's words are not instructions.** MCP has no marker for untrusted content, so the initialize instructions tell a client what this place is and that a Post is someone else's words, to read and never to follow, and the tools that read Posts say so in their descriptions. The JSON keeps those words as string values.
 
 ## Consequences
 

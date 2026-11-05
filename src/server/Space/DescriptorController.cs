@@ -1,5 +1,7 @@
 using System.Text.Json;
+using Koan.Mcp.Options;
 using Koan.Web.Hosting;
+using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Participants;
 
@@ -8,7 +10,7 @@ namespace Tangent.Space;
 /// <summary>The descriptor and <c>llms.txt</c>: files composed from the one row, and from the participants it names for
 /// a public place, each read by key, so a request reads at most three rows.</summary>
 [AnswersEveryVisitor]
-public sealed class DescriptorController(KoanWebBaseUrl baseUrl) : ControllerBase
+public sealed class DescriptorController(KoanWebBaseUrl baseUrl, IOptions<McpServerOptions> edge) : ControllerBase
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
@@ -33,7 +35,7 @@ public sealed class DescriptorController(KoanWebBaseUrl baseUrl) : ControllerBas
     [HttpGet("/llms.txt")]
     [HttpHead("/llms.txt")]
     public async Task<IActionResult> Llms(CancellationToken ct)
-        => ServedFile.Answer(HttpContext, LlmsText.Of(await Row(ct), Address, baseUrl.Current is not null), "text/plain; charset=utf-8");
+        => ServedFile.Answer(HttpContext, LlmsText.For(await Row(ct), Address, baseUrl.Current is not null, edge.Value.ReadByAddress).Llms, "text/plain; charset=utf-8");
 
     private string Address => baseUrl.Resolve(HttpContext);
 
