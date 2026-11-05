@@ -118,6 +118,20 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'visitor', seed: 'many-tangents' },
     ],
   },
+  // Members-only Tangents as someone outside them finds them: one anyone joins, one to ask to join, one whose ask waits.
+  'tangents-members-only': {
+    path: '/t',
+    states: [{ name: 'outside', seed: 'members-only', signedIn: true }],
+  },
+  // A members-only Tangent's people, for whoever manages it: two asking to join, who is in, and a search.
+  'tangent-settings-people': {
+    path: '/t/workshop/settings/people',
+    states: [
+      { name: 'asking', seed: 'members-only-people', signedIn: true },
+      { name: 'found', seed: 'members-only-people', signedIn: true, query: { find: 'l' } },
+      { name: 'door', seed: 'members-only-people', signedIn: true, path: '/' },
+    ],
+  },
   // What a visitor reads: the action that signs in with Bluesky; on its way once pressed; the handle form for another
   // server, opened; and back from a failed sign-in with Koan's code: one through Bluesky that the provider did not
   // confirm, and by handle, the typed handle kept, one refused on the provider's page and a handle no account answers to;

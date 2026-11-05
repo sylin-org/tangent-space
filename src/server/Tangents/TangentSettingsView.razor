@@ -96,7 +96,7 @@
                 </fieldset>
                 @if (Mutable && !Model.Fixed)
                 {
-                    <p class="post-form-note"><a href="@Model.Access">Access</a> sets which roles read and post here.</p>
+                    <p class="post-form-note"><a href="@Model.Access">Access</a> sets which roles read and post here; <a href="@(Model.Access[..Model.Access.LastIndexOf('/')] + "/" + TangentPeopleController.Segment)">People</a>, who joins and who is in.</p>
                 }
                 @if (Mutable)
                 {

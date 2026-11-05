@@ -90,7 +90,9 @@ public sealed class Readable(string? participantId, TimeProvider? clock = null)
     }
 
     /// <summary>Whether <paramref name="row"/> reaches the reader; <see cref="Prepare"/> has read what it needs.</summary>
-    public bool Reaches(Event row) => row.TangentId is { } tangent
+    public bool Reaches(Event row) => row.Kind == EventKind.TangentLet
+        ? participantId is not null && row.TargetId == participantId
+        : row.TangentId is { } tangent
         ? _tangents.GetValueOrDefault(tangent)
         : _place && (row.Kind == EventKind.SpaceChanged || (participantId is not null && row.TargetId == participantId)
                      || (_decides && Application(row)));

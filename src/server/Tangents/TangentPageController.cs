@@ -92,7 +92,10 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
             DateOnly.FromDateTime(DateTime.UtcNow),
             capabilities.Holds(Bit.ManageTangent) ? address + "/" + TangentWrites.SettingsSegment : null,
             creates ? baseAddress + NewTangentController.Route : null,
-            audience == Audience.Public ? Feeds.TangentLinks(baseAddress, row.Id, row.Name, space.Name) : null));
+            audience == Audience.Public ? Feeds.TangentLinks(baseAddress, row.Id, row.Name, space.Name) : null,
+            reader is not null && Inside.In(await Inside.Own(row.Id, reader.Id, ct))
+                ? Render.Form.Posting(address + "/" + JoinController.LeaveSegment)
+                : null));
     }
 
     /// <summary>One Topic as a list shows it, what is new in it marked for a signed-in reader by the one rule
@@ -173,7 +176,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
         var listed = (await ViewableTangents.Read(personId, ViewableTangents.Views, null, SwitcherLimit, ct)).Tangents.ToList();
         if (listed.All(row => row.Id != current.Id)) listed.Add(current);
         return listed.Select(row => new TangentPage.Listed(row.Id, row.Name, Word(row.DefaultKind), Address(row.Id),
-            row.Id == current.Id ? current.TopicCount : row.TopicCount, Tile.For(row, BaseAddress() + "/"))).ToList();
+            row.Id == current.Id ? current.TopicCount : row.TopicCount, Tile: Tile.For(row, BaseAddress() + "/"))).ToList();
     }
 
     private string Address(string slug) => BaseAddress() + "/t/" + Uri.EscapeDataString(slug);

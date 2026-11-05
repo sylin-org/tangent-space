@@ -59,6 +59,9 @@ public sealed class Tangent : Entity<Tangent>
     /// <summary>Its place among the Tangents, lowest first.</summary>
     public int Order { get; set; }
 
+    /// <summary>How a participant outside it comes in while it is private.</summary>
+    public Joining Joining { get; set; }
+
     /// <summary>How many Topics were started here, raised in the commit that starts one.</summary>
     public int TopicCount { get; set; }
 
