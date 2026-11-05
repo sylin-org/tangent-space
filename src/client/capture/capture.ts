@@ -194,8 +194,8 @@ async function captureState(browser: Browser, pageBase: URL, baseUrl: URL, path:
           await page.$eval(selector, (field, given) => ((field as HTMLInputElement).value = given), value)
         for (const [selector, value] of Object.entries(state.fill ?? {})) await page.fill(selector, value)
         if (state.reload) await page.reload({ waitUntil: 'networkidle' })
-        if (state.click) {
-          await page.click(state.click)
+        if (state.click) await page.click(state.click)
+        if (state.click || state.waitFor) {
           if (state.waitFor) await page.waitForSelector(state.waitFor, { timeout: 15_000 })
           await page.waitForLoadState('networkidle')
         }

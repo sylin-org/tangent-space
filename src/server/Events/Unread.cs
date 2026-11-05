@@ -70,13 +70,15 @@ public sealed class Unread
     public static bool Arrival(Event row)
         => row.Kind == EventKind.PostCreated || (row.Kind == EventKind.Mention && (row.Version ?? 1) == 1);
 
-    /// <summary>What is for the reader and new to them: each row of the log that names them as its target, and, while
-    /// they may view the moderators' Tangent, each report, that someone else made past the floor and that reaches them;
+    /// <summary>What is for the reader and new to them: each row of the log that names them as its target, each mention of
+    /// a role they hold, and, while they may view the moderators' Tangent, each report, that someone else made past the
+    /// floor and that reaches them, a Post that mentions them more than once counting once;
     /// and, while they hold <c>ManageStanding</c>, the applications that wait past it. A row that brought a Post
     /// (<see cref="Arrival"/>) stays while that Post and its Topic stand and the Post is new in its Topic, so reading the
     /// Topic clears it here too; someone else's edits of one Post are its newest, a change of the reader's standing is
     /// its newest, and a role given or taken is the newest change of that role. Newest first. One read of at most
-    /// <see cref="CountLimit"/> and one more rows of each kind, what capability reads for the Tangents they name, and
+    /// <see cref="CountLimit"/> and one more rows of each kind, the mentions of their roles one range of
+    /// <c>ix_event_roles</c> for each, what capability reads for the Tangents they name, and
     /// one keyed read each of the Posts they name and of the reader's marks on their Topics.</summary>
     public async Task<ForYou> ForYouNow(CancellationToken ct, TimeProvider? clock = null)
     {
@@ -90,11 +92,19 @@ public sealed class Unread
             ? await Event.Query(e => e.Report == true && e.Seq > floor,
                 new QueryDefinition { Page = 1, PageSize = CountLimit + 1 }.WithSort<Event>(sort => sort.OrderByDescending(e => e.Seq)), ct)
             : [];
-        await readable.Prepare([.. targeted, .. reports], ct);
+        var held = await readable.Held(ct);
+        IReadOnlyList<Event> named = held.Count > 0
+            ? await Event.Query(e => held.Contains(e.Role!) && e.Kind == EventKind.Mention && e.Seq > floor,
+                new QueryDefinition { Page = 1, PageSize = CountLimit + 1 }.WithSort<Event>(sort => sort.OrderByDescending(e => e.Seq)), ct)
+            : [];
+        await readable.Prepare([.. targeted, .. reports, .. named], ct);
         var decides = await readable.Decides(ct);
         var waiting = decides ? await Applications.Waiting(floor, long.MaxValue, CountLimit + 1, ct) : [];
 
-        var reached = targeted.Concat(reports).Where(row => row.ActorId != readerId && readable.Reaches(row))
+        // A Post that mentions the reader and a role of theirs, or two of their roles, is one mention of them.
+        var mentioning = targeted.Where(row => row.Kind == EventKind.Mention).Select(Mentioned).ToHashSet(StringComparer.Ordinal);
+        var reached = targeted.Concat(reports).Concat(named.Where(row => mentioning.Add(Mentioned(row))))
+            .Where(row => row.ActorId != readerId && readable.Reaches(row))
             .DistinctBy(row => row.Seq).OrderByDescending(row => row.Seq).ToList();
         var posts = await Posts(reached, ct);
         var marks = await Marks(reached.Where(Arrival).Select(row => row.TopicId).OfType<string>(), ct);
@@ -121,9 +131,12 @@ public sealed class Unread
         }
 
         var through = new[] { floor, kept.Count > 0 ? kept[0].Seq : floor, waiting.Count > 0 ? waiting[0].WaitingSeq!.Value : floor }.Max();
-        var atLeast = targeted.Count > CountLimit || reports.Count > CountLimit || waiting.Count > CountLimit;
+        var atLeast = targeted.Count > CountLimit || reports.Count > CountLimit || named.Count > CountLimit || waiting.Count > CountLimit;
         return new ForYou(kept, waiting.Count, atLeast, through, decides, posts);
     }
+
+    /// <summary>The Post version a mention was written with, which one mention of the reader stands for.</summary>
+    private static string Mentioned(Event row) => row.PostId + "\n" + row.Version;
 
     /// <summary>How many things are for the reader and new to them, as every page's masthead shows it, with the door's
     /// <paramref name="door"/> address, where they are read.</summary>

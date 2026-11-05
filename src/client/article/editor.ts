@@ -3,6 +3,7 @@ import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view'
 import { draftKey, readDraft, writeDraft } from '../composer'
 import { composerChanged } from '../islands/composer'
+import { attachSuggestions, textareaSurface } from '../suggest'
 import { bring, refusedHere, type Brought } from './bringing'
 import { articleExtensions } from './extensions'
 import { canEditMarkdownRichly } from './markdown-roundtrip'
@@ -22,6 +23,7 @@ export interface ArticleProps {
   bring: string | null
   participant: string | null
   edit: string | null
+  suggest?: string | null
 }
 
 const noImages = 'Images come in where the place lets you write them.'
@@ -589,6 +591,36 @@ export function writeArticle(props: ArticleProps): () => void {
   }
   form.addEventListener('keydown', onKeydown, { capture: true })
   cleanups.push(() => form.removeEventListener('keydown', onKeydown, { capture: true }))
+
+  // Typing @ or # offers who and where to name, in either view.
+  if (props.suggest) {
+    cleanups.push(attachSuggestions(textareaSurface(source), props.suggest))
+    cleanups.push(attachSuggestions({
+      element: editor.view.dom,
+      keys: surface,
+      before: () => {
+        const { $from } = editor.state.selection
+        return $from.parent.textBetween(0, $from.parentOffset, undefined, '￼')
+      },
+      pointBack: (characters) => {
+        const point = editor.view.coordsAtPos(Math.max(0, editor.state.selection.from - characters))
+        return { left: point.left, bottom: point.bottom }
+      },
+      replaceBack: (characters, words) => {
+        const to = editor.state.selection.from
+        editor.view.dispatch(editor.state.tr.insertText(words, to - characters, to))
+      },
+      writable: () => rich && editor.isEditable,
+      onChange: (listener) => {
+        editor.on('update', listener)
+        editor.on('selectionUpdate', listener)
+        return () => {
+          editor.off('update', listener)
+          editor.off('selectionUpdate', listener)
+        }
+      },
+    }, props.suggest))
+  }
 
   renderCover()
   countWords()

@@ -49,7 +49,7 @@ public sealed record EditPost(
         if (CoverId is { Length: > 0 } && CoverId != post.CoverId && !await MediaUse.Reaches(EditorId, CoverId, ct)) return new Outcome<Post>.Refused(Post.NoCover);
         var at = At ?? DateTimeOffset.UtcNow;
         await AuditPartition.Snapshot(post, post.Version, ct);
-        var before = post.MentionedIds.ToList();
+        var before = post.MentionedIds.Concat(post.MentionedRoles).ToList();
         var used = post.UsedMedia();
         post.Edit(Body, Title, EditorId, at);
         if (CoverId is not null) post.Cover(CoverId);

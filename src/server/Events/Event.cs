@@ -21,6 +21,7 @@ public sealed class Event : Entity<Event>
     [Index(Name = "ix_event_seq", Unique = true)]
     [Index(Name = "ix_event_targets", Order = 1)]
     [Index(Name = "ix_event_reports", Order = 1)]
+    [Index(Name = "ix_event_roles", Order = 1)]
     public long Seq { get; set; }
 
     /// <summary>One of <see cref="EventKind"/>.</summary>
@@ -58,7 +59,10 @@ public sealed class Event : Entity<Event>
     /// admission.</summary>
     public Participants.Standing? Before { get; set; }
 
-    /// <summary>The role given or taken, by its key, on <see cref="EventKind.RoleChanged"/>.</summary>
+    /// <summary>The role given or taken, by its key, on <see cref="EventKind.RoleChanged"/>; the role mentioned, on a
+    /// <see cref="EventKind.Mention"/> that targets no one, which reaches each of its holders who may view its Tangent. In
+    /// <c>ix_event_roles</c> before the sequence, so a role's rows, newest first, are one range.</summary>
+    [Index(Name = "ix_event_roles", Order = 0)]
     public string? Role { get; set; }
 
     /// <summary>Whether the role was given (true) or taken (false), on <see cref="EventKind.RoleChanged"/>.</summary>

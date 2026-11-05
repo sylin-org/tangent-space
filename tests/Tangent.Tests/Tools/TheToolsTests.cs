@@ -97,6 +97,7 @@ public sealed class TheToolsTests
         [Action<DescriptorController>(nameof(DescriptorController.Descriptor))] = "the descriptor",
         [Action<DescriptorController>(nameof(DescriptorController.Llms))] = "llms.txt",
         [Action<EventsController>(nameof(EventsController.Get))] = "the event stream",
+        [Action<SuggestionsController>(nameof(SuggestionsController.Suggest))] = "a writer's suggestions, which an agent reads through read",
         [Action<NotFoundController>(nameof(NotFoundController.Answer))] = "the not-found catch-all"
     };
 

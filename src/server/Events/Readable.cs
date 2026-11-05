@@ -33,6 +33,7 @@ public sealed class Readable(string? participantId, TimeProvider? clock = null)
     private DateTimeOffset _read = DateTimeOffset.MinValue;
     private bool _place = true;
     private bool _decides;
+    private IReadOnlyList<string> _roles = [];
     private string? _moderators;
     private bool _placeRead;
 
@@ -66,6 +67,14 @@ public sealed class Readable(string? participantId, TimeProvider? clock = null)
     {
         if (!_placeRead) await ReadPlace(ct);
         return _decides;
+    }
+
+    /// <summary>The roles the place gives (<see cref="Roles.Given"/>) that the reader holds, by key, whose mentions are
+    /// theirs: what <see cref="Prepare"/> read of the place, or one read of it now where it read none.</summary>
+    public async Task<IReadOnlyList<string>> Held(CancellationToken ct)
+    {
+        if (!_placeRead) await ReadPlace(ct);
+        return _place ? _roles : [];
     }
 
     /// <summary>Whether reports reach the reader: they may view the moderators' Tangent, where every report is written
@@ -103,14 +112,16 @@ public sealed class Readable(string? participantId, TimeProvider? clock = null)
         return rows.FirstOrDefault(readable.Reaches)?.Seq ?? head;
     }
 
-    /// <summary>What the reader holds in the place: whether it exists for them, and whether they decide applications;
-    /// and which Tangent is the moderators', from the settings row the same read holds.</summary>
+    /// <summary>What the reader holds in the place: whether it exists for them, whether they decide applications, and the
+    /// roles they hold that the place gives; and which Tangent is the moderators', from the settings row the same read
+    /// holds.</summary>
     private async Task ReadPlace(CancellationToken ct)
     {
         var rows = await Capabilities.LoadRows(participantId, null, ct);
         var place = rows.For(null);
         _place = place.Exists;
         _decides = place.Holds(Bit.ManageStanding);
+        _roles = participantId is null ? [] : place.RoleIds.Where(Roles.Given).ToList();
         _moderators = rows.Space.ModeratorsTangentId;
         _placeRead = true;
     }
