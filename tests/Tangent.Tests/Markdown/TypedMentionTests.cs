@@ -139,7 +139,7 @@ public sealed class TypedMentionTests
         Assert.Equal([Bea], reply.MentionedIds);
         // The Post Ada lands on reads it as every mention reads: Bea's handle, linked to her profile.
         var landed = await Send(ada.Client, HttpMethod.Get, new Uri(replied.Location!).AbsolutePath);
-        Assert.Contains($"<a href=\"{BaseUrl}/p/bea4writes.example\">@bea4writes.example</a> you said you had a spare knob?", landed.Body);
+        Assert.Contains($"<a href=\"{BaseUrl}/p/bea4writes.example\" title=\"@bea4writes.example\">@bea4writes.example</a> you said you had a spare knob?", landed.Body);
 
         // Bea hears it on her door, among what is for her.
         var door = (await Send(bea.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news").GetProperty("mentions");
@@ -192,7 +192,7 @@ public sealed class TypedMentionTests
         var html = WebUtility.HtmlDecode((await Send(ada.Client, HttpMethod.Get, TopicPath(root))).Body);
         Assert.Contains("<p>Ask @nobody.example, or write to bea@bea4writes.example.</p>", html);
         Assert.Contains("<code>@bea4writes.example</code>", html);
-        Assert.Single(html.Split($"href=\"{BaseUrl}/p/bea4writes.example\">@bea4writes.example</a>").Skip(1));
+        Assert.Single(html.Split($"href=\"{BaseUrl}/p/bea4writes.example\" title=\"@bea4writes.example\">@bea4writes.example</a>").Skip(1));
     }
 
     [Fact]
@@ -211,7 +211,7 @@ public sealed class TypedMentionTests
 
         using var visitor = Agent(tangentSpace);
         var html = (await Send(visitor, HttpMethod.Get, TopicPath(root))).Body;
-        Assert.Contains($"<a href=\"{BaseUrl}/p/bea.renamed.example\">@bea.renamed.example</a>?", html);
+        Assert.Contains($"<a href=\"{BaseUrl}/p/bea.renamed.example\" title=\"@bea.renamed.example\">@bea.renamed.example</a>?", html);
         Assert.DoesNotContain("bea4writes.example", html);
         Assert.Equal([Bea], (await Post.Get(replyId, Cancellation))!.MentionedIds);
         // The old handle names no one now: typed again, it stays the words typed.

@@ -54,7 +54,7 @@ public sealed class AtprotoAdapter(IAtprotoRepository repository, KoanWebBaseUrl
     {
         var did = article.AuthorId;
         var cover = article.CoverId is { } id ? await Cover(did, id, ct) : null;
-        var text = RenderedBodies.For(article).PlainText();
+        var text = Mentions.PlainText(article, await QuotedPost.People(article, ct));
         var description = Lead(text);
         var title = article.Title ?? "";
         var canonical = Canonical(article);

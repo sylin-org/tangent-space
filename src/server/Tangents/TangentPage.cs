@@ -82,7 +82,14 @@ public sealed partial record TangentPage(
 
     /// <summary>A participant as the page shows them: the name to show, their handle, their kind and avatar, and, where
     /// the page links their name, their profile's address.</summary>
-    public sealed record Author(string Id, string Handle, string Name, string Kind, string? Avatar, string? Profile = null);
+    public sealed record Author(string Id, string Handle, string Name, string Kind, string? Avatar, string? Profile = null)
+    {
+        /// <summary>A participant as a page shows them, their name linked to their profile under
+        /// <paramref name="baseAddress"/> where one is given.</summary>
+        public static Author Of(Participants.Participant row, string? baseAddress = null)
+            => new(row.Id, row.ShownHandle(), row.ShownName(), row.Kind.ToString().ToLowerInvariant(), row.Profile.Avatar,
+                baseAddress is null ? null : Participants.ProfilePage.AddressOf(baseAddress, row.ShownHandle()));
+    }
 
     /// <summary>A Tangent the reader may view: its slug, name, kind, address and how many Topics were started there, and the
     /// tile it wears, where the page draws it. A members-only Tangent the reader is outside of lists what it is about
@@ -123,7 +130,7 @@ public sealed partial record TangentPage(
         : null;
 
     /// <summary>The opening words of a Post's body as plain text on one line, each mention of a participant among
-    /// <paramref name="people"/> their current handle (<see cref="Mentions.PlainText"/>), cut at a word within
+    /// <paramref name="people"/> their name now (<see cref="Mentions.PlainText"/>), cut at a word within
     /// <see cref="OpeningLimit"/> characters.</summary>
     public static string Opening(Post post, IReadOnlyDictionary<string, Author> people) => Opening(Mentions.PlainText(post, people));
 

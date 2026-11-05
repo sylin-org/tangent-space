@@ -45,10 +45,6 @@ public sealed class SuggestionsController : ControllerBase
     public static string Address(string tangentAddress, string? topic = null)
         => tangentAddress + "/" + Segment + (topic is null ? "" : "?" + InTopic + "=" + Uri.EscapeDataString(topic));
 
-    /// <summary>The props of a body field's suggest island, which reads them at <see cref="Address"/>.</summary>
-    public static string Props(string tangentAddress, string? topic = null)
-        => System.Text.Json.JsonSerializer.Serialize(new { address = Address(tangentAddress, topic) });
-
     [HttpGet("/t/{tangent}/" + Segment)]
     [Needs(Bit.View)]
     public async Task<IActionResult> Suggest(string tangent, [FromQuery(Name = Typed)] string? typed,
@@ -70,10 +66,12 @@ public sealed class SuggestionsController : ControllerBase
     /// <summary>The suggestions, best first.</summary>
     public sealed record Answer(IReadOnlyList<Suggestion> Suggestions);
 
-    /// <summary>One suggestion: whether it is a <c>person</c>, a <c>role</c> or a <c>tangent</c>; what picking it writes after
-    /// the <c>@</c> or <c>#</c>; the name it is shown by; and a note beside it — a person's kind where they are an agent, how
-    /// many hold a role, a Tangent's description.</summary>
-    public sealed record Suggestion(string Kind, string Insert, string Name, string? Note);
+    /// <summary>One suggestion: whether it is a <c>person</c>, a <c>role</c> or a <c>tangent</c>; what typing it after the
+    /// <c>@</c> or <c>#</c> names — a handle, a role's word, a Tangent's slug; the link target picking it writes, so the
+    /// body keeps who or what it means — <c>at://</c> and a participant's id, a role's key, a Tangent's address; the name it
+    /// is shown by, which the picked link reads after its sign; and a note beside it — a person's kind where they are an
+    /// agent, how many hold a role, a Tangent's description.</summary>
+    public sealed record Suggestion(string Kind, string Insert, string Target, string Name, string? Note);
 
     /// <summary>How well a name meets what was typed: 0 for the whole of it, 1 where it starts with it, 2 where it holds
     /// it, null where it does neither. Nothing typed meets everything at 1.</summary>
@@ -116,9 +114,8 @@ public sealed class SuggestionsController : ControllerBase
             if (!known.TryGetValue(order[index], out var participant) || participant.Handle.Length == 0) continue;
             if (participant.Standing is Standing.Banned or Standing.Applied or Standing.Declined) continue;
             if (Meets(needle, participant.Handle, participant.Profile.DisplayName) is not { } meets) continue;
-            ranked.Add((meets, index, new Suggestion("person", participant.Handle,
-                participant.Profile.DisplayName is { Length: > 0 } name ? name : participant.Handle,
-                participant.Kind == ParticipantKind.Agent ? "agent" : null)));
+            ranked.Add((meets, index, new Suggestion("person", participant.Handle, Mentions.Target(participant.Id),
+                participant.ShownName(), participant.Kind == ParticipantKind.Agent ? "agent" : null)));
         }
 
         var roles = AppHost.GetRequiredService<RoleCollection>(nameof(SuggestionsController));
@@ -127,7 +124,7 @@ public sealed class SuggestionsController : ControllerBase
             var word = Roles.Word(role.Key);
             if (Meets(needle, word, role.Name) is not { } meets) continue;
             var holders = await RoleMember.Count.Where(member => member.RoleKey == role.Key, CountStrategy.Exact, ct);
-            ranked.Add((meets, order.Count, new Suggestion("role", word, role.Name, holders == 1 ? "1 person" : $"{holders} people")));
+            ranked.Add((meets, order.Count, new Suggestion("role", word, role.Key, role.Name, holders == 1 ? "1 person" : $"{holders} people")));
         }
 
         return ranked.OrderBy(entry => entry.Meets).ThenBy(entry => entry.Source).Take(Limit).Select(entry => entry.Suggestion).ToList();
@@ -138,5 +135,5 @@ public sealed class SuggestionsController : ControllerBase
             .Select((tangent, index) => (Meets: Meets(needle, tangent.Id, tangent.Name), Index: index, Tangent: tangent))
             .Where(entry => entry.Meets is not null)
             .OrderBy(entry => entry.Meets).ThenBy(entry => entry.Index).Take(Limit)
-            .Select(entry => new Suggestion("tangent", entry.Tangent.Id, entry.Tangent.Name, null)).ToList();
+            .Select(entry => new Suggestion("tangent", entry.Tangent.Id, Mentions.TangentTarget(entry.Tangent.Id), entry.Tangent.Name, null)).ToList();
 }

@@ -86,7 +86,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
             space.Name,
             baseAddress + "/",
             reader is null ? null : new TangentPage.Reader(
-                reader.Id, Named(reader).Name, Named(reader).Handle, Role(capabilities), reader.Profile.Avatar,
+                reader.Id, reader.ShownName(), reader.ShownHandle(), Role(capabilities), reader.Profile.Avatar,
                 baseAddress + AuthConstants.Routes.Logout + "?return=" + back, place is null ? null : TangentSpaceSettingsController.Entry(place, baseAddress),
                 await unread!.BadgeNow(baseAddress + "/", ct)),
             DateOnly.FromDateTime(DateTime.UtcNow),
@@ -152,20 +152,9 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
             .Concat(topics.Concat(latest).Select(post => post.EditedBy).OfType<string>()).Distinct(StringComparer.Ordinal).ToList();
         if (ids.Count == 0) return new Dictionary<string, TangentPage.Author>();
         var rows = await Participant.Get(ids, ct);
-        return rows.OfType<Participant>().ToDictionary(row => row.Id, row =>
-        {
-            var (name, handle) = Named(row);
-            return new TangentPage.Author(row.Id, handle, name, row.Kind.ToString().ToLowerInvariant(), row.Profile.Avatar);
-        }, StringComparer.Ordinal);
+        return rows.OfType<Participant>().ToDictionary(row => row.Id, row => TangentPage.Author.Of(row), StringComparer.Ordinal);
     }
 
-    /// <summary>The name a participant is shown by, and their handle: the profile's display name, else the handle,
-    /// else their Id.</summary>
-    private static (string Name, string Handle) Named(Participant participant)
-    {
-        var handle = participant.Handle.Length > 0 ? participant.Handle : participant.Id;
-        return (participant.Profile.DisplayName is { Length: > 0 } name ? name : handle, handle);
-    }
 
     /// <summary>The highest seeded role the reader holds, in words; null for none.</summary>
     private static string? Role(Capabilities capabilities) => Roles.Word(capabilities.RoleIds);

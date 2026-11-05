@@ -51,11 +51,6 @@ public sealed record QuotedPost(
     public static async Task<IReadOnlyDictionary<string, TangentPage.Author>> People(Post post, CancellationToken ct)
     {
         var ids = post.MentionedIds.Prepend(post.AuthorId).Concat(post.EditedBy is { } editor ? [editor] : []).Distinct(StringComparer.Ordinal).ToList();
-        return (await Participant.Get(ids, ct)).OfType<Participant>().ToDictionary(row => row.Id, row =>
-        {
-            var handle = row.Handle.Length > 0 ? row.Handle : row.Id;
-            return new TangentPage.Author(row.Id, handle, row.Profile.DisplayName is { Length: > 0 } name ? name : handle,
-                row.Kind.ToString().ToLowerInvariant(), row.Profile.Avatar);
-        }, StringComparer.Ordinal);
+        return (await Participant.Get(ids, ct)).OfType<Participant>().ToDictionary(row => row.Id, row => TangentPage.Author.Of(row), StringComparer.Ordinal);
     }
 }

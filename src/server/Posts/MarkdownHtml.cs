@@ -87,9 +87,9 @@ public static class MarkdownHtml
     /// <summary>How many times this process has parsed Markdown.</summary>
     public static long Parses => Interlocked.Read(ref _parses);
 
-    /// <summary>What a caller writes for a held link: its target and its words; with no target, the link's own words,
-    /// marked as a mention that has no page of its own.</summary>
-    public sealed record Link(string? Url, string Words);
+    /// <summary>What a caller writes for a held link: its target, its words and what hovering it shows; with no target,
+    /// the link's own words, marked as a mention that has no page of its own.</summary>
+    public sealed record Link(string? Url, string Words, string? Title = null);
 
     /// <summary>A piece of a rendered result: words as they stand, or a held link (<see cref="Held"/> its index) with
     /// its own words as the source wrote them.</summary>
@@ -126,7 +126,8 @@ public static class MarkdownHtml
 
                 if (written is { Url: { } url } && SafeUrl(url))
                 {
-                    var anchor = "<a href=\"" + WebUtility.HtmlEncode(url) + "\">" + WebUtility.HtmlEncode(written.Words) + "</a>";
+                    var title = written.Title is { } hover ? " title=\"" + WebUtility.HtmlEncode(hover) + "\"" : "";
+                    var anchor = "<a href=\"" + WebUtility.HtmlEncode(url) + "\"" + title + ">" + WebUtility.HtmlEncode(written.Words) + "</a>";
                     if (Encoding.UTF8.GetByteCount(anchor) <= LinkLimit)
                     {
                         builder.Append(anchor);

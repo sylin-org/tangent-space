@@ -4,6 +4,7 @@ import Paragraph from '@tiptap/extension-paragraph'
 import { Markdown } from '@tiptap/markdown'
 import { Placeholder } from '@tiptap/extensions'
 import type { Extensions } from '@tiptap/core'
+import { NamedChip } from './chip'
 
 export const articleExtensions = (door = '/'): Extensions => [
   StarterKit.configure({
@@ -27,6 +28,8 @@ export const articleExtensions = (door = '/'): Extensions => [
       return ['img', { ...HTMLAttributes, src: src.startsWith('/media/') ? door + src.slice(1) : src, referrerpolicy: 'no-referrer' }]
     },
   }).configure({ inline: true, allowBase64: false }),
+  // A name a pick wrote, as one chip, ahead of the link it would otherwise be.
+  NamedChip,
   Placeholder.configure({ placeholder: 'Start writing…' }),
   Markdown.configure({ markedOptions: { gfm: true, breaks: true } }),
 ]

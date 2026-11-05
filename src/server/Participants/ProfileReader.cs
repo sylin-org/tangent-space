@@ -34,7 +34,8 @@ public sealed class ProfileReadFailed(string reason, Exception? inner = null) : 
 /// command.</summary>
 public sealed class ProfileReader(HttpClient http, IOptions<ProfileReaderOptions> options)
 {
-    private const int DisplayNameLimit = 640;
+    /// <summary>The most characters of a display name kept.</summary>
+    public const int DisplayNameLimit = 640;
     private const int DescriptionLimit = 2560;
     private const int AvatarLimit = 2048;
 

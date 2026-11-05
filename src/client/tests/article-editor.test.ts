@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import type { Editor } from '@tiptap/core'
 import { writeArticle } from '../article/editor'
 import { draftKey } from '../composer'
 import { mountIslands } from '../islands'
+import { openComposer } from '../named'
+import { suggesting } from '../suggest'
 
 // The article form as the server renders it, with the composer on it: the visual editor writes Markdown back to the
 // form's own field, never rewrites what nobody changed, stays out where it cannot hold the meaning, and an image on its
@@ -52,6 +55,7 @@ beforeEach(() => {
 afterEach(() => {
   while (stops.length) stops.pop()!()
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
   localStorage.clear()
   document.body.innerHTML = ''
 })
@@ -384,4 +388,60 @@ test('a reply is written in the same editor, in a Post’s type, with no heading
   expect(tools).toContain('Insert image')
   expect(tools).not.toContain('Heading 2')
   expect(tools).not.toContain('Insert divider')
+})
+
+function reply(body: string, suggest: string | null = null) {
+  document.body.innerHTML =
+    '<form method="post" action="https://tangent.example/t/field-notes/cotton"><div class="host"><label>Your reply</label>' +
+    `<textarea name="body" required>${body}</textarea></div><button type="submit">Post reply</button></form>`
+  const host = document.querySelector<HTMLElement>('.host')!
+  stops.push(writeArticle({ host, door: '/', bring: null, participant, edit: null, post: true, suggest }))
+  const surface = host.querySelector<HTMLElement>('.ProseMirror')!
+  return { host, surface, source: host.querySelector<HTMLTextAreaElement>('textarea')!, editor: (surface as unknown as { editor: Editor }).editor }
+}
+
+test('a name in a body opens as one chip showing its words, and writes back the Markdown it was read from', () => {
+  const body = String.raw`Thanks [@Lu\]m\*e\_n\\](at://did:plc:lumen) and [@Moderators](role:moderator), see [#General](/t/general) or [a link](https://example.com).`
+  const { host, surface, source, editor } = reply(body)
+
+  expect(host.classList.contains('is-visual')).toBe(true)
+  const chips = [...surface.querySelectorAll<HTMLElement>('span[data-named]')]
+  expect(chips.map((chip) => [chip.textContent, chip.dataset.named, chip.getAttribute('contenteditable')])).toEqual([
+    ['@Lu]m*e_n\\', 'at://did:plc:lumen', 'false'],
+    ['@Moderators', 'role:moderator', 'false'],
+    ['#General', '/t/general', 'false'],
+  ])
+  expect(surface.querySelector('a')?.textContent).toBe('a link')
+
+  editor.commands.insertContentAt(editor.state.doc.content.size - 1, ' Yes.')
+  expect(source.value).toBe(body + ' Yes.')
+})
+
+test('a pick in the visual view writes a chip of who it means', async () => {
+  vi.spyOn(suggesting, 'read').mockResolvedValue([{ kind: 'person', insert: 'lumen.example', target: 'at://did:plc:lumen', name: 'Lumen', note: null }])
+  const { surface, source, editor } = reply('', '/t/field-notes/suggest')
+  // jsdom focuses an editable element only where it has a tab index.
+  surface.tabIndex = 0
+  // Nor has it the layout the list is placed under the caret by.
+  editor.view.coordsAtPos = () => ({ left: 0, right: 0, top: 0, bottom: 0 })
+  editor.commands.focus()
+  await vi.waitFor(() => expect(document.activeElement).toBe(surface))
+  editor.commands.insertContent('Hi @lu')
+  await vi.waitFor(() => expect(document.querySelector('.suggestions:not([hidden])')).not.toBeNull())
+  surface.parentElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+
+  expect(surface.querySelector<HTMLElement>('span[data-named]')?.textContent).toBe('@Lumen')
+  expect(source.value).toBe('Hi [@Lumen](at://did:plc:lumen)')
+})
+
+test('a card’s Mention puts the name where the writer is, in either view', () => {
+  const { source, editor } = reply('Hello')
+  editor.commands.focus('end')
+  openComposer()!.put({ words: '@Lu]men', target: 'at://did:plc:lumen' })
+  expect(source.value).toBe(String.raw`Hello [@Lu\]men](at://did:plc:lumen)`)
+
+  document.querySelector<HTMLButtonElement>('button[title="Markdown source"]')!.click()
+  source.setSelectionRange(5, 5)
+  openComposer()!.put({ words: '@Bea', target: 'at://did:plc:bea' })
+  expect(source.value).toBe(String.raw`Hello [@Bea](at://did:plc:bea) [@Lu\]men](at://did:plc:lumen)`)
 })

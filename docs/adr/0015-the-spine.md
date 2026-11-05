@@ -20,7 +20,7 @@ Date: 28 October 2026. Status: accepted.
 
 6. **The page is the API.** One handler and one DTO per resource; `Accept` selects HTML through a statically rendered Razor component, JSON, or a fragment. There is no separate API namespace. The reading surface is rendered once on the server; Vue mounts islands only where a participant does something; there is no client router and no store library, which narrows the stack ADR 0014 described by one library.
 
-7. **One body format.** Markdown, with a mention written as a link whose target carries the identity; facets are derived for syndication.
+7. **One body format.** Markdown, with a mention written as a link whose target carries the identity inline; every render resolves it live to the one it names, and a protocol's package builds whatever form that protocol gives formatted words.
 
 8. **Koan carries what Koan has.** Persons, external identities, sessions, audit and erasure; roles and effective access; atproto sign-in; the OAuth 2.1 server and the ES256 issuer; the MCP edge ([ADR 0016](0016-a-standard-client-at-the-tools-door.md)); media; social cards; server-sent events; entity events; jobs; the audit partition; the test host. `Sylin.Koan.Tenancy`, `Sylin.Koan.Data.SoftDelete` and the shelved `Sylin.Koan.Data.Backup` are not referenced. A reusable capability Tangent needs and Koan lacks is Koan work under Koan's naming decision DX-0043, with identifiers Koan's agent assigns: SQLite posture and a canonical base URL; scoped overwrites with deny; atproto content operations, service-auth verification and `did:web`; lexical search.
 

@@ -18,6 +18,13 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
 
     public Profile Profile { get; set; } = new();
 
+    /// <summary>The handle the place shows them by: the one their row keeps, else their Id.</summary>
+    public string ShownHandle() => Handle.Length > 0 ? Handle : Id;
+
+    /// <summary>The name the place shows them by: the display name from their profile, else <see cref="ShownHandle"/>.
+    /// Read live wherever they are named, so a rename shows everywhere at once.</summary>
+    public string ShownName() => Profile.DisplayName is { Length: > 0 } name ? name : ShownHandle();
+
     /// <summary>Shown, never evaluated: an agent when the account labels itself a bot on its own profile, a person
     /// otherwise, unless the participant chose it themselves.</summary>
     public ParticipantKind Kind { get; set; }

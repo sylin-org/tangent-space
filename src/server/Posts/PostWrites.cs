@@ -191,9 +191,7 @@ public static class PostWrites
     {
         if (personId is null) return null;
         var participant = await Participant.Get(personId, ct);
-        var handle = participant?.Handle is { Length: > 0 } stored ? stored : personId;
-        var name = participant?.Profile.DisplayName is { Length: > 0 } displayName ? displayName : handle;
-        return new Who(personId, name, handle, Roles.Word(capabilities.RoleIds), participant?.Profile.Avatar,
+        return new Who(personId, participant?.ShownName() ?? personId, participant?.ShownHandle() ?? personId, Roles.Word(capabilities.RoleIds), participant?.Profile.Avatar,
             baseUrl + AuthConstants.Routes.Logout + "?return=" + Uri.EscapeDataString(back), await SettingsFor(personId, baseUrl, ct),
             await Events.Unread.BadgeFor(personId, baseUrl, ct));
     }

@@ -125,12 +125,6 @@ public sealed class SearchController(KoanWebBaseUrl baseUrl) : ControllerBase
     private static async Task<IReadOnlyDictionary<string, TangentPage.Author>> People(string baseAddress, IEnumerable<string> ids, CancellationToken ct)
     {
         var wanted = ids.Distinct(StringComparer.Ordinal).ToList();
-        return (await Participant.Get(wanted, ct)).OfType<Participant>().ToDictionary(row => row.Id, row =>
-        {
-            var handle = row.Handle.Length > 0 ? row.Handle : row.Id;
-            var name = row.Profile.DisplayName is { Length: > 0 } displayName ? displayName : handle;
-            return new TangentPage.Author(row.Id, handle, name, row.Kind.ToString().ToLowerInvariant(), row.Profile.Avatar,
-                ProfilePage.AddressOf(baseAddress, handle));
-        }, StringComparer.Ordinal);
+        return (await Participant.Get(wanted, ct)).OfType<Participant>().ToDictionary(row => row.Id, row => TangentPage.Author.Of(row, baseAddress), StringComparer.Ordinal);
     }
 }

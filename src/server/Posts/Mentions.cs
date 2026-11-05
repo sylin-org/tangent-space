@@ -13,11 +13,12 @@ using Tangent.Tangents;
 namespace Tangent.Posts;
 
 /// <summary>A mention is a link in a body whose target is <c>at://</c> and a DID — <c>[@ada](at://did:plc:…)</c> — so
-/// the identity is written into the body and a handle that changes later changes nothing there; an <c>@</c> and a
-/// participant's handle typed in a body becomes one when the Post is written (<see cref="Typed"/>). Wherever a body is
-/// shown, a mention resolves to the participant with that DID: in HTML a link to their address reading <c>@</c> and
-/// their current handle, in plain text <c>@</c> and that handle; a DID that is no participant's leaves the link's own
-/// words. A Post keeps the identities its body mentions (<see cref="Post.MentionedIds"/>), at most <see cref="Limit"/>,
+/// the identity is written into the body and a handle or a name that changes later changes nothing there; a writer's
+/// pick writes it whole (<see cref="Target"/>), and an <c>@</c> and a participant's handle typed in a body becomes one
+/// when the Post is written (<see cref="Typed"/>). Wherever a body is shown, a mention resolves live to the participant
+/// with that DID: in HTML a link to their address reading <c>@</c> and the name the place shows them by
+/// (<see cref="Participant.ShownName"/>), with <c>@</c> and their handle as its title, so two people of one name are told
+/// apart; in plain text <c>@</c> and that name; a DID that is no participant's leaves the link's own words. A Post keeps the identities its body mentions (<see cref="Post.MentionedIds"/>), at most <see cref="Limit"/>,
 /// so nothing parses a body to find them. A role is mentioned the same way, by a link whose target is its key —
 /// <c>[@moderators](role:moderator)</c>, written from an <c>@</c> and its word typed — which the Post keeps among its roles
 /// (<see cref="Post.MentionedRoles"/>) and a page shows as its words, marked, while the role exists; and a Tangent's slug
@@ -34,8 +35,15 @@ public static partial class Mentions
     /// <summary>The most characters a mentioned DID holds.</summary>
     public const int IdentityLimit = 576;
 
-    /// <summary>What one resolved mention may weigh in an answer: its DID, handle and address, with room to spare.</summary>
-    public const int Weight = 2048;
+    /// <summary>What one resolved mention may weigh in an answer: its DID, handle and address, with room to spare, and its
+    /// name, each of its characters escaped at worst.</summary>
+    public const int Weight = 2048 + 6 * ProfileReader.DisplayNameLimit;
+
+    /// <summary>A participant's mention target, <c>at://</c> and their id: the one place it is written.</summary>
+    public static string Target(string participantId) => Scheme + participantId;
+
+    /// <summary>A Tangent's link target in a body, by its slug.</summary>
+    public static string TangentTarget(string slug) => "/t/" + slug;
 
     /// <summary>The most UTF-8 bytes writing one typed handle as its mention adds to a body: <c>[</c> before it, and
     /// <c>](at://</c>, the DID and <c>)</c> after it.</summary>
@@ -73,15 +81,13 @@ public static partial class Mentions
         var ids = shown.SelectMany(post => post.MentionedIds).Distinct(StringComparer.Ordinal).ToList();
         if (ids.Count > 0)
             foreach (var participant in (await Participant.Get(ids, ct)).OfType<Participant>())
-            {
-                var handle = participant.Handle.Length > 0 ? participant.Handle : participant.Id;
-                resolved[participant.Id] = new TopicPage.Mention(participant.Id, handle, ProfilePage.AddressOf(baseUrl, handle));
-            }
+                resolved[participant.Id] = new TopicPage.Mention(participant.Id, participant.ShownHandle(), participant.ShownName(),
+                    ProfilePage.AddressOf(baseUrl, participant.ShownHandle()));
 
         var keys = shown.SelectMany(post => post.MentionedRoles).Distinct(StringComparer.Ordinal).ToList();
         if (keys.Count > 0)
             foreach (var role in (await Role.Get(keys.Select(Role.KeyFor).ToList(), ct)).OfType<Role>())
-                resolved[role.Key] = new TopicPage.Mention(role.Key, Access.Roles.Word(role.Key), null);
+                resolved[role.Key] = new TopicPage.Mention(role.Key, Access.Roles.Word(role.Key), role.Name, null);
         return resolved;
     }
 
@@ -91,16 +97,16 @@ public static partial class Mentions
         => post.MentionedIds.Concat(post.MentionedRoles).Select(id => resolved.GetValueOrDefault(id)).OfType<TopicPage.Mention>().ToList();
 
     /// <summary>A Post's body at a version as safe HTML, each mention of a participant among <paramref name="mentioned"/> a
-    /// link to their address reading <c>@</c> and their current handle, each mention of a role among them its own words
-    /// marked, and every other mention its own words.</summary>
+    /// link to their address reading <c>@</c> and their name now, titled <c>@</c> and their handle, each mention of a role
+    /// among them its own words marked, and every other mention its own words.</summary>
     public static string Html(string postId, long version, string body, IReadOnlyList<TopicPage.Mention> mentioned)
         => RenderedBodies.For(postId, version, body).Html(target => (Identity(target) ?? RoleOf(target)) is { } id
             && mentioned.FirstOrDefault(mention => mention.Id == id) is { } mention
-                ? new MarkdownHtml.Link(mention.Address, "@" + mention.Handle)
+                ? new MarkdownHtml.Link(mention.Address, "@" + mention.Name, mention.Address is null ? null : "@" + mention.Handle)
                 : null);
 
     /// <summary>A Post's body as plain text on one line, each mention of a participant among <paramref name="people"/>
-    /// <c>@</c> and their current handle, and every other mention its own words.</summary>
+    /// <c>@</c> and their name now, and every other mention its own words.</summary>
     public static string PlainText(Post post, IReadOnlyDictionary<string, TangentPage.Author> people)
         => RenderedBodies.For(post).PlainText(Words(people));
 
@@ -110,7 +116,7 @@ public static partial class Mentions
         => MarkdownHtml.Tractable(markdown) ? RenderedBodies.Render(markdown).PlainText(Words(people)) : markdown;
 
     private static Func<string, string?> Words(IReadOnlyDictionary<string, TangentPage.Author> people)
-        => target => Identity(target) is { } did && people.TryGetValue(did, out var person) ? "@" + person.Handle : null;
+        => target => Identity(target) is { } did && people.TryGetValue(did, out var person) ? "@" + person.Name : null;
 
     /// <summary>A Post's body at a version as plain text on one line with its mentions of participants left out, so it
     /// names no one, and no punctuation stranded where one stood.</summary>
@@ -173,7 +179,7 @@ public static partial class Mentions
             var asked = handles.Concat(handles.Select(handle => handle.ToLowerInvariant())).Distinct(StringComparer.Ordinal).ToList();
             foreach (var participant in await Participant.Query(participant => asked.Contains(participant.Handle),
                          new QueryDefinition { Page = 1, PageSize = asked.Count }, ct))
-                if (Identity(Scheme + participant.Id) is not null) holders.TryAdd(participant.Handle, participant.Id);
+                if (Identity(Target(participant.Id)) is not null) holders.TryAdd(participant.Handle, participant.Id);
         }
 
         var tangents = slugs.Count == 0 ? new HashSet<string>(StringComparer.Ordinal)
@@ -190,7 +196,7 @@ public static partial class Mentions
             {
                 var slug = text.ToLowerInvariant();
                 if (places == Limit || !tangents.Contains(slug)) continue;
-                target = "/t/" + slug;
+                target = TangentTarget(slug);
                 places++;
             }
             else if (!text.Contains('.'))
@@ -202,7 +208,7 @@ public static partial class Mentions
             else
             {
                 if (people == Limit || (holders.GetValueOrDefault(text) ?? holders.GetValueOrDefault(text.ToLowerInvariant())) is not { } did) continue;
-                target = Scheme + did;
+                target = Target(did);
                 people++;
             }
 

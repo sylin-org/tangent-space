@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using Koan.Data.Core;
+using Koan.Data.Core.Commands;
 using Tangent.Events;
 using Xunit;
 using static Tangent.Posts.Writing;
@@ -80,6 +81,39 @@ public sealed class MentionPickerTests
         Assert.Equal(1, forMo.GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32());
         var forBea = (await Send(bea.Client, HttpMethod.Get, "/", json: true)).Json;
         Assert.Equal(0, forBea.GetProperty("news").GetProperty("mentions").GetProperty("count").GetInt32());
+    }
+
+    [Fact]
+    public async Task A_picked_mention_reaches_the_one_picked_even_when_their_handle_changed_before_it_was_sent()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        using var ada = await SignedIn(tangentSpace, Ada);
+        using var bea = await SignedIn(tangentSpace, Bea);
+        Assert.IsType<Outcome<Participants.Participant>.Done>(await new Participants.CaptureProfile(
+            new Participants.ProfileAnswer(Bea, "Bea [the] *lamp*_", null, null), DateTimeOffset.UtcNow).Send(Cancellation));
+        var root = await Started(Ada, "Lanterns", "Who lights theirs first?");
+        await Replied(root, Bea, "I do.");
+
+        // The pick names its target and its name: what the browser writes for it.
+        var answer = await Send(ada.Client, HttpMethod.Get, $"/t/{Workshop}/{SuggestionsController.Segment}?q=%40bea&topic={root.Slug}", json: true);
+        var picked = answer.Json.GetProperty("suggestions")[0];
+        Assert.Equal(("person", "at://" + Bea, "Bea [the] *lamp*_"),
+            (picked.GetProperty("kind").GetString(), picked.GetProperty("target").GetString(), picked.GetProperty("name").GetString()));
+        var markdown = @"[@Bea \[the\] \*lamp\*\_](" + picked.GetProperty("target").GetString() + ")";
+
+        // Bea's handle changes while Ada writes; the pick still means Bea.
+        Assert.IsType<Outcome<Participants.Participant>.Done>(await new Participants.RecordHandle(Bea, "bea.renamed.example").Send(Cancellation));
+        var page = TopicPath(root);
+        var id = Tids.Mint();
+        Assert.Equal(HttpStatusCode.Created, (await Json(ada, page, page, new { id, body = "Thanks " + markdown + "!" })).Status);
+
+        var reply = (await Post.Get(id, Cancellation))!;
+        Assert.Equal("Thanks " + markdown + "!", reply.Body);
+        Assert.Equal([Bea], reply.MentionedIds);
+        var told = Assert.Single(await Event.Query(e => e.Kind == EventKind.Mention && e.PostId == id, Cancellation));
+        Assert.Equal(Bea, told.TargetId);
+        Assert.Contains($"title=\"@bea.renamed.example\">@Bea [the] *lamp*_</a>!", (await Send(bea.Client, HttpMethod.Get, page)).Body);
     }
 
     [Fact]

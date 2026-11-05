@@ -47,13 +47,12 @@ public static class Origins
         var topic = origin.ParentId is null ? origin : await Post.Get(origin.TopicId, ct);
         if (topic is null) return TopicPage.Origin.Unseen;
         var author = await Participant.Get(origin.AuthorId, ct);
-        var handle = author?.Handle is { Length: > 0 } stored ? stored : origin.AuthorId;
         return new TopicPage.Origin(
             false,
             PostWrites.Address(baseUrl, tangent.Id, topic.Slug ?? topic.Id, origin.Id),
             topic.Title ?? "",
             tangent.Name,
-            author?.Profile.DisplayName is { Length: > 0 } name ? name : handle,
+            author?.ShownName() ?? origin.AuthorId,
             origin.Removed);
     }
 

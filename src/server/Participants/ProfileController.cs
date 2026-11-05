@@ -58,7 +58,7 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
         var person = await KoanPerson.Get(subject.Id, ct);
 
         var baseAddress = BaseAddress();
-        var (name, shownHandle) = Named(subject);
+        var (name, shownHandle) = (subject.ShownName(), subject.ShownHandle());
         var address = ProfilePage.AddressOf(baseAddress, shownHandle);
         var reader = rows.Participant;
         // The reader's own profile, and one carrying forms that change someone, is never stored, so a browser's Back after
@@ -131,11 +131,7 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
     {
         var ids = posts.SelectMany(post => post.MentionedIds).Concat(posts.Select(post => post.EditedBy).OfType<string>()).Distinct(StringComparer.Ordinal).ToList();
         if (ids.Count == 0) return new Dictionary<string, TangentPage.Author>();
-        return (await Participant.Get(ids, ct)).OfType<Participant>().ToDictionary(row => row.Id, row =>
-        {
-            var (name, handle) = Named(row);
-            return new TangentPage.Author(row.Id, handle, name, row.Kind.ToString().ToLowerInvariant(), row.Profile.Avatar);
-        }, StringComparer.Ordinal);
+        return (await Participant.Get(ids, ct)).OfType<Participant>().ToDictionary(row => row.Id, row => TangentPage.Author.Of(row), StringComparer.Ordinal);
     }
 
     private static ProfilePage.Written Written(Post post, IReadOnlyDictionary<string, Post> roots, IReadOnlyDictionary<string, Tangents.Tangent> tangents,
@@ -160,18 +156,11 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
     /// things are for them and new.</summary>
     private Who Reader(Participant reader, Capabilities place, string back, Events.Unread.Badge? forYou)
     {
-        var (name, handle) = Named(reader);
+        var (name, handle) = (reader.ShownName(), reader.ShownHandle());
         return new Who(reader.Id, name, handle, Roles.Word(place.RoleIds), reader.Profile.Avatar,
             BaseAddress() + AuthConstants.Routes.Logout + "?return=" + back, ForYou: forYou);
     }
 
-    /// <summary>The name a participant is shown by, and their handle: the profile's display name, else the handle, else
-    /// their Id.</summary>
-    private static (string Name, string Handle) Named(Participant participant)
-    {
-        var handle = participant.Handle.Length > 0 ? participant.Handle : participant.Id;
-        return (participant.Profile.DisplayName is { Length: > 0 } name ? name : handle, handle);
-    }
 
     private string BaseAddress() => baseUrl.Resolve(HttpContext);
 }
