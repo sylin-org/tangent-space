@@ -124,6 +124,10 @@ public sealed class Post : Entity<Post>
     [Index(Name = "ix_post_authors", Order = 0)]
     public string AuthorId { get; set; } = "";
 
+    /// <summary>The DID of the Bluesky account its author was bound to when they wrote it, which an edit never changes:
+    /// the account the Post links out to and goes out under.</summary>
+    public string AuthorDid { get; set; } = "";
+
     [Index(Name = "ix_post_origins", Order = 1)]
     [Index(Name = "ix_post_authors", Order = 1)]
     [Index(Name = "ix_post_started", Order = 3)]

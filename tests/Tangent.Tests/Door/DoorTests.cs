@@ -22,7 +22,7 @@ public sealed class DoorTests(ITestOutputHelper output)
     private const string BaseUrl = TangentSpaceFixture.DefaultBaseUrl;
     private const string Workshop = "the-workshop";
     private const string Articles = "articles";
-    private const string Reader = "did:plc:reader";
+    private static readonly string Reader = Persona.Id("reader");
 
     private static CancellationToken Cancellation => TestContext.Current.CancellationToken;
 
@@ -63,7 +63,7 @@ public sealed class DoorTests(ITestOutputHelper output)
         var since = await Mark(Reader);
 
         var reply = await Replied(mine, "ada");
-        var other = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, "Ada asks", $"A question for [@reader](at://{Reader}).", "ada").Send(Cancellation)).Result;
+        var other = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, "Ada asks", $"A question for [@reader](/p/{Reader}).", "ada").Send(Cancellation)).Result;
         var article = await Started(Articles, "On lanterns", "leo");
         // The reader's own reply is never news to them, and it leaves the reply before it, which they have not read, new.
         var own = await Replied(mine, Reader, body: "My own words in reply.");
@@ -133,7 +133,7 @@ public sealed class DoorTests(ITestOutputHelper output)
     [Fact]
     public async Task A_waiting_applicants_news_begins_at_their_arrival_so_what_the_place_held_is_not_new_to_them()
     {
-        const string applicant = "did:plc:applicant4door";
+        var applicant = Persona.Id("applicant4door");
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
         await Place(tangentSpace);
         var space = (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!;
@@ -159,7 +159,7 @@ public sealed class DoorTests(ITestOutputHelper output)
     [Fact]
     public async Task A_newcomers_news_begins_at_their_arrival_so_what_the_place_held_is_not_new_and_what_follows_is()
     {
-        const string newcomer = "did:plc:newcomer";
+        var newcomer = Persona.Id("newcomer");
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
         await Place(tangentSpace);
         var topic = await Started(Workshop, "What should we build?", "ada");

@@ -98,6 +98,8 @@ public sealed record ReportPost(
             await into.Save(ct);
         }
 
+        written.AuthorDid = await Participants.Participant.DidOf(ReporterId, ct);
+
         var root = earlier ?? written;
         var created = await Event.Append(EventKind.PostCreated, at, ct,
             tangentId: written.TangentId, topicId: written.TopicId, postId: written.Id, actorId: ReporterId, version: written.Version,

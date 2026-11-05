@@ -17,10 +17,10 @@ namespace Tangent.Capture;
 /// into the capture host, like <see cref="CaptureSeedController"/>; fixed names.</summary>
 public sealed class MembersOnlySeedController(RoleCollection roles) : ControllerBase
 {
-    private const string Persona = "did:plc:capture4persona";
-    private const string Leo = "did:plc:capture4leo";
-    private const string Mara = "did:plc:capture4mara";
-    private const string Lumen = "did:plc:capture4lumen";
+    private const string Persona = Seeded.Persona;
+    private const string Leo = Seeded.Leo;
+    private const string Mara = Seeded.Mara;
+    private const string Lumen = Seeded.Lumen;
 
     [HttpPost("/capture/seed/members-only")]
     public Task<IActionResult> Outside(CancellationToken ct) => Seed(false, ct);
@@ -64,8 +64,8 @@ public sealed class MembersOnlySeedController(RoleCollection roles) : Controller
 
     private async Task Person(string id, string handle, string displayName, IReadOnlyList<string> held, CancellationToken ct)
     {
-        await Write(new Keep<Participant>(new Participant { Id = id, Handle = handle }), ct);
-        await Write(new CaptureProfile(new ProfileAnswer(id, displayName, null, null), DateTimeOffset.UtcNow), ct);
+        await Write(new Keep<Participant>(new Participant { Id = id, Did = Seeded.Did(id), Handle = handle }), ct);
+        await Write(new CaptureProfile(id, new ProfileAnswer(Seeded.Did(id), displayName, null, null), DateTimeOffset.UtcNow), ct);
         foreach (var role in held) await roles.Add(role, id, ct);
     }
 

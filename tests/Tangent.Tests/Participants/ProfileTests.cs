@@ -19,8 +19,8 @@ namespace Tangent.Participants;
 /// approved, each revoked in the page through Koan.</summary>
 public sealed class ProfileTests
 {
-    private const string Leo = "did:plc:leo4profile";
-    private const string Ann = "did:plc:ann4profile";
+    private static readonly string Leo = Persona.Id("leo4profile");
+    private static readonly string Ann = Persona.Id("ann4profile");
     private const string LeoHandle = "leo4profile.example";
     private const string AdaHandle = "ada4writes.example";
 
@@ -34,8 +34,8 @@ public sealed class ProfileTests
         using var leo = await SignedIn(tangentSpace, Leo);
         using var ada = await SignedIn(tangentSpace, Ada);
         using var ann = await SignedIn(tangentSpace, Ann);
-        Assert.IsType<Outcome<Participant>.Done>(await new CaptureProfile(
-            new ProfileAnswer(Leo, "Leo Botinelly", "Builds places to talk.", "https://cdn.example/leo.jpg"), DateTimeOffset.UtcNow).Send(Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new CaptureProfile(Leo, 
+            new ProfileAnswer(Persona.Did(Leo), "Leo Botinelly", "Builds places to talk.", "https://cdn.example/leo.jpg"), DateTimeOffset.UtcNow).Send(Cancellation));
 
         var open = await Started(Leo, "Lanterns at dusk", "Who lights theirs first?");
         var reply = await Replied(open, Leo, "I do, at six.");
@@ -141,8 +141,8 @@ public sealed class ProfileTests
 
         Assert.Equal(Bea, (await Send(visitor, HttpMethod.Get, "/p/x.example", json: true)).Json.GetProperty("id").GetString());
         Assert.Equal("", (await Participant.Get(Ada, Cancellation))!.Handle);
-        var byDid = await Send(visitor, HttpMethod.Get, "/p/" + Uri.EscapeDataString(Ada), json: true);
-        Assert.Equal((HttpStatusCode.OK, Ada, BaseUrl + "/p/" + Uri.EscapeDataString(Ada)),
+        var byDid = await Send(visitor, HttpMethod.Get, "/p/" + Uri.EscapeDataString(Persona.Did(Ada)), json: true);
+        Assert.Equal((HttpStatusCode.OK, Persona.Did(Ada), BaseUrl + "/p/" + Uri.EscapeDataString(Persona.Did(Ada))),
             (byDid.Status, byDid.Json.GetProperty("handle").GetString(), byDid.Json.GetProperty("address").GetString()));
     }
 
@@ -159,7 +159,7 @@ public sealed class ProfileTests
         var door = await Send(visitor, HttpMethod.Get, "/");
         var doorJson = await Send(visitor, HttpMethod.Get, "/", json: true);
 
-        Assert.Contains($"<a class=\"post-author\" href=\"{BaseUrl}/p/{AdaHandle}\">", topic.Body);
+        Assert.Contains($"<a class=\"post-author\" href=\"{BaseUrl}/p/{AdaHandle}\" data-account=\"{Persona.Did(Ada)}\">", topic.Body);
         Assert.Contains($"<a class=\"around-name\" href=\"{BaseUrl}/p/{AdaHandle}\">", door.Body);
         Assert.Equal(BaseUrl + "/p/" + AdaHandle, doorJson.Json.GetProperty("around").GetProperty("people")[0].GetProperty("profile").GetString());
     }

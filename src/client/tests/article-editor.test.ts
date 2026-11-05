@@ -401,13 +401,13 @@ function reply(body: string, suggest: string | null = null) {
 }
 
 test('a name in a body opens as one chip showing its words, and writes back the Markdown it was read from', () => {
-  const body = String.raw`Thanks [@Lu\]m\*e\_n\\](at://did:plc:lumen) and [@Moderators](role:moderator), see [#General](/t/general) or [a link](https://example.com).`
+  const body = String.raw`Thanks [@Lu\]m\*e\_n\\](/p/0193b2c4-0000-7000-8000-00000000000c) and [@Moderators](role:moderator), see [#General](/t/general) or [a link](https://example.com).`
   const { host, surface, source, editor } = reply(body)
 
   expect(host.classList.contains('is-visual')).toBe(true)
   const chips = [...surface.querySelectorAll<HTMLElement>('span[data-named]')]
   expect(chips.map((chip) => [chip.textContent, chip.dataset.named, chip.getAttribute('contenteditable')])).toEqual([
-    ['@Lu]m*e_n\\', 'at://did:plc:lumen', 'false'],
+    ['@Lu]m*e_n\\', '/p/0193b2c4-0000-7000-8000-00000000000c', 'false'],
     ['@Moderators', 'role:moderator', 'false'],
     ['#General', '/t/general', 'false'],
   ])
@@ -418,7 +418,7 @@ test('a name in a body opens as one chip showing its words, and writes back the 
 })
 
 test('a pick in the visual view writes a chip of who it means', async () => {
-  vi.spyOn(suggesting, 'read').mockResolvedValue([{ kind: 'person', insert: 'lumen.example', target: 'at://did:plc:lumen', name: 'Lumen', note: null }])
+  vi.spyOn(suggesting, 'read').mockResolvedValue([{ kind: 'person', insert: 'lumen.example', target: '/p/0193b2c4-0000-7000-8000-00000000000c', name: 'Lumen', note: null }])
   const { surface, source, editor } = reply('', '/t/field-notes/suggest')
   // jsdom focuses an editable element only where it has a tab index.
   surface.tabIndex = 0
@@ -431,17 +431,17 @@ test('a pick in the visual view writes a chip of who it means', async () => {
   surface.parentElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
 
   expect(surface.querySelector<HTMLElement>('span[data-named]')?.textContent).toBe('@Lumen')
-  expect(source.value).toBe('Hi [@Lumen](at://did:plc:lumen)')
+  expect(source.value).toBe('Hi [@Lumen](/p/0193b2c4-0000-7000-8000-00000000000c)')
 })
 
 test('a card’s Mention puts the name where the writer is, in either view', () => {
   const { source, editor } = reply('Hello')
   editor.commands.focus('end')
-  openComposer()!.put({ words: '@Lu]men', target: 'at://did:plc:lumen' })
-  expect(source.value).toBe(String.raw`Hello [@Lu\]men](at://did:plc:lumen)`)
+  openComposer()!.put({ words: '@Lu]men', target: '/p/0193b2c4-0000-7000-8000-00000000000c' })
+  expect(source.value).toBe(String.raw`Hello [@Lu\]men](/p/0193b2c4-0000-7000-8000-00000000000c)`)
 
   document.querySelector<HTMLButtonElement>('button[title="Markdown source"]')!.click()
   source.setSelectionRange(5, 5)
-  openComposer()!.put({ words: '@Bea', target: 'at://did:plc:bea' })
-  expect(source.value).toBe(String.raw`Hello [@Bea](at://did:plc:bea) [@Lu\]men](at://did:plc:lumen)`)
+  openComposer()!.put({ words: '@Bea', target: '/p/0193b2c4-0000-7000-8000-00000000000b' })
+  expect(source.value).toBe(String.raw`Hello [@Bea](/p/0193b2c4-0000-7000-8000-00000000000b) [@Lu\]men](/p/0193b2c4-0000-7000-8000-00000000000c)`)
 })

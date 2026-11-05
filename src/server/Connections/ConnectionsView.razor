@@ -1,8 +1,9 @@
 @using System.Globalization
 @using global::Tangent.Render
 @* A participant's Connections: one panel, first why a permission Bluesky was asked for was not given, where that is what
-   brought them here, then their Bluesky account with where it stands and the one thing they may do about it, then each
-   article it carries with its state and its Bluesky post once it is out. *@
+   brought them here, then their Bluesky account with where it stands and the one thing they may do about it, and the way
+   to use another Bluesky account, open with why where a binding was refused, then each article it carries with its state
+   and its Bluesky post once it is out. *@
 <main class="layout">
     <div class="layout-main">
         <section class="sign-in-panel post-form-panel connections" aria-labelledby="connections-heading">
@@ -45,6 +46,7 @@
                                 <form method="post" action="@again.Action"><button type="submit" class="button">Offer it again</button></form>
                             </div>
                         }
+                        <Tangent.Participants.AnotherAccountForm Model="@Model.Another" />
                     </li>
                 </ul>
                 @if (Model.Articles.Count > 0)

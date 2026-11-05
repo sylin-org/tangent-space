@@ -12,42 +12,45 @@ using Tangent.Tangents;
 
 namespace Tangent.Posts;
 
-/// <summary>A mention is a link in a body whose target is <c>at://</c> and a DID — <c>[@ada](at://did:plc:…)</c> — so
-/// the identity is written into the body and a handle or a name that changes later changes nothing there; a writer's
-/// pick writes it whole (<see cref="Target"/>), and an <c>@</c> and a participant's handle typed in a body becomes one
-/// when the Post is written (<see cref="Typed"/>). Wherever a body is shown, a mention resolves live to the participant
-/// with that DID: in HTML a link to their address reading <c>@</c> and the name the place shows them by
-/// (<see cref="Participant.ShownName"/>), with <c>@</c> and their handle as its title, so two people of one name are told
-/// apart; in plain text <c>@</c> and that name; a DID that is no participant's leaves the link's own words. A Post keeps the identities its body mentions (<see cref="Post.MentionedIds"/>), at most <see cref="Limit"/>,
-/// so nothing parses a body to find them. A role is mentioned the same way, by a link whose target is its key —
-/// <c>[@moderators](role:moderator)</c>, written from an <c>@</c> and its word typed — which the Post keeps among its roles
-/// (<see cref="Post.MentionedRoles"/>) and a page shows as its words, marked, while the role exists; and a Tangent's slug
-/// typed after a <c>#</c> is written as a link to it. The command that writes a Post appends one <see cref="EventKind.Mention"/>
-/// per participant its body newly mentions, and one per role, however many hold it (<see cref="Notify"/>).</summary>
+/// <summary>A mention is a link in a body whose target is the participant's page by their id, which is the place's own —
+/// <c>[@ada](/p/0193…)</c> — so the participant is written into the body, and a handle, a name or a Bluesky account that
+/// changes later changes nothing there; a writer's pick writes it whole (<see cref="Target"/>), and an <c>@</c> and a
+/// participant's handle typed in a body becomes one when the Post is written (<see cref="Typed"/>). Wherever a body is
+/// shown, a mention resolves live to the participant with that id: in HTML a link to their address reading <c>@</c> and
+/// the name the place shows them by (<see cref="Participant.ShownName"/>), with <c>@</c> and their handle as its title, so
+/// two people of one name are told apart; in plain text <c>@</c> and that name; an id that is no participant's leaves the
+/// link's own words. A Post keeps the participants its body mentions (<see cref="Post.MentionedIds"/>), at most
+/// <see cref="Limit"/>, so nothing parses a body to find them. A role is mentioned the same way, by a link whose target is
+/// its key — <c>[@moderators](role:moderator)</c>, written from an <c>@</c> and its word typed — which the Post keeps among
+/// its roles (<see cref="Post.MentionedRoles"/>) and a page shows as its words, marked, while the role exists; and a
+/// Tangent's slug typed after a <c>#</c> is written as a link to it. The command that writes a Post appends one
+/// <see cref="EventKind.Mention"/> per participant its body newly mentions, and one per role, however many hold it
+/// (<see cref="Notify"/>).</summary>
 public static partial class Mentions
 {
-    /// <summary>What a mention's target starts with: atproto's URI scheme, whose authority is the DID.</summary>
-    public const string Scheme = "at://";
+    /// <summary>What a mention's target starts with: the path of the participants' pages, as a Tangent's link is
+    /// <c>/t/</c> and its slug.</summary>
+    public const string Prefix = "/p/";
 
     /// <summary>The most identities one body mentions.</summary>
     public const int Limit = 32;
 
-    /// <summary>The most characters a mentioned DID holds.</summary>
+    /// <summary>The most characters a DID holds, where a profile's address names one.</summary>
     public const int IdentityLimit = 576;
 
-    /// <summary>What one resolved mention may weigh in an answer: its DID, handle and address, with room to spare, and its
+    /// <summary>What one resolved mention may weigh in an answer: its id, handle and address, with room to spare, and its
     /// name, each of its characters escaped at worst.</summary>
     public const int Weight = 2048 + 6 * ProfileReader.DisplayNameLimit;
 
-    /// <summary>A participant's mention target, <c>at://</c> and their id: the one place it is written.</summary>
-    public static string Target(string participantId) => Scheme + participantId;
+    /// <summary>A participant's mention target, <c>/p/</c> and their id: the one place it is written.</summary>
+    public static string Target(string participantId) => Prefix + participantId;
 
     /// <summary>A Tangent's link target in a body, by its slug.</summary>
     public static string TangentTarget(string slug) => "/t/" + slug;
 
     /// <summary>The most UTF-8 bytes writing one typed handle as its mention adds to a body: <c>[</c> before it, and
-    /// <c>](at://</c>, the DID and <c>)</c> after it.</summary>
-    public const int TypedWeight = 9 + IdentityLimit;
+    /// <c>](/p/</c>, the id and <c>)</c> after it.</summary>
+    public const int TypedWeight = 7 + 36;
 
     /// <summary>The most UTF-8 bytes writing one typed Tangent as its link adds to a body: <c>[</c> before it, and
     /// <c>](/t/</c>, its slug and <c>)</c> after it.</summary>
@@ -57,13 +60,9 @@ public static partial class Mentions
     /// <c>](role:</c>, its word and <c>)</c> after it.</summary>
     public const int RoleWeight = 9 + Slug.Limit;
 
-    /// <summary>The DID a link target names when it is a mention; null for any other target.</summary>
+    /// <summary>The participant's id a link target names when it is a mention; null for any other target.</summary>
     public static string? Identity(string target)
-    {
-        if (!target.StartsWith(Scheme, StringComparison.Ordinal)) return null;
-        var did = target[Scheme.Length..];
-        return did.Length <= IdentityLimit && Did().IsMatch(did) ? did : null;
-    }
+        => target.StartsWith(Prefix, StringComparison.Ordinal) && Participant.IsId(target[Prefix.Length..]) ? target[Prefix.Length..] : null;
 
     /// <summary>The key of the role a link target names when it is a role's mention: <c>role:</c> and the word of a role
     /// the place gives (<see cref="Access.Roles.Given"/>); null for any other target.</summary>
@@ -71,7 +70,7 @@ public static partial class Mentions
         => target.StartsWith(RoleTokens.RolePrefix, StringComparison.Ordinal) && Access.Roles.KeyOf(target[RoleTokens.RolePrefix.Length..]) == target
            && Access.Roles.Given(target) ? target : null;
 
-    /// <summary>The participants these Posts mention, by DID, and the roles they mention that still exist, by key, as a page
+    /// <summary>The participants these Posts mention, by id, and the roles they mention that still exist, by key, as a page
     /// shows them, in one keyed read of at most <see cref="Limit"/> identities a Post and one of their roles.</summary>
     public static async Task<IReadOnlyDictionary<string, TopicPage.Mention>> Resolve(IEnumerable<Post> posts, string baseUrl,
         CancellationToken ct)
@@ -116,7 +115,7 @@ public static partial class Mentions
         => MarkdownHtml.Tractable(markdown) ? RenderedBodies.Render(markdown).PlainText(Words(people)) : markdown;
 
     private static Func<string, string?> Words(IReadOnlyDictionary<string, TangentPage.Author> people)
-        => target => Identity(target) is { } did && people.TryGetValue(did, out var person) ? "@" + person.Name : null;
+        => target => Identity(target) is { } id && people.TryGetValue(id, out var person) ? "@" + person.Name : null;
 
     /// <summary>A Post's body at a version as plain text on one line with its mentions of participants left out, so it
     /// names no one, and no punctuation stranded where one stood.</summary>
@@ -125,7 +124,7 @@ public static partial class Mentions
 
     /// <summary>Appends, inside the running command, one <see cref="EventKind.Mention"/> per participant
     /// <paramref name="post"/> mentions that <paramref name="before"/> — the identities and roles it mentioned before an
-    /// edit, empty for a new Post — did not, targeted at them: not the actor, not a DID that is no participant's, and not a
+    /// edit, empty for a new Post — did not, targeted at them: not the actor, not an id that is no participant's, and not a
     /// participant for whom the Post's Tangent is absent; and one per role it newly mentions, naming the role and
     /// targeting no one, which reaches each holder who may view the Tangent (<see cref="Unread"/>). One keyed read of the
     /// participants, then capability's rows for each; nothing parses.</summary>
@@ -148,7 +147,7 @@ public static partial class Mentions
     }
 
     /// <summary><paramref name="body"/> as its writer typed it, written: each handle typed in its prose that names a
-    /// participant here written as their mention, <c>[@handle](at://did)</c> with the words as typed, so the body keeps
+    /// participant here written as their mention, <c>[@handle](/p/id)</c> with the words as typed, so the body keeps
     /// their identity and a handle that changes later changes nothing in it; each <c>#</c> and slug of a Tangent written as
     /// a link to it, <c>[#slug](/t/slug)</c>; and each <c>@</c> and word of a role the place gives
     /// (<see cref="Access.Roles.Given"/>) — its word, or its word and an <c>s</c>, as <c>@moderators</c> — written as its
@@ -207,8 +206,8 @@ public static partial class Mentions
             }
             else
             {
-                if (people == Limit || (holders.GetValueOrDefault(text) ?? holders.GetValueOrDefault(text.ToLowerInvariant())) is not { } did) continue;
-                target = Target(did);
+                if (people == Limit || (holders.GetValueOrDefault(text) ?? holders.GetValueOrDefault(text.ToLowerInvariant())) is not { } id) continue;
+                target = Target(id);
                 people++;
             }
 
@@ -313,9 +312,6 @@ public static partial class Mentions
 
     [GeneratedRegex(@"^[\s,.;:!?]+|\s+(?=[,.;:!?])")]
     private static partial Regex Stranded();
-
-    [GeneratedRegex(@"^did:[a-z]+:[A-Za-z0-9._:%-]+$")]
-    private static partial Regex Did();
 
     /// <summary>atproto's handle syntax: dot-separated labels of letters, digits and inner hyphens, at least two, the
     /// last starting with a letter.</summary>

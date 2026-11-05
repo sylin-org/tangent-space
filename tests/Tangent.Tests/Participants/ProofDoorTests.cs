@@ -60,22 +60,23 @@ public sealed class ProofDoorTests
         Assert.True(proved.Status == HttpStatusCode.NoContent, proved.Body);
 
         // It arrived as anyone does: a participant on its verified handle, in the member role, with a session of its own.
-        var participant = await Participant.Get(Scout.Did, Cancellation);
-        Assert.Equal((Scout.Handle, Standing.Admitted), (participant?.Handle, participant?.Standing));
-        Assert.Contains(Roles.Member, (await tangentSpace.Services.GetRequiredService<RoleCollection>().ForPerson(Scout.Did, Cancellation)).Select(role => role.Key));
-        Assert.Single(await Koan.Identity.Session.Query(row => row.IdentityId == Scout.Did, Cancellation));
+        var participant = await Persona.Arrived(Scout.Did, Cancellation);
+        Assert.NotNull(participant);
+        Assert.Equal((Scout.Handle, Standing.Admitted), (participant.Handle, participant.Standing));
+        Assert.Contains(Roles.Member, (await tangentSpace.Services.GetRequiredService<RoleCollection>().ForPerson(participant.Id, Cancellation)).Select(role => role.Key));
+        Assert.Single(await Koan.Identity.Session.Query(row => row.IdentityId == participant.Id, Cancellation));
 
         // A later page, by the cookie alone, reads as it; opening its door is its own opening.
         var door = await Read(session, "/");
         var who = door.GetProperty("who");
-        Assert.Equal((Scout.Did, Scout.Handle), (who.GetProperty("id").GetString(), who.GetProperty("handle").GetString()));
-        await Eventually(async () => (await Participant.Get(Scout.Did, Cancellation))?.ArrivedSeq > 0);
+        Assert.Equal((participant.Id, Scout.Handle), (who.GetProperty("id").GetString(), who.GetProperty("handle").GetString()));
+        await Eventually(async () => (await Persona.Arrived(Scout.Did, Cancellation))?.ArrivedSeq > 0);
 
         // It writes by the form a page gives it, with the form's token, as any session does.
         var page = await Read(session, TopicPath(root));
         var replied = await Follow(session, page.GetProperty("reply"), new Dictionary<string, string> { [PostWrites.BodyField] = "Whoever is first home." });
         Assert.True(replied.Status == HttpStatusCode.Created, replied.Body);
-        Assert.Equal("Whoever is first home.", Assert.Single(await Post.Query(post => post.AuthorId == Scout.Did, Cancellation)).Body);
+        Assert.Equal("Whoever is first home.", Assert.Single(await Post.Query(post => post.AuthorId == participant.Id, Cancellation)).Body);
 
         // Signing out ends it, the way a browser's ends.
         (await session.Follow(HttpMethod.Post, who.GetProperty("signOut").GetString()![BaseUrl.Length..], Cancellation)).Dispose();
@@ -95,8 +96,8 @@ public sealed class ProofDoorTests
 
         using var session = await SignedInByProof(tangentSpace, Scout);
 
-        Assert.Equal(Standing.Applied, (await Participant.Get(Scout.Did, Cancellation))?.Standing);
-        Assert.DoesNotContain(Roles.Member, (await tangentSpace.Services.GetRequiredService<RoleCollection>().ForPerson(Scout.Did, Cancellation)).Select(role => role.Key));
+        Assert.Equal(Standing.Applied, (await Persona.Arrived(Scout.Did, Cancellation))?.Standing);
+        Assert.DoesNotContain(Roles.Member, (await tangentSpace.Services.GetRequiredService<RoleCollection>().ForPerson((await Persona.Arrived(Scout.Did, Cancellation))!.Id, Cancellation)).Select(role => role.Key));
         Assert.Equal(Capabilities.Apply.Word, (await Read(session, "/")).GetProperty("gate").GetString());
         var page = await Read(session, TopicPath(root));
         Assert.False(page.TryGetProperty("reply", out var reply) && reply.ValueKind == JsonValueKind.Object);
@@ -109,13 +110,13 @@ public sealed class ProofDoorTests
         await using var tangentSpace = await Start(directory);
         await Place(tangentSpace);
         using var held = await SignedInByProof(tangentSpace, Scout);
-        Assert.IsType<Outcome<Participant>.Done>(await new Ban(Mo, Scout.Did).Send(Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new Ban(Mo, (await Persona.Arrived(Scout.Did, Cancellation))!.Id).Send(Cancellation));
 
         Assert.Equal("absent", (await Send(held.Client, HttpMethod.Get, "/", json: true)).Kind);
 
         using var again = await SignedInByProof(tangentSpace, Scout);
         Assert.Equal("absent", (await Send(again.Client, HttpMethod.Get, "/", json: true)).Kind);
-        Assert.Equal(Standing.Banned, (await Participant.Get(Scout.Did, Cancellation))?.Standing);
+        Assert.Equal(Standing.Banned, (await Persona.Arrived(Scout.Did, Cancellation))?.Standing);
     }
 
     [Fact]
@@ -153,9 +154,10 @@ public sealed class ProofDoorTests
 
         using var tools = await Tools.ToolClient.Connect(tangentSpace, session);
         var door = await tools.Call("arrive");
-        Assert.Equal((200, Scout.Did), (door.Status, door.Structured!.Value.GetProperty("who").GetProperty("id").GetString()));
+        var scout = (await Persona.Arrived(Scout.Did, Cancellation))!.Id;
+        Assert.Equal((200, scout), (door.Status, door.Structured!.Value.GetProperty("who").GetProperty("id").GetString()));
         var reply = await tools.Call("reply", new { tangent = Workshop, topic = root.Slug, body = "Whoever is first home." });
-        Assert.Equal((201, Scout.Did), (reply.Status, reply.Structured!.Value.GetProperty("authorId").GetString()));
+        Assert.Equal((201, scout), (reply.Status, reply.Structured!.Value.GetProperty("authorId").GetString()));
     }
 
     [Theory]
@@ -186,7 +188,7 @@ public sealed class ProofDoorTests
         var answer = await Send(session.Client, HttpMethod.Post, Exchange, json: true, bearer: token);
 
         Assert.Equal((HttpStatusCode.Unauthorized, "invalid_service_proof"), (answer.Status, answer.Json.GetProperty("error").GetString()));
-        Assert.Null(await Participant.Get(Scout.Did, Cancellation));
+        Assert.Null(await Persona.Arrived(Scout.Did, Cancellation));
         Assert.False((await Send(session.Client, HttpMethod.Get, "/", json: true)).Json.TryGetProperty("who", out var who) && who.ValueKind == JsonValueKind.Object);
     }
 
@@ -216,7 +218,7 @@ public sealed class ProofDoorTests
 
         var misaddressed = await At(agent, Exchange, "evil.example", Scout.Token("did:web:evil.example#tangent", ProofDoor.Method));
         Assert.Equal((HttpStatusCode.Unauthorized, "invalid_service_proof"), (misaddressed.Status, misaddressed.Json.GetProperty("error").GetString()));
-        Assert.Null(await Participant.Get(Scout.Did, Cancellation));
+        Assert.Null(await Persona.Arrived(Scout.Did, Cancellation));
 
         var proved = await At(agent, Exchange, "evil.example", Proof(Scout));
         Assert.True(proved.Status == HttpStatusCode.NoContent, proved.Body);
@@ -238,7 +240,7 @@ public sealed class ProofDoorTests
             (refused.Status, refused.Json.GetProperty("error").GetString(), refused.Json.GetProperty("message").GetString()));
         var statement = await Send(agent, HttpMethod.Get, ProofDoor.StatementPath, json: true);
         Assert.Equal((HttpStatusCode.ServiceUnavailable, "exchange_unconfigured"), (statement.Status, statement.Json.GetProperty("error").GetString()));
-        Assert.Null(await Participant.Get(Scout.Did, Cancellation));
+        Assert.Null(await Persona.Arrived(Scout.Did, Cancellation));
         Assert.Null(await TangentSpace.Get(TangentSpace.SingleRow, Cancellation));
 
         // Signing in through atproto sets the place up and gives it its address, and a token addressed there is taken.
@@ -282,17 +284,18 @@ public sealed class ProofDoorTests
         var statement = await Send(agent, HttpMethod.Get, ProofDoor.StatementPath, json: true);
         Assert.Equal((HttpStatusCode.ServiceUnavailable, "exchange_not_set_up"), (statement.Status, statement.Json.GetProperty("error").GetString()));
         Assert.Null(await TangentSpace.Get(TangentSpace.SingleRow, Cancellation));
-        Assert.Null(await Participant.Get(Scout.Did, Cancellation));
+        Assert.Null(await Persona.Arrived(Scout.Did, Cancellation));
 
         using (var setter = new Browser(tangentSpace))
             (await setter.SignIn("leo", "did:plc:leoleoleoleoleoleoleoleol", Cancellation, handle: "leo.example")).Dispose();
         var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
-        Assert.Equal("did:plc:leoleoleoleoleoleoleoleol", space?.OperatorId);
+        var leo = (await Persona.Arrived("did:plc:leoleoleoleoleoleoleoleol", Cancellation))!.Id;
+        Assert.Equal(leo, space?.OperatorId);
 
         // The agent comes in now, as a member of a place someone else set up.
         using var session = await SignedInByProof(tangentSpace, Scout);
-        Assert.Equal(Standing.Admitted, (await Participant.Get(Scout.Did, Cancellation))?.Standing);
-        Assert.Equal("did:plc:leoleoleoleoleoleoleoleol", (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.OperatorId);
+        Assert.Equal(Standing.Admitted, (await Persona.Arrived(Scout.Did, Cancellation))?.Standing);
+        Assert.Equal(leo, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.OperatorId);
     }
 
     [Fact]
@@ -308,8 +311,9 @@ public sealed class ProofDoorTests
         using var session = await SignedInByProof(tangentSpace, Scout);
 
         var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
-        Assert.Equal(("Scout's Tangent Space", Scout.Did, Scout.Did), (space?.Name, space?.ProprietorId, space?.OperatorId));
-        Assert.Equal(Scout.Did, (await Read(session, "/")).GetProperty("who").GetProperty("id").GetString());
+        var scout = (await Persona.Arrived(Scout.Did, Cancellation))!.Id;
+        Assert.Equal(("Scout's Tangent Space", scout, scout), (space?.Name, space?.ProprietorId, space?.OperatorId));
+        Assert.Equal(scout, (await Read(session, "/")).GetProperty("who").GetProperty("id").GetString());
     }
 
     [Fact]
@@ -328,7 +332,7 @@ public sealed class ProofDoorTests
 
         using var session = await SignedInByProof(tangentSpace, Scout);
 
-        Assert.Equal(Scout.Did, (await Read(session, "/")).GetProperty("who").GetProperty("id").GetString());
+        Assert.Equal((await Persona.Arrived(Scout.Did, Cancellation))!.Id, (await Read(session, "/")).GetProperty("who").GetProperty("id").GetString());
     }
 
     [Fact]

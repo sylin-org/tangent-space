@@ -39,20 +39,21 @@ public sealed class AtprotoAdapter(IAtprotoRepository repository, KoanWebBaseUrl
     public static IReadOnlyList<string> ScopesFor(string personId, TangentSpace space)
         => space.ProprietorId == personId ? ProprietorScopes : Scopes;
 
-    /// <summary>Whether the participant's account lets the place write what their Connection writes.</summary>
-    public Task<bool> MayWrite(string personId, TangentSpace space, CancellationToken ct)
-        => repository.Holds(personId, ScopesFor(personId, space), ct);
+    /// <summary>Whether the account <paramref name="did"/> the participant is bound to lets the place write what their
+    /// Connection writes.</summary>
+    public Task<bool> MayWrite(string personId, string did, TangentSpace space, CancellationToken ct)
+        => repository.Holds(did, ScopesFor(personId, space), ct);
 
     /// <summary>The address of an article's page, canonical wherever it is published.</summary>
     public string Canonical(Post root) => Base() + Path(root);
 
     public static string Path(Post root) => "/t/" + Uri.EscapeDataString(root.TangentId) + "/" + Uri.EscapeDataString(root.Slug ?? root.Id);
 
-    /// <summary>Publishes or updates <paramref name="article"/> under its author's account. The Bluesky post is written
-    /// the first time and kept after; the document is put every time, naming the post.</summary>
+    /// <summary>Publishes or updates <paramref name="article"/> under the account it was written as. The Bluesky post is
+    /// written the first time and kept after; the document is put every time, naming the post.</summary>
     public async Task<Written> Deliver(Post article, Receipt? receipt, Publication? publication, CancellationToken ct)
     {
-        var did = article.AuthorId;
+        var did = article.AuthorDid;
         var cover = article.CoverId is { } id ? await Cover(did, id, ct) : null;
         var text = Mentions.PlainText(article, await QuotedPost.People(article, ct));
         var description = Lead(text);
@@ -79,24 +80,26 @@ public sealed class AtprotoAdapter(IAtprotoRepository repository, KoanWebBaseUrl
         return new Written(await repository.Put(did, Documents, article.Id, document, ct), note);
     }
 
-    /// <summary>Deletes both copies a receipt names; ones already gone are deleted.</summary>
+    /// <summary>Deletes both copies a receipt names from the repository they are in; ones already gone are deleted.</summary>
     public async Task Retract(Receipt receipt, CancellationToken ct)
     {
-        await repository.Delete(receipt.ConnectionId, Documents, receipt.PostId, ct);
-        await repository.Delete(receipt.ConnectionId, Notes, receipt.PostId, ct);
+        var did = receipt.Repository() ?? throw new InvalidOperationException("A receipt with nothing out has nothing to retract.");
+        await repository.Delete(did, Documents, receipt.PostId, ct);
+        await repository.Delete(did, Notes, receipt.PostId, ct);
     }
 
-    /// <summary>Puts the place as the proprietor's publication, at the key it already has or a new one.</summary>
-    public Task<AtprotoRecord> Publish(TangentSpace space, string key, CancellationToken ct)
+    /// <summary>Puts the place as the proprietor's publication under the account <paramref name="did"/> they are bound to,
+    /// at the key it already has or a new one.</summary>
+    public Task<AtprotoRecord> Publish(TangentSpace space, string did, string key, CancellationToken ct)
     {
         var record = new JsonObject { ["$type"] = Publications, ["url"] = Base(), ["name"] = space.Name };
         if (space.Description.Length > 0) record["description"] = space.Description;
-        return repository.Put(space.ProprietorId!, Publications, key, record, ct);
+        return repository.Put(did, Publications, key, record, ct);
     }
 
     /// <summary>Deletes the place's publication record from the account it is under.</summary>
     public Task Withdraw(Publication publication, CancellationToken ct)
-        => repository.Delete(publication.Proprietor, Publications, publication.Key, ct);
+        => repository.Delete(publication.Did, Publications, publication.Key, ct);
 
     /// <summary>What the place's publication record says, to tell when it has changed.</summary>
     public string Fingerprint(TangentSpace space) => Base() + "\n" + space.Name + "\n" + space.Description;

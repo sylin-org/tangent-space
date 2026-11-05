@@ -147,7 +147,7 @@ public sealed class MarkdownTests
         var wide = "a|b\n-|-\n" + string.Concat(Enumerable.Repeat(new string('|', 200) + "\n", 300));
         var deep = new string('>', 20_000) + " a";
         var nested = string.Concat(Enumerable.Repeat("- ", 999)) + "a";
-        var crowded = string.Join(' ', Enumerable.Range(0, Mentions.Limit + 1).Select(index => $"[@p{index}](at://did:plc:p{index})"));
+        var crowded = string.Join(' ', Enumerable.Range(0, Mentions.Limit + 1).Select(index => $"[@p{index}](/p/{Persona.Id("p" + index)})"));
         Assert.True(System.Text.Encoding.UTF8.GetByteCount(wide) <= Post.BodyLimit);
         Assert.True(MarkdownHtml.Tractable(nested));
 
@@ -165,15 +165,15 @@ public sealed class MarkdownTests
             await new StartTopic(Tids.Mint(), Workshop, "Everyone", crowded, Ada).Send(Cancellation)).Reason);
 
         // One identity mentioned over and over: every mention is measured at its longest rendering, whatever handle Bea
-        // holds when it is read, so the body is refused — two hundred on lines of their own by the rendered size, and the
-        // body's limit of them in one paragraph already by its brackets.
-        Assert.IsType<Outcome<Participant>.Done>(await new RecordHandle(Bea, new string('b', 243) + ".bsky").Send(Cancellation));
-        var repeated = string.Concat(Enumerable.Repeat($"[x](at://{Bea})\n\n", 200));
-        var paragraph = Fill($"[x](at://{Bea}) ");
+        // holds when it is read, so the body is refused by the rendered size, two hundred on lines of their own and the
+        // body's limit of them in one paragraph alike.
+        Assert.IsType<Outcome<Participant>.Done>(await new RecordSignIn(Bea, Persona.Did(Bea), new string('b', 243) + ".bsky").Send(Cancellation));
+        var repeated = string.Concat(Enumerable.Repeat($"[x](/p/{Bea})\n\n", 200));
+        var paragraph = Fill($"[x](/p/{Bea}) ");
         Assert.True(MarkdownHtml.Tractable(repeated));
         Assert.Equal(Post.BodyRendersTooLong, Assert.IsType<Outcome<Post>.Refused>(
             await new StartTopic(Tids.Mint(), Workshop, "Bea", repeated, Ada).Send(Cancellation)).Reason);
-        Assert.Equal(Post.BodyTooIntricate, Assert.IsType<Outcome<Post>.Refused>(
+        Assert.Equal(Post.BodyRendersTooLong, Assert.IsType<Outcome<Post>.Refused>(
             await new StartTopic(Tids.Mint(), Workshop, "Bea", paragraph, Ada).Send(Cancellation)).Reason);
 
         // Sixty-four kilobytes of unclosed links would take Markdig seconds to parse; the structure check refuses the body

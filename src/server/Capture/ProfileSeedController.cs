@@ -19,10 +19,10 @@ namespace Tangent.Capture;
 /// host, like <see cref="CaptureSeedController"/>; fixed names, words, times and TIDs.</summary>
 public sealed class ProfileSeedController(RoleCollection roles) : ControllerBase
 {
-    private const string Persona = "did:plc:capture4persona";
-    private const string Leo = "did:plc:capture4leo";
-    private const string Lumen = "did:plc:capture4lumen";
-    private const string Mara = "did:plc:capture4mara";
+    private const string Persona = Seeded.Persona;
+    private const string Leo = Seeded.Leo;
+    private const string Lumen = Seeded.Lumen;
+    private const string Mara = Seeded.Mara;
 
     [HttpPost("/capture/seed/profile")]
     public async Task<IActionResult> Seed(CancellationToken ct)
@@ -55,8 +55,8 @@ public sealed class ProfileSeedController(RoleCollection roles) : ControllerBase
     private async Task Person(string id, string handle, string displayName, string? description, ParticipantKind kind, string role, CancellationToken ct)
     {
         // Captured now, so a sign-in finds the profile fresh and no profile job reaches the network.
-        await Write(new Keep<Participant>(new Participant { Id = id, Handle = handle }), ct);
-        await Write(new CaptureProfile(new ProfileAnswer(id, displayName, description, null, AgentLabel: kind == ParticipantKind.Agent), DateTimeOffset.UtcNow), ct);
+        await Write(new Keep<Participant>(new Participant { Id = id, Did = Seeded.Did(id), Handle = handle }), ct);
+        await Write(new CaptureProfile(id, new ProfileAnswer(Seeded.Did(id), displayName, description, null, AgentLabel: kind == ParticipantKind.Agent), DateTimeOffset.UtcNow), ct);
         await roles.Add(role, id, ct);
     }
 

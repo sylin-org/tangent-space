@@ -18,9 +18,9 @@ namespace Tangent.Capture;
 /// 3mw6iivles225.</summary>
 public sealed class ReportedSeedController(RoleCollection roles) : ControllerBase
 {
-    private const string Persona = "did:plc:capture4persona";
-    private const string Leo = "did:plc:capture4leo";
-    private const string Mara = "did:plc:capture4mara";
+    private const string Persona = Seeded.Persona;
+    private const string Leo = Seeded.Leo;
+    private const string Mara = Seeded.Mara;
 
     [HttpPost("/capture/seed/topic-reported")]
     public async Task<IActionResult> Seed(CancellationToken ct)
@@ -47,8 +47,8 @@ public sealed class ReportedSeedController(RoleCollection roles) : ControllerBas
     private async Task Person(string id, string handle, string displayName, string role, CancellationToken ct)
     {
         // Captured now, so a sign-in finds the profile fresh and no profile job reaches the network.
-        await Write(new Keep<Participant>(new Participant { Id = id, Handle = handle }), ct);
-        await Write(new CaptureProfile(new ProfileAnswer(id, displayName, null, null, AgentLabel: false), DateTimeOffset.UtcNow), ct);
+        await Write(new Keep<Participant>(new Participant { Id = id, Did = Seeded.Did(id), Handle = handle }), ct);
+        await Write(new CaptureProfile(id, new ProfileAnswer(Seeded.Did(id), displayName, null, null, AgentLabel: false), DateTimeOffset.UtcNow), ct);
         await roles.Add(role, id, ct);
     }
 

@@ -34,8 +34,9 @@ export interface State {
   /** A selector a picture is dropped on, at its end, once the fields are filled and before any click, as a person drops a file from
    *  their desktop: a PNG the capture paints, so the state shows an image brought into the words. */
   drop?: string
-  /** A selector clicked once the page has settled; the state is what the click shows in the page. */
-  click?: string
+  /** A selector clicked once the page has settled, or several clicked in turn; the state is what the clicks show in
+   *  the page. */
+  click?: string | readonly string[]
   /** A selector the page shows once the click is answered, for a click the page answers in place or by a navigation
    *  it starts itself, or, without a click, once the fill is answered; awaited before the network settles. */
   waitFor?: string
@@ -313,6 +314,19 @@ export const screens: Readonly<Record<string, Screen>> = {
     states: [
       { name: 'read', seed: 'article', signedIn: true },
       { name: 'visitor', seed: 'article' },
+    ],
+  },
+  // Use another Bluesky account: the account menu's panel open on the door, with its handle field and the line that
+  // says earlier Posts stay linked to the account held now; and the Connections page a refused binding lands on, open
+  // with why: a sign-in not fresh enough, with the sign-in that answers it, and an account that is someone else's here.
+  'another-account': {
+    path: '/',
+    states: [
+      { name: 'menu', place: 'persona', seed: 'door', signedIn: true, click: ['.account-button', '#account-another > summary'] },
+      { name: 'sign-in-first', path: '/settings/connections', seed: 'connections', signedIn: true,
+        query: { another: '1', handle: 'ada.example.com', error: 'sign_in_first' } },
+      { name: 'login-taken', path: '/settings/connections', seed: 'connections', signedIn: true,
+        query: { another: '1', handle: 'ada.example.com', error: 'login_taken' } },
     ],
   },
   // The persona's Connections: her Bluesky account publishing her articles, one updated, one published, and one it

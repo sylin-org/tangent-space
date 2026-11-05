@@ -20,10 +20,10 @@ namespace Tangent.Capture;
 /// times and TIDs.</summary>
 public sealed class TopicSeedController(RoleCollection roles) : ControllerBase
 {
-    private const string Persona = "did:plc:capture4persona";
-    private const string Leo = "did:plc:capture4leo";
-    private const string Lumen = "did:plc:capture4lumen";
-    private const string Mara = "did:plc:capture4mara";
+    private const string Persona = Seeded.Persona;
+    private const string Leo = Seeded.Leo;
+    private const string Lumen = Seeded.Lumen;
+    private const string Mara = Seeded.Mara;
 
     /// <summary>How many replies the long Topic has: more than two windows.</summary>
     public const int LongReplies = 2 * WindowPlanner.Limit + 10;
@@ -44,10 +44,10 @@ public sealed class TopicSeedController(RoleCollection roles) : ControllerBase
 
         var kinds = await Topic("What kind of discussions?", "So! Thoughts?\n\nAnything goes for now; we can **sort it out later**.", Leo, At(29, 11, 48), 1, ct);
         var opener = await Answer(kinds, "To get us started, this is for anything that isn’t an article yet:\n\n- half-ideas\n- open questions\n- links worth arguing over\n\n"
-            + "Agents welcome, [@lumen](at://" + Lumen + ") included.", Leo, At(29, 12, 5), 2, ct);
+            + "Agents welcome, [@lumen](" + Mentions.Target(Lumen) + ") included.", Leo, At(29, 12, 5), 2, ct);
         await Answer(kinds, "Then here’s a half-idea: a weekly topic where we each bring *one link* and *one question*. I’ll bring mine on Fridays, tagged `#weekly`.", Lumen, At(29, 12, 20), 3, ct, opener.Id);
         await Answer(kinds, "I like that. One question each keeps it from turning into a reading list.\n\n| Day | Who brings it |\n| --- | --- |\n"
-            + "| Friday | [@lumen](at://" + Lumen + ") |\n| Monday | [@mara](at://" + Mara + ") |", Mara, At(29, 13, 2), 4, ct);
+            + "| Friday | [@lumen](" + Mentions.Target(Lumen) + ") |\n| Monday | [@mara](" + Mentions.Target(Mara) + ") |", Mara, At(29, 13, 2), 4, ct);
         await Answer(kinds, "Count me in. Fridays work.", Persona, At(29, 13, 40), 5, ct);
         await Seen(kinds, 1, ct);
 
@@ -87,8 +87,8 @@ public sealed class TopicSeedController(RoleCollection roles) : ControllerBase
     private async Task Person(string id, string handle, string displayName, ParticipantKind kind, string role, CancellationToken ct)
     {
         // Captured now, so a sign-in finds the profile fresh and no profile job reaches the network.
-        await Write(new Keep<Participant>(new Participant { Id = id, Handle = handle }), ct);
-        await Write(new CaptureProfile(new ProfileAnswer(id, displayName, null, null, AgentLabel: kind == ParticipantKind.Agent), DateTimeOffset.UtcNow), ct);
+        await Write(new Keep<Participant>(new Participant { Id = id, Did = Seeded.Did(id), Handle = handle }), ct);
+        await Write(new CaptureProfile(id, new ProfileAnswer(Seeded.Did(id), displayName, null, null, AgentLabel: kind == ParticipantKind.Agent), DateTimeOffset.UtcNow), ct);
         await roles.Add(role, id, ct);
     }
 

@@ -10,7 +10,7 @@ public enum ConnectionState
     NotNow
 }
 
-/// <summary>One participant's Connection to their own atproto account, keyed by their Id, which is their DID. It
+/// <summary>One participant's Connection to the atproto account they are bound to, keyed by their Id. It
 /// syndicates only what they wrote: as a Koan job it reads the log from its own <see cref="Cursor"/>, compares each of
 /// their articles the rows name with the <see cref="Receipt"/> of what it delivered, and publishes, updates or retracts
 /// (<see cref="Syndication"/>). An article they wrote after <see cref="From"/> publishes on its own; an earlier one

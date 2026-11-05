@@ -20,7 +20,7 @@ namespace Tangent.Events;
 /// capped.</summary>
 public sealed class StreamTests
 {
-    private const string Leo = "did:plc:leo4live";
+    private static readonly string Leo = Persona.Id("leo4live");
 
     [Fact]
     public async Task A_reply_committed_after_a_stream_opened_reaches_it_with_its_sequence_as_id_and_a_reconnect_with_last_event_id_resumes_without_a_gap_or_a_repeat()

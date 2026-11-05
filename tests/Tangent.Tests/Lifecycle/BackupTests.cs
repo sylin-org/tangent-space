@@ -27,10 +27,10 @@ public sealed class BackupTests(ITestOutputHelper output)
         Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateModeratorsTangent().Send(Cancellation));
         var row = (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!;
         await Given.ATangent(original, "workshop", ct: Cancellation);
-        await Given.AParticipant(original, "did:plc:ada", [Roles.Member], ct: Cancellation);
+        await Given.AParticipant(original, Persona.Id("ada"), [Roles.Member], ct: Cancellation);
         var image = await Media.Keep(ArticleMediaTests.Jpeg(), Cancellation);
-        Assert.IsType<Outcome<MediaUse>.Done>(await new BringMedia(image.Id, "did:plc:ada").Send(Cancellation));
-        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "workshop", "A picture", "![It](/media/" + image.Id + ")", "did:plc:ada").Send(Cancellation));
+        Assert.IsType<Outcome<MediaUse>.Done>(await new BringMedia(image.Id, Persona.Id("ada")).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "workshop", "A picture", "![It](/media/" + image.Id + ")", Persona.Id("ada")).Send(Cancellation));
         var kept = await original.Client.GetByteArrayAsync("/media/" + image.Id, Cancellation);
         var rendered = await original.Client.GetByteArrayAsync($"/media/{image.Id}/{MediaRecipes.CardName}", Cancellation);
 

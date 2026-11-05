@@ -15,7 +15,7 @@ namespace Tangent.Tangents;
 /// it, and they leave it with one action.</summary>
 public sealed class MembersOnlyTests
 {
-    private const string Leo = "did:plc:leo4members";
+    private static readonly string Leo = Persona.Id("leo4members");
 
     [Fact]
     public async Task Someone_outside_asks_to_join_is_let_in_from_the_people_tab_is_told_on_their_door_and_leaves()

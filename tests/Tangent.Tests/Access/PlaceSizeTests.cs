@@ -19,9 +19,9 @@ namespace Tangent.Access;
 /// reader may view however many come before them.</summary>
 public sealed class PlaceSizeTests(ITestOutputHelper output)
 {
-    private const string Leo = "did:plc:leo4size";
-    private const string Ada = "did:plc:ada4size";
-    private const string Mo = "did:plc:mo4size";
+    private static readonly string Leo = Persona.Id("leo4size");
+    private static readonly string Ada = Persona.Id("ada4size");
+    private static readonly string Mo = Persona.Id("mo4size");
 
     private static CancellationToken Cancellation => TestContext.Current.CancellationToken;
 
@@ -78,7 +78,7 @@ public sealed class PlaceSizeTests(ITestOutputHelper output)
 
         var clock = Stopwatch.StartNew();
         for (var index = 0; index < others; index++)
-            await roles.Add(Roles.Member, "did:plc:member" + index.ToString("0000", System.Globalization.CultureInfo.InvariantCulture), Cancellation);
+            await roles.Add(Roles.Member, Persona.Id("member") + index.ToString("0000", System.Globalization.CultureInfo.InvariantCulture), Cancellation);
         output.WriteLine($"{others} members joined in {clock.Elapsed}");
 
         var ada = await Given.AParticipant(tangentSpace, Ada, [], ct: Cancellation);

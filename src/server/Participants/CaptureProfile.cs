@@ -3,15 +3,16 @@ using Koan.Data.Core.Commands;
 
 namespace Tangent.Participants;
 
-/// <summary>Caches the profile the profile service answered on the participant it belongs to, with the time of
-/// capture, and the kind its bot self-label says unless the participant chose theirs. The profile job reads the
-/// network and sends this; nothing here reads anything but the row.</summary>
-public sealed record CaptureProfile(ProfileAnswer Answer, DateTimeOffset At) : ICommand<Participant>
+/// <summary>Caches the profile the profile service answered on the participant whose bound account it belongs to, with
+/// the time of capture, and the kind its bot self-label says unless the participant chose theirs; an answer for an
+/// account they are no longer bound to is refused. The profile job reads the network and sends this; nothing here reads
+/// anything but the row.</summary>
+public sealed record CaptureProfile(string ParticipantId, ProfileAnswer Answer, DateTimeOffset At) : ICommand<Participant>
 {
     public async Task<Outcome<Participant>> Run(CancellationToken ct)
     {
-        var participant = await Participant.Get(Answer.Did, ct);
-        if (participant is null) return new Outcome<Participant>.Refused(Reason.Invalid($"No participant is {Answer.Did}."));
+        var participant = await Participant.Get(ParticipantId, ct);
+        if (participant is null) return new Outcome<Participant>.Refused(Reason.Invalid($"No participant is {ParticipantId}."));
         participant.Capture(Answer, At);
         await participant.Save(ct);
         return new Outcome<Participant>.Done(participant);

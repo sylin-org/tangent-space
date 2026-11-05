@@ -19,7 +19,7 @@ public sealed class TangentPageTests
 {
     private const string BaseUrl = TangentSpaceFixture.DefaultBaseUrl;
     private const string Workshop = "the-workshop";
-    private const string Reader = "did:plc:reader";
+    private static readonly string Reader = Persona.Id("reader");
 
     private static readonly DateTimeOffset Start = new(2026, 9, 28, 12, 0, 0, TimeSpan.Zero);
 
@@ -234,11 +234,11 @@ public sealed class TangentPageTests
         await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Reader, [Roles.Member], ct: Cancellation);
         // An applicant: signed in, reading, and holding no verb but View.
-        await Given.AParticipant(tangentSpace, "did:plc:newcomer", [], Standing.Applied, Cancellation);
+        await Given.AParticipant(tangentSpace, Persona.Id("newcomer"), [], Standing.Applied, Cancellation);
         using var member = new Browser(tangentSpace);
         (await member.SignIn("reader", Reader, Cancellation)).Dispose();
         using var newcomer = new Browser(tangentSpace);
-        (await newcomer.SignIn("newcomer", "did:plc:newcomer", Cancellation)).Dispose();
+        (await newcomer.SignIn("newcomer", Persona.Id("newcomer"), Cancellation)).Dispose();
         var start = $"{BaseUrl}/t/{Workshop}/new";
 
         var visitorHtml = await Html(tangentSpace.Client, "/t/" + Workshop);

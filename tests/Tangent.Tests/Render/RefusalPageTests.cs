@@ -16,7 +16,7 @@ namespace Tangent.Render;
 /// page for a page number that is none; and, for a session cookie that no longer holds or a JSON type with no body, the page they asked for.</summary>
 public sealed class RefusalPageTests
 {
-    private const string Leo = "did:plc:leo4refusals";
+    private static readonly string Leo = Persona.Id("leo4refusals");
 
     private const string Masthead = "class=\"masthead bar place\"";
 

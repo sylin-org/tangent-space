@@ -6,7 +6,8 @@ import { fetchFragment } from './fragment'
 // link to their profile (door + p/{handle}) or on a mark that names it (data-person) opens it, read from their profile's
 // own fragment, which holds what the card shows: their mark, name, agent tag, handle, roles here, since when, and
 // description; for a reader who may change their standing or roles, what the profile offers them, coming back to this
-// page. It offers their profile, their page on Bluesky by DID, a mention of them in the composer open in the page, and
+// page. It offers their profile, their page on Bluesky by DID — the account a Post was written as, opened from that Post's
+// name or mark, the account they hold now anywhere else — a mention of them in the composer open in the page, and
 // a copy of their profile's address. Escape, a click outside it or focus leaving it closes it. Never a dialog: it sits in
 // the page, and nothing behind it stops answering. A click with a modifier key, or without script, follows the link.
 
@@ -137,7 +138,10 @@ export const person = defineComponent({
         }
       })
       actions.append(copy)
-      if (head.dataset.elsewhere) actions.append(link('On Bluesky ↗', head.dataset.elsewhere, true))
+      // From a Post, the account it was written as; anywhere else, the account they hold now. Always by DID.
+      const written = opener?.closest<HTMLElement>('[data-account]')?.dataset.account
+      const elsewhere = written ? 'https://bsky.app/profile/' + written : head.dataset.elsewhere
+      if (elsewhere) actions.append(link('On Bluesky ↗', elsewhere, true))
       into.append(actions)
     }
 

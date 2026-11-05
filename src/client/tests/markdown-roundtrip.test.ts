@@ -14,7 +14,7 @@ function richRoundtrip(source: string): string {
 const samples: Record<string, string> = {
   article: '## A turning point\n\nA **bold** idea with [a source](https://example.com).\n\n#### A smaller heading\n\n![Alt text](https://example.com/photo.jpg)\n\n> A longer quotation.\n\n- First point\n- Second point',
   breaks: 'One line\nand the next\n\nanother paragraph',
-  mention: 'Thanks to [@ines.bsky.social](at://did:plc:ines) for this.',
+  mention: 'Thanks to [@ines.bsky.social](/p/0193b2c4-0000-7000-8000-00000000000e) for this.',
   media: 'Before.\n\n![A kiln at dusk](/media/019a2b3c-4d5e-7f60-8a9b-0c1d2e3f4a5b)\n\n*The kiln at dusk.*\n\nAfter.',
   ordered: '3. three\n4. four',
   nested: '- a\n  - b\n- c',

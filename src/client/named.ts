@@ -1,5 +1,5 @@
 // Who or what a body names, as a pick writes it: a link whose words are the sign and the name shown, and whose target
-// says who or what it means — a participant's at:// and id, a role's key, a Tangent's address — so the body keeps it
+// says who or what it means — a participant's page by their id, a role's key, a Tangent's address — so the body keeps it
 // whatever the name or handle becomes. In the source it is Markdown, the name's punctuation escaped so it reads as it
 // is; in the visual editor it is one chip (article/chip.ts) that writes the same Markdown.
 
@@ -26,14 +26,14 @@ export function unescapedName(written: string): string {
   return written.replace(/\\([!-/:-@[-`{-~])/gu, '$1')
 }
 
-// The named one as Markdown: [@Lumen](at://did:plc:…).
+// The named one as Markdown: [@Lumen](/p/0193…).
 export function markdownOf(named: Named): string {
   const sign = named.words.startsWith('@') || named.words.startsWith('#') ? named.words[0] : ''
   return `[${sign}${escapedName(named.words.slice(sign.length))}](${named.target})`
 }
 
-// A link target a chip stands for: a participant's (at:// and a DID), a role's key, or a Tangent's address.
-const targetPattern = /^(?:at:\/\/did:[a-z]+:[A-Za-z0-9._:%-]+|role:[\p{L}\p{N}-]+|\/t\/[\p{L}\p{N}-]+)$/u
+// A link target a chip stands for: a participant's (/p/ and their id), a role's key, or a Tangent's address.
+const targetPattern = /^(?:\/p\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|role:[\p{L}\p{N}-]+|\/t\/[\p{L}\p{N}-]+)$/u
 
 // What [words](target) at the start of src names, where its words are a sign and a name and its target one a chip stands
 // for, with the sign the target is named after; null otherwise.

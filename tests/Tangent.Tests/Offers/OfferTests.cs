@@ -20,8 +20,8 @@ namespace Tangent.Offers;
 /// offered again and opens the next; a configured URL leaves none open.</summary>
 public sealed class OfferTests
 {
-    private const string Leo = "did:plc:leo4offers";
-    private const string Ada = "did:plc:ada4offers";
+    private static readonly string Leo = Persona.Id("leo4offers");
+    private static readonly string Ada = Persona.Id("ada4offers");
     private const string Public = "https://tangent.example.org";
     private const string Other = "https://www.example.org";
     private const string OnAPort = "https://tangent.example.org:8443";

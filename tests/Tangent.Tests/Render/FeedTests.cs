@@ -21,7 +21,7 @@ public sealed class FeedTests
     private const string Workshop = "the-workshop";
     private const string Articles = "articles";
     private const string Back = "the-back-room";
-    private const string Reader = "did:plc:reader";
+    private static readonly string Reader = Persona.Id("reader");
 
     private static readonly XNamespace Atom = "http://www.w3.org/2005/Atom";
     private static readonly DateTimeOffset Start = new(2026, 9, 28, 12, 0, 0, TimeSpan.Zero);
@@ -40,9 +40,9 @@ public sealed class FeedTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Place(tangentSpace);
-        await Given.AParticipant(tangentSpace, "did:plc:ines", [Roles.Member], ct: Cancellation);
+        await Given.AParticipant(tangentSpace, Persona.Id("ines"), [Roles.Member], ct: Cancellation);
         await Started("A first & \u0001plain question",
-            "The *words*\u0001 with <script>alert(1)</script>, [@ines](at://did:plc:ines), [a page](/about), [here](#there), ![a sketch](/media/sketch.png) and `href=\"/kept\"`.", Start);
+            "The *words*\u0001 with <script>alert(1)</script>, [@ines](/p/" + Persona.Id("ines") + "), [a page](/about), [here](#there), ![a sketch](/media/sketch.png) and `href=\"/kept\"`.", Start);
 
         using var atomAnswer = await tangentSpace.Client.GetAsync($"/t/{Workshop}/feed.atom", Cancellation);
         Assert.Equal(HttpStatusCode.OK, atomAnswer.StatusCode);
@@ -87,7 +87,7 @@ public sealed class FeedTests
     {
         Assert.Contains("<em>words</em>", html);
         Assert.DoesNotContain("<script", html);
-        Assert.Contains($"href=\"{BaseUrl}/p/did%3Aplc%3Aines.example\" title=\"@did:plc:ines.example\">@did:plc:ines.example</a>", html);
+        Assert.Contains($"href=\"{BaseUrl}/p/ines.example\" title=\"@ines.example\">@ines.example</a>", html);
         Assert.Contains("href=\"https://tangent.test/about\"", html);
         Assert.Contains($"href=\"{topic}#there\"", html);
         Assert.Contains("src=\"https://tangent.test/media/sketch.png\"", html);

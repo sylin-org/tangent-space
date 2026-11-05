@@ -30,11 +30,11 @@
         <h1 class="article-title">@Title</h1>
     }
     <p class="article-byline">
-        @TopicRow.Mark(Author, "article-byline-mark")
+        @TopicRow.Mark(Author, "article-byline-mark", writtenAs: WrittenAs)
         <span class="article-byline-text">
             @if (Author.Profile is { } profile)
             {
-                <a class="article-byline-name" href="@profile">@Author.Name</a>
+                <a class="article-byline-name" href="@profile" data-account="@WrittenAs">@Author.Name</a>
             }
             else
             {
@@ -62,6 +62,9 @@
     [Parameter, EditorRequired] public TangentPage.Author Author { get; set; } = default!;
 
     [Parameter, EditorRequired] public DateTimeOffset At { get; set; }
+
+    /// <summary>The DID of the account the article was written as, which its author's card links out to.</summary>
+    [Parameter] public string? WrittenAs { get; set; }
 
     [Parameter] public int Minutes { get; set; } = 1;
 

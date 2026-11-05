@@ -12,7 +12,7 @@ namespace Tangent.Render;
 /// match; and the reader's own chip, Posts and marks say so.</summary>
 public sealed class MarkupContractTests
 {
-    private const string Lumen = "did:plc:lumen4contract";
+    private static readonly string Lumen = Persona.Id("lumen4contract");
 
     [Fact]
     public async Task A_posts_header_and_footer_are_direct_children_of_its_article_and_the_readers_own_say_so()
@@ -20,7 +20,7 @@ public sealed class MarkupContractTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Lumen, [Roles.Member], ct: Cancellation);
-        var agent = new Participant { Id = Lumen, Handle = "lumen.example", Kind = ParticipantKind.Agent, Standing = Standing.Admitted };
+        var agent = new Participant { Id = Lumen, Did = Persona.Did(Lumen), Handle = "lumen.example", Kind = ParticipantKind.Agent, Standing = Standing.Admitted };
         Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(agent).Send(Cancellation));
         var root = await Started(Ada, "Lanterns", "How do you hang yours?");
         var answer = await Replied(root, Lumen, "From the eaves, mostly.");

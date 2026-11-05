@@ -80,7 +80,8 @@ public sealed record TopicPage(
     /// it on a tangent, present only on a Post that is not removed, for a reader who may start a Topic somewhere;
     /// <see cref="Taken"/> holds the Topics taken on a tangent from it that the reader may view, where there are any.
     /// <see cref="Report"/> is the form that reports it to the moderators, with a TID minted for it, for a signed-in
-    /// reader, on someone else's Post that is not removed, outside the moderators' Tangent.</summary>
+    /// reader, on someone else's Post that is not removed, outside the moderators' Tangent. <see cref="WrittenAs"/> is the
+    /// DID of the Bluesky account its author wrote it as, which its author's card links to from it.</summary>
     public sealed record Post(
         string Id,
         long Sequence,
@@ -99,9 +100,10 @@ public sealed record TopicPage(
         string? TakeOnATangent = null,
         TopicPage.Taken? Taken = null,
         Form? Report = null,
-        TangentPage.Edited? Edited = null);
+        TangentPage.Edited? Edited = null,
+        string? WrittenAs = null);
 
-    /// <summary>A participant or a role a body mentions, by what the body's link names: a participant's DID, their handle
+    /// <summary>A participant or a role a body mentions, by what the body's link names: a participant's id, their handle
     /// now, the name the place shows them by now, and their address; a role's key, its word, as an <c>@</c> names it, its
     /// name, and no address.</summary>
     public sealed record Mention(string Id, string Handle, string Name, string? Address);

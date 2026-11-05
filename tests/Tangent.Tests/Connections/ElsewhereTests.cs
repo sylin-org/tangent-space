@@ -35,7 +35,7 @@ public sealed class ElsewhereTests
         using var bound = CancellationTokenSource.CreateLinkedTokenSource(Cancellation);
         bound.CancelAfter(TimeSpan.FromSeconds(20));
         while ((await Elsewhere.Get(article.Id, bound.Token))?.Likes is not 128) await Task.Delay(100, bound.Token);
-        Assert.Equal($"at://{Ada}/{AtprotoAdapter.Notes}/{article.Id}", network.Asked);
+        Assert.Equal($"at://{Persona.Did(Ada)}/{AtprotoAdapter.Notes}/{article.Id}", network.Asked);
 
         var html = (await Send(Agent(tangentSpace), HttpMethod.Get, page)).Body;
         Assert.All(["128 likes", "17 reposts", "1 quote ", "9 replies"], count => Assert.Contains(count, html));

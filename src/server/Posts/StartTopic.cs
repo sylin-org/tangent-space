@@ -3,6 +3,7 @@ using Koan.Data.Core;
 using Koan.Data.Core.Commands;
 using Tangent.Access;
 using Tangent.Events;
+using Tangent.Participants;
 
 namespace Tangent.Posts;
 
@@ -59,6 +60,7 @@ public sealed record StartTopic(
         var at = At ?? DateTimeOffset.UtcNow;
         Post.CheckTitle(Title);
         var root = Post.Root(Id, TangentId, Title, await UniqueSlug(TangentId, Title, Id, ct), kind, Body, AuthorId, at, origin?.Id);
+        root.AuthorDid = await Participant.DidOf(AuthorId, ct);
         if (CoverId is not null)
         {
             if (!await MediaUse.Reaches(AuthorId, CoverId, ct)) return new Outcome<Post>.Refused(Post.NoCover);

@@ -15,7 +15,7 @@ namespace Tangent.Tangents;
 /// the gate; a refused name keeps the form; and the form answers JSON with its defaults, <c>can</c> and <c>gate</c>.</summary>
 public sealed class NewTangentTests
 {
-    private const string Leo = "did:plc:leo4tangents";
+    private static readonly string Leo = Persona.Id("leo4tangents");
 
     [Fact]
     public async Task An_administrator_creates_a_tangent_with_only_a_name_and_lands_on_it_with_its_slug_kind_audience_and_order_defaulted()

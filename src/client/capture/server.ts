@@ -203,7 +203,10 @@ export async function signIn(listening: URL, persona: Persona): Promise<Map<stri
   const jar = new Map([['_tp_user', encodeURIComponent(`${persona.name}|${persona.did}`)]])
   let target = new URL('/auth/test/challenge?return=' + encodeURIComponent('/sign-in'), listening)
   for (let hop = 0; hop < 10; hop++) {
-    if (target.pathname.endsWith('/.testoauth/authorize')) target.searchParams.set('claim.atproto:handle', persona.handle)
+    if (target.pathname.endsWith('/.testoauth/authorize')) {
+      target.searchParams.set('claim.atproto:did', persona.did)
+      target.searchParams.set('claim.atproto:handle', persona.handle)
+    }
     const cookie = [...jar].map(([name, value]) => `${name}=${value}`).join('; ')
     const response = await fetch(target, { redirect: 'manual', headers: { cookie } })
     for (const set of response.headers.getSetCookie()) {

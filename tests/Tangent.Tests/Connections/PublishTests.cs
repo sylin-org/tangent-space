@@ -40,15 +40,15 @@ public sealed class PublishTests
         Assert.Equal(HttpStatusCode.SeeOther, published.Status);
         Assert.Equal(BaseUrl + page, published.Location);
 
-        var document = $"at://{Ada}/{AtprotoAdapter.Documents}/{article.Id}";
-        var note = $"at://{Ada}/{AtprotoAdapter.Notes}/{article.Id}";
+        var document = $"at://{Persona.Did(Ada)}/{AtprotoAdapter.Documents}/{article.Id}";
+        var note = $"at://{Persona.Did(Ada)}/{AtprotoAdapter.Notes}/{article.Id}";
         await Until(() => repository.Records.ContainsKey(document));
         Assert.Equal("Mending with gold", repository.Records[note]["embed"]!["external"]!["title"]!.GetValue<string>());
         Assert.Equal(BaseUrl + page, repository.Records[note]["embed"]!["external"]!["uri"]!.GetValue<string>());
         Assert.Equal(note, repository.Records[document]["bskyPostRef"]!["uri"]!.GetValue<string>());
         Assert.Contains("Published on Bluesky as you.", (await Send(ada.Client, HttpMethod.Get, page)).Body);
         Assert.Contains($"<link rel=\"site.standard.document\" href=\"{document}\"", (await Send(Agent(tangentSpace), HttpMethod.Get, page)).Body);
-        var publication = repository.Records.Keys.Single(key => key.StartsWith($"at://{Ada}/{AtprotoAdapter.Publications}/", StringComparison.Ordinal));
+        var publication = repository.Records.Keys.Single(key => key.StartsWith($"at://{Persona.Did(Ada)}/{AtprotoAdapter.Publications}/", StringComparison.Ordinal));
         Assert.Equal(publication, (await Send(Agent(tangentSpace), HttpMethod.Get, PublicationController.Path)).Body);
 
         Assert.IsType<Outcome<Post>.Done>(await new EditPost(article.Id, 1, PostBody.Of("A cracked bowl, mended by a moderator."), "Mending with brass", Mo).Send(Cancellation));

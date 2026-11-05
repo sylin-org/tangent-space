@@ -24,9 +24,9 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
 {
     private const string BaseUrl = TangentSpaceFixture.DefaultBaseUrl;
     private const string Workshop = "the-workshop";
-    private const string Leo = "did:plc:leo";
-    private const string Ada = "did:plc:ada";
-    private const string Reader = "did:plc:reader";
+    private static readonly string Leo = Persona.Id("leo");
+    private static readonly string Ada = Persona.Id("ada");
+    private static readonly string Reader = Persona.Id("reader");
 
     private static readonly DateTimeOffset Start = new(2026, 9, 28, 12, 0, 0, TimeSpan.Zero);
 
@@ -66,7 +66,7 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
             var replies = page.GetProperty("replies").EnumerateArray().ToList();
             Assert.Equal([(first.Id, 1L, Leo), (second.Id, 2L, Ada), (third.Id, 3L, Leo)], replies.Select(reply =>
                 (reply.GetProperty("id").GetString()!, reply.GetProperty("sequence").GetInt64(), reply.GetProperty("author").GetProperty("id").GetString()!)).ToList());
-            Assert.Equal("did:plc:leo.example", replies[0].GetProperty("author").GetProperty("handle").GetString());
+            Assert.Equal("leo.example", replies[0].GetProperty("author").GetProperty("handle").GetString());
             Assert.All(replies.Prepend(root), post => Assert.Equal(["View"], Strings(post.GetProperty("can"))));
             Assert.All(replies.Prepend(root), post => Assert.False(post.TryGetProperty("edit", out _)));
             Assert.Equal($"{address}/{second.Id}", replies[1].GetProperty("address").GetString());
@@ -83,7 +83,7 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
         var order = new[] { "First line.", "Agreed.", "Thanks, Leo.", "And one more." }.Select(text => visitorHtml.IndexOf(text, StringComparison.Ordinal)).ToList();
         Assert.All(order, index => Assert.True(index > 0));
         Assert.Equal(order.Order().ToList(), order);
-        Assert.Contains($"<a class=\"post-parent\" href=\"{address}/{first.Id}\">In reply to did:plc:leo.example</a>", visitorHtml);
+        Assert.Contains($"<a class=\"post-parent\" href=\"{address}/{first.Id}\">In reply to leo.example</a>", visitorHtml);
         Assert.DoesNotContain(">Edit</a>", visitorHtml);
         Assert.DoesNotContain("<dialog", visitorHtml);
 
@@ -304,7 +304,7 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
         }
 
         var html = await Html(tangentSpace.Client, $"/t/{Workshop}/a-removal");
-        Assert.Contains("Removed by did:plc:leo.example", html);
+        Assert.Contains("Removed by leo.example", html);
         Assert.DoesNotContain("Said and taken back.", html);
         Assert.True(html.IndexOf("Kept.", StringComparison.Ordinal) < html.IndexOf("Removed by", StringComparison.Ordinal)
             && html.IndexOf("Removed by", StringComparison.Ordinal) < html.IndexOf("Also kept.", StringComparison.Ordinal));

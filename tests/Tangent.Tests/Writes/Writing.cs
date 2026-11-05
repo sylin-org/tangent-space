@@ -23,9 +23,9 @@ internal static partial class Writing
     public const string Workshop = "workshop";
     public const string Articles = "articles";
     public const string Studio = "studio";
-    public const string Ada = "did:plc:ada4writes";
-    public const string Bea = "did:plc:bea4writes";
-    public const string Mo = "did:plc:mo4writes";
+    public static readonly string Ada = Persona.Id("ada4writes");
+    public static readonly string Bea = Persona.Id("bea4writes");
+    public static readonly string Mo = Persona.Id("mo4writes");
 
     public static CancellationToken Cancellation => TestContext.Current.CancellationToken;
 
@@ -55,11 +55,12 @@ internal static partial class Writing
     public static async Task<Post> Replied(Post root, string author, string body)
         => Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), root.Id, body, author).Send(Cancellation)).Result;
 
-    /// <summary>A browser signed in as <paramref name="did"/>.</summary>
-    public static async Task<Browser> SignedIn(TangentSpaceFixture tangentSpace, string did)
+    /// <summary>A browser signed in as <paramref name="who"/>, a persona or an account's DID.</summary>
+    public static async Task<Browser> SignedIn(TangentSpaceFixture tangentSpace, string who)
     {
         var browser = new Browser(tangentSpace);
-        (await browser.SignIn(did.Split(':')[^1], did, Cancellation, handle: did.Split(':')[^1] + ".example")).Dispose();
+        var name = Persona.Did(who).Split(':')[^1];
+        (await browser.SignIn(name, who, Cancellation, handle: name + ".example")).Dispose();
         return browser;
     }
 

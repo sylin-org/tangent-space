@@ -18,8 +18,8 @@ namespace Tangent.Capture;
 /// only into the capture host, like <see cref="CaptureSeedController"/>; fixed names.</summary>
 public sealed class ManyTangentsSeedController(RoleCollection roles) : ControllerBase
 {
-    private const string Persona = "did:plc:capture4persona";
-    private const string Leo = "did:plc:capture4leo";
+    private const string Persona = Seeded.Persona;
+    private const string Leo = Seeded.Leo;
 
     /// <summary>How many Tangents the seed adds.</summary>
     public const int Count = 60;
@@ -48,8 +48,8 @@ public sealed class ManyTangentsSeedController(RoleCollection roles) : Controlle
     private async Task Person(string id, string handle, string displayName, IReadOnlyList<string> held, CancellationToken ct)
     {
         // Captured now, so a sign-in finds the profile fresh and no profile job reaches the network.
-        await Write(new Keep<Participant>(new Participant { Id = id, Handle = handle }), ct);
-        await Write(new CaptureProfile(new ProfileAnswer(id, displayName, null, null), DateTimeOffset.UtcNow), ct);
+        await Write(new Keep<Participant>(new Participant { Id = id, Did = Seeded.Did(id), Handle = handle }), ct);
+        await Write(new CaptureProfile(id, new ProfileAnswer(Seeded.Did(id), displayName, null, null), DateTimeOffset.UtcNow), ct);
         foreach (var role in held) await roles.Add(role, id, ct);
     }
 

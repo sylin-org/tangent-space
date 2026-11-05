@@ -14,7 +14,7 @@ namespace Tangent.Posts;
 /// box is a form that works without JavaScript.</summary>
 public sealed class SearchTests
 {
-    private const string Leo = "did:plc:leo4search";
+    private static readonly string Leo = Persona.Id("leo4search");
 
     private static string Path(string words, int page = 1) => "/search?q=" + Uri.EscapeDataString(words) + (page > 1 ? "&page=" + page : "");
 
@@ -34,7 +34,7 @@ public sealed class SearchTests
         await Furnish(tangentSpace);
         await using var space = tangentSpace;
         var root = await Started(Ada, "Copper lanterns", "How the glass is cut.");
-        var reply = await Replied(root, Bea, "Annealing **matters** most, as [@ada](at://" + Ada + ") says.");
+        var reply = await Replied(root, Bea, "Annealing **matters** most, as [@ada](/p/" + Ada + ") says.");
 
         var byTitle = (await Send(tangentSpace.Client, HttpMethod.Get, Path("lanterns"), json: true)).Json;
         Assert.Equal([BaseUrl + TopicPath(root)], Addresses(byTitle));
@@ -50,7 +50,7 @@ public sealed class SearchTests
         var runs = body.GetProperty("snippet").EnumerateArray().ToList();
         Assert.Equal("Annealing", Assert.Single(runs, run => run.GetProperty("marked").GetBoolean()).GetProperty("text").GetString());
         var words = string.Concat(runs.Select(run => run.GetProperty("text").GetString()));
-        Assert.Equal("Annealing matters most, as @" + Ada + ".example says.", words);
+        Assert.Equal("Annealing matters most, as @" + Persona.Handle(Ada) + " says.", words);
 
         var page = await Send(tangentSpace.Client, HttpMethod.Get, Path("annealing"));
         Assert.Equal(HttpStatusCode.OK, page.Status);
@@ -170,7 +170,7 @@ public sealed class SearchTests
         await Furnish(tangentSpace);
         await using var space = tangentSpace;
         await Started(Ada, "Copper lanterns", "How the glass is cut.");
-        const string gone = "did:plc:gone4search";
+        var gone = Persona.Id("gone4search");
         await Given.AParticipant(tangentSpace, gone, [], Participants.Standing.Banned, Cancellation);
         using var banned = await SignedIn(tangentSpace, gone);
 

@@ -2,6 +2,7 @@ using Koan.Data.Core;
 using Koan.Data.Core.Commands;
 using Tangent.Access;
 using Tangent.Events;
+using Tangent.Participants;
 
 namespace Tangent.Posts;
 
@@ -44,6 +45,7 @@ public sealed record Reply(
 
         var at = At ?? DateTimeOffset.UtcNow;
         var reply = root.Reply(Id, Body, AuthorId, parent.Id, at);
+        reply.AuthorDid = await Participant.DidOf(AuthorId, ct);
         var created = await Event.Append(EventKind.PostCreated, at, ct,
             tangentId: reply.TangentId, topicId: reply.TopicId, postId: reply.Id, actorId: reply.AuthorId,
             targetId: parent.AuthorId == reply.AuthorId ? null : parent.AuthorId, version: reply.Version);

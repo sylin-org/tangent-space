@@ -26,10 +26,11 @@ public sealed class FirstRunSignIn(KoanWebBaseUrl baseUrl, IOptions<TangentSpace
         try
         {
             if (await TangentSpace.Get(TangentSpace.SingleRow, ct) is not null) return;
+            var did = ctx.Identity.FindFirst(AtprotoClaimTypes.Did)?.Value ?? "";
             var handle = ctx.Identity.FindFirst(AtprotoClaimTypes.Handle)?.Value ?? "";
-            if (!options.Value.MaySetUp(ctx.UserId, handle)) return;
+            if (!options.Value.MaySetUp(did, handle)) return;
 
-            switch (await new Establish(ctx.UserId, handle, TangentSpace.NameFor(handle)).Send())
+            switch (await new Establish(ctx.UserId, did, handle, TangentSpace.NameFor(handle)).Send())
             {
                 case Outcome<TangentSpace>.Done { Result: var space }:
                     logger.LogInformation("{Person} set up this Tangent Space as {Name} at sign-in", ctx.UserId, space.Name);

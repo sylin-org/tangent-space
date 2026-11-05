@@ -4,7 +4,7 @@ using Tangent.Participants;
 namespace Tangent.Space;
 
 /// <summary>Whose a Tangent Space is and who answers for it, as the descriptor states a person: the handle the place
-/// shows, where the participant is known, and the DID.</summary>
+/// shows, and the DID of the account they are bound to now.</summary>
 public sealed record DescriptorPerson(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Handle,
     string Did);
@@ -74,6 +74,6 @@ public sealed record Descriptor(string Name, string Address, string Audience, st
             };
     }
 
-    private static DescriptorPerson? Person(string? did, Participant? row)
-        => did is null ? null : new DescriptorPerson(row is { Handle.Length: > 0 } ? row.Handle : null, did);
+    private static DescriptorPerson? Person(string? id, Participant? row)
+        => id is null || row is not { Did.Length: > 0 } ? null : new DescriptorPerson(row.Handle.Length > 0 ? row.Handle : null, row.Did);
 }

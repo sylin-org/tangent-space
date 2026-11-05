@@ -51,6 +51,7 @@ public static class Syndication
         var rows = await Event.Query(e => e.Seq > connection.Cursor,
             new QueryDefinition { Page = 1, PageSize = Page }.WithSort<Event>(sort => sort.OrderBy(e => e.Seq)), ct);
         var through = rows.Count > 0 ? rows[^1].Seq : connection.Cursor;
+        var did = await Participants.Participant.DidOf(connection.Id, ct);
         var receipts = (await Receipt.Query(receipt => receipt.ConnectionId == connection.Id,
                 new QueryDefinition { Page = 1, PageSize = ReceiptLimit }.WithSort<Receipt>(sort => sort.OrderByDescending(receipt => receipt.At)), ct))
             .ToDictionary(receipt => receipt.PostId, StringComparer.Ordinal);
@@ -59,7 +60,7 @@ public static class Syndication
             .Select(row => row.PostId!);
         var ids = named.Concat(receipts.Keys).Distinct(StringComparer.Ordinal).ToList();
         var articles = ids.Count == 0 ? [] : (await Post.Get(ids, ct)).OfType<Post>()
-            .Where(post => post.ParentId is null && post.Kind == PostKind.Article && post.AuthorId == connection.Id)
+            .Where(post => post.ParentId is null && post.Kind == PostKind.Article && post.AuthorId == connection.Id && post.AuthorDid == did)
             .ToList();
 
         try
@@ -69,13 +70,13 @@ public static class Syndication
             if (publication is not null && publication.Proprietor == connection.Id
                                         && (space.Audience != Audience.Public || space.ProprietorId != connection.Id))
             {
-                await adapter.Withdraw(publication, ct);
+                if (publication.Did == did) await adapter.Withdraw(publication, ct);
                 await Sent(new ForgetPublication(), ct);
                 publication = null;
             }
 
             if (space.ProprietorId == connection.Id && space.Audience == Audience.Public)
-                publication = await Placed(space, publication, adapter, ct);
+                publication = await Placed(space, did, publication, adapter, ct);
 
             var audiences = new Dictionary<string, bool>(StringComparer.Ordinal);
             foreach (var article in articles)
@@ -130,15 +131,17 @@ public static class Syndication
         await Sent(new KeepReceipt(connection.Id, article.Id, article.TangentId, receipt.Version, null, DateTimeOffset.UtcNow), ct);
     }
 
-    /// <summary>The place as the proprietor's publication: put where it is missing, under someone else, or says something
-    /// else now.</summary>
-    private static async Task<Publication> Placed(TangentSpace space, Publication? publication, AtprotoAdapter adapter, CancellationToken ct)
+    /// <summary>The place as the proprietor's publication under the account <paramref name="did"/> they are bound to: put
+    /// where it is missing, under someone else or another account, or says something else now. One under an earlier
+    /// account of theirs stays there.</summary>
+    private static async Task<Publication> Placed(TangentSpace space, string did, Publication? publication, AtprotoAdapter adapter, CancellationToken ct)
     {
         var fingerprint = adapter.Fingerprint(space);
-        if (publication is not null && publication.Proprietor == space.ProprietorId && publication.Fingerprint == fingerprint) return publication;
-        var key = publication is not null && publication.Proprietor == space.ProprietorId ? publication.Key : Tid.Mint(DateTimeOffset.UtcNow);
-        var written = await adapter.Publish(space, key, ct);
-        var placed = new Publication { Proprietor = space.ProprietorId!, Key = key, Uri = written.Uri, Cid = written.Cid, Fingerprint = fingerprint };
+        var ours = publication is not null && publication.Proprietor == space.ProprietorId && publication.Did == did;
+        if (ours && publication!.Fingerprint == fingerprint) return publication;
+        var key = ours ? publication!.Key : Tid.Mint(DateTimeOffset.UtcNow);
+        var written = await adapter.Publish(space, did, key, ct);
+        var placed = new Publication { Proprietor = space.ProprietorId!, Did = did, Key = key, Uri = written.Uri, Cid = written.Cid, Fingerprint = fingerprint };
         await Sent(new KeepPublication(placed), ct);
         return placed;
     }

@@ -29,7 +29,7 @@ public sealed class RolesSeedController(RoleCollection roles) : ControllerBase
         await Write(new CreateRole(keeper, "Patrons", Bit.None), ct);
         await Write(new ChangeAccess("studio", keeper, Access.Roles.Member, RoleAccess.Post), ct);
         await Write(new ChangeAccess("studio", keeper, "role:patrons", RoleAccess.Read), ct);
-        await Person("did:plc:capture4noor", "noor.bsky.social", [Access.Roles.Member, "role:night-shift"], ct);
+        await Person(Seeded.Noor, "noor.bsky.social", [Access.Roles.Member, "role:night-shift"], ct);
         return NoContent();
     }
 
@@ -49,7 +49,7 @@ public sealed class RolesSeedController(RoleCollection roles) : ControllerBase
 
     private async Task Person(string id, string handle, IReadOnlyList<string> held, CancellationToken ct)
     {
-        await Write(new Keep<Participant>(new Participant { Id = id, Handle = handle, Standing = Standing.Admitted }), ct);
+        await Write(new Keep<Participant>(new Participant { Id = id, Did = Seeded.Did(id), Handle = handle, Standing = Standing.Admitted }), ct);
         foreach (var role in held) await roles.Add(role, id, ct);
     }
 

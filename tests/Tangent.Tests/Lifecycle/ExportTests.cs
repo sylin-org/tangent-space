@@ -19,7 +19,7 @@ namespace Tangent.Lifecycle;
 /// walks, what it leaves out, who it refuses, and that a tombstone stays one.</summary>
 public sealed partial class ExportTests
 {
-    private const string Leo = "did:plc:leo4export";
+    private static readonly string Leo = Persona.Id("leo4export");
     private const string Path = ExportController.Path;
 
     [Fact]
@@ -30,7 +30,7 @@ public sealed partial class ExportTests
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         using var leo = await SignedIn(tangentSpace, Leo);
         var root = await Started(Ada, "How do you sharpen a card scraper",
-            $"Burnish it, says [@bea](at://{Bea}), then see [the notes](/about) and ![the bench](/media/bench.png).");
+            $"Burnish it, says [@bea](/p/{Bea}), then see [the notes](/about) and ![the bench](/media/bench.png).");
         var reply = await Replied(root, Bea, "A little oil on the *burnisher*.");
         var taken = await Taken(reply, Articles, "On oil");
 
@@ -60,7 +60,7 @@ public sealed partial class ExportTests
         // A body's root-relative targets and a profile name the place, which they are of; a mention still reads.
         Assert.Contains($"href=\"{BaseUrl}/about\"", page);
         Assert.Contains($"src=\"{BaseUrl}/media/bench.png\"", page);
-        Assert.Contains($"href=\"{ProfilePage.AddressOf(BaseUrl, Bea + ".example")}\"", page);
+        Assert.Contains($"href=\"{ProfilePage.AddressOf(BaseUrl, Persona.Handle(Bea))}\"", page);
 
         // A Topic taken into a Tangent this zip leaves out is the live address.
         Assert.Contains($"href=\"{BaseUrl}/t/{Articles}/{taken.Slug}\"", page);
@@ -143,7 +143,7 @@ public sealed partial class ExportTests
     {
         const string members = "the-members";
         const string keeper = "role:keeper";
-        const string Keeping = "did:plc:keeper4export";
+        var Keeping = Persona.Id("keeper4export");
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
         var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
@@ -274,7 +274,7 @@ public sealed partial class ExportTests
     public async Task An_articles_pictures_come_along_for_whatever_its_reader_may_view_and_its_page_stands_alone()
     {
         const string keeper = "role:keeper";
-        const string Keeping = "did:plc:keeper4export";
+        var Keeping = Persona.Id("keeper4export");
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
         var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
@@ -338,7 +338,7 @@ public sealed partial class ExportTests
     public async Task An_image_the_places_words_name_comes_along_for_a_holder_who_did_not_bring_it()
     {
         const string keeper = "role:keeper";
-        const string Keeping = "did:plc:keeper4export";
+        var Keeping = Persona.Id("keeper4export");
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
         var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();

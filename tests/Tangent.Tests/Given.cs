@@ -34,10 +34,13 @@ public static class Given
         return tangent;
     }
 
+    /// <summary>The persona <paramref name="id"/> as a participant, bound to their account, with their logins bound to
+    /// them, a standing and the roles they hold.</summary>
     public static async Task<Participant> AParticipant(TangentSpaceFixture tangentSpace, string id, IReadOnlyList<string> roles,
         Standing standing = Standing.Admitted, CancellationToken ct = default)
     {
-        var participant = new Participant { Id = id, Handle = id + ".example", Standing = standing };
+        await Persona.Bind(tangentSpace, id, ct);
+        var participant = new Participant { Id = id, Did = Persona.Did(id), Handle = Persona.Handle(id), Standing = standing };
         Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(participant).Send(ct));
         var collection = tangentSpace.Services.GetRequiredService<RoleCollection>();
         foreach (var role in roles) await collection.Add(role, id, ct);

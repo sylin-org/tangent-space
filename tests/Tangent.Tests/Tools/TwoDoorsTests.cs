@@ -17,7 +17,7 @@ namespace Tangent.Tools;
 /// answer in their own shape, through a real host's <c>/mcp</c>.</summary>
 public sealed class TwoDoorsTests
 {
-    private const string Leo = "did:plc:leo4writes";
+    private static readonly string Leo = Persona.Id("leo4writes");
 
     /// <summary>A place, Ada signed in, and a Topic of Bea's.</summary>
     private sealed class Doors : IDisposable

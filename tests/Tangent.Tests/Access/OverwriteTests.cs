@@ -17,7 +17,7 @@ namespace Tangent.Access;
 /// the words it has always had, and no overwrite type of Tangent's own.</summary>
 public sealed class OverwriteTests
 {
-    private const string Reader = "did:plc:reader";
+    private static readonly string Reader = Persona.Id("reader");
 
     private static CancellationToken Cancellation => TestContext.Current.CancellationToken;
 
@@ -92,7 +92,7 @@ public sealed class OverwriteTests
         Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), topic.Id, "Me, yes.", "bo").Send(Cancellation));
 
         Assert.Equal("role:member denies Topic", Assert.IsType<Outcome<Post>.Refused>(started).Reason.Word);
-        Assert.Equal("did:plc:reader denies Post", Assert.IsType<Outcome<Post>.Refused>(replied).Reason.Word);
+        Assert.Equal(Reader + " denies Post", Assert.IsType<Outcome<Post>.Refused>(replied).Reason.Word);
 
         using var browser = new Browser(tangentSpace);
         (await browser.SignIn("reader", Reader, Cancellation)).Dispose();
@@ -101,7 +101,7 @@ public sealed class OverwriteTests
         using var response = await browser.Client.SendAsync(request, Cancellation);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var page = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Cancellation));
-        Assert.Equal("did:plc:reader denies Post", page.RootElement.GetProperty("gate").GetString());
+        Assert.Equal(Reader + " denies Post", page.RootElement.GetProperty("gate").GetString());
         Assert.DoesNotContain("Post", page.RootElement.GetProperty("can").EnumerateArray().Select(verb => verb.GetString()));
     }
 

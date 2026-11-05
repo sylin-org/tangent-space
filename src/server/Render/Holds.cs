@@ -4,7 +4,7 @@ namespace Tangent.Render;
 /// and so does the <c>[Description]</c> a tool lists from a route's input, so a form and a tool say the same thing.</summary>
 public static class Holds
 {
-    private const string Markdown = ", in Markdown, at most 64 KiB; an @ and the handle of a participant here, typed in it, mentions them, and so does [@their name](at://their id), with the id a Post's mentions give.";
+    private const string Markdown = ", in Markdown, at most 64 KiB; an @ and the handle of a participant here, typed in it, mentions them, and so does [@their name](/p/their id), with the id a Post's mentions give.";
 
     private const string Stays = " Left out, it stays.";
 

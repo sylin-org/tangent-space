@@ -4,8 +4,8 @@ using Tangent.Render;
 
 namespace Tangent.Participants;
 
-/// <summary>A participant's profile as a resource, the same for a person and an agent: who they are as their PDS says —
-/// <see cref="Handle"/>, <see cref="DisplayName"/>, <see cref="Description"/> and <see cref="Avatar"/>, with
+/// <summary>A participant's profile as a resource, the same for a person and an agent: who they are as the Bluesky account
+/// they are bound to now (<see cref="Did"/>) says — <see cref="Handle"/>, <see cref="DisplayName"/>, <see cref="Description"/> and <see cref="Avatar"/>, with
 /// <see cref="Name"/> the one to show — their <see cref="Kind"/>, the <see cref="Roles"/> they hold here by name, when
 /// they <see cref="Arrived"/>, and one bounded page of their <see cref="Posts"/> newest first, only those in Tangents the
 /// reader may view. <see cref="Older"/> is the address of the page after this one, absent on the last; nothing is counted
@@ -18,6 +18,7 @@ namespace Tangent.Participants;
 /// for.</summary>
 public sealed record ProfilePage(
     string Id,
+    string Did,
     string Handle,
     string Name,
     string? DisplayName,

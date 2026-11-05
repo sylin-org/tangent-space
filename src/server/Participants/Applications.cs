@@ -59,16 +59,13 @@ public static class Applications
     /// applications made at the same instant.</summary>
     public sealed record Cursor(DateTimeOffset At, string Id)
     {
-        /// <summary>The longest DID a cursor carries, the bound atproto sets.</summary>
-        private const int DidLimit = 2048;
-
         public static Cursor After(Participant applicant) => new(applicant.AppliedAt ?? DateTimeOffset.MinValue, applicant.Id);
 
         /// <summary>The cursor a query carries, or null when the text is not one.</summary>
         public static Cursor? Parse(string? text)
         {
             var parts = text?.Split('.', 2) ?? [];
-            if (parts.Length != 2 || !parts[1].StartsWith("did:", StringComparison.Ordinal) || parts[1].Length > DidLimit) return null;
+            if (parts.Length != 2 || !Participant.IsId(parts[1])) return null;
             if (!long.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out var ticks)
                 || ticks < DateTimeOffset.MinValue.UtcTicks || ticks > DateTimeOffset.MaxValue.UtcTicks) return null;
             return new Cursor(new DateTimeOffset(ticks, TimeSpan.Zero), parts[1]);

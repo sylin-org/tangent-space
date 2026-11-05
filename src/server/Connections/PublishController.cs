@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
 using Tangent.Events;
+using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Render;
 using Tangent.Space;
@@ -50,6 +51,9 @@ public sealed class PublishController(KoanWebBaseUrl baseUrl, AtprotoAdapter atp
 
     public static readonly Reason OnlyArticles = Reason.Invalid("Only an article is published under your own account.");
     public static readonly Reason OnlyTheAuthor = Reason.Gated("not yours", "Only its author publishes an article under their own account.");
+
+    /// <summary>The refusal an article meets that its author wrote as a Bluesky account they are no longer bound to.</summary>
+    public static readonly Reason EarlierAccount = Reason.Conflict("earlier account", Publishing.EarlierSentence);
     public static readonly Reason OnlyPublic = Reason.Gated("private", "Only a public article is published: members alone read this one.");
     public static readonly Reason GrantExpired = Reason.Invalid("That permission came back too late or for someone else; publish the article again.");
 
@@ -82,8 +86,8 @@ public sealed class PublishController(KoanWebBaseUrl baseUrl, AtprotoAdapter atp
         var root = here.Root!;
         if (await Refusal(root, personId, here.Rows.Space, ct) is { } refusal) return Answers.Refused(HttpContext, refusal);
 
-        if (!await atproto.MayWrite(personId, here.Rows.Space, ct))
-            return Asked(personId, root.Id, ConnectionsController.Path + "?" + ConnectionsController.ArticleQuery + "=" + root.Id, here.Rows.Space);
+        if (!await atproto.MayWrite(personId, root.AuthorDid, here.Rows.Space, ct))
+            return Asked(personId, root.AuthorDid, root.Id, ConnectionsController.Path + "?" + ConnectionsController.ArticleQuery + "=" + root.Id, here.Rows.Space);
         return await Chosen(personId, root, baseUrl.Resolve(HttpContext), ct);
     }
 
@@ -111,7 +115,7 @@ public sealed class PublishController(KoanWebBaseUrl baseUrl, AtprotoAdapter atp
         Response.Headers.CacheControl = "no-store";
         if (PostWrites.PersonId(User) is not { } personId) return Answers.Refused(HttpContext, Capabilities.SignIn);
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
-        return Asked(personId, null, ConnectionsController.Path, space);
+        return Asked(personId, await Participant.DidOf(personId, ct), null, ConnectionsController.Path, space);
     }
 
     /// <summary>Not now, to the first offer to publish under one's own account: no article offers it again until the
@@ -133,11 +137,11 @@ public sealed class PublishController(KoanWebBaseUrl baseUrl, AtprotoAdapter atp
     /// <summary>The path under the base URL a not-now form comes back to: the article's own.</summary>
     public static string Back(string articleAddress, string baseAddress) => articleAddress[baseAddress.Length..];
 
-    /// <summary>atproto's request for permission to write to <paramref name="personId"/>'s repository, asking that
-    /// account alone, coming back to <see cref="GrantedPath"/> with the article sealed in, or to <paramref name="failed"/>,
+    /// <summary>atproto's request for permission to write to the repository of <paramref name="did"/>, the account
+    /// <paramref name="personId"/> is bound to, asking that account alone, coming back to <see cref="GrantedPath"/> with the article sealed in, or to <paramref name="failed"/>,
     /// a path Koan places under the path base, where it is not given; for a JSON or tool caller, a request that cannot
     /// start is a refusal (<see cref="Unstarted"/>).</summary>
-    private IActionResult Asked(string personId, string? postId, string failed, TangentSpace space)
+    private IActionResult Asked(string personId, string did, string? postId, string failed, TangentSpace space)
     {
         var properties = new AuthenticationProperties
         {
@@ -145,7 +149,7 @@ public sealed class PublishController(KoanWebBaseUrl baseUrl, AtprotoAdapter atp
         };
         properties.Items[AuthConstants.Items.FailurePath] = failed;
         AtprotoChallenge.WithScopes(properties, [.. AtprotoAdapter.ScopesFor(personId, space)]);
-        var challenge = Challenge(AtprotoChallenge.ForAccount(properties, personId), "atproto");
+        var challenge = Challenge(AtprotoChallenge.ForAccount(properties, did), "atproto");
         return PostWrites.WantsJson(Request) ? new Unstarted(challenge) : challenge;
     }
 
@@ -186,6 +190,7 @@ public sealed class PublishController(KoanWebBaseUrl baseUrl, AtprotoAdapter atp
     {
         if (root.ParentId is not null || root.Kind != PostKind.Article) return OnlyArticles;
         if (root.AuthorId != personId) return OnlyTheAuthor;
+        if (root.AuthorDid != await Participant.DidOf(personId, ct)) return EarlierAccount;
         if (root.Removed) return Capabilities.Removed;
         return await Publishing.Open(space, root.TangentId, ct) ? null : OnlyPublic;
     }

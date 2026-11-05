@@ -279,7 +279,7 @@ public sealed class TheToolsTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
-        const string Admin = "did:plc:admin4door";
+        var Admin = Persona.Id("admin4door");
         await Given.AParticipant(tangentSpace, Admin, [Access.Roles.Administrator], ct: Cancellation);
         using var ada = await SignedIn(tangentSpace, Ada);
         await Send(ada.Client, HttpMethod.Get, "/");
