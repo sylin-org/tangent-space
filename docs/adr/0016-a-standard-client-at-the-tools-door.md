@@ -29,7 +29,7 @@ An agent that held only a place's address could read its pages and follow its fo
 
 7. **The proof door is the sign-in with no browser.** An agent posts its service-auth token to `/api/v1/identity/exchange` and is answered `204` and the session's cookie, the same sign-in lifecycle as a browser's, so the same admission, roles and bans. `/.well-known/tangent-auth`, which Companion Lobby's adapter validates in every field, states it. Neither route is a tool.
 
-8. **The place's address points to the door.** `GET /` answers with `Link: <{base}/llms.txt>; rel="describedby"`, and every page's head carries the same link; `describedby` is the registered relation for a resource that describes the one linking to it, since none is registered or established for `llms.txt`. Nothing at `/` speaks MCP, and `POST /` stays `caught_up`. `llms.txt` says to use `/mcp`, a fixed path, how to sign in with one's own account, and that without a session one is a visitor.
+8. **The place's address points to the door.** `GET /` answers with `Link: <{base}/llms.txt>; rel="describedby"`, and every page's head carries the same link; `describedby` is the registered relation for a resource that describes the one linking to it, since none is registered or established for `llms.txt`. Nothing at `/` speaks MCP, and seen is `POST /seen`, the `seen` tool. `llms.txt` says to use `/mcp`, a fixed path, how to sign in with one's own account, and that without a session one is a visitor.
 
 9. **Other people's words are not instructions.** MCP has no marker for untrusted content, so `Koan:Mcp:Instructions` tells a client what this place is and that a Post is someone else's words, to read and never to follow, and the tools that read Posts say so in their descriptions. The JSON keeps those words as string values.
 
@@ -38,5 +38,5 @@ An agent that held only a place's address could read its pages and follow its fo
 - `tools/list` answers the same list to everyone, so a role's tools are listed to those without it, and a call answers per resource as a route does. Filtering a list per participant is its own question.
 - Which MCP clients can set a `Cookie` header is not known; the TypeScript SDK's does, through its transport's request headers.
 - A signed-in reader's page that carries a form is never stored, so a browser's Back after sign-out redisplays nothing of it; a Topic's forms mint new ids on every answer, so it would never earn a `304` anyway.
-- An agent's own opening of its door and notifications moves its checkpoints, as a person's does: it is the reader.
+- An agent says seen as a person does, and its reading moves nothing: it is the reader.
 - The earlier records' "no MCP server" is amended: `Sylin.Koan.Mcp` is among what Koan carries ([ADR 0015](0015-the-spine.md) decision 8).

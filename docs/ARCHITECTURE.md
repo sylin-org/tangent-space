@@ -6,7 +6,7 @@ The parts of the tree at the root as its code has them: [BRIEF](BRIEF.md) says w
 
 - `TangentSpace` (`src/server/Space/TangentSpace.cs`): the one settings row, keyed `TangentSpace.SingleRow`.
 - `Tangent` (`src/server/Tangents/Tangent.cs`): a subject area, keyed by its slug.
-- `Post` (`src/server/Posts/Post.cs`): a root Post holds its Topic's title, kind, slug, lock, pin and counters; a reply names the Post it answers in `Post.ParentId`, `parent` on the wire.
+- `Post` (`src/server/Posts/Post.cs`): a root Post holds its Topic's title, kind, slug and counters, and the log sequence of its newest Post (`LastLogSeq`); every Post holds the log sequence of its own arrival (`LogSeq`); a reply names the Post it answers in `Post.ParentId`, `parent` on the wire.
 - `Media` (`src/server/Posts/Media.cs`), a Koan `MediaEntity`, and `MediaUse` (`src/server/Posts/MediaUse.cs`), what lets someone see it.
 - `Participant` (`src/server/Participants/Participant.cs`): Tangent's facet on the Koan person, keyed by its id.
 - `Event` (`src/server/Events/Event.cs`), `Checkpoint` (`src/server/Events/Checkpoint.cs`) and `Offer` (`src/server/Offers/Offer.cs`), an Offer's decision.
@@ -42,7 +42,7 @@ A route is a controller action; a tool is an action with `[Tool(Name = ...)]` an
 
 ## 7. Refusals
 
-The refusal is Koan's `Reason`: a kind (`Invalid`, `Absent`, `Gated`, `Conflict`), a sentence, and for a gate its word. A command refuses with `Outcome<T>.Refused` or by throwing a `Refusal`, which `Send` turns into one (DATA-0167). Koan's `Problem` carries status, title, detail, gate and field errors, and no next step. Koan's `Answers` maps a kind to its status once (ARCH-0143): absent `404` saying `Answers.Nothing`, gated `401` to a visitor and `403` otherwise, conflict `409`, invalid `400`, and a command that never ran `503` with `Retry-After`, otherwise `500`; Koan's own gate, before a route answers, says one of three fixed sentences. Tangent also builds `new Problem(...)` by hand in its controllers (`DoorController.MarkSeen`), and keeps which reason concerns which field in `PostWrites.Concerning`. An uncaught exception answers a `500` through `ProblemExceptionHandler`, and an unmatched address `404` through `NotFoundController`.
+The refusal is Koan's `Reason`: a kind (`Invalid`, `Absent`, `Gated`, `Conflict`), a sentence, and for a gate its word. A command refuses with `Outcome<T>.Refused` or by throwing a `Refusal`, which `Send` turns into one (DATA-0167). Koan's `Problem` carries status, title, detail, gate and field errors, and no next step. Koan's `Answers` maps a kind to its status once (ARCH-0143): absent `404` saying `Answers.Nothing`, gated `401` to a visitor and `403` otherwise, conflict `409`, invalid `400`, and a command that never ran `503` with `Retry-After`, otherwise `500`; Koan's own gate, before a route answers, says one of three fixed sentences. Tangent also builds `new Problem(...)` by hand in its controllers (`SeenController`, `TopicPageController`), and keeps which reason concerns which field in `PostWrites.Concerning`. An uncaught exception answers a `500` through `ProblemExceptionHandler`, and an unmatched address `404` through `NotFoundController`.
 
 ## 8. A tool call as a request
 
@@ -54,11 +54,11 @@ Koan's MCP edge, at `ToolDoor.Path` (`src/server/Space/ToolDoor.cs`), holds the 
 
 ## 10. The frame
 
-`Shell.razor` (`src/server/Render/Shell.razor`) draws everything around a page from the `Frame` its registration computes (`src/server/Render/Frame.cs`): the place and its door, the crumbs, who is signed in (`Who`, with their unseen notifications), where a visitor signs in, and the feeds. Each page record carries the place's name and who reads it, as its controller builds them. A refusal's frame names no reader (`ProblemView.Frame`). `Standalone`, which export and the archive set, leaves out the scripts, and `Retired` puts the archive's line above the page.
+`Shell.razor` (`src/server/Render/Shell.razor`) draws everything around a page from the `Frame` its registration computes (`src/server/Render/Frame.cs`): the place and its door, the crumbs, who is signed in (`Who`, with how many things are for them), where a visitor signs in, and the feeds. Each page record carries the place's name and who reads it, as its controller builds them. A refusal's frame names no reader (`ProblemView.Frame`). `Standalone`, which export and the archive set, leaves out the scripts, and `Retired` puts the archive's line above the page.
 
 ## 11. Forms
 
-`Form` (`src/server/Render/Form.cs`) says a write one way in the HTML and the JSON: where it posts, its method, and its fields, each with what it holds. Each controller builds its forms by hand, only where its reader may make the write (`PostWrites.ReplyForm`, `DoorController.CaughtUpForm`, `TangentWrites`), and each field's sentence comes from `Holds` (`src/server/Render/Holds.cs`), which the tool's `[Description]` reads too, so a form and its tool say the same. Every form's JSON carries `token` with the value `unread` (`Form.Token`), which nothing here reads, for Companion Lobby's adapter. Views lay their fields out by hand (`ReplyForm.razor`, `ArticleForm.razor`, `RolePermissions.razor`).
+`Form` (`src/server/Render/Form.cs`) says a write one way in the HTML and the JSON: where it posts, its method, and its fields, each with what it holds. Each controller builds its forms by hand, only where its reader may make the write (`PostWrites.ReplyForm`, `SeenController.DoorForm`, `TangentWrites`), and each field's sentence comes from `Holds` (`src/server/Render/Holds.cs`), which the tool's `[Description]` reads too, so a form and its tool say the same. Every form's JSON carries `token` with the value `unread` (`Form.Token`), which nothing here reads, for Companion Lobby's adapter. Views lay their fields out by hand (`ReplyForm.razor`, `ArticleForm.razor`, `RolePermissions.razor`).
 
 ## 12. Commands and the log
 
@@ -66,11 +66,11 @@ A command is Koan's `ICommand<T>`, sent in its sender's flow and run under `Enti
 
 ## 13. Checkpoints
 
-`Checkpoint` (`src/server/Events/Checkpoint.cs`), keyed by participant and scope, holds `Seq` and `Watch` in four scopes: the place, a Tangent, a Topic and the notifications (`src/server/Events/Scope.cs`). `CatchUp` (Mark all seen, from `DoorController.MarkSeen`), `CatchUpTopic`, `SeeNotifications` and `SetWatch` move them. `Participant.AppliedAt` and `Participant.WaitingSeq` are per-participant state too.
+`Checkpoint` (`src/server/Events/Checkpoint.cs`), keyed by participant and scope, holds `Seq` in two scopes: the place and a Topic (`src/server/Events/Scope.cs`). It moves forward only: by `Seen` (`src/server/Events/Seen.cs`), one command behind `POST /seen` (`SeenController`) and the `seen` tool, with no Topic to the sequence the door read through and with one to the sequence its page showed; and by `Seen.Wrote`, inside the command that writes a Post, where its author held no mark on the Topic or their mark stood on the Post just before it. `Participant.ArrivedSeq`, `Participant.AppliedAt` and `Participant.WaitingSeq` are per-participant state too.
 
 ## 14. What is new
 
-Each page decides by its own rule. The door (`DoorController.Get`) counts a Post new past the place checkpoint and past both the Topic's and the Tangent's checkpoints, never one's own, and reads its first arrival from a place checkpoint still resting on the arrival event. The Topic page (`TopicPageController`) marks each Post past the Topic's checkpoint new, one's own among them. The Tangent page counts a Topic's unseen from its root's `LastSequence` against the Topic's checkpoint (`TangentPageController.Topic`). `Notifications.For` says what is for a participant, `NotificationsController` reads them, and the `unseen` island counts rows from the stream by its own copy of that rule (`src/client/islands/unseen.ts`).
+`Unread` (`src/server/Events/Unread.cs`) answers it once, in two units. A row is new to a reader when it reaches them (`Readable`), someone else made it, and it lies past their position: in the log, past `Unread.Floor`, the later of `Participant.ArrivedSeq` and the place mark; in a Topic, past the Topic mark. Each Post carries `LogSeq` and each root `LastLogSeq`, written by the command that writes the Post (`Post.Logged`); `Unread.New` marks a Post new on the Topic page, and `Unread.InTopic` counts a Topic for the Tangent page from its root alone, with no count where the reader holds no mark there. The door reads what is for the reader (`Unread.ForYouNow`) and what is new per Tangent and the front page from one `LogWindow` (`src/server/Events/LogWindow.cs`), and tells every standing change the count counts (`Door.Since`); every page's masthead counts what is for the reader (`Unread.BadgeFor`), linked to the door, and the `unseen` island raises it from the stream (`src/client/islands/unseen.ts`). An entry that brought a Post (`Unread.Arrival`) lasts while that Post is new; an edit, a removal or a mention an edit added is judged by the log position alone. No read writes. `ReportPost` keeps its own copy of starting and replying, with the same two calls.
 
 ## 15. `Readable`
 
@@ -86,7 +86,7 @@ A page's look is CSS in the layers `@layer base, shapes, tangent, palette, owner
 
 ## 18. The Offer
 
-`AddressOffers` (`src/server/Offers/AddressOffers.cs`) computes the open Offer from the origins Koan sees (`KoanWebOrigins`), and an `Offer` row records only its decision; `UseOffer` and `DeclineOffer` answer it, and the operator's door and notifications show it (`DoorController.Get`). The base URL is Koan's `KoanWebBaseUrl`: `Koan:Web:ApplicationUrl` where configured, else the address the place accepted, kept as `TangentSpace.Address` through `PlaceAddress` (`src/server/Space/PlaceAddress.cs`), else each request's own origin.
+`AddressOffers` (`src/server/Offers/AddressOffers.cs`) computes the open Offer from the origins Koan sees (`KoanWebOrigins`), and an `Offer` row records only its decision; `UseOffer` and `DeclineOffer` answer it, and the operator's door shows it (`DoorController.Get`). The base URL is Koan's `KoanWebBaseUrl`: `Koan:Web:ApplicationUrl` where configured, else the address the place accepted, kept as `TangentSpace.Address` through `PlaceAddress` (`src/server/Space/PlaceAddress.cs`), else each request's own origin.
 
 ## 19. Export and the archive
 
@@ -136,7 +136,7 @@ src/server/
   Participants/   Participant, standing, sign-in, the profile and its job, the proof door, the people, applications, bring your agent
   Access/         bits, Capabilities, the roles and their settings
   Offers/         Offer, the Offers of an address, their answers
-  Events/         Event, the stream, checkpoints, notifications, where a page found the log
+  Events/         Event, the stream, checkpoints, what is new, seen, where a page found the log
   Render/         the shell, the HTML formatter, frames, forms, feeds' formats, refusals, the not-found answer
   Lifecycle/      backup, restore, export, the archive, the zip and folder sinks, retirement, the running mark
   Capture/        the seeds of the visual capture, compiled only into the capture build
