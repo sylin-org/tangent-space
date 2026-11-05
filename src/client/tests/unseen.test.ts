@@ -44,6 +44,19 @@ test('a reply to the reader delivered past the count shows the count and raises 
   expect(host.querySelector('.masthead-unseen-count')!.textContent).toBe('2')
 })
 
+test('a reply that also mentions the reader raises the count once, and a mention in someone else’s Post still raises it', () => {
+  const host = render(0, false, 40)
+
+  delivered({ seq: 41, post: 'p1', actor: 'did:plc:bea', target: reader }, { seq: 42, kind: 'mention', post: 'p1', actor: 'did:plc:bea', target: reader })
+  expect(host.querySelector('.masthead-unseen-count')!.textContent).toBe('1')
+
+  delivered({ seq: 43, kind: 'mention', post: 'p1', version: 2, actor: 'did:plc:bea', target: reader })
+  expect(host.querySelector('.masthead-unseen-count')!.textContent).toBe('1')
+
+  delivered({ seq: 44, post: 'p2', actor: 'did:plc:mo', target: null }, { seq: 45, kind: 'mention', post: 'p2', actor: 'did:plc:mo', target: reader })
+  expect(host.querySelector('.masthead-unseen-count')!.textContent).toBe('2')
+})
+
 test('rows the count already read, the reader’s own and those for someone else raise nothing', () => {
   const host = render(3, false, 40)
 

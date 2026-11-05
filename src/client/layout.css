@@ -1,8 +1,8 @@
 /* The frame every page shares: the masthead, the path bar, the layout grid with its rail, and the footer.
  * Sizes follow the design reference. Three containers: the door and Tangent pages (1072),
  * reading (952) and settings (1144). From 1400 every rail shows; from 1024 the gap shrinks before
- * the column does; under 1024 the rail folds and one column of 680 at most remains; under 720 the
- * phone layout takes over. */
+ * the column does; under 1024 one column of 680 at most remains and the rail stands in it as a card,
+ * except a Topic's, which leaves it; under 720 the phone layout takes over. */
 
 *,
 *::before,

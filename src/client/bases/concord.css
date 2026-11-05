@@ -165,9 +165,16 @@
     align-items: center;
   }
 
+  /* Concord's rows sit inside the rail's own padding. */
   & .rail li > a {
     flex: 1;
     min-width: 0;
+    margin: 0;
+  }
+
+  & .rail .article-filter-choice {
+    width: 100%;
+    margin: 0;
   }
 
   & .rail li > a,
