@@ -50,6 +50,10 @@ public sealed class PeopleTests
     private static IReadOnlyList<string?> Strings(JsonElement element, string name)
         => element.GetProperty(name).EnumerateArray().Select(item => item.GetString()).ToList();
 
+    /// <summary>The words of the roles a row offers to give or take.</summary>
+    private static IReadOnlyList<string?> Offered(JsonElement row, string name)
+        => row.GetProperty(name).EnumerateArray().Select(role => role.GetProperty("word").GetString()).ToList();
+
     /// <summary>The row a page of the people lists for <paramref name="id"/>.</summary>
     private static JsonElement Row(JsonElement page, string id)
         => page.GetProperty("people").EnumerateArray().Single(row => row.GetProperty("id").GetString() == id);
@@ -80,7 +84,7 @@ public sealed class PeopleTests
         var adaRow = Row(listed.Json, Ada);
         Assert.Equal(("admitted", "person"), (adaRow.GetProperty("standing").GetString(), adaRow.GetProperty("kind").GetString()));
         Assert.Equal([People.Verb.TimeOut, People.Verb.Ban], Strings(adaRow, "can"));
-        Assert.Empty(Strings(adaRow, "give"));
+        Assert.Empty(Offered(adaRow, "give"));
         Assert.Equal(["Member"], Strings(adaRow, "roles"));
         Assert.Equal(["hour", "day", "week"], Strings(listed.Json.GetProperty("forms"), "durations"));
         var html = (await Send(mo.Client, HttpMethod.Get, path)).Body;
@@ -205,8 +209,8 @@ public sealed class PeopleTests
         {
             var row = Row(page, id);
             Assert.Empty(Strings(row, "can"));
-            Assert.Empty(Strings(row, "give"));
-            Assert.Empty(Strings(row, "take"));
+            Assert.Empty(Offered(row, "give"));
+            Assert.Empty(Offered(row, "take"));
         }
 
         foreach (var (target, reason) in new[] { (Leo, People.NotBelow.Word), (Mia, People.NotBelow.Word), (Mo, People.Themselves.Word), (Otto, People.Operator.Word) })
@@ -279,17 +283,18 @@ public sealed class PeopleTests
         var path = PeopleController.Path;
 
         // A moderator holds no ManageRoles: no role is offered, and giving one is refused with its gate.
-        Assert.Empty(Strings(Row((await Send(mo.Client, HttpMethod.Get, path, json: true)).Json, Bea), "give"));
+        Assert.Empty(Offered(Row((await Send(mo.Client, HttpMethod.Get, path, json: true)).Json, Bea), "give"));
         var gated = await Json(mo, path, PeopleController.GivePath, new { participant = Bea, role = People.Moderator });
         Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageRoles).Word), (gated.Status, gated.Word));
 
         // The administrator is offered the moderator role on a member, never their own highest, and gives it from the
         // people page.
         var beaRow = Row((await Send(leo.Client, HttpMethod.Get, path, json: true)).Json, Bea);
-        Assert.Equal([People.Moderator], Strings(beaRow, "give"));
+        Assert.Equal([People.Moderator], Offered(beaRow, "give"));
+        Assert.Equal("Moderator", beaRow.GetProperty("give")[0].GetProperty("name").GetString());
         var notManaged = await Json(leo, path, PeopleController.GivePath, new { participant = Bea, role = People.Administrator });
         Assert.Equal((HttpStatusCode.Forbidden, People.NotManaged.Word), (notManaged.Status, notManaged.Word));
-        Assert.Contains("Make moderator", (await Send(leo.Client, HttpMethod.Get, path)).Body);
+        Assert.Contains("Give Moderator role", (await Send(leo.Client, HttpMethod.Get, path)).Body);
         var before = await Head();
         var given = await Form(leo, path, PeopleController.GivePath, new Dictionary<string, string>
         {
@@ -303,7 +308,7 @@ public sealed class PeopleTests
         var door = (await Send(bea.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news").GetProperty("roles");
         Assert.Equal((Leo, People.Moderator, true), (door[0].GetProperty("who").GetProperty("id").GetString(), door[0].GetProperty("role").GetString(),
             door[0].GetProperty("given").GetBoolean()));
-        Assert.Contains("made you a moderator", (await Send(bea.Client, HttpMethod.Get, "/")).Body);
+        Assert.Contains("gave you the moderator role", (await Send(bea.Client, HttpMethod.Get, "/")).Body);
         // Giving what is held writes nothing.
         Assert.Equal(HttpStatusCode.OK, (await Json(leo, path, PeopleController.GivePath, new { participant = Bea, role = People.Moderator })).Status);
         Assert.Single(await Since(before));
@@ -323,10 +328,10 @@ public sealed class PeopleTests
         Assert.Equal(HttpStatusCode.BadRequest, (await Json(leo, path, PeopleController.TakePath, new { participant = Ada, role = "member" })).Status);
 
         // An administrator never takes another's role, nor the operator's; the operator, above every role, takes theirs.
-        Assert.Empty(Strings(Row((await Send(leo.Client, HttpMethod.Get, path, json: true)).Json, Otto), "take"));
+        Assert.Empty(Offered(Row((await Send(leo.Client, HttpMethod.Get, path, json: true)).Json, Otto), "take"));
         var operatorRefused = await Json(leo, path, PeopleController.TakePath, new { participant = Otto, role = People.Administrator });
         Assert.Equal((HttpStatusCode.Forbidden, People.Operator.Word), (operatorRefused.Status, operatorRefused.Word));
-        Assert.Equal([People.Administrator], Strings(Row((await Send(otto.Client, HttpMethod.Get, path, json: true)).Json, Leo), "take"));
+        Assert.Equal([People.Administrator], Offered(Row((await Send(otto.Client, HttpMethod.Get, path, json: true)).Json, Leo), "take"));
         Assert.Equal(HttpStatusCode.OK, (await Json(otto, path, PeopleController.TakePath, new { participant = Leo, role = People.Administrator })).Status);
         Assert.False((await roles.Bag(Leo, authenticated: true, Cancellation)).InRole(Roles.Administrator));
         Assert.True((await roles.Bag(Otto, authenticated: true, Cancellation)).InRole(Roles.Administrator));
@@ -386,11 +391,11 @@ public sealed class PeopleTests
         var plan = HandlePlan(tangentSpace.DatabasePath, "person2", "person3");
         Assert.Contains(plan, detail => detail.StartsWith("SEARCH", StringComparison.Ordinal) && detail.Contains("USING INDEX ix_participant_handles", StringComparison.Ordinal));
 
-        // A member reads no one, and is refused with the gate.
+        // A member reads no one, and is refused with the gate: as a tool reads it, its problem.
         using var ada = await SignedIn(tangentSpace, Ada);
         var refused = await Send(ada.Client, HttpMethod.Get, path, json: true);
-        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageStanding).Word), (refused.Status, refused.Json.GetProperty("gate").GetString()));
-        Assert.Empty(refused.Json.GetProperty("people").EnumerateArray());
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageStanding).Word), (refused.Status, refused.Json.GetProperty("word").GetString()));
+        Assert.False(refused.Json.TryGetProperty("people", out _));
         Assert.DoesNotContain("People", (await Send(ada.Client, HttpMethod.Get, TangentSpaceSettingsController.Path, json: true)).Json
             .GetProperty("sections").EnumerateArray().Select(section => section.GetProperty("name").GetString()));
     }

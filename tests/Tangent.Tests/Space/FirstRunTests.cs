@@ -42,13 +42,14 @@ public sealed class FirstRunTests
     }
 
     [Fact]
-    public async Task Before_first_run_the_door_and_a_tangents_page_answer_first_run_both_ways_and_health_sign_in_and_a_static_file_answer_as_themselves()
+    public async Task Before_first_run_the_door_a_tangents_page_and_the_sign_in_page_answer_first_run_both_ways_and_health_and_a_static_file_answer_as_themselves()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Given.ATangent(tangentSpace, "workshop", ct: Cancellation);
         var challenge = $"{BaseUrl}/auth/atproto/challenge?return={Uri.EscapeDataString("/first-run")}";
 
-        foreach (var path in new[] { "/", "/t/workshop" })
+        // The sign-in page sends everyone on to first run, wherever they were going.
+        foreach (var path in new[] { "/", "/t/workshop", "/sign-in?return=%2Ft%2Fworkshop" })
         {
             var (htmlStatus, html) = await Read(tangentSpace, path, "text/html");
             var (jsonStatus, body) = await Read(tangentSpace, path, "application/json");
@@ -77,17 +78,10 @@ public sealed class FirstRunTests
         }
 
         var (liveStatus, live) = await Read(tangentSpace, "/health/live", "application/json");
-        var (signInStatus, signIn) = await Read(tangentSpace, "/sign-in", "text/html");
-        var (_, signInBody) = await Read(tangentSpace, "/sign-in?return=%2Ft%2Fworkshop", "application/json");
-        using var signInJson = JsonDocument.Parse(signInBody);
         using var stylesheet = await tangentSpace.Client.GetAsync("/tangent.css", Cancellation);
 
         Assert.Equal(HttpStatusCode.OK, liveStatus);
         Assert.DoesNotContain("challenge", live);
-        Assert.Equal(HttpStatusCode.OK, signInStatus);
-        Assert.Contains("Sign in to reply", signIn);
-        // Before setup the sign-in page sends everyone on to first run, wherever they were going.
-        Assert.Equal("/first-run", signInJson.RootElement.GetProperty("return").GetString());
         Assert.Equal(HttpStatusCode.OK, stylesheet.StatusCode);
         Assert.Equal("text/css", stylesheet.Content.Headers.ContentType?.MediaType);
         Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
@@ -104,8 +98,8 @@ public sealed class FirstRunTests
         using var landed = await browser.SignIn("leo", Leo, Cancellation, handle: "leo.sylin.org", comeBack: comeBack);
         var pointers = WebUtility.HtmlDecode(await landed.Content.ReadAsStringAsync(Cancellation));
 
-        // Signed in through the sign-in page, the setter lands on first run's ready page.
-        Assert.Equal("/sign-in?return=" + Uri.EscapeDataString("/first-run"), comeBack);
+        // The sign-in page sends the setter on to first run, whose sign-in lands on its ready page.
+        Assert.Equal("/first-run", comeBack);
         Assert.Equal((HttpStatusCode.OK, "/first-run"), (landed.StatusCode, landed.RequestMessage!.RequestUri!.AbsolutePath));
         Assert.Contains("Leo's Tangent Space is ready", pointers);
         Assert.Contains($"<link rel=\"tangent\" href=\"{BaseUrl}\">", pointers);

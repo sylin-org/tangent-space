@@ -12,9 +12,9 @@ namespace Tangent.Participants;
 /// <summary>The sign-in page, one resource both ways. A visitor reads the action that signs in with Bluesky and the
 /// handle form for another server, or as JSON the Koan connector's challenge to follow; the challenge comes back here
 /// signed in, the first sign-in having made the person a participant on the way, and a signed-in person is sent where
-/// they were going. A failed sign-in comes back here with Koan's sanitized code in <c>error</c>. It answers as itself
-/// before first run, for a place that reads as unestablished, and sends everyone on to first run, where a sign-in that
-/// set the place up finds its pointers. A private place answers every other page to a visitor with this one
+/// they were going. A failed sign-in comes back here with Koan's sanitized code in <c>error</c>. Before first run it
+/// sends everyone on to first run, which says how to set the place up and where a sign-in that set it up finds its
+/// pointers, and answers as itself, for a place that reads as unestablished, only to say why a sign-in failed. A private place answers every other page to a visitor with this one
 /// (<see cref="Answer"/>).</summary>
 [AnswersBeforeFirstRun]
 [AnswersEveryVisitor]
@@ -33,7 +33,8 @@ public sealed class SignInController(KoanWebBaseUrl baseUrl) : ControllerBase
         Response.Headers.CacheControl = "no-store";
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct);
         var to = space is null ? baseUrl.PathBase + FirstRunController.Path : Destination(destination);
-        if (User.Identity?.IsAuthenticated == true && User.FindFirst(ClaimTypes.NameIdentifier) is not null) return Redirect(to);
+        if (space is null && string.IsNullOrEmpty(error) || User.Identity?.IsAuthenticated == true && User.FindFirst(ClaimTypes.NameIdentifier) is not null)
+            return Redirect(to);
         var name = (space ?? TangentSpace.Unestablished()).Name;
         return new ObjectResult(Participants.SignIn.ForVisitor(name, BaseAddress() + "/", to, Challenge(baseUrl, HttpContext, to), handle, error)
             with { Private = space?.Audience == Audience.Private });

@@ -52,12 +52,12 @@ public static class Roles
     /// itself for one without that prefix.</summary>
     public static string Word(string key) => key.StartsWith(RoleTokens.RolePrefix, StringComparison.Ordinal) ? key[RoleTokens.RolePrefix.Length..] : key;
 
-    /// <summary>A role given or taken, in words, from the role's word: "made you a moderator", "took your night shift
-    /// role".</summary>
+    /// <summary>A role given or taken, in words that hold for any role's name, from its word: "gave you the moderator role",
+    /// "took your night shift role".</summary>
     public static string Changed(string word, bool given)
     {
         var spoken = word.Replace('-', ' ');
-        return given ? "made you " + (spoken.Length > 0 && "aeiou".Contains(spoken[0]) ? "an " : "a ") + spoken : "took your " + spoken + " role";
+        return (given ? "gave you the " : "took your ") + spoken + " role";
     }
 
     /// <summary>The key of the role a word names (<see cref="Word(string)"/>): <c>role:</c> and the word, where the word is a

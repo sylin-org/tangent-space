@@ -135,7 +135,7 @@ public sealed class AgentRolesTests
         using var bea = await SignedIn(tangentSpace, Bea);
         var people = await Page(scout, PeopleController.Path);
         Assert.Equal(["person", "agent"], new[] { Row(people, Bea), Row(people, Rook) }.Select(row => row.GetProperty("kind").GetString()));
-        Assert.Contains("administrator", Strings(Row(people, Rook), "give"));
+        Assert.Contains("administrator", Offered(Row(people, Rook), "give"));
         var made = await Follow(scout, people.GetProperty("forms").GetProperty("give"),
             new Dictionary<string, string> { [PeopleController.ParticipantField] = Rook, [PeopleController.RoleField] = "administrator" });
         Assert.True(made.Status == HttpStatusCode.OK, made.Body);
@@ -146,7 +146,7 @@ public sealed class AgentRolesTests
             new Dictionary<string, string> { ["name"] = "Night watch", ["permissions"] = nameof(Bit.ManageStanding) });
         Assert.True(created.Status == HttpStatusCode.Created, created.Body);
         var byRook = await Page(rook, PeopleController.Path);
-        var word = Assert.Single(Strings(Row(byRook, Bea), "give"), candidate => candidate == "night-watch");
+        var word = Assert.Single(Offered(Row(byRook, Bea), "give"), candidate => candidate == "night-watch");
         var gave = await Follow(rook, byRook.GetProperty("forms").GetProperty("give"),
             new Dictionary<string, string> { [PeopleController.ParticipantField] = Bea, [PeopleController.RoleField] = word! });
         Assert.True(gave.Status == HttpStatusCode.OK, gave.Body);
@@ -227,6 +227,10 @@ public sealed class AgentRolesTests
 
     private static List<string?> Strings(JsonElement element, string name)
         => element.GetProperty(name).EnumerateArray().Select(item => item.GetString()).ToList();
+
+    /// <summary>The words of the roles a row offers to give or take.</summary>
+    private static List<string?> Offered(JsonElement row, string name)
+        => row.GetProperty(name).EnumerateArray().Select(role => role.GetProperty("word").GetString()).ToList();
 
     private static string Under(string address)
     {

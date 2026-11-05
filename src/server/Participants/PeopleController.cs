@@ -40,8 +40,8 @@ public sealed record TakeRoleInput(
 /// <see cref="Bit.ManageStanding"/> or <see cref="Bit.ManageRoles"/>. Its <c>GET</c> is one bounded page of them
 /// (<see cref="People.Read"/>), one resource both ways (<see cref="PeoplePage"/>), continued from the sealed cursor in
 /// <c>after</c> and narrowed to the handles that start with <c>handle</c>; a cursor this server did not seal is refused
-/// with <c>400</c>, and a reader who may not read them reads the gate with no one listed, answered <c>401</c> to sign in
-/// and <c>403</c> otherwise. Its <c>POST</c>s take the participant's id in <c>participant</c>, as a form or a JSON
+/// with <c>400</c>, and a reader who may not read them is refused with the gate, <c>401</c> to sign in and <c>403</c>
+/// otherwise: a page reads it with no one listed, and a JSON request as its problem. Its <c>POST</c>s take the participant's id in <c>participant</c>, as a form or a JSON
 /// object, and send one command: <c>time-out</c> sends <see cref="TimeOut"/> for the duration in <c>for</c>;
 /// <c>ban</c>, <see cref="Ban"/>; <c>lift</c>, <see cref="Lift"/>, after which the participant joins the member role
 /// where they lack it (<see cref="MemberRole"/>); <c>give</c> and <c>take</c>, <see cref="ChangeRole"/> for the role in
@@ -93,6 +93,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
+        if (ReadGate(place) is { } refused && PostWrites.WantsJson(Request)) return this.Refused(refused);
 
         People.Cursor? cursor = null;
         if (after is not null && (cursor = People.Cursor.Open(after, protection)) is null)
@@ -115,7 +116,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
     [HttpPost(BanPath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "ban", Destructive = true, Idempotent = true, OpenWorld = false)]
-    [Description("Ban a participant, for whoever holds ManageStanding: the place no longer exists for them, and they are told. lift reverses it.")]
+    [Description("Ban a participant, for whoever holds ManageStanding: the place disappears for them, every page and every stream, as an address with nothing at it answers. lift reverses it.")]
     public Task<IActionResult> PostBan(StandingInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) => new Ban(actor, participant), null, ct);
 
     [HttpPost(LiftPath)]

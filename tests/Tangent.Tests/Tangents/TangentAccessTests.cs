@@ -70,10 +70,10 @@ public sealed class TangentAccessTests
         Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageTangent).Word), (unmanaged.Status, unmanaged.Json.GetProperty("gate").GetString()));
         Assert.Empty(unmanaged.Json.GetProperty("roles").EnumerateArray());
 
-        // A member manages nothing here; a role no one has is not found; an administrator's access is not set.
+        // A member manages nothing here; a role no one has is refused on its field; an administrator's access is not set.
         var refused = await Json(ada, "/t/" + Studio, access, new { role = "member", access = "post" });
         Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageTangent).Word), (refused.Status, refused.Word));
-        Assert.Equal(HttpStatusCode.NotFound, (await Json(leo, access, access, new { role = "nobody", access = "post" })).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Json(leo, access, access, new { role = "nobody", access = "post" })).Status);
         Assert.Equal(HttpStatusCode.BadRequest, (await Json(leo, access, access, new { role = "administrator", access = "read" })).Status);
         Assert.Equal(HttpStatusCode.BadRequest, (await Json(leo, access, access, new { role = "member", access = "everything" })).Status);
 
