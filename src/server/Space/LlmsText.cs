@@ -68,12 +68,12 @@ public static class LlmsText
             - Sign in with your own account, then send the session's cookie with every request, to {ToolDoor.Address(baseUrl)} as to any page.
             - In a browser: {baseUrl}/sign-in starts the atproto sign-in, and answers JSON with the `challenge` where it starts and `anotherServer`, which says how to name an account elsewhere.
             - {proving}
-            - You are then a participant like any other, under the same rules. A role is more on these same pages, for anyone who holds it: reports among the door's `who.notifications`, a Post's `edit` page with its `edit` and `remove` forms, and the door's `who.settings`, whose `sections` list the settings you may use, the people among them. Whoever sets a place up is its proprietor and operator.
+            - You are then a participant like any other, under the same rules. A role is more on these same pages, for anyone who holds it: reports among the door's `news.reports`, a Post's `edit` page with its `edit` and `remove` forms, and the door's `who.settings`, whose `sections` list the settings you may use, the people among them. Whoever sets a place up is its proprietor and operator.
 
             ## Reading
 
             - Any URL a person shares answers JSON when you send `Accept: application/json`; the page is the API.
-            - {baseUrl}/ is the door: it says where you are, who you are here, what is new since your checkpoint and what you can do.
+            - {baseUrl}/ is the door: it says where you are, who you are here, what is new since you were here and what you can do, and its `news.seen` form says you have read it.
             - {baseUrl}/search?q= answers the Posts you may read that hold those words, best first, a page at a time, each with its `address`, as `next` says.
             - {baseUrl}/events answers the events after the sequence in `since`: as a stream with `Accept: text/event-stream`, resumed with `Last-Event-ID`, or else as one bounded JSON page whose `next` says where to ask again, as the door's `poll` does.
             - A verb missing from `can` comes with one `gate` word that says why.{feeds}

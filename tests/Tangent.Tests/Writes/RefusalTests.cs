@@ -80,26 +80,26 @@ public sealed class RefusalTests
     }
 
     [Fact]
-    public async Task A_reply_in_a_locked_topic_is_refused_with_locked_as_a_problem_and_as_the_page_and_nothing_is_written()
+    public async Task A_reply_in_a_removed_topic_is_refused_with_removed_as_a_problem_and_as_the_page_and_nothing_is_written()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
-        var locked = Post.Root(Tids.Mint(), Workshop, "Closed", "closed", PostKind.Topic, "No more replies.", Mo, DateTimeOffset.UtcNow);
-        locked.Locked = true;
-        Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(locked).Send(Cancellation));
+        var removed = Post.Root(Tids.Mint(), Workshop, "Closed", "closed", PostKind.Topic, "No more replies.", Mo, DateTimeOffset.UtcNow);
+        removed.Removed = true;
+        Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(removed).Send(Cancellation));
         using var ada = await SignedIn(tangentSpace, Ada);
         var before = await Counted();
 
-        var asJson = await Json(ada, "/t/" + Workshop + "/new", TopicPath(locked), new { id = Tids.Mint(), body = "Still?" });
-        var onForm = await Form(ada, "/t/" + Workshop + "/new", TopicPath(locked), new Dictionary<string, string> { ["id"] = Tids.Mint(), ["body"] = "Still?" });
+        var asJson = await Json(ada, "/t/" + Workshop + "/new", TopicPath(removed), new { id = Tids.Mint(), body = "Still?" });
+        var onForm = await Form(ada, "/t/" + Workshop + "/new", TopicPath(removed), new Dictionary<string, string> { ["id"] = Tids.Mint(), ["body"] = "Still?" });
 
-        Assert.Equal((HttpStatusCode.Forbidden, "application/problem+json", Capabilities.Locked.Word), (asJson.Status, asJson.MediaType, asJson.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, "application/problem+json", Capabilities.Removed.Word), (asJson.Status, asJson.MediaType, asJson.Gate));
         Assert.Equal("gated", asJson.Kind);
         Assert.Equal(("text/html", HttpStatusCode.Forbidden), (onForm.MediaType, onForm.Status));
-        Assert.Contains("data-gate=\"locked\"", onForm.Body);
-        Assert.Contains("This topic is locked, so no one replies in it.", onForm.Body);
-        Assert.Contains(">Locked</h1>", onForm.Body);
-        Assert.DoesNotContain(">locked<", onForm.Body);
+        Assert.Contains("data-gate=\"removed\"", onForm.Body);
+        Assert.Contains(Capabilities.Removed.Text, System.Net.WebUtility.HtmlDecode(onForm.Body));
+        Assert.Contains(">Removed</h1>", onForm.Body);
+        Assert.DoesNotContain(">removed<", onForm.Body);
         Assert.Equal(before, await Counted());
     }
 
@@ -109,13 +109,14 @@ public sealed class RefusalTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
         using var visitor = Agent(tangentSpace);
+        var seen = new Dictionary<string, string> { [Events.SeenController.ThroughField] = "1" };
 
-        var asJson = await Send(visitor, HttpMethod.Get, Events.Notifications.Path, json: true);
+        var asJson = await Send(visitor, HttpMethod.Post, Events.SeenController.Path, FormBody(seen), json: true);
         Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (asJson.Status, asJson.Gate));
 
-        var asPage = await Send(visitor, HttpMethod.Get, Events.Notifications.Path);
+        var asPage = await Send(visitor, HttpMethod.Post, Events.SeenController.Path, FormBody(seen));
         Assert.Equal(HttpStatusCode.Unauthorized, asPage.Status);
-        Assert.Contains("href=\"" + BaseUrl + "/sign-in?return=%2Fnotifications\">Sign in</a>", asPage.Body);
+        Assert.Contains("href=\"" + BaseUrl + "/sign-in\">Sign in</a>", asPage.Body);
         Assert.DoesNotContain(">" + Capabilities.SignIn.Word + "<", asPage.Body);
     }
 

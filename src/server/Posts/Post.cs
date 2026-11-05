@@ -6,9 +6,10 @@ using Koan.Data.Core.Model;
 namespace Tangent.Posts;
 
 /// <summary>One message, a root or a reply, keyed by the TID the client minted. A Topic has no row: its title, slug,
-/// kind, cover, lock, pin and counters live on its root Post, whose <see cref="TopicId"/> is its own Id. A reply
-/// carries its root's <see cref="TangentId"/> and <see cref="TopicId"/> and the next <see cref="Sequence"/> of its
-/// Topic.</summary>
+/// kind, cover and counters live on its root Post, whose <see cref="TopicId"/> is its own Id. A reply carries its
+/// root's <see cref="TangentId"/> and <see cref="TopicId"/> and the next <see cref="Sequence"/> of its Topic. Every
+/// Post carries <see cref="LogSeq"/>, where the log took its arrival, and its root <see cref="LastLogSeq"/>, its
+/// newest Post's, so a list of Topics says what is new with no further read (<see cref="Events.Unread"/>).</summary>
 public sealed class Post : Entity<Post>
 {
     /// <summary>How many of a Topic's most recent authors its root keeps.</summary>
@@ -40,7 +41,6 @@ public sealed class Post : Entity<Post>
     public static readonly Reason NeedsTangent = Reason.Invalid("A Topic starts in a Tangent.");
     public static readonly Reason NeedsAuthor = Reason.Invalid("A Post has an author.");
     public static readonly Reason NotARoot = Reason.Invalid("A reply goes to a Topic.");
-    public static readonly Reason TopicLocked = Access.Capabilities.Locked;
     public static readonly Reason TopicRemoved = Access.Capabilities.Removed;
     public static readonly Reason NoTitleOnReply = Reason.Invalid("A reply has no title; a Topic's title is on its root.");
     public static readonly Reason PostRemoved = Access.Capabilities.Removed;
@@ -127,11 +127,18 @@ public sealed class Post : Entity<Post>
     /// <summary>The last sequence taken in the Topic. Root only.</summary>
     public long LastSequence { get; set; }
 
+    /// <summary>The log's sequence of the <see cref="Events.EventKind.PostCreated"/> that brought this Post, written by
+    /// the command that writes the Post.</summary>
+    public long LogSeq { get; set; }
+
+    /// <summary>The <see cref="LogSeq"/> of the Topic's newest Post. Root only.</summary>
+    public long LastLogSeq { get; set; }
+
     /// <summary>Root only.</summary>
     public int ReplyCount { get; set; }
 
     /// <summary>When the Topic last gained a Post. Root only.</summary>
-    [Index(Name = "ix_post_topics", Order = 3)]
+    [Index(Name = "ix_post_topics", Order = 2)]
     public DateTimeOffset LastActivityAt { get; set; }
 
     /// <summary>The Topic's latest reply and its author; null until the first reply. Root only.</summary>
@@ -142,14 +149,6 @@ public sealed class Post : Entity<Post>
     /// <summary>The Topic's most recent authors, newest first, each once, at most <see cref="RecentAuthorLimit"/>.
     /// Root only.</summary>
     public List<string> RecentAuthorIds { get; set; } = [];
-
-    /// <summary>Root only.</summary>
-    public bool Locked { get; set; }
-
-    /// <summary>Root only. In the topic-list index before the last activity, so the pinned Topics and the others are
-    /// each one range of it.</summary>
-    [Index(Name = "ix_post_topics", Order = 2)]
-    public bool Pinned { get; set; }
 
     /// <summary>In <c>ix_post_started</c> and <c>ix_post_articles</c> before the time a Topic started, so a Tangent's
     /// Topics or the articles that stand, newest first, are each one range, however many were removed.</summary>
@@ -209,7 +208,7 @@ public sealed class Post : Entity<Post>
     public static string RootBody(PostBody body, string? originId)
         => originId is not null && string.IsNullOrWhiteSpace(body.Text) ? "" : body.Text;
 
-    /// <summary>A reply to this root, or a refusal: this Post is a root that is neither locked nor removed, the Id is a TID,
+    /// <summary>A reply to this root, or a refusal: this Post is a root that is not removed, the Id is a TID,
     /// the body is within its limits and the author is named. The parent is the caller's, already known to be a Post of
     /// this Topic. The reply takes the Topic's next sequence, and the root's counters, last activity, latest reply and
     /// recent authors move with it.</summary>
@@ -217,7 +216,6 @@ public sealed class Post : Entity<Post>
     {
         if (ParentId is not null) throw new Refusal(NotARoot);
         if (Removed) throw new Refusal(TopicRemoved);
-        if (Locked) throw new Refusal(TopicLocked);
         if (!Tid.IsValid(id)) throw new Refusal(NeedsTid);
         if (string.IsNullOrWhiteSpace(authorId)) throw new Refusal(NeedsAuthor);
         CheckBody(body);
@@ -241,6 +239,14 @@ public sealed class Post : Entity<Post>
             AuthorId = authorId,
             CreatedAt = at
         };
+    }
+
+    /// <summary>Records that the log took this Post's arrival at <paramref name="logSeq"/>, on it and on its Topic's
+    /// <paramref name="root"/>, whose newest Post it is: the root itself, for a Topic that starts.</summary>
+    public void Logged(long logSeq, Post root)
+    {
+        LogSeq = logSeq;
+        root.LastLogSeq = logSeq;
     }
 
     /// <summary>Whether an edit with this body, title and cover would leave the Post as it is: the same body, on a root

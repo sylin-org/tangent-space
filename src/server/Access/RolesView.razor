@@ -78,7 +78,7 @@
                                         @if (role.Can.Contains(RolesPage.Verb.Change))
                                         {
                                             <details class="application-decline roles-change">
-                                                <summary class="watch-button">Change</summary>
+                                                <summary class="button">Change</summary>
                                                 <div class="post-remove-confirm">
                                                     <form class="sign-in-form change-role" method="post" action="@roleForms.Change.Action">
                                                         <input type="hidden" name="@RolesController.RoleField" value="@role.Word">
@@ -90,7 +90,7 @@
                                                             </span>
                                                         </div>
                                                         <RolePermissions Prefix="@("role-" + role.Word)" Permissions="@Model.Permissions" Chosen="@role.Permissions" />
-                                                        <button type="submit" class="watch-button">Save</button>
+                                                        <button type="submit" class="button">Save</button>
                                                     </form>
                                                 </div>
                                             </details>
@@ -98,7 +98,7 @@
                                         @if (role.Can.Contains(RolesPage.Verb.Delete))
                                         {
                                             <details class="application-decline roles-delete">
-                                                <summary class="watch-button">Delete</summary>
+                                                <summary class="button">Delete</summary>
                                                 <div class="post-remove-confirm">
                                                     <p class="post-remove-note">Everyone in it loses it, and so does every Tangent’s access for it.</p>
                                                     <form class="delete-role" method="post" action="@roleForms.Delete.Action">
@@ -152,6 +152,6 @@
     /// <summary>One move as a small form of its own, posting the role and the move alone.</summary>
     private static RenderFragment Moved(Form change, RolesPage.Listed role, RoleMove move, string label) => @<form class="change-role" method="post" action="@change.Action">
         <input type="hidden" name="@RolesController.RoleField" value="@role.Word">
-        <button type="submit" class="watch-button" name="@RolesController.MoveField" value="@RolesController.Word(move)">@label</button>
+        <button type="submit" class="button" name="@RolesController.MoveField" value="@RolesController.Word(move)">@label</button>
     </form>;
 }

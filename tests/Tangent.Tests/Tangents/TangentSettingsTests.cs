@@ -40,7 +40,7 @@ public sealed class TangentSettingsTests
         var settings = BaseUrl + "/t/workshop/settings";
 
         Assert.Equal(settings, (await Send(leo.Client, HttpMethod.Get, "/t/workshop", json: true)).Json.GetProperty("settings").GetString());
-        Assert.Contains($"<a class=\"watch-button tangent-settings\" href=\"{settings}\">Settings</a>", (await Send(leo.Client, HttpMethod.Get, "/t/workshop")).Body);
+        Assert.Contains($"<a class=\"button tangent-settings\" href=\"{settings}\">Settings</a>", (await Send(leo.Client, HttpMethod.Get, "/t/workshop")).Body);
         Assert.Equal(settings, (await Send(bea.Client, HttpMethod.Get, "/t/workshop", json: true)).Json.GetProperty("settings").GetString());
         Assert.False((await Send(bea.Client, HttpMethod.Get, "/t/articles", json: true)).Json.TryGetProperty("settings", out _));
         Assert.False((await Send(ada.Client, HttpMethod.Get, "/t/workshop", json: true)).Json.TryGetProperty("settings", out _));

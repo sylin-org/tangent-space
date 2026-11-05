@@ -5,7 +5,7 @@ import { mountIslands } from '../islands'
 // The server renders the seen control at the end of a Topic's window as a form; the island posts it once by itself
 // when the form comes on screen, and the form leaves the page when the checkpoint has moved.
 
-const action = 'https://tangent.example/t/workshop/lanterns/seen'
+const action = 'https://tangent.example/seen'
 let observed: ((entries: { isIntersecting: boolean }[]) => void) | undefined
 
 class Observer {
@@ -20,6 +20,7 @@ function render() {
   document.body.innerHTML =
     `<form class="topic-seen" method="post" action="${action}" data-island="seen">` +
     '<input type="hidden" name="through" value="7">' +
+    '<input type="hidden" name="topic" value="3lanterns4topic">' +
     '<button type="submit">Mark seen</button></form>'
   return document.querySelector('form')!
 }
@@ -32,7 +33,7 @@ afterEach(() => {
 
 test('the seen island posts its form once when the end of the window comes on screen, and the form then leaves', async () => {
   vi.stubGlobal('IntersectionObserver', Observer)
-  const fetched = vi.fn(async (_url: string, _init: RequestInit) => new Response('{"scope":"topic:x","seq":7,"watch":false}', { status: 200 }))
+  const fetched = vi.fn(async (_url: string, _init: RequestInit) => new Response('{"scope":"topic:3lanterns4topic","seq":7}', { status: 200 }))
   vi.stubGlobal('fetch', fetched)
   const form = render()
 
@@ -49,7 +50,7 @@ test('the seen island posts its form once when the end of the window comes on sc
   expect(url).toBe(action)
   expect(init.method).toBe('POST')
   expect(new Headers(init.headers).get('Accept')).toBe('application/json')
-  expect(String(init.body)).toBe('through=7')
+  expect(String(init.body)).toBe('through=7&topic=3lanterns4topic')
 })
 
 test('a seen post that does not succeed leaves the form and its button as they were', async () => {

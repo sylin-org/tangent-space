@@ -49,7 +49,7 @@ public static class RoleSettings
         Bit.Topic => "Start topics",
         Bit.EditOwn => "Edit their own posts",
         Bit.RemoveOwn => "Remove their own posts",
-        Bit.Moderate => "Moderate: edit, remove, lock, pin and move anyone’s posts",
+        Bit.Moderate => "Moderate: edit and remove anyone’s posts",
         Bit.ManageTangent => "Change Tangents’ settings and access",
         Bit.ManageRoles => "Shape roles and give them",
         Bit.ManageStanding => "Decide applications, time out and ban",

@@ -201,7 +201,6 @@ public sealed class Export
     {
         var latest = await TangentPageController.LatestReplies(topics, ct);
         var people = Marks(await TangentPageController.People(topics, latest.Values, ct));
-        var unseen = new Dictionary<string, long>();
         return new TangentPage(
             tangent.Id,
             tangent.Name,
@@ -210,11 +209,10 @@ public sealed class Export
             audience.ToString().ToLowerInvariant(),
             First + ".html",
             [],
-            topics.Select(root => TangentPageController.Topic(root, _base + "/t/" + Uri.EscapeDataString(tangent.Id), people, latest, unseen, signedIn: false)
+            topics.Select(root => TangentPageController.Topic(root, _base + "/t/" + Uri.EscapeDataString(tangent.Id), people, latest, null, new Dictionary<string, long>())
                 with { Address = Uri.EscapeDataString(root.Slug ?? root.Id) + "/" + First + ".html" }).ToList(),
             more ? PagePath(page + 1) + ".html" : null,
             page > 1,
-            null,
             null,
             null,
             [new TangentPage.Listed(tangent.Id, tangent.Name, PostWrites.Word(tangent.DefaultKind), First + ".html", tangent.TopicCount)],
@@ -259,11 +257,8 @@ public sealed class Export
             PostWrites.Word(root.Kind),
             First + ".html",
             new TopicPage.InTangent(tangent.Id, tangent.Name, "../" + First + ".html"),
-            root.Locked,
-            root.Pinned,
             root.ReplyCount,
             [],
-            null,
             null,
             null,
             null,

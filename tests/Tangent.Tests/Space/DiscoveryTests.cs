@@ -80,7 +80,8 @@ public sealed partial class DiscoveryTests
         initialize.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         using var answered = await tangentSpace.Client.SendAsync(initialize, Cancellation);
         var body = await answered.Content.ReadAsStringAsync(Cancellation);
-        Assert.Equal(HttpStatusCode.Unauthorized, answered.StatusCode);
+        // Nothing answers a post to the address: it is absent, or, on a private place, a visitor is asked to sign in.
+        Assert.Equal(audience == Audience.Private ? HttpStatusCode.Unauthorized : HttpStatusCode.NotFound, answered.StatusCode);
         Assert.DoesNotContain("jsonrpc", body);
     }
 

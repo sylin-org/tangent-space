@@ -15,7 +15,6 @@ namespace Tangent.Posts;
 public sealed record StartInput(
     [Description(Holds.TopicTitle)] string? Title = null,
     [Description(Holds.TopicBody)] string? Body = null,
-    [Description(Holds.Kind)] string? Kind = null,
     [Description(Holds.Cover)] string? Cover = null,
     [Description(Holds.Id)] string? Id = null);
 
@@ -51,8 +50,6 @@ public sealed class NewTopicController(KoanWebBaseUrl baseUrl) : ControllerBase
         var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, null, null, ct);
         if (found is null) return unseen!;
 
-        var kind = PostWrites.Kind(input.Kind, out var kindValid);
-        if (!kindValid) return await Refused(tangent, personId, input, PostWrites.KindRule, ct);
         var title = PostWrites.Title(input.Title) ?? "";
         var cover = input.Cover is { Length: > 0 } named ? named : null;
         var body = await PostWrites.Body(input.Body, found.Capabilities.Holds(Bit.Topic));
@@ -62,7 +59,6 @@ public sealed class NewTopicController(KoanWebBaseUrl baseUrl) : ControllerBase
             title,
             body,
             personId ?? "",
-            kind,
             CoverId: cover).Send();
         switch (outcome)
         {

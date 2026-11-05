@@ -18,8 +18,8 @@ namespace Tangent.Tangents;
 /// with what is new to the reader marked, left to the formatter as HTML, a fragment or JSON. A reader without
 /// <see cref="Bit.View"/> on the Tangent receives its gate instead, and one for whom the Tangent is absent receives
 /// what an address with no Tangent receives. Every read is bounded and keyed: the Tangent, then capability's rows, at
-/// most two reads of Topics, their latest replies by Id, the people on the page, the reader's checkpoints for those
-/// Topics and for the Tangent, whose watch flag the page's watch form shows, the first <see cref="SwitcherLimit"/>
+/// one read of Topics, their latest replies by Id, the people on the page, the reader's place mark and their marks on
+/// those Topics, which say what is new to them (<see cref="Unread"/>), the first <see cref="SwitcherLimit"/>
 /// Tangents the reader may view for the switcher (<see cref="ViewableTangents"/>), and, for a signed-in reader, what they
 /// hold in the place, which says whether the switcher offers a new Tangent.</summary>
 public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBase
@@ -57,8 +57,8 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
         var reader = personId is null ? null : await Participant.Get(personId, ct);
         var latest = await LatestReplies(page.Topics, ct);
         var people = await People(page.Topics, latest.Values, ct);
-        var seen = await Seen(reader, page.Topics, ct);
-        var watched = reader is not null && (await Checkpoint.Get(Checkpoint.Key(reader.Id, Scope.Tangent(row.Id)), ct))?.Watch == true;
+        var unread = reader is null ? null : await Unread.Of(reader, ct);
+        var marks = unread is null ? new Dictionary<string, long>() : await unread.Marks(page.Topics.Select(topic => topic.Id), ct);
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
         var audience = space.Audience == Audience.Private || await Overwrites.AudienceOf(row.Id, ct) == Audience.Private
             ? Audience.Private
@@ -79,11 +79,10 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
             audience.ToString().ToLowerInvariant(),
             address,
             capabilities.Can,
-            page.Topics.Select(topic => Topic(topic, address, people, latest, seen, reader is not null)).ToList(),
+            page.Topics.Select(topic => Topic(topic, address, people, latest, unread, marks)).ToList(),
             page.Next is { } next ? address + "?" + After + "=" + Uri.EscapeDataString(next.ToString()) : null,
             cursor is not null,
             capabilities.Holds(Bit.Topic) ? address + "/" + NewTopicSegment : null,
-            reader is null ? null : CheckpointController.WatchingOf(address, watched),
             reader is null ? baseAddress + SignInController.Path + "?return=" + back : null,
             await Viewable(personId, row, ct),
             space.Name,
@@ -91,23 +90,25 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
             reader is null ? null : new TangentPage.Reader(
                 reader.Id, Named(reader).Name, Named(reader).Handle, Role(capabilities), reader.Profile.Avatar,
                 baseAddress + AuthConstants.Routes.Logout + "?return=" + back, place is null ? null : TangentSpaceSettingsController.Entry(place, baseAddress),
-                await Events.Notifications.Count(reader.Id, baseAddress, ct)),
+                await unread!.BadgeNow(baseAddress + "/", ct)),
             DateOnly.FromDateTime(DateTime.UtcNow),
             TangentWrites.MayManage(capabilities) ? address + "/" + TangentWrites.SettingsSegment : null,
             creates ? baseAddress + NewTangentController.Route : null,
             audience == Audience.Public ? Feeds.TangentLinks(baseAddress, row.Id, row.Name, space.Name) : null));
     }
 
+    /// <summary>One Topic as a list shows it, what is new in it marked for a signed-in reader by the one rule
+    /// (<see cref="Unread.InTopic"/>), and none for a visitor.</summary>
     public static TangentPage.Topic Topic(Post root, string tangentAddress, IReadOnlyDictionary<string, TangentPage.Author> people,
-        IReadOnlyDictionary<string, Post> latest, IReadOnlyDictionary<string, long> seen, bool signedIn)
+        IReadOnlyDictionary<string, Post> latest, Unread? unread, IReadOnlyDictionary<string, long> marks)
     {
-        var known = seen.TryGetValue(root.Id, out var last);
-        var unseen = !signedIn ? 0 : known ? Math.Max(0, root.LastSequence - last) : root.LastSequence + 1;
+        long? mark = marks.TryGetValue(root.Id, out var read) ? read : null;
+        var (isNew, newPosts) = unread?.InTopic(root, mark) ?? (false, 0);
         var address = tangentAddress + "/" + Uri.EscapeDataString(root.Slug ?? root.Id);
         TangentPage.Latest? reply = null;
         if (root.LatestReplyId is { } replyId && latest.TryGetValue(replyId, out var post))
             reply = new TangentPage.Latest(post.Id, Person(people, post.AuthorId), TangentPage.Opening(post, people), post.CreatedAt,
-                signedIn && (!known || post.Sequence > last), TangentPage.EditedOf(post, people));
+                unread is not null && unread.New(post, mark), TangentPage.EditedOf(post, people));
         return new TangentPage.Topic(
             root.Id,
             root.Slug ?? root.Id,
@@ -120,12 +121,10 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
             root.ReplyCount,
             root.CreatedAt,
             root.LastActivityAt,
-            root.Pinned,
-            root.Locked,
             reply,
             root.RecentAuthorIds.Take(Post.RecentAuthorLimit).Select(id => Person(people, id)).ToList(),
-            unseen > 0,
-            unseen,
+            isNew,
+            newPosts,
             TangentPage.EditedOf(root, people),
             root.CoverId is { } cover ? tangentAddress[..tangentAddress.LastIndexOf("/t/", StringComparison.Ordinal)] + Media.Reference(cover) : null);
     }
@@ -180,21 +179,6 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
     }
 
     private string Address(string slug) => BaseAddress() + "/t/" + Uri.EscapeDataString(slug);
-
-    /// <summary>The sequence the reader last saw in each of the page's Topics, by Topic Id, in one keyed read of their
-    /// checkpoints; empty for a visitor. A Topic without a checkpoint is absent from the answer.</summary>
-    private static async Task<IReadOnlyDictionary<string, long>> Seen(Participant? reader, IReadOnlyList<Post> topics, CancellationToken ct)
-    {
-        if (reader is null || topics.Count == 0) return new Dictionary<string, long>();
-        var checkpoints = await Checkpoint.Get(topics.Select(topic => Checkpoint.Key(reader.Id, Scope.Topic(topic.Id))).ToList(), ct);
-        var seen = new Dictionary<string, long>(StringComparer.Ordinal);
-        for (var index = 0; index < topics.Count; index++)
-        {
-            if (checkpoints[index] is { } checkpoint) seen[topics[index].Id] = checkpoint.Seq;
-        }
-
-        return seen;
-    }
 
     private static string Word(PostKind kind) => kind.ToString().ToLowerInvariant();
 

@@ -40,6 +40,10 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
     [Index(Name = "ix_participant_applications")]
     public DateTimeOffset? AppliedAt { get; set; }
 
+    /// <summary>The log's sequence of the participant's arrival, where "since you were here" begins for them until they
+    /// say what they have seen (<see cref="Events.Unread.Floor"/>).</summary>
+    public long ArrivedSeq { get; set; }
+
     /// <summary>The log's sequence of the arrival that made the participant an applicant, while their application waits;
     /// null for everyone else, and once it is admitted or declined. The applications that wait are one range of
     /// <c>ix_participant_waiting</c>, newest first, which is how they reach whoever decides them.</summary>
@@ -81,9 +85,13 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
         };
     }
 
-    /// <summary>Records that the participant's arrival took the log's sequence <paramref name="seq"/>: where they
-    /// applied, their application waits at it.</summary>
-    public void Arrived(long seq) => WaitingSeq = Standing == Standing.Applied ? seq : null;
+    /// <summary>Records that the participant's arrival took the log's sequence <paramref name="seq"/>: what is new to them
+    /// begins there, and where they applied, their application waits at it.</summary>
+    public void Arrived(long seq)
+    {
+        ArrivedSeq = seq;
+        WaitingSeq = Standing == Standing.Applied ? seq : null;
+    }
 
     /// <summary>Admits an applicant, waiting or declined: they stand admitted and their application is closed. False,
     /// with nothing changed, for one who stands admitted at <paramref name="now"/>, a timeout that has ended among them;

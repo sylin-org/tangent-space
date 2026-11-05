@@ -26,9 +26,9 @@ public static class Given
     }
 
     public static async Task<Tangents.Tangent> ATangent(TangentSpaceFixture tangentSpace, string slug,
-        Audience audience = Audience.Public, CancellationToken ct = default)
+        Audience audience = Audience.Public, CancellationToken ct = default, PostKind kind = PostKind.Topic)
     {
-        var tangent = Tangents.Tangent.Create(slug, slug, "", PostKind.Topic, 1);
+        var tangent = Tangents.Tangent.Create(slug, slug, "", kind, 1);
         await Overwrites.SetAudience(tangentSpace.Services.GetRequiredService<RoleCollection>(), slug, audience, ct);
         Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new Store<Tangents.Tangent>(tangent).Send(ct));
         return tangent;
@@ -42,12 +42,5 @@ public static class Given
         var collection = tangentSpace.Services.GetRequiredService<RoleCollection>();
         foreach (var role in roles) await collection.Add(role, id, ct);
         return participant;
-    }
-
-    /// <summary>A participant who was at the door before anything the log holds, so everything in it is new to them,
-    /// whatever their arrival began their checkpoint at.</summary>
-    public static async Task BeenAtTheDoor(TangentSpaceFixture tangentSpace, string id, CancellationToken ct = default)
-    {
-        Assert.IsType<Outcome<Events.Checkpoint>.Done>(await new Store<Events.Checkpoint>(Events.Checkpoint.At(id, Events.Scope.Place, 0)).Send(ct));
     }
 }

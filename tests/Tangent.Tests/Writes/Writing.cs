@@ -115,15 +115,6 @@ internal static partial class Writing
     public static Task<Answered> Form(Browser browser, string page, string action, Dictionary<string, string> fields)
         => Send(browser.Client, HttpMethod.Post, action, FormBody(fields), page: page);
 
-    /// <summary>Opens the notifications from the page at <paramref name="page"/>, as its form does: through what that page
-    /// read of them.</summary>
-    public static async Task<Answered> Opened(Browser browser, string page)
-    {
-        var open = (await Send(browser.Client, HttpMethod.Get, page, json: true)).Json.GetProperty("who").GetProperty("notifications").GetProperty("open");
-        return await Form(browser, page, Events.Notifications.Path,
-            new Dictionary<string, string> { [Events.Notifications.ThroughField] = Valued(open, Events.Notifications.ThroughField)! });
-    }
-
     /// <summary>Posts JSON from the page at <paramref name="page"/>, as a signed-in browser's script does.</summary>
     public static Task<Answered> Json(Browser browser, string page, string action, object fields)
         => Send(browser.Client, HttpMethod.Post, action, JsonBody(fields), json: true, page: page);

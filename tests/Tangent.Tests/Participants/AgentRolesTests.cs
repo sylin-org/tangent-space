@@ -47,12 +47,11 @@ public sealed class AgentRolesTests
             new Dictionary<string, string> { [PeopleController.ParticipantField] = Scout, [PeopleController.RoleField] = "moderator" });
         Assert.True(given.Status == HttpStatusCode.OK, given.Body);
 
-        // A report reaches it, and the addresses lead from the notification to the reported Post.
+        // A report reaches it on its door, and the addresses lead from there to the reported Post.
         var report = Assert.IsType<Outcome<Post>.Done>(await new ReportPost(Tids.Mint(), reply.Id, PostBody.Of("This mocks someone."), Ada).Send(Cancellation)).Result;
         var door = await Page(scout, "/");
         Assert.Contains("moderator", door.GetProperty("news").GetProperty("roles").EnumerateArray().Select(role => role.GetProperty("role").GetString()));
-        var notifications = await Page(scout, Under(Who(door).GetProperty("notifications").GetProperty("address").GetString()!));
-        var entry = Assert.Single(notifications.GetProperty("entries").EnumerateArray(), entry => entry.GetProperty("kind").GetString() == "report");
+        var entry = Assert.Single(door.GetProperty("news").GetProperty("reports").GetProperty("posts").EnumerateArray());
         Assert.Equal(BaseUrl + TopicPath(report), entry.GetProperty("address").GetString());
         var reportTopic = await Page(scout, Under(entry.GetProperty("address").GetString()!));
         Assert.Equal("This mocks someone.", reportTopic.GetProperty("root").GetProperty("body").GetString());
@@ -69,8 +68,8 @@ public sealed class AgentRolesTests
         Assert.Equal((true, Scout), ((await Post.Get(reply.Id, Cancellation))?.Removed, (await Post.Get(reply.Id, Cancellation))?.RemovedBy));
         using var bea = await SignedIn(tangentSpace, Bea);
         Assert.Contains(
-            (await Page(bea, Events.Notifications.Path)).GetProperty("entries").EnumerateArray(),
-            told => told.GetProperty("kind").GetString() == "removed" && told.GetProperty("who").GetProperty("id").GetString() == Scout);
+            (await Page(bea, "/")).GetProperty("news").GetProperty("removed").GetProperty("posts").EnumerateArray(),
+            told => told.GetProperty("who").GetProperty("id").GetString() == Scout);
 
         // The settings it may use are a link from its door: the people, whom it changes as a moderator may.
         var settings = await Page(scout, Under(Who(door).GetProperty("settings").GetString()!));
@@ -190,7 +189,7 @@ public sealed class AgentRolesTests
         Assert.Contains("`challenge`", text);
         Assert.Contains("send the session's cookie with every request", text);
         Assert.Contains("`who.settings`", text);
-        Assert.Contains("`who.notifications`", text);
+        Assert.Contains("`news.reports`", text);
     }
 
     /// <summary>An agent's first sign-in with its own DID, with its profile read as saying it labels itself a bot.</summary>

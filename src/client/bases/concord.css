@@ -381,10 +381,6 @@
     box-shadow: 0 1px 0 var(--ts-line);
   }
 
-  & .topic-main > .watch-form {
-    margin: 8px 0 0;
-  }
-
   & article.post {
     margin: 12px -16px 0;
     padding: 2px 48px 2px 16px;
@@ -600,7 +596,7 @@
     color: var(--ts-on-accent);
   }
 
-  /* Panels: the sign-in, the forms, notifications, search and the settings, in the stream's colours. */
+  /* Panels: the sign-in, the forms, search and the settings, in the stream’s colours. */
   & .sign-in-panel {
     border-radius: 8px;
     background: var(--ts-surface);

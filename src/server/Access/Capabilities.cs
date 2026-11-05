@@ -16,7 +16,7 @@ namespace Tangent.Access;
 /// nothing else is said; the Post's state; the bag and the overwrites for every other bit; authorship. Koan resolves the
 /// bag and the overwrites (<see cref="RoleBag.On"/>) and names the fact that decided each missing bit; the first step
 /// that drops a verb names its gate, which puts the words in their precedence: <see cref="SignIn"/>, <see cref="Apply"/>,
-/// <see cref="Declined"/>, <see cref="TimedOut"/>, <see cref="Absent"/>, <see cref="Locked"/>, <see cref="Removed"/>. Computed per request from a
+/// <see cref="Declined"/>, <see cref="TimedOut"/>, <see cref="Absent"/>, <see cref="Removed"/>. Computed per request from a
 /// few small rows; nothing stores it.</summary>
 public sealed class Capabilities
 {
@@ -31,7 +31,6 @@ public sealed class Capabilities
     /// stand. Every verb carries this one reason, and a command answers what it answers for a missing resource, which
     /// says <see cref="Answers.Nothing"/>.</summary>
     public static readonly Reason Absent = Reason.Absent("absent");
-    public static readonly Reason Locked = Reason.Gated("locked", "This topic is locked, so no one replies in it.");
     public static readonly Reason Removed = Reason.Gated("removed", "This post is removed, so nothing changes it now.");
 
     /// <summary>The reason <see cref="Bit.EditOwn"/> and <see cref="Bit.RemoveOwn"/> are missing on a Post that is
@@ -52,7 +51,6 @@ public sealed class Capabilities
         (Apply, "Waiting to be admitted"),
         (Declined, "Not admitted"),
         (TimedOut, "Timed out"),
-        (Locked, "Locked"),
         (Removed, "Removed"),
         (NotYours, "Not yours")
     }.ToDictionary(worded => worded.Gate.Word!, worded => (worded.Gate.Text, worded.Heading), StringComparer.Ordinal);
@@ -93,7 +91,7 @@ public sealed class Capabilities
     public bool Holds(Bit verb) => (Held & verb) == verb;
 
     /// <summary>Null when the verb is held; otherwise the one reason it is not: <see cref="SignIn"/>,
-    /// <see cref="Apply"/>, <see cref="Declined"/>, <see cref="TimedOut"/>, <see cref="Absent"/>, <see cref="Locked"/> or <see cref="Removed"/>
+    /// <see cref="Apply"/>, <see cref="Declined"/>, <see cref="TimedOut"/>, <see cref="Absent"/> or <see cref="Removed"/>
     /// where standing, audience or state decided, or the deciding overwrite or the absence of a role where the bag and
     /// the overwrites decided.</summary>
     public Reason? Gate(Bit verb)
@@ -124,7 +122,7 @@ public sealed class Capabilities
     /// the Tangent Space itself has none. <paramref name="now"/> decides whether a
     /// timeout or an overwrite has ended. <paramref name="post"/> is the Topic's root for a question about the Topic, the
     /// Post itself for a question about that Post, and null for a Tangent or the place. <paramref name="root"/> is the
-    /// Topic's root for a question about a reply: a locked or removed root drops <see cref="Bit.Post"/> on every reply of
+    /// Topic's root for a question about a reply: a removed root drops <see cref="Bit.Post"/> on every reply of
     /// its Topic with that gate, while the reply's own removal governs everything else.</summary>
     public static Capabilities For(Participant? participant, IEnumerable<string> tokens, TangentSpace space, string? tangentId,
         IReadOnlyList<PermissionOverwrite> overwrites, DateTimeOffset now, Post? post = null, Post? root = null)
@@ -174,7 +172,6 @@ public sealed class Capabilities
 
         // Replying is judged by the Topic, whose state lives on its root; everything else by the Post itself.
         var topic = root ?? post;
-        if (topic is { Locked: true }) Drop(Bit.Post, Locked);
         if (topic is { Removed: true }) Drop(Bit.Post, Removed);
         if (post is { Removed: true }) Drop(Bits.All, Removed);
 

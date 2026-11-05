@@ -135,3 +135,46 @@ a.masthead-search-all:hover {
     width: auto;
   }
 }
+
+/* The hits of a search, each in an Offer's line: who wrote it by their mark, the Topic it is in linked, its Tangent and
+ * when, and its snippet under it. */
+.search-hits {
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.search-hits > .post {
+  align-items: flex-start;
+}
+
+.search-hit-body {
+  flex: 1 1 320px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.search-hit-line {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.search-hit-text {
+  min-width: 0;
+}
+
+.search-hit-link {
+  color: var(--ts-text);
+  font-weight: 600;
+}
+
+.snippet {
+  margin: 0;
+  color: var(--ts-text-2);
+  font: var(--ts-type-ui);
+  overflow-wrap: anywhere;
+}

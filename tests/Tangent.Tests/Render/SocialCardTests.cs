@@ -62,9 +62,10 @@ public sealed partial class SocialCardTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Established(tangentSpace);
-        var article = await Started("A published piece", string.Concat(Enumerable.Repeat("word ", 100)), PostKind.Article);
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent("articles", "Articles", "Pieces.", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
+        var article = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "articles", "A published piece", string.Concat(Enumerable.Repeat("word ", 100)), "ada", Start).Send(Cancellation)).Result;
 
-        var html = await Page(tangentSpace.Client, $"/t/{Workshop}/{article.Slug}");
+        var html = await Page(tangentSpace.Client, $"/t/articles/{article.Slug}");
 
         Assert.Equal("article", Meta(html, "og:type"));
         var description = Meta(html, "og:description")!;
@@ -99,7 +100,7 @@ public sealed partial class SocialCardTests
         await Overwrites.SetAudience(roles, Back, Audience.Private, Cancellation);
         Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new Store<Tangents.Tangent>(Tangents.Tangent.Create(Back, "The back room", "Kept close.", PostKind.Topic, 2)).Send(Cancellation));
         await Overwrites.SetAccess(roles, Back, Roles.Member, RoleAccess.Post, Cancellation);
-        var inside = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Back, "Said in the back", "Secret words.", "ada", null, Start).Send(Cancellation)).Result;
+        var inside = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Back, "Said in the back", "Secret words.", "ada", Start).Send(Cancellation)).Result;
         using var member = new Browser(tangentSpace);
         (await member.SignIn("reader", Reader, Cancellation)).Dispose();
 
@@ -204,8 +205,8 @@ public sealed partial class SocialCardTests
         Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent(Workshop, "The workshop", "Where things get made.", PostKind.Topic, 1, Audience.Public, "leo").Send(Cancellation));
     }
 
-    private static async Task<Post> Started(string title, string body, PostKind? kind = null)
-        => Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, title, body, "ada", kind, Start).Send(Cancellation)).Result;
+    private static async Task<Post> Started(string title, string body)
+        => Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, title, body, "ada", Start).Send(Cancellation)).Result;
 
     private static async Task<(HttpStatusCode Status, string Html)> Answer(HttpClient client, string path)
     {

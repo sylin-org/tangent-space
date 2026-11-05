@@ -58,10 +58,9 @@ public sealed class CapabilitiesTests
     private static PermissionOverwrite ForAudience(Audience audience) =>
         audience == Audience.Public ? Over(RoleTokens.Everyone, allow: Bit.View) : Over(RoleTokens.Everyone, deny: Bit.View);
 
-    private static Post Root(string authorId = Leo, bool locked = false, bool removed = false)
+    private static Post Root(string authorId = Leo, bool removed = false)
     {
         var root = Post.Root("3jzfcijpj2z2a", Workshop, "A Topic", "a-topic", PostKind.Topic, "Words.", authorId, Now);
-        root.Locked = locked;
         root.Removed = removed;
         return root;
     }
@@ -177,8 +176,8 @@ public sealed class CapabilitiesTests
     public void What_a_reader_may_not_view_does_not_exist_for_them_and_nothing_else_is_said()
     {
         IReadOnlyList<PermissionOverwrite> closed = [ForAudience(Audience.Private)];
-        var member = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, closed, Now, Root(Leo, locked: true));
-        var timedOut = Capabilities.For(Participant(standing: Standing.TimedOut), Member(), PublicPlace, Workshop, closed, Now, Root(Leo, locked: true));
+        var member = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, closed, Now, Root(Leo, removed: true));
+        var timedOut = Capabilities.For(Participant(standing: Standing.TimedOut), Member(), PublicPlace, Workshop, closed, Now, Root(Leo, removed: true));
         var moderator = Capabilities.For(Participant(), Moderator(), PublicPlace, Workshop, [Over(Roles.Moderator, deny: Bit.View)], Now, Root(Ada, removed: true));
 
         Assert.False(member.Exists);
@@ -195,7 +194,6 @@ public sealed class CapabilitiesTests
         var another = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, [], Now, Root(Ada));
         var noPost = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, [], Now);
         var removed = Capabilities.For(Participant(), Moderator(), PublicPlace, Workshop, [], Now, Root(Leo, removed: true));
-        var locked = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, [], Now, Root(Leo, locked: true));
 
         Assert.True(mine.Holds(Bit.EditOwn | Bit.RemoveOwn));
         Assert.Equal((Capabilities.NotYours, Capabilities.NotYours), (another.Gate(Bit.EditOwn), another.Gate(Bit.RemoveOwn)));
@@ -203,38 +201,31 @@ public sealed class CapabilitiesTests
         Assert.Equal(Capabilities.NotYours, noPost.Gate(Bit.EditOwn));
         // A removed Post is a tombstone the reader finds, with nothing to do on it.
         Assert.Equal((Bit.None, true, Capabilities.Removed), (removed.Held, removed.Exists, removed.Gate(Bit.Moderate)));
-        Assert.Equal((Roles.MemberBits & ~Bit.Post, Capabilities.Locked), (locked.Held, locked.Gate(Bit.Post)));
     }
 
     [Fact]
-    public void The_gate_word_is_the_first_reason_in_precedence_sign_in_apply_timed_out_absent_locked_removed()
+    public void The_gate_word_is_the_first_reason_in_precedence_sign_in_apply_timed_out_absent_removed()
     {
-        var lockedRoot = Root(Leo, locked: true);
         var removedRoot = Root(Leo, removed: true);
         IReadOnlyList<PermissionOverwrite> closed = [ForAudience(Audience.Private)];
 
-        var timedOutOnLocked = Capabilities.For(Participant(standing: Standing.TimedOut), Member(), PublicPlace, Workshop, [], Now, lockedRoot);
-        var visitorOnLocked = Capabilities.For(null, Visitor, PublicPlace, Workshop, [], Now, lockedRoot);
-        var appliedOnLocked = Capabilities.For(Participant(standing: Standing.Applied), Member(), PrivatePlace, Workshop, [], Now, lockedRoot);
-        var unseenLocked = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, closed, Now, lockedRoot);
-        var unseenRemoved = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, closed, Now, removedRoot);
-        var memberOnLocked = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, [], Now, lockedRoot);
-        var deniedOnLocked = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, [Over(RoleTokens.Everyone, deny: Bit.Post)], Now, lockedRoot);
+        var timedOutOnRemoved = Capabilities.For(Participant(standing: Standing.TimedOut), Member(), PublicPlace, Workshop, [], Now, removedRoot);
         var visitorOnRemoved = Capabilities.For(null, Visitor, PublicPlace, Workshop, [], Now, removedRoot);
+        var appliedOnRemoved = Capabilities.For(Participant(standing: Standing.Applied), Member(), PrivatePlace, Workshop, [], Now, removedRoot);
+        var unseenRemoved = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, closed, Now, removedRoot);
         var memberOnRemoved = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, [], Now, removedRoot);
+        var deniedOnRemoved = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, [Over(RoleTokens.Everyone, deny: Bit.Post)], Now, removedRoot);
         var moderatorOnRemoved = Capabilities.For(Participant(), Moderator(), PublicPlace, Workshop, [], Now, removedRoot);
 
-        Assert.Equal(Capabilities.TimedOut, timedOutOnLocked.Gate(Bit.Post));
-        Assert.Equal(Capabilities.SignIn, visitorOnLocked.Gate(Bit.Post));
-        Assert.Equal(Capabilities.Apply, appliedOnLocked.Gate(Bit.Post));
-        Assert.Equal(Capabilities.Absent, unseenLocked.Gate(Bit.Post));
+        Assert.Equal(Capabilities.TimedOut, timedOutOnRemoved.Gate(Bit.Post));
+        Assert.Equal(Capabilities.SignIn, visitorOnRemoved.Gate(Bit.Post));
+        Assert.Equal(Capabilities.Apply, appliedOnRemoved.Gate(Bit.Post));
         Assert.Equal(Capabilities.Absent, unseenRemoved.Gate(Bit.View));
-        Assert.Equal(Capabilities.Locked, memberOnLocked.Gate(Bit.Post));
-        Assert.Equal(Capabilities.Locked, deniedOnLocked.Gate(Bit.Post));
+        Assert.Equal(Capabilities.Removed, memberOnRemoved.Gate(Bit.Post));
+        Assert.Equal(Capabilities.Removed, deniedOnRemoved.Gate(Bit.Post));
         Assert.Equal(Capabilities.Removed, visitorOnRemoved.Gate(Bit.View));
         Assert.Equal(Capabilities.Removed, memberOnRemoved.Gate(Bit.EditOwn));
         Assert.Equal(Capabilities.Removed, moderatorOnRemoved.Gate(Bit.Moderate));
-        Assert.Null(memberOnLocked.Gate(Bit.View));
     }
 
     [Fact]

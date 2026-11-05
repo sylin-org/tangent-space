@@ -9,15 +9,16 @@ namespace Tangent.Posts;
 /// <summary>A Topic as a resource, the same for a person and an agent: its root — <see cref="Title"/>,
 /// <see cref="Kind"/>, author, when it started and its body, in <see cref="Root"/> — and one bounded window of its
 /// <see cref="Replies"/> in sequence order. The window holds the sequences <see cref="From"/> through
-/// <see cref="Through"/> (both absent when it holds none); <see cref="Older"/> and <see cref="Newer"/> are the addresses
+/// <see cref="Through"/>; where it holds no reply, <see cref="From"/> is absent and <see cref="Through"/> is the root's
+/// zero, which is what the page shows and what its seen form sends; <see cref="Older"/> and <see cref="Newer"/> are the addresses
 /// of the windows on either side, each absent where nothing lies that way, and their cursors are sequence numbers.
 /// <see cref="Anchor"/> is the Post the window was opened around, where its address named one. <see cref="Can"/> is what
 /// the reader holds on the Topic — <c>Post</c> among it when they may reply — and <see cref="Gate"/> the one reason they
 /// may not, where they may not; <see cref="Reply"/> is the form that replies, present only where they may, answering
 /// the Post the page's address named where that is someone else's reply and not removed, and the Topic otherwise. For a
-/// signed-in reader, <see cref="Seen"/> is the form that moves their checkpoint on the Topic through what the page
-/// shows, present while the window continues from that checkpoint and reaches past it, so the page never offers to skip
-/// a reply it did not show, and <see cref="Watching"/> their watch flag on it with the form that sets it. Nothing here is a total: <see cref="ReplyCount"/> is the root's own counter.
+/// signed-in reader, <see cref="Seen"/> is the form that moves their mark on the Topic through what the page shows,
+/// present while the window continues from that mark and reaches past it, so the page never offers to skip a reply it
+/// did not show. Nothing here is a total: <see cref="ReplyCount"/> is the root's own counter.
 /// <see cref="Tangent"/> is where the Topic is; <see cref="Place"/>, <see cref="Door"/> and <see cref="Who"/> say where
 /// the page is and who reads it; <see cref="Day"/> is the UTC day its times are written for. <see cref="TakenFrom"/> is
 /// where a Topic taken on a tangent was taken from, as the reader may know it. <see cref="Feeds"/> are its Tangent's
@@ -31,14 +32,11 @@ public sealed record TopicPage(
     string Kind,
     string Address,
     TopicPage.InTangent Tangent,
-    bool Locked,
-    bool Pinned,
     int ReplyCount,
     IReadOnlyList<string> Can,
     string? Gate,
     Form? Reply,
     Form? Seen,
-    Events.Watching? Watching,
     TopicPage.Post Root,
     IReadOnlyList<TopicPage.Post> Replies,
     long? From,
@@ -70,8 +68,8 @@ public sealed record TopicPage(
     /// is a tombstone that keeps its place, author and time, carries no body and says who removed it and when.
     /// <see cref="Edited"/> says who other than its author last edited it and when, where someone did: the words are not
     /// said to be the author's.
-    /// <see cref="New"/> marks a Post a signed-in reader has not seen — past their checkpoint on the Topic, or every
-    /// Post where they have none. <see cref="Can"/> is what the reader holds on this Post, and <see cref="Edit"/> where
+    /// <see cref="New"/> marks a Post that is new to a signed-in reader (<see cref="Events.Unread.New"/>): someone else's,
+    /// past where they were last here and past their mark on the Topic. <see cref="Can"/> is what the reader holds on this Post, and <see cref="Edit"/> where
     /// it is edited or removed, present only where they may do either. <see cref="TakeOnATangent"/> is where the reader
     /// takes it on a tangent, present only on a Post that is not removed, for a reader who may start a Topic somewhere;
     /// <see cref="Taken"/> holds the Topics taken on a tangent from it that the reader may view, where there are any.
@@ -126,9 +124,9 @@ public sealed record TopicPage(
 
     /// <summary>The signed-in participant reading the page: their id, the name to show, their handle, the highest role
     /// they hold where they hold one, their avatar, where they sign out, coming back to this page, and the place's
-    /// settings, for one who holds <c>ManageSpace</c>, and how many of their notifications they have not seen.</summary>
+    /// settings, for one who holds <c>ManageSpace</c>, and how many things are for them and new.</summary>
     public sealed record Reader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut, string? Settings = null,
-        Events.Notifications.Unseen? Notifications = null);
+        Events.Unread.Badge? ForYou = null);
 
     /// <summary>What a link to the Topic, or to a Post in it, previews, where a visitor may read it, which is where it has
     /// <see cref="Feeds"/>: its title, its root's opening with no one named, none where the root is removed, its address, and

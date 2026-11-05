@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using Microsoft.AspNetCore.WebUtilities;
 using Tangent.Access;
+using Tangent.Events;
 using Tangent.Posts;
 using Tangent.Space;
 using Tangent.Tools;
@@ -90,7 +91,8 @@ public sealed class RefusalPageTests
         await Place(tangentSpace);
         using var visitor = Agent(tangentSpace);
 
-        using var asked = new HttpRequestMessage(HttpMethod.Get, Events.Notifications.Path);
+        // Saying seen needs a signed-in participant: a visitor's post of it is refused with sign-in.
+        using var asked = new HttpRequestMessage(HttpMethod.Post, SeenController.Path) { Content = Seen() };
         asked.Headers.TryAddWithoutValidation("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
         using var browser = await visitor.SendAsync(asked, Cancellation);
         var page = await browser.Content.ReadAsStringAsync(Cancellation);
@@ -101,7 +103,7 @@ public sealed class RefusalPageTests
 
         foreach (var accept in new[] { "*/*", "application/problem+json", "application/json" })
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, Events.Notifications.Path);
+            using var request = new HttpRequestMessage(HttpMethod.Post, SeenController.Path) { Content = Seen() };
             request.Headers.TryAddWithoutValidation("Accept", accept);
             using var response = await visitor.SendAsync(request, Cancellation);
             using var problem = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync(Cancellation));
@@ -111,13 +113,13 @@ public sealed class RefusalPageTests
     }
 
     [Fact]
-    public async Task A_fragment_refused_for_sign_in_offers_the_way_to_sign_in_and_come_back()
+    public async Task A_fragment_refused_for_sign_in_offers_the_way_to_sign_in_and_a_refused_post_names_no_address_to_come_back_to()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
         using var visitor = Agent(tangentSpace);
 
-        using var fragment = new HttpRequestMessage(HttpMethod.Get, Events.Notifications.Path + "?after=x");
+        using var fragment = new HttpRequestMessage(HttpMethod.Post, SeenController.Path + "?after=x") { Content = Seen() };
         fragment.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
         fragment.Headers.Add(HtmlFormatter.FragmentHeader, "1");
         using var alone = await visitor.SendAsync(fragment, Cancellation);
@@ -125,8 +127,11 @@ public sealed class RefusalPageTests
 
         Assert.Equal(HttpStatusCode.Unauthorized, alone.StatusCode);
         Assert.DoesNotContain(Masthead, body);
-        Assert.Contains("href=\"" + BaseUrl + "/sign-in?return=%2Fnotifications%3Fafter%3Dx\">Sign in</a>", body);
+        Assert.Contains("href=\"" + BaseUrl + "/sign-in\">Sign in</a>", body);
     }
+
+    /// <summary>What a door's seen form posts.</summary>
+    private static FormUrlEncodedContent Seen() => FormBody(new Dictionary<string, string> { [SeenController.ThroughField] = "1" });
 
     [Theory]
     [InlineData("abc")]

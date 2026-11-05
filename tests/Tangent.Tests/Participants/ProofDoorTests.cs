@@ -69,7 +69,7 @@ public sealed class ProofDoorTests
         var door = await Read(session, "/");
         var who = door.GetProperty("who");
         Assert.Equal((Scout.Did, Scout.Handle), (who.GetProperty("id").GetString(), who.GetProperty("handle").GetString()));
-        await Eventually(async () => await Checkpoint.Get(Checkpoint.At(Scout.Did, Scope.Place, 0).Id, Cancellation) is not null);
+        await Eventually(async () => (await Participant.Get(Scout.Did, Cancellation))?.ArrivedSeq > 0);
 
         // It writes by the form a page gives it, with the form's token, as any session does.
         var page = await Read(session, TopicPath(root));

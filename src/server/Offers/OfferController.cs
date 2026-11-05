@@ -15,7 +15,7 @@ namespace Tangent.Offers;
 /// <summary>What answering an Offer sends, as a form or one JSON object.</summary>
 public sealed record OfferInput([Description(Holds.Origin)] string? Origin = null);
 
-/// <summary>An Offer's two answers, each a form its decider posts from the door or their notifications, carrying the
+/// <summary>An Offer's two answers, each a form its decider posts from the door, carrying the
 /// origin it offers in <see cref="Field"/>. <b>Use it</b> uses the address (<see cref="PlaceAddress.Use"/>)
 /// and lands on first run's pointers, which say in one line where the place now answers, with the link to it, and
 /// carry the address the site's pointers must now name; the person signs in again there. <b>Not this one</b> declines it

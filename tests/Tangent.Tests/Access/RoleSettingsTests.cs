@@ -78,7 +78,7 @@ public sealed class RoleSettingsTests
         Assert.Equal([nameof(Bit.Moderate), nameof(Bit.ManageStanding)], Strings(Row(page.Json, "night-shift"), "permissions"));
         var html = WebUtility.HtmlDecode((await Send(leo.Client, HttpMethod.Get, path)).Body);
         Assert.Contains("Night shift", html);
-        Assert.Contains("Moderate: edit, remove, lock, pin and move anyone’s posts", html);
+        Assert.Contains("Moderate: edit and remove anyone’s posts", html);
         Assert.Contains("Everyone in it loses it", html);
 
         // One place higher, past the moderator role.

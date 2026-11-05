@@ -1,7 +1,7 @@
 using System.ComponentModel;
+using System.Globalization;
 using System.Security.Claims;
 using Koan.Data.Core.Commands;
-using Koan.Data.Core.Sorting;
 using Koan.Web.Attributes;
 using Koan.Web.Auth.Infrastructure;
 using Koan.Web.Controllers;
@@ -17,42 +17,18 @@ using Tangent.Tangents;
 
 namespace Tangent.Space;
 
-/// <summary>What marking the door seen sends, as a form or one JSON object.</summary>
-public sealed record SeenDoorInput([Description(Holds.DoorThrough)] long? Through = null);
-
-/// <summary>The door, one resource both ways, at the base URL. Its <c>GET</c> reads, each bounded
-/// and keyed: capability's rows for the place; the reader's place checkpoint; the newest events of the log and the
-/// newest that name the reader as their target (<see cref="LogWindow"/>); how many of the reader's notifications they have
-/// not seen (<see cref="Notifications.Count"/>); the first Tangents by order; capability once
-/// per distinct Tangent among them and the events; the Posts and Topics the events name; the reader's checkpoints for
-/// those Topics and Tangents; and the people it shows. It writes nothing: a participant's place checkpoint begins at their
-/// arrival, moves to just before their admission for an applicant admitted, and moves when they mark the door seen; a
-/// reader whose checkpoint still stands at their own arrival, one keyed read of that event, is at their first door and is
-/// welcomed. An event is new to the reader when it is past their place
-/// checkpoint, past their checkpoint for its Topic (in the Topic's own sequence) and for its Tangent where those exist,
-/// not their own, and in a Tangent they may view; an event in a Tangent they may not view does not exist for them. A
-/// mention is not judged by the Topic's checkpoint: that counts the Topic's Posts as they arrived, and an edit can
-/// mention the reader in a Post they read long before, so a mention is new by its own place in the log alone.
-/// The Topics and Tangents among the news that the reader watches, by the watch flag on those same checkpoints, are
-/// listed first. The newest <c>standing.changed</c> among the reader's targeted events by someone else is news while they
-/// stand admitted, as their admission or as the lift of their timeout or ban, by the standing it changed; so is each
-/// <c>role.changed</c> that gave them a role or took one, the newest of each role. While the reader has notifications
-/// they have not seen, the news names them with how many. The door's <c>gate</c> is why they may
-/// not write in the place, which an applicant's door and a timed-out participant's, with when it ends, say in one
-/// sentence.
-/// The front page comes from the same window: the Topics that gained a Post in it, newest first, pinned ones and
-/// articles <see cref="Door.Featured"/> and the rest <see cref="Door.Alive"/>, each new to the reader by the same
-/// rule, and its writers <see cref="Door.Around"/>. For the place's operator it also reads the open Offer of an address
-/// (<see cref="AddressOffers.Open"/>), one keyed read, with the evidence Koan holds for it, and shows it first. For whoever
-/// holds <see cref="Bit.ManageStanding"/> in the place, it reads how many applications wait, one bounded read of those
-/// that wait (<see cref="Applications.Waiting"/>), and says so, linked to where they are decided. A reader
-/// without <see cref="Bit.View"/> on the place receives its gate. Its <c>POST</c>
-/// moves the reader's place checkpoint to the sequence a door read through, by a command.</summary>
+/// <summary>The door, one resource both ways, at the base URL. Its <c>GET</c> writes nothing and is a composition of
+/// named reads, each bounded and keyed: what is for a signed-in reader and new to them (<see cref="Unread.ForYouNow"/>);
+/// what is new in each Tangent and the front page, both from one window of the log (<see cref="LogWindow"/>): the Topics
+/// that gained a Post in it, newest first, articles <see cref="Door.Featured"/> and the rest <see cref="Door.Alive"/>,
+/// and their writers <see cref="Door.Around"/>; for the place's operator, the open Offer of an address
+/// (<see cref="AddressOffers.Open"/>), shown first; for whoever holds <see cref="Bit.ManageStanding"/>, how many
+/// applications wait, linked to where they are decided; one seen form whenever the door has news; and the poll link.
+/// Everything new is new by the one rule (<see cref="Unread"/>). The door's <c>gate</c> is why the reader may not write
+/// in the place, which an applicant's door and a timed-out participant's, with when it ends, say in one sentence. A
+/// reader without <see cref="Bit.View"/> on the place receives its gate.</summary>
 public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers) : ControllerBase
 {
-    /// <summary>The form field that carries the sequence the door was read through.</summary>
-    public const string Through = "through";
-
     /// <summary>The most Tangents the door lists: the first page of those the reader may view
     /// (<see cref="ViewableTangents"/>), with the moderators' Tangent after them for whoever may view it, and, where more
     /// follow, a link to all of them (<see cref="TangentsController"/>).</summary>
@@ -71,7 +47,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
     [HttpHead("/")]
     [LlmsText.Pointer]
     [Tool(Name = "arrive")]
-    [Description("Call this first when you come back, to see who you are here, what is new since your checkpoint and what you may do, with links. Follow with read_tangent on a Tangent's slug, read_topic or read_post on what a new Post's address names, /t/{tangent}/{topic}/{post}, and caught_up once you have seen it.")]
+    [Description("Call this first when you come back, to see who you are here, what is new since you were here and what you may do, with links. Follow with read_tangent on a Tangent's slug, read_topic or read_post on what a new Post's address names, /t/{tangent}/{topic}/{post}, and seen with news.through once you have read it.")]
     public async Task<IActionResult> Get(CancellationToken ct)
     {
         var personId = PersonId(User);
@@ -80,16 +56,13 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct)
             ?? throw new InvalidOperationException("The Tangent Space row is missing.");
         var reader = personId is null ? null : await Participant.Get(personId, ct);
+        var unread = reader is null ? null : await Unread.Of(reader, ct);
+        var baseAddress = BaseAddress();
 
-        var checkpoint = reader is null ? null : await Checkpoint.Get(Checkpoint.Key(reader.Id, Scope.Place), ct);
-        var since = checkpoint?.Seq ?? 0;
-        var first = checkpoint is not null && await Event.Get(Event.Key(checkpoint.Seq), ct) is { Kind: EventKind.StandingChanged } arrival
-                    && arrival.ActorId == reader!.Id && arrival.TargetId == reader.Id;
+        var forYou = unread is null ? null : await unread.ForYouNow(ct);
         var window = await LogWindow.Newest(ct);
-        IReadOnlyList<Event> targeted = reader is null ? [] : await LogWindow.Targeting(reader.Id, since, ct);
-
         var page = await ViewableTangents.Read(personId, ViewableTangents.Views, null, TangentLimit, ct);
-        var tangentIds = window.Concat(targeted).Select(e => e.TangentId).OfType<string>()
+        var tangentIds = window.Concat(forYou?.Rows ?? []).Select(e => e.TangentId).OfType<string>()
             .Concat(space.ModeratorsTangentId is { } moderators ? [moderators] : [])
             .Distinct(StringComparer.Ordinal).Where(id => !page.Each.ContainsKey(id)).ToList();
         var each = new Dictionary<string, Capabilities>(page.Each, StringComparer.Ordinal);
@@ -102,129 +75,52 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             ? [.. page.Tangents, reports]
             : page.Tangents;
 
-        // The events that speak of Posts in a Tangent the reader may view; every other one is absent here. Someone's edit
-        // or removal speaks here only to the Post's author, whom it targets.
-        var concerning = window.Concat(targeted)
-            .Where(e => (e.Kind is EventKind.PostCreated or EventKind.Mention || (e.Kind is EventKind.PostEdited or EventKind.PostRemoved && e.TargetId is not null && e.TargetId == reader?.Id))
-                        && Viewable(e.TangentId) && e.PostId is not null && e.TopicId is not null)
-            .ToList();
-        var posts = await Posts(concerning, ct);
-        var seen = reader is null ? new Dictionary<string, Checkpoint>() : await Seen(reader.Id, concerning, ct);
+        var created = window.Where(e => e.Kind == EventKind.PostCreated && Viewable(e.TangentId) && e.PostId is not null && e.TopicId is not null).ToList();
+        var posts = await Posts(created, forYou?.Posts, ct);
+        var marks = unread is null ? new Dictionary<string, long>() : await unread.Marks(created.Select(e => e.TopicId!), ct);
+        var fresh = unread is null ? [] : Fresh(created, unread, posts, marks);
+        var (featured, alive, writers) = Front(created, posts);
 
-        bool New(Event e) =>
-            reader is not null && e.Seq > since && e.ActorId != reader.Id && Viewable(e.TangentId)
-            && posts.TryGetValue(e.PostId ?? "", out var post) && !post.Removed
-            && posts.TryGetValue(e.TopicId ?? "", out var root) && !root.Removed
-            && (e.Kind == EventKind.Mention
-                || !seen.TryGetValue(Checkpoint.Key(reader.Id, Scope.Topic(root.Id)), out var topicSeen) || post.Sequence > topicSeen.Seq)
-            && (!seen.TryGetValue(Checkpoint.Key(reader.Id, Scope.Tangent(root.TangentId)), out var tangentSeen) || e.Seq > tangentSeen.Seq);
-        // Someone else edited or removed the reader's Post, past their checkpoints: the tombstone is the news, so a removed
-        // Post is no reason to say nothing.
-        bool Changed(Event e) =>
-            reader is not null && e.TargetId == reader.Id && e.Seq > since && e.ActorId != reader.Id && Viewable(e.TangentId)
-            && posts.ContainsKey(e.PostId ?? "") && posts.ContainsKey(e.TopicId ?? "")
-            && (!seen.TryGetValue(Checkpoint.Key(reader.Id, Scope.Tangent(e.TangentId!)), out var tangentSeen) || e.Seq > tangentSeen.Seq);
-        bool Watched(Scope scope) => reader is not null && seen.TryGetValue(Checkpoint.Key(reader.Id, scope), out var checkpoint) && checkpoint.Watch;
-
-        var created = window.Where(e => e.Kind == EventKind.PostCreated && Viewable(e.TangentId)).ToList();
-        var active = created.Select(e => e.TopicId).OfType<string>().Distinct(StringComparer.Ordinal)
-            .Select(id => posts.GetValueOrDefault(id)).OfType<Post>().Where(root => !root.Removed).ToList();
-        var featured = active.Where(root => root.Pinned || root.Kind == PostKind.Article).Take(FeaturedLimit).ToList();
-        var alive = active.Where(root => !root.Pinned && root.Kind != PostKind.Article).Take(AliveLimit).ToList();
-        var writers = created.Select(e => e.ActorId).OfType<string>().Distinct(StringComparer.Ordinal).ToList();
-        var full = window.Count >= LogWindow.Size;
-
-        var fresh = window.Where(e => e.Kind == EventKind.PostCreated && New(e)).ToList();
-        var freshIn = fresh.GroupBy(e => e.TopicId!, StringComparer.Ordinal).ToDictionary(topic => topic.Key, topic => topic.Count(), StringComparer.Ordinal);
-        // A Topic taken on a tangent from the reader's Post targets them too; its root is not a reply, so it is a group of
-        // its own.
-        bool TakenOnATangent(Event e) => posts.TryGetValue(e.PostId ?? "", out var post) && post is { ParentId: null, OriginId: not null };
-        var replies = targeted.Where(e => e.Kind == EventKind.PostCreated && e.TargetId == reader?.Id && New(e) && !TakenOnATangent(e)).ToList();
-        var taken = targeted.Where(e => e.Kind == EventKind.PostCreated && e.TargetId == reader?.Id && New(e) && TakenOnATangent(e)).ToList();
-        var mentions = targeted.Where(e => e.Kind == EventKind.Mention && e.TargetId == reader?.Id && New(e)).ToList();
-        var articles = fresh.Where(e => e.PostId == e.TopicId && posts[e.TopicId!].Kind == PostKind.Article).ToList();
-        // The reader's Posts someone else edited that still stand, the newest edit of each, and those someone else removed.
-        var edited = targeted.Where(e => e.Kind == EventKind.PostEdited && Changed(e) && !posts[e.PostId!].Removed)
-            .GroupBy(e => e.PostId!, StringComparer.Ordinal).Select(edits => edits.First()).ToList();
-        var removed = targeted.Where(e => e.Kind == EventKind.PostRemoved && Changed(e)).ToList();
-        // Someone admitted the reader, or lifted their timeout or ban, since their checkpoint, and they stand admitted
-        // still: the newest change someone else made of their standing says which.
         var now = DateTimeOffset.UtcNow;
-        var decided = reader is not null && reader.StandingAt(now) == Standing.Admitted
-            ? targeted.FirstOrDefault(e => e is { Kind: EventKind.StandingChanged, ActorId: not null } && e.ActorId != reader.Id)
-            : null;
-        var admitted = decided is { Standing: Standing.Admitted, Before: not (Standing.TimedOut or Standing.Banned) } ? decided : null;
-        var lifted = decided is { Standing: Standing.Admitted, Before: Standing.TimedOut or Standing.Banned } ? decided : null;
-        // The roles someone gave the reader or took from them since their checkpoint, the newest change of each.
-        var roleChanges = reader is null
-            ? []
-            : targeted.Where(e => e is { Kind: EventKind.RoleChanged, ActorId: not null, Role: not null, Given: not null } && e.ActorId != reader.Id)
-                .GroupBy(e => e.Role!, StringComparer.Ordinal).Select(changes => changes.First()).ToList();
-
-        var baseAddress = BaseAddress();
+        var forYouGroups = forYou is null || reader is null ? null : ForYouOf(forYou, reader.Id);
         var people = await People(
             baseAddress,
-            new[] { space.ProprietorId, reader?.Id, admitted?.ActorId, lifted?.ActorId }.Concat(roleChanges.Select(e => e.ActorId))
-                .Concat(replies.Concat(mentions).Concat(articles).Concat(taken).Concat(edited).Concat(removed).Select(e => e.ActorId))
+            new[] { space.ProprietorId, reader?.Id }
+                .Concat(forYouGroups?.People() ?? [])
+                .Concat(fresh.Where(e => Article(e, posts)).Select(e => e.ActorId))
                 .Concat(writers.Take(AroundLimit))
                 .Concat(featured.Concat(alive).SelectMany(root => root.RecentAuthorIds.Take(Post.RecentAuthorLimit).Append(root.AuthorId)))
-                .Concat(replies.Take(ItemLimit).Concat(mentions.Take(ItemLimit)).Concat(articles.Take(ItemLimit)).Concat(taken.Take(ItemLimit))
-                    .Concat(edited.Take(ItemLimit))
-                    .Select(e => posts[e.PostId!])
+                .Concat((forYouGroups?.Shown() ?? []).Concat(fresh.Where(e => Article(e, posts)).Take(ItemLimit)).Select(e => posts[e.PostId!])
                     .Concat(featured).Concat(alive).SelectMany(post => post.MentionedIds.Append(post.EditedBy))),
             ct);
 
-        var door = baseAddress + "/";
-        var back = Uri.EscapeDataString(baseUrl.PathBase + "/");
-        // Read through the newest event in a Tangent the reader may view, their own included, and the changes of their
-        // standing and roles the door tells; an event in a Tangent they may not view moves nothing they can see.
-        var newestViewable = window.Concat(targeted).Where(e => Viewable(e.TangentId) || e == admitted || e == lifted || roleChanges.Contains(e))
-            .Select(e => e.Seq).DefaultIfEmpty(0).Max();
-        var through = Math.Max(since, newestViewable);
         Door.Since? news = null;
-        if (reader is not null)
+        var through = 0L;
+        if (unread is not null && forYou is not null && forYouGroups is not null)
         {
-            var partial = LogWindow.Partial(window, since);
-            var targetedFull = targeted.Count >= LogWindow.TargetedSize;
-            news = new Door.Since(
-                since,
-                through,
-                WatchedNews(fresh, Watched, posts, tangents, partial),
-                Group(replies, targetedFull, posts, tangents, people),
-                Group(mentions, targetedFull, posts, tangents, people),
-                fresh.GroupBy(e => e.TangentId!, StringComparer.Ordinal)
-                    .Select(byTangent => new Door.InTangent(byTangent.Key, Name(tangents, byTangent.Key), Address(byTangent.Key),
-                        byTangent.Count(e => e.PostId == e.TopicId), byTangent.Count(e => e.PostId != e.TopicId), partial))
-                    .ToList(),
-                Group(articles, partial, posts, tangents, people),
-                null,
-                Group(taken, targetedFull, posts, tangents, people),
-                admitted is null ? null : new Door.Decision(Person(people, admitted.ActorId!), admitted.At),
-                lifted is null ? null : new Door.Decision(Person(people, lifted.ActorId!), lifted.At, Participants.People.Word(lifted.Before!.Value)),
-                roleChanges.Select(e => new Door.RoleChange(Person(people, e.ActorId!), e.At,
-                    Roles.Word(e.Role!), e.Given!.Value)).ToList(),
-                Group(edited, targetedFull, posts, tangents, people),
-                Group(removed, targetedFull, posts, tangents, people));
+            // Read through the newest event in a Tangent the reader may view, their own included, and what is for them; an
+            // event in a Tangent they may not view moves nothing they can see.
+            var newestViewable = window.Where(e => Viewable(e.TangentId)).Select(e => e.Seq).DefaultIfEmpty(0).Max();
+            through = new[] { unread.Floor, newestViewable, forYou.Through }.Max();
+            news = News(unread, forYou, forYouGroups, fresh, window, posts, tangents, people, through, baseAddress);
             // A door that carries a form is never stored, so a browser's Back after sign-out redisplays nothing of it; any
             // other door of a signed-in reader is theirs alone to cache.
-            if (first) news = news with { First = true };
-            if (!news.Quiet) news = news with { CaughtUp = CaughtUpForm(door, through) };
-            Response.Headers.CacheControl = news.CaughtUp is null ? "private" : "no-cache, no-store";
+            if (!news.Quiet && through > unread.Floor) news = news with { Seen = SeenController.DoorForm(baseAddress, through) };
+            Response.Headers.CacheControl = news.Seen is null ? "private" : "no-cache, no-store";
         }
 
         var offered = reader is not null && reader.Id == space.OperatorId ? await offers.Offered(space, baseAddress, ct) : null;
         if (offered is not null) Response.Headers.CacheControl = "no-cache, no-store";
 
-        // The door names the reader's notifications, with how many they have not seen, while there are some.
-        var unseen = reader is null ? null : await Notifications.Count(reader.Id, baseAddress, ct);
-        if (news is not null && unseen is { Count: > 0 }) news = news with { Notifications = unseen };
-
         // Whoever decides applications reads how many wait, seen or not, and reaches them in one click.
         var waiting = reader is not null && place.Holds(Bit.ManageStanding)
-            ? await Applications.Waiting(0, long.MaxValue, Notifications.CountLimit + 1, ct)
+            ? await Applications.Waiting(0, long.MaxValue, Unread.CountLimit + 1, ct)
             : [];
 
+        var freshIn = fresh.GroupBy(e => e.TopicId!, StringComparer.Ordinal).ToDictionary(topic => topic.Key, topic => topic.Count(), StringComparer.Ordinal);
         var newIn = news?.PerTangent.ToDictionary(tangent => tangent.Slug, tangent => tangent.Topics + tangent.Replies, StringComparer.Ordinal);
+        var door = baseAddress + "/";
+        var back = Uri.EscapeDataString(baseUrl.PathBase + "/");
         return Ok(new Door(
             space.Name,
             door,
@@ -238,13 +134,14 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             page.Next is not null,
             featured.Select(root => Shown(root, tangents, people, freshIn)).ToList(),
             alive.Select(root => Shown(root, tangents, people, freshIn)).ToList(),
-            new Door.Crowd(writers.Count, full, writers.Take(AroundLimit).Select(id => Person(people, id)).ToList()),
+            new Door.Crowd(writers.Count, window.Count >= LogWindow.Size, writers.Take(AroundLimit).Select(id => Person(people, id)).ToList()),
             reader is null ? baseAddress + SignInController.Path + "?return=" + back : null,
             reader is null ? null : new Door.Reader(reader.Id, Person(people, reader.Id).Name, Person(people, reader.Id).Handle,
                 Roles.Word(place.RoleIds), reader.Profile.Avatar, baseAddress + AuthConstants.Routes.Logout + "?return=" + back,
-                TangentSpaceSettingsController.Entry(place, baseAddress), unseen),
+                TangentSpaceSettingsController.Entry(place, baseAddress),
+                forYou is null ? null : new Unread.Badge(forYou.Count, forYou.AtLeast, door, forYou.Through, forYou.Applications)),
             DateOnly.FromDateTime(DateTime.UtcNow),
-            Resume(baseAddress, newestViewable > 0 ? through : Math.Max(since, window.Count > 0 ? window[0].Seq : 0)),
+            Resume(baseAddress, through > 0 ? through : window.Count > 0 ? window[0].Seq : 0),
             place.Holds(Bit.ManageSpace) ? baseAddress + NewTangentController.Route : null)
         {
             Description = space.Description,
@@ -253,51 +150,120 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             Offer = offered,
             Applications = waiting.Count == 0
                 ? null
-                : new Door.Waiting(waiting.Count, waiting.Count > Notifications.CountLimit, baseAddress + ApplicationsController.Path),
+                : new Door.Waiting(waiting.Count, waiting.Count > Unread.CountLimit, baseAddress + ApplicationsController.Path),
             AllTangents = page.Next is null ? null : baseAddress + TangentsController.Route,
             Gate = place.Gate(Bit.Post)?.Word,
             Until = reader is not null && reader.StandingAt(now) == Standing.TimedOut ? reader.StandingUntil : null
         });
     }
 
-    /// <summary>Where the reader asks again: the poll past the newest event the door read that they may view, or, where its
-    /// whole window held none, past the window's newest, so the position never reaches back before what the door read and
-    /// says of hidden events only that a whole window of them passed.</summary>
-    private static Door.Position Resume(string baseAddress, long at)
-        => new(at, baseAddress + EventsController.Path + "?" + EventsController.Since + "=" + at.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    /// <summary>The Posts the window's new Topics and replies brought that are new to the reader by the one rule: in a
+    /// Tangent they may view, someone else's, standing in a Topic that stands, past where they were last here and past
+    /// their mark on the Topic.</summary>
+    private static List<Event> Fresh(IReadOnlyList<Event> created, Unread unread, IReadOnlyDictionary<string, Post> posts,
+        IReadOnlyDictionary<string, long> marks)
+        => created.Where(e => posts.TryGetValue(e.PostId!, out var post) && !post.Removed
+                              && posts.TryGetValue(e.TopicId!, out var root) && !root.Removed
+                              && unread.New(post, marks.TryGetValue(root.Id, out var mark) ? mark : null))
+            .ToList();
 
-    /// <summary>The form that marks the door at <paramref name="door"/> seen through <paramref name="through"/>, the
-    /// sequence it read through.</summary>
-    public static Form CaughtUpForm(string door, long through) => Form.Posting(door,
-        new Form.Field(Through, Holds.DoorThrough, through.ToString(System.Globalization.CultureInfo.InvariantCulture)));
-
-    /// <summary>Marks the door seen: moves the signed-in reader's place checkpoint to the sequence in the
-    /// <see cref="Through"/> field, sent as a form or a JSON object, never backwards, and sends them back to the door.</summary>
-    [HttpPost("/")]
-    [Tool(Name = "caught_up", Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Call this after arrive, once you have seen what it showed, with the sequence its news read through: the door then shows nothing new until something happens. It never moves back.")]
-    public async Task<IActionResult> MarkSeen(SeenDoorInput input, CancellationToken ct)
+    /// <summary>The front page from the window: the Topics that gained a Post in it and stand, newest first, articles
+    /// featured and the rest alive, and who wrote in it, newest first.</summary>
+    private static (List<Post> Featured, List<Post> Alive, List<string> Writers) Front(IReadOnlyList<Event> created, IReadOnlyDictionary<string, Post> posts)
     {
-        Response.Headers.CacheControl = "no-store";
-        if (PersonId(User) is not { } personId)
-            return Answers.Refused(HttpContext, SignInToMark);
-
-        if (input.Through is not (>= 0 and var sequence))
-            return new Problem(StatusCodes.Status400BadRequest,
-                $"The {Through} field carries the sequence the door names as read through.") { Title = "Not a sequence of the log" }.ToResult();
-
-        var outcome = await new CatchUp(personId, sequence).Send();
-        switch (outcome)
-        {
-            case Outcome<Checkpoint>.Done:
-                Response.Headers.Location = baseUrl.PathBase + "/";
-                return StatusCode(StatusCodes.Status303SeeOther);
-            case Outcome<Checkpoint>.Refused { Reason: { Kind: ReasonKind.Invalid } reason }:
-                return new Problem(StatusCodes.Status400BadRequest, reason.Text) { Title = "Not a sequence of the log" }.ToResult();
-            default:
-                return Answers.NotDone(HttpContext, outcome);
-        }
+        var active = created.Select(e => e.TopicId).OfType<string>().Distinct(StringComparer.Ordinal)
+            .Select(id => posts.GetValueOrDefault(id)).OfType<Post>().Where(root => !root.Removed).ToList();
+        return (active.Where(root => root.Kind == PostKind.Article).Take(FeaturedLimit).ToList(),
+            active.Where(root => root.Kind != PostKind.Article).Take(AliveLimit).ToList(),
+            created.Select(e => e.ActorId).OfType<string>().Distinct(StringComparer.Ordinal).ToList());
     }
+
+    /// <summary>What is for the reader, by what it is.</summary>
+    private sealed record ForYouGroups(
+        IReadOnlyList<Event> Replies,
+        IReadOnlyList<Event> Taken,
+        IReadOnlyList<Event> Mentions,
+        IReadOnlyList<Event> Reports,
+        IReadOnlyList<Event> Edited,
+        IReadOnlyList<Event> Removed,
+        Event? Admitted,
+        Event? Lifted,
+        Event? TimedOut,
+        Event? Declined,
+        IReadOnlyList<Event> Roles)
+    {
+        /// <summary>Who the groups name.</summary>
+        public IEnumerable<string?> People() => Replies.Concat(Taken).Concat(Mentions).Concat(Reports).Concat(Edited).Concat(Removed).Concat(Roles)
+            .Concat(new[] { Admitted, Lifted, TimedOut, Declined }.OfType<Event>()).Select(e => e.ActorId);
+
+        /// <summary>The rows the door shows with a Post's first words.</summary>
+        public IEnumerable<Event> Shown() => Replies.Take(ItemLimit).Concat(Taken.Take(ItemLimit)).Concat(Mentions.Take(ItemLimit))
+            .Concat(Reports.Take(ItemLimit)).Concat(Edited.Take(ItemLimit));
+    }
+
+    /// <summary>What is for the reader, by what it is: a reply to them, a Topic taken on a tangent from their Post, a
+    /// mention of them, a report, their Post someone else edited or removed, the newest change someone else made of their
+    /// standing — who admitted them, lifted their timeout or ban, timed them out or declined their application — and the
+    /// roles someone gave them or took from them. A ban has no line: the place is absent to whoever it bans.</summary>
+    private static ForYouGroups ForYouOf(Unread.ForYou forYou, string readerId)
+    {
+        var rows = forYou.Rows;
+        bool Taken(Event e) => forYou.Posts.TryGetValue(e.PostId ?? "", out var post) && post is { ParentId: null, OriginId: not null };
+        var decided = rows.FirstOrDefault(e => e.Kind == EventKind.StandingChanged);
+        return new ForYouGroups(
+            rows.Where(e => e is { Kind: EventKind.PostCreated, Report: not true } && e.TargetId == readerId && !Taken(e)).ToList(),
+            rows.Where(e => e is { Kind: EventKind.PostCreated, Report: not true } && e.TargetId == readerId && Taken(e)).ToList(),
+            rows.Where(e => e.Kind == EventKind.Mention).ToList(),
+            rows.Where(e => e is { Kind: EventKind.PostCreated, Report: true }).ToList(),
+            rows.Where(e => e.Kind == EventKind.PostEdited).ToList(),
+            rows.Where(e => e.Kind == EventKind.PostRemoved).ToList(),
+            decided is { Standing: Standing.Admitted, Before: not (Standing.TimedOut or Standing.Banned) } ? decided : null,
+            decided is { Standing: Standing.Admitted, Before: Standing.TimedOut or Standing.Banned } ? decided : null,
+            decided is { Standing: Standing.TimedOut } ? decided : null,
+            decided is { Standing: Standing.Declined } ? decided : null,
+            rows.Where(e => e is { Kind: EventKind.RoleChanged, Given: not null }).ToList());
+    }
+
+    /// <summary>What is new to the reader, said: what is for them, then what is new in each Tangent and the new
+    /// articles, each count a lower bound where a read it came from was full.</summary>
+    private Door.Since News(Unread unread, Unread.ForYou forYou, ForYouGroups groups, IReadOnlyList<Event> fresh, IReadOnlyList<Event> window,
+        IReadOnlyDictionary<string, Post> posts, IReadOnlyDictionary<string, Tangents.Tangent> tangents,
+        IReadOnlyDictionary<string, TangentPage.Author> people, long through, string baseAddress)
+    {
+        var partial = LogWindow.Partial(window, unread.Floor);
+        Door.Group Group(IReadOnlyList<Event> events, bool atLeast) => this.Group(events, atLeast, posts, tangents, people);
+        return new Door.Since(
+            unread.Floor,
+            through,
+            Group(groups.Replies, forYou.AtLeast),
+            Group(groups.Mentions, forYou.AtLeast),
+            fresh.GroupBy(e => e.TangentId!, StringComparer.Ordinal)
+                .Select(byTangent => new Door.InTangent(byTangent.Key, Name(tangents, byTangent.Key), Address(byTangent.Key),
+                    byTangent.Count(e => e.PostId == e.TopicId), byTangent.Count(e => e.PostId != e.TopicId), partial))
+                .ToList(),
+            Group(fresh.Where(e => Article(e, posts)).ToList(), partial),
+            null,
+            Group(groups.Taken, forYou.AtLeast),
+            groups.Admitted is { } admitted ? new Door.Decision(Person(people, admitted.ActorId!), admitted.At) : null,
+            groups.Lifted is { } lifted ? new Door.Decision(Person(people, lifted.ActorId!), lifted.At, Participants.People.Word(lifted.Before!.Value)) : null,
+            groups.Roles.Select(e => new Door.RoleChange(Person(people, e.ActorId!), e.At, Roles.Word(e.Role!), e.Given!.Value)).ToList(),
+            Group(groups.Edited, forYou.AtLeast),
+            Group(groups.Removed, forYou.AtLeast),
+            Group(groups.Reports, forYou.AtLeast),
+            groups.TimedOut is { } timedOut ? new Door.Decision(Person(people, timedOut.ActorId!), timedOut.At, Until: unread.Reader.StandingUntil) : null,
+            groups.Declined is { } declined ? new Door.Decision(Person(people, declined.ActorId!), declined.At) : null,
+            forYou.Waiting > 0 ? new Door.Waiting(forYou.Waiting, forYou.AtLeast, baseAddress + ApplicationsController.Path) : null);
+    }
+
+    /// <summary>Whether a new Post is an article's root.</summary>
+    private static bool Article(Event e, IReadOnlyDictionary<string, Post> posts)
+        => e.PostId == e.TopicId && posts.TryGetValue(e.TopicId!, out var root) && root.Kind == PostKind.Article;
+
+    /// <summary>Where the reader asks again: the poll past the sequence the door read through, or, where it read nothing the
+    /// reader may see, past the window's newest, so the position never reaches back before what the door read and says
+    /// of hidden events only that a whole window of them passed.</summary>
+    private static Door.Position Resume(string baseAddress, long at)
+        => new(at, baseAddress + EventsController.Path + "?" + EventsController.Since + "=" + at.ToString(CultureInfo.InvariantCulture));
 
     /// <summary>What a reader without <see cref="Bit.View"/> on the place receives: a missing resource's answer where
     /// the place is absent to them; otherwise the one step that stands between them and reading.</summary>
@@ -319,8 +285,6 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
 
     private static readonly Reason DeclinedToRead = Reason.Gated(Capabilities.Declined.Word!, "Your application was declined, so this Tangent Space is not open to you.");
 
-    private static readonly Reason SignInToMark = Reason.Gated(Capabilities.SignIn.Word!, "Marking the door seen needs a signed-in participant.");
-
     /// <summary>One group of new Posts: how many, whether that is a lower bound, and the newest few.</summary>
     private Door.Group Group(IReadOnlyList<Event> events, bool atLeast, IReadOnlyDictionary<string, Post> posts,
         IReadOnlyDictionary<string, Tangents.Tangent> tangents, IReadOnlyDictionary<string, TangentPage.Author> people)
@@ -333,8 +297,8 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
                 post.Id == root.Id ? topic : topic + "/" + Uri.EscapeDataString(post.Id), TangentPage.Opening(post, people), e.At, TangentPage.EditedOf(post, people));
         }).ToList());
 
-    /// <summary>A Topic on the front page, new to the reader by the door's own rule: as many of its Posts as the
-    /// window holds new to them.</summary>
+    /// <summary>A Topic on the front page, new to the reader by the one rule: as many of its Posts as the window holds
+    /// new to them.</summary>
     private Door.Shown Shown(Post root, IReadOnlyDictionary<string, Tangents.Tangent> tangents, IReadOnlyDictionary<string, TangentPage.Author> people,
         IReadOnlyDictionary<string, int> freshIn)
     {
@@ -351,8 +315,6 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             root.ReplyCount,
             root.CreatedAt,
             root.LastActivityAt,
-            root.Pinned,
-            root.Locked,
             null,
             root.RecentAuthorIds.Take(Post.RecentAuthorLimit).Select(id => Person(people, id)).ToList(),
             unseen > 0,
@@ -373,39 +335,20 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
         return bySlug;
     }
 
-    /// <summary>The Posts the events name and the roots of their Topics, by Id, in one keyed read.</summary>
-    private static async Task<IReadOnlyDictionary<string, Post>> Posts(IReadOnlyList<Event> events, CancellationToken ct)
+    /// <summary>The Posts the window's events name and the roots of their Topics, by Id, beside those
+    /// <paramref name="known"/> already holds: one keyed read of the others.</summary>
+    private static async Task<IReadOnlyDictionary<string, Post>> Posts(IReadOnlyList<Event> events, IReadOnlyDictionary<string, Post>? known,
+        CancellationToken ct)
     {
-        var ids = events.SelectMany(e => new[] { e.PostId!, e.TopicId! }).Distinct(StringComparer.Ordinal).ToList();
-        if (ids.Count == 0) return new Dictionary<string, Post>();
-        return (await Post.Get(ids, ct)).OfType<Post>().ToDictionary(post => post.Id, StringComparer.Ordinal);
+        var read = await Unread.Posts(events.Where(e => known is null || !known.ContainsKey(e.PostId!) || !known.ContainsKey(e.TopicId!)), ct);
+        return known is null ? read : Merge(read, known);
     }
 
-    /// <summary>The watched Topics and Tangents among the new Posts, each with how many of them it holds, the one whose
-    /// newest Post is newest first: a Topic the reader watches, then the Tangent they watch, by the same order.</summary>
-    private IReadOnlyList<Door.Watched> WatchedNews(IReadOnlyList<Event> fresh, Func<Scope, bool> watched, IReadOnlyDictionary<string, Post> posts,
-        IReadOnlyDictionary<string, Tangents.Tangent> tangents, bool atLeast)
+    private static IReadOnlyDictionary<string, Post> Merge(IReadOnlyDictionary<string, Post> one, IReadOnlyDictionary<string, Post> other)
     {
-        var topics = fresh.GroupBy(e => e.TopicId!, StringComparer.Ordinal)
-            .Where(topic => watched(Scope.Topic(topic.Key)))
-            .Select(topic => (Newest: topic.Max(e => e.Seq), Item: new Door.Watched("topic", posts[topic.Key].Title ?? "",
-                Name(tangents, posts[topic.Key].TangentId), TopicAddress(posts[topic.Key]), topic.Count(), atLeast)));
-        var inTangents = fresh.GroupBy(e => e.TangentId!, StringComparer.Ordinal)
-            .Where(tangent => watched(Scope.Tangent(tangent.Key)))
-            .Select(tangent => (Newest: tangent.Max(e => e.Seq), Item: new Door.Watched("tangent", Name(tangents, tangent.Key),
-                Name(tangents, tangent.Key), Address(tangent.Key), tangent.Count(), atLeast)));
-        return topics.OrderByDescending(topic => topic.Newest).Concat(inTangents.OrderByDescending(tangent => tangent.Newest))
-            .Select(watch => watch.Item).ToList();
-    }
-
-    /// <summary>The reader's checkpoints for the Topics and Tangents the events are in, by key, in one keyed read.</summary>
-    private static async Task<IReadOnlyDictionary<string, Checkpoint>> Seen(string readerId, IReadOnlyList<Event> events, CancellationToken ct)
-    {
-        var keys = events.Select(e => Checkpoint.Key(readerId, Scope.Topic(e.TopicId!)))
-            .Concat(events.Select(e => Checkpoint.Key(readerId, Scope.Tangent(e.TangentId!))))
-            .Distinct(StringComparer.Ordinal).ToList();
-        if (keys.Count == 0) return new Dictionary<string, Checkpoint>();
-        return (await Checkpoint.Get(keys, ct)).OfType<Checkpoint>().ToDictionary(checkpoint => checkpoint.Id, StringComparer.Ordinal);
+        var merged = new Dictionary<string, Post>(one, StringComparer.Ordinal);
+        foreach (var (id, post) in other) merged.TryAdd(id, post);
+        return merged;
     }
 
     /// <summary>Everyone the door shows, in one keyed read, by participant Id, each with their profile's address.</summary>

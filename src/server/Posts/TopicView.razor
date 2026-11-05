@@ -1,7 +1,7 @@
 @using System.Globalization
 @using global::Tangent.Render
-@* The Topic page: the rail with the way back to the Tangent and the replies this window holds; then the title with
-   any pin or lock, when it started and how many replies it has, the root, and one window of replies in order, with
+@* The Topic page: the rail with the way back to the Tangent and the replies this window holds; then the title,
+   when it started and how many replies it has, the root, and one window of replies in order, with
    the way to the older window above them and to the newer below, and where the reader replies or why they may not. A
    Topic without replies says so in one sentence. Zeros are said in words. An article opens with its own head, which holds
    the proprietor's article header, where they wrote one. *@
@@ -38,26 +38,24 @@
             </ul>
         }
     </aside>
-    <div class="@("layout-main topic-main topic" + (Model.Pinned ? " is-pinned" : "") + (Model.Locked ? " is-locked" : ""))">
+    <div class="layout-main topic-main topic">
         @if (Article)
         {
             <article class="article">
-                <ArticleHead Title="@Model.Title" Cover="@Model.Cover" Author="@Model.Root.Author" At="@Model.Root.CreatedAt" Minutes="@Model.ReadMinutes" Flags="@Flags()" Header="@Model.ArticleHeader" />
+                <ArticleHead Title="@Model.Title" Cover="@Model.Cover" Author="@Model.Root.Author" At="@Model.Root.CreatedAt" Minutes="@Model.ReadMinutes" Header="@Model.ArticleHeader" />
                 <TakenFrom Model="@Model.TakenFrom" />
                 <TopicPost Model="@Model.Root" Today="@Model.Day" Root="true" Article="true" Door="@Model.Door" Anchor="@(Model.Anchor == Model.Root.Id)" Reader="@Model.Who?.Id" />
             </article>
-            <Tangent.Events.WatchForm Model="@Model.Watching" Tool="watch-topic" />
         }
         else
         {
-            <h1 class="topic-title">@Model.Title@Flags()</h1>
+            <h1 class="topic-title">@Model.Title</h1>
             <p class="topic-meta">
                 <span>Started <time datetime="@Model.Root.CreatedAt.ToUniversalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@TopicRow.When(Model.Root.CreatedAt, Model.Day)</time></span>
                 <span aria-hidden="true">·</span>
                 <span>@TopicRow.Count(Model.ReplyCount, "reply", "replies", "No replies yet")</span>
             </p>
             <TakenFrom Model="@Model.TakenFrom" />
-            <Tangent.Events.WatchForm Model="@Model.Watching" Tool="watch-topic" />
             <TopicPost Model="@Model.Root" Today="@Model.Day" Root="true" Door="@Model.Door" Anchor="@(Model.Anchor == Model.Root.Id)" Reader="@Model.Who?.Id" />
         }
         <section class="topic-replies" aria-labelledby="topic-replies-title">
@@ -102,7 +100,7 @@
     /// reads, or where a visitor signs in.</summary>
     public static Frame Frame(TopicPage page)
     {
-        var who = page.Who is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut, reader.Settings, reader.Notifications) : null;
+        var who = page.Who is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut, reader.Settings, reader.ForYou) : null;
         return new(page.Place, page.Door, [new Crumb(page.Tangent.Name, page.Tangent.Address), new Crumb(page.Title)], who, page.SignIn, page.Feeds);
     }
 
@@ -116,10 +114,4 @@
     /// <summary>The name of the author of the Post a reply answers, where this window holds that Post.</summary>
     private string? ParentAuthor(TopicPage.Post reply)
         => reply.ParentId is { } parent ? Model.Replies.FirstOrDefault(post => post.Id == parent)?.Author.Name : null;
-
-    private RenderFragment Flags() => builder =>
-    {
-        if (Model.Pinned) builder.AddMarkupContent(0, "<span class=\"badge is-pinned\">Pinned</span>");
-        if (Model.Locked) builder.AddMarkupContent(1, "<span class=\"badge is-locked\">Locked</span>");
-    };
 }

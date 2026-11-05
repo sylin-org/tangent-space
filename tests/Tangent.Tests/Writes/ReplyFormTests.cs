@@ -136,20 +136,20 @@ public sealed partial class ReplyFormTests
         var open = await Started(Ada, "Open", "Anyone may answer.");
         var closed = await Started(Ada, "Closed", "Said and done.");
         var row = (await Post.Get(closed.Id, Cancellation))!;
-        row.Locked = true;
+        row.Remove(Mo, DateTimeOffset.UtcNow);
         Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(row).Send(Cancellation));
         using var bea = await SignedIn(tangentSpace, Bea);
         using var visitor = Agent(tangentSpace);
 
         var (visiting, _) = await Page(visitor, TopicPath(open));
-        var (locked, _) = await Page(bea.Client, TopicPath(closed));
+        var (removed, _) = await Page(bea.Client, TopicPath(closed));
 
         Assert.DoesNotContain("class=\"reply-form reply\"", visiting);
         Assert.Contains($"<p class=\"topic-closed\" data-gate=\"{Capabilities.SignIn.Word}\">", visiting);
         Assert.Matches(Regex.Escape(Capabilities.SignIn.Text) + " <a href=\"[^\"]*/sign-in\\?return=[^\"]+\">Sign in</a>", visiting);
-        Assert.DoesNotContain("class=\"reply-form reply\"", locked);
-        Assert.Contains($"<p class=\"topic-closed\" data-gate=\"{Capabilities.Locked.Word}\">", locked);
-        Assert.Contains(Capabilities.Locked.Text, locked);
+        Assert.DoesNotContain("class=\"reply-form reply\"", removed);
+        Assert.Contains($"<p class=\"topic-closed\" data-gate=\"{Capabilities.Removed.Word}\">", removed);
+        Assert.Contains(Capabilities.Removed.Text, System.Net.WebUtility.HtmlDecode(removed));
     }
 
     /// <summary>A page as a browser reads it: its HTML and its <c>Cache-Control</c>.</summary>

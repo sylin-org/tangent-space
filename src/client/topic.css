@@ -56,10 +56,6 @@
   overflow-wrap: anywhere;
 }
 
-.topic-title .badge:where(.is-pinned, .is-locked) {
-  vertical-align: 10px;
-}
-
 .topic-meta {
   margin: 10px 0 0;
   display: flex;
@@ -390,4 +386,11 @@ article.post:not(.post-article) > :not(.mark) {
     height: 32px;
     font-size: 12px;
   }
+}
+
+/* The seen control at the end of a Topic's window. */
+.topic-seen {
+  margin: 16px 0 0;
+  display: flex;
+  justify-content: flex-end;
 }

@@ -279,7 +279,7 @@ body {
   background: var(--ts-hover);
 }
 
-/* An account item that posts: sign out, and opening the notifications. */
+/* An account item that posts: sign out. */
 .account-action {
   width: 100%;
   border: 0;

@@ -328,7 +328,7 @@ export function writeArticle(props: ArticleProps): () => void {
     linkPanel.hidden = true
     reflect()
   })
-  addLink.className = 'watch-button'
+  addLink.className = 'button'
   linkPanel.append(linkAddress.wrap, linkWords.wrap, addLink)
   // Enter in a panel's field answers the panel; it never sends the form around it.
   const enterAnswers = (element: HTMLElement, answer: () => void) =>
@@ -354,7 +354,7 @@ export function writeArticle(props: ArticleProps): () => void {
     if (file) void bringInto(file, editor.state.selection.from)
   })
   const chooseImage = button('Choose an image', 'Choose an image', () => chooser.click())
-  chooseImage.className = 'watch-button'
+  chooseImage.className = 'button'
   const imageAddress = field('Image address', 'url', 'https://example.com/image.jpg')
   const imageWords = field('Description', 'text', 'Describe the image')
   const placeAddress = button('Insert', 'Insert the image', () => {
@@ -366,13 +366,13 @@ export function writeArticle(props: ArticleProps): () => void {
     imagePanel.hidden = true
     reflect()
   })
-  placeAddress.className = 'watch-button'
+  placeAddress.className = 'button'
   const removeImage = button('Remove image', 'Remove image', () => {
     chain().deleteSelection().run()
     imagePanel.hidden = true
     reflect()
   })
-  removeImage.className = 'watch-button'
+  removeImage.className = 'button'
   imagePanel.append(chooseImage, imageAddress.wrap, imageWords.wrap, placeAddress, removeImage, chooser)
   enterAnswers(imagePanel, () => placeAddress.click())
 

@@ -76,7 +76,7 @@ public sealed class MarkdownTests
 
     [Theory]
     [InlineData("/auth/logout")]
-    [InlineData("/notifications")]
+    [InlineData("/search")]
     [InlineData("/media")]
     [InlineData("/media/")]
     [InlineData("/mediafile")]

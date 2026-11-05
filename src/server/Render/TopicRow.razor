@@ -2,7 +2,7 @@
 @using Tangent.Posts
 @using Tangent.Tangents
 @* One Topic in a Tangent's list. In a discussions Tangent it is a row of the table: a dot when it is new to the
-   reader, its title with any pin or lock, who started it and its opening words, who else edited a Post beside its author where someone did, its latest reply on the page's colour
+   reader, its title, who started it and its opening words, who else edited a Post beside its author where someone did, its latest reply on the page's colour
    with "New" when the reader has not seen it, the faces of its recent authors, its replies with how many Posts are
    new, and when it last gained a Post and from whom. In an articles Tangent it is an article: the lead, first on the
    first page, with its cover, date and read time, opening, author and latest-reply strip; the rest as rows, each with
@@ -36,7 +36,6 @@
                 <time datetime="@Iso(Model.CreatedAt)">@When(Model.CreatedAt, Today)</time>
                 <span aria-hidden="true">·</span>
                 <span>@Model.ReadMinutes.ToString(CultureInfo.InvariantCulture) min read</span>
-                @Flags()
             </p>
             <h3 class="article-card-title"><a href="@Model.Address">@Model.Title</a></h3>
             @if (Model.Opening.Length > 0)
@@ -75,7 +74,7 @@ else
             }
         </span>
         <span class="topic-row-body">
-            <span class="topic-row-title">@Model.Title @Flags()</span>
+            <span class="topic-row-title">@Model.Title</span>
             <span class="topic-row-opening"><span class="topic-row-author">@Model.Author.Name</span>@AgentTag(Model.Author)@Edited(Model.Edited)@(Model.Opening.Length > 0 ? ": " + Model.Opening : "")</span>
             @if (Model.Latest is { } latest)
             {
@@ -107,7 +106,7 @@ else
             {
                 <span class="topic-row-count">@Model.ReplyCount.ToString(CultureInfo.InvariantCulture)<span class="topic-row-count-word">@(Model.ReplyCount == 1 ? " reply" : " replies")</span></span>
             }
-            @if (NewCount > 0)
+            @if (SaysNew)
             {
                 <span class="topic-row-new-separator" aria-hidden="true">·</span>
                 <span class="badge is-new">@NewWords()</span>
@@ -180,33 +179,30 @@ else
 
     private string ArticleClass() => (Lead ? "article-card article-lead" : Model.Cover is null ? "article-card" : "article-card article-card-covered") + " card topic" + States();
 
-    /// <summary>What the Topic's record holds of it, as the contract's states: new to the reader, pinned, locked, and started
-    /// by the reader or by an agent.</summary>
-    private string States() => (Model.New ? " is-new" : "") + (Model.Pinned ? " is-pinned" : "") + (Model.Locked ? " is-locked" : "")
+    /// <summary>What the Topic's record holds of it, as the contract's states: new to the reader, and started by the reader
+    /// or by an agent.</summary>
+    private string States() => (Model.New ? " is-new" : "")
         + (Reader is not null && Model.Author.Id == Reader ? " by-you" : "") + (Model.Author.Kind == "agent" ? " by-agent" : "");
 
     private static string Iso(DateTimeOffset at) => at.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
 
-    /// <summary>How many of the Topic's replies are new to the reader: every one where they have not seen the Topic,
-    /// otherwise those past their checkpoint.</summary>
-    private long NewCount => Math.Min(Model.NewPosts, Model.ReplyCount);
+    /// <summary>How many of the Topic's replies are new to the reader, as the one rule counts them; absent where they never
+    /// read the Topic, which is new with no count.</summary>
+    private long? NewCount => Model.NewPosts is { } count ? Math.Min(count, Model.ReplyCount) : null;
 
-    private string NewWords() => NewCount.ToString(CultureInfo.InvariantCulture) + " new";
+    /// <summary>Whether the row says what is new in words: a count past zero, or a Topic new with no count.</summary>
+    private bool SaysNew => NewCount is > 0 || (Model.New && NewCount is null);
+
+    private string NewWords() => NewCount is { } count ? count.ToString(CultureInfo.InvariantCulture) + " new" : "New";
 
     private RenderFragment NewReplies() => builder =>
     {
-        if (NewCount > 0) builder.AddMarkupContent(0, "<span class=\"badge is-new\">" + NewWords() + "</span>");
+        if (SaysNew) builder.AddMarkupContent(0, "<span class=\"badge is-new\">" + NewWords() + "</span>");
     };
 
     private static RenderFragment AgentTag(TangentPage.Author author) => builder =>
     {
         if (author.Kind == "agent") builder.AddMarkupContent(0, "<span class=\"badge is-agent\">Agent</span>");
-    };
-
-    private RenderFragment Flags() => builder =>
-    {
-        if (Model.Pinned) builder.AddMarkupContent(0, "<span class=\"badge is-pinned\">Pinned</span>");
-        if (Model.Locked) builder.AddMarkupContent(1, "<span class=\"badge is-locked\">Locked</span>");
     };
 
     /// <summary>Beside a Post's first words, right after its author, who else edited them, so they never read as the

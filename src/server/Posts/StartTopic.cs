@@ -11,9 +11,8 @@ namespace Tangent.Posts;
 /// suffix too — the Tangent's Topic count raised and <see cref="EventKind.PostCreated"/> appended in the same commit, with
 /// one <see cref="EventKind.Mention"/> per participant the body mentions (<see cref="Mentions.Notify"/>).
 /// The Tangent exists for the author, who holds <see cref="Bit.View"/> in it, or the command answers that no Tangent
-/// has the slug; the author holds <see cref="Bit.Topic"/> there, or is refused with the gate word. A command that
-/// names no kind starts a Topic of the Tangent's <see cref="Tangents.Tangent.DefaultKind"/>, so a Topic started in an
-/// articles Tangent is an article. Idempotent by Id: the same Id with the same request answers with the existing Post,
+/// has the slug; the author holds <see cref="Bit.Topic"/> there, or is refused with the gate word. A Topic takes the
+/// Tangent's <see cref="Tangents.Tangent.DefaultKind"/>, so a Topic started in an articles Tangent is an article. Idempotent by Id: the same Id with the same request answers with the existing Post,
 /// before any gate, so a replay is safe, whoever the handles it typed name by then; a Post of this Tangent holding the
 /// Id with a different title, kind, body or author is a conflict, and a Post anywhere else holding it is refused with
 /// <see cref="Post.IdTaken"/>, which says nothing of that Post. The body is judged where the command is built (<see cref="PostBody"/>), never in its
@@ -31,7 +30,6 @@ public sealed record StartTopic(
     string Title,
     PostBody Body,
     string AuthorId,
-    PostKind? Kind = null,
     DateTimeOffset? At = null,
     string? OriginId = null,
     string? CoverId = null) : ICommand<Post>
@@ -52,7 +50,7 @@ public sealed record StartTopic(
         var capabilities = await Capabilities.Load(AuthorId, TangentId, null, ct);
         if (!capabilities.Exists) return new Outcome<Post>.Refused(NoTangent);
 
-        var kind = Kind ?? tangent.DefaultKind;
+        var kind = tangent.DefaultKind;
         var existing = await Post.Get(Id, ct);
         if (existing is not null && Same(existing, kind)) return new Outcome<Post>.Done(existing);
         if (origin is { Removed: true }) return new Outcome<Post>.Refused(Capabilities.Removed);
@@ -73,13 +71,15 @@ public sealed record StartTopic(
             root.Cover(CoverId);
         }
 
+        var created = await Event.Append(EventKind.PostCreated, at, ct,
+            tangentId: root.TangentId, topicId: root.TopicId, postId: root.Id, actorId: root.AuthorId,
+            targetId: origin is null || origin.AuthorId == root.AuthorId ? null : origin.AuthorId, version: root.Version);
+        root.Logged(created.Seq, root);
         await root.Save(ct);
         await MediaUse.Record(root, AuthorId, [], ct);
         tangent.TopicStarted();
         await tangent.Save(ct);
-        await Event.Append(EventKind.PostCreated, at, ct,
-            tangentId: root.TangentId, topicId: root.TopicId, postId: root.Id, actorId: root.AuthorId,
-            targetId: origin is null || origin.AuthorId == root.AuthorId ? null : origin.AuthorId, version: root.Version);
+        await Seen.Wrote(root.AuthorId, root, root.Sequence, ct);
         await Mentions.Notify(root, root.AuthorId, [], at, ct);
         return new Outcome<Post>.Done(root);
     }

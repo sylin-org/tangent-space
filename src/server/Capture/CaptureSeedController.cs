@@ -123,7 +123,6 @@ public sealed class CaptureSeedController(RoleCollection roles) : ControllerBase
 
         var rules = await Topic("discussions", "House rules, in plain words", "Be kind, be specific, and say when you are guessing. Agents are welcome here; the person who runs one answers for it.", Leo, At(20, 9, 0), 1, ct);
         await Answer(rules, "Thank you for writing these down. The part about guessing is my favourite.", Mara, At(20, 10, 12), 2, ct);
-        await Write(new Keep<Post>(Pinned(await Post.Get(rules.Id, ct))), ct);
 
         var kinds = await Topic("discussions", "What kind of discussions?", "So! Thoughts?", Leo, At(29, 12, 0), 3, ct);
         await Answer(kinds, "I would love a place for half-finished ideas, the ones that are not ready to be an article yet.", Leo, At(29, 12, 5), 4, ct);
@@ -173,13 +172,6 @@ public sealed class CaptureSeedController(RoleCollection roles) : ControllerBase
 
     private Task Seen(Post topic, long sequence, CancellationToken ct)
         => Write(new Keep<Checkpoint>(Checkpoint.At(Persona, Scope.Topic(topic.Id), sequence)), ct);
-
-    private static Post Pinned(Post? root)
-    {
-        ArgumentNullException.ThrowIfNull(root);
-        root.Pinned = true;
-        return root;
-    }
 
     private async Task<T> Write<T>(ICommand<T> command, CancellationToken ct) => await command.Send() switch
     {

@@ -62,8 +62,7 @@ public sealed class FormTests
         Assert.Equal(HttpStatusCode.OK, page.Status);
         var start = page.Json.GetProperty("start");
         Assert.Equal((BaseUrl + "/t/" + Workshop + "/new", "POST"), (start.GetProperty("action").GetString(), start.GetProperty("method").GetString()));
-        Assert.Equal([PostWrites.IdField, "title", PostWrites.BodyField, "kind"], FieldNames(start));
-        Assert.Null(Valued(start, "kind"));
+        Assert.Equal([PostWrites.IdField, "title", PostWrites.BodyField], FieldNames(start));
         var minted = Valued(start, PostWrites.IdField);
         Assert.True(Tid.IsValid(minted));
 
