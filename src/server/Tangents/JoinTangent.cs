@@ -18,17 +18,17 @@ public sealed record Joined(Tangent Tangent, string State)
 }
 
 /// <summary>A participant joins the Tangent <see cref="Slug"/>, or asks to, as its joining says. They take part in the
-/// place (<see cref="Bit.Post"/> there), or are refused with its gate; a Tangent they read already leaves them as they are;
-/// one whose joining is closed, one that keeps them out (<see cref="Inside.Out"/>), or one that no row has, is absent to them. Joining lets them in at once
-/// (<see cref="Inside.LetIn"/>), whatever they asked before, and ends that ask; asking writes their <see cref="Ask"/>, once,
-/// and a declined ask is not made again.</summary>
+/// place (<see cref="Bit.Post"/> there), or are refused with its gate before any Tangent is looked for; a Tangent they read
+/// already leaves them as they are; one whose joining is closed, one that keeps them out (<see cref="Inside.Out"/>), or one
+/// that no row has, is absent to them. Joining lets them in at once (<see cref="Inside.LetIn"/>), whatever they asked
+/// before, and ends that ask; asking writes their <see cref="Ask"/>, once, and a declined ask is not made again.</summary>
 public sealed record JoinTangent(string Slug, string ActorId, DateTimeOffset? At = null) : ICommand<Joined>
 {
     public async Task<Outcome<Joined>> Run(CancellationToken ct)
     {
-        if (await Tangent.Get(Slug, ct) is not { } tangent) return new Outcome<Joined>.Refused(ChangeTangent.NoTangent);
         var place = await Capabilities.Load(ActorId, null, null, ct);
         if (place.Gate(Bit.Post) is { } gate) return new Outcome<Joined>.Refused(gate);
+        if (await Tangent.Get(Slug, ct) is not { } tangent) return new Outcome<Joined>.Refused(ChangeTangent.NoTangent);
         var here = await Capabilities.Load(ActorId, Slug, null, ct);
         if (here.Exists) return new Outcome<Joined>.Done(new Joined(tangent, Joined.InState));
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct);
@@ -52,11 +52,13 @@ public sealed record JoinTangent(string Slug, string ActorId, DateTimeOffset? At
 }
 
 /// <summary>A participant leaves the Tangent <see cref="Slug"/>: their own overwrite there is removed, or their waiting
-/// ask withdrawn; where they have neither, the command answers <see cref="Inside.NotIn"/>.</summary>
+/// ask withdrawn; where they have neither, the command answers <see cref="Inside.NotIn"/>. Someone the place does not exist
+/// for (<see cref="Bit.View"/> there) is refused with its gate before any Tangent is looked for.</summary>
 public sealed record LeaveTangent(string Slug, string ActorId) : ICommand<Tangent>
 {
     public async Task<Outcome<Tangent>> Run(CancellationToken ct)
     {
+        if (await Capabilities.Load(ActorId, null, null, ct) is { Exists: false } place) return new Outcome<Tangent>.Refused(place.Gate(Bit.View)!);
         if (await Tangent.Get(Slug, ct) is not { } tangent) return new Outcome<Tangent>.Refused(ChangeTangent.NoTangent);
         if (Inside.In(await Inside.Own(Slug, ActorId, ct)))
         {

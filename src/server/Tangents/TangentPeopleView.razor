@@ -167,11 +167,13 @@
         _ => "Only who you let in"
     };
 
-    private static string StateLine(string state) => state switch
+    /// <summary>Where one person stands here, in words. A public Tangent is read by everyone who reads the place, so someone
+    /// kept out of it is kept out again only once it is private.</summary>
+    private string StateLine(string state) => state switch
     {
         "in" => "reads and posts here",
         TangentPeopleController.RoleState => "reads here through a role",
-        TangentPeopleController.KeptOutState => "kept out",
+        TangentPeopleController.KeptOutState => Model.Audience == "public" ? "kept out while it is private" : "kept out",
         "asked" => "asked to join",
         "declined" => "ask declined",
         _ => "not in"

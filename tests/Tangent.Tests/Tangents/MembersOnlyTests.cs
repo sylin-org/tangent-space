@@ -1,7 +1,10 @@
 using System.Net;
 using System.Text.Json;
+using Koan.Data.Core.Commands;
 using Tangent.Access;
+using Tangent.Participants;
 using Tangent.Posts;
+using Tangent.Space;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -67,6 +70,23 @@ public sealed class MembersOnlyTests
         var everyone = await Json(leo, workshop, workshop, new { person = Ada, choice = "out" });
         Assert.Equal((HttpStatusCode.Conflict, Inside.Public.Word), (everyone.Status, everyone.Word));
         Assert.Equal(HttpStatusCode.OK, (await Send(ada.Client, HttpMethod.Get, "/t/" + Workshop)).Status);
+    }
+
+    [Fact]
+    public async Task A_banned_participant_leaves_nothing_and_finds_one_answer_for_a_tangent_they_joined_and_a_missing_one()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        await Given.ATangent(tangentSpace, Studio, Audience.Private, ct: Cancellation);
+        await Given.AParticipant(tangentSpace, "ban", [Roles.Member], Standing.Banned, Cancellation);
+        await Inside.LetIn(RoleSettings.Collection(), Studio, "ban", Cancellation);
+
+        var joined = Assert.IsType<Outcome<Tangent>.Refused>(await new LeaveTangent(Studio, "ban").Send(Cancellation));
+        var missing = Assert.IsType<Outcome<Tangent>.Refused>(await new LeaveTangent("nowhere", "ban").Send(Cancellation));
+        var join = Assert.IsType<Outcome<Joined>.Refused>(await new JoinTangent(Studio, "ban").Send(Cancellation));
+
+        Assert.Equal(joined.Reason, missing.Reason);
+        Assert.Equal(missing.Reason, join.Reason);
+        Assert.True(Inside.In(await Inside.Own(Studio, "ban", Cancellation)));
     }
 
     private static JsonElement Listed(JsonElement page, string slug)

@@ -78,6 +78,8 @@ public sealed class TangentAccessTests
         Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageTangent).Word), (refused.Status, refused.Word));
         Assert.Equal(HttpStatusCode.NotFound, (await Json(leo, access, access, new { role = "nobody", access = "post" })).Status);
         Assert.Equal(HttpStatusCode.BadRequest, (await Json(leo, access, access, new { role = "administrator", access = "read" })).Status);
+        var everyone = await Json(leo, access, access, new { role = "everyone", access = "read" });
+        Assert.Equal((HttpStatusCode.BadRequest, ChangeAccess.EveryoneReads.Text), (everyone.Status, everyone.Json.GetProperty("detail").GetString()));
         Assert.Equal(HttpStatusCode.BadRequest, (await Json(leo, access, access, new { role = "member", access = "everything" })).Status);
 
         // Back to as in the place: private again to her.
