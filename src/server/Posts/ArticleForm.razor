@@ -69,6 +69,9 @@
     [Parameter] public string? Participant { get; set; }
     [Parameter] public string? EditScope { get; set; }
 
+    /// <summary>The slug of the Topic an edit is of, whose writers its suggestions offer first.</summary>
+    [Parameter] public string? Topic { get; set; }
+
     [Parameter] public string? Title { get; set; }
     [Parameter] public string? Body { get; set; }
     [Parameter] public string? CoverId { get; set; }
@@ -90,7 +93,7 @@
     private string? CoverAddress => CoverId is { } cover ? Door + Media.Reference(cover).TrimStart('/') : null;
 
     private string? EditorProps => Bring is { } bring
-        ? System.Text.Json.JsonSerializer.Serialize(new { door = Door, bring = bring.Action, participant = Participant, edit = EditScope })
+        ? System.Text.Json.JsonSerializer.Serialize(new { door = Door, bring = bring.Action, participant = Participant, edit = EditScope, suggest = SuggestionsController.Address(TangentAddress, Topic) })
         : null;
 
     private RenderFragment CoverField => @<div class="article-cover-field" data-article-cover>

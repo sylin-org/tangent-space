@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using Koan.Data.Abstractions;
 using Koan.Data.Core;
 using Koan.Data.Core.Commands;
+using Koan.Identity.Roles;
 using Tangent.Access;
 using Tangent.Events;
 using Tangent.Participants;
@@ -17,8 +18,10 @@ namespace Tangent.Posts;
 /// shown, a mention resolves to the participant with that DID: in HTML a link to their address reading <c>@</c> and
 /// their current handle, in plain text <c>@</c> and that handle; a DID that is no participant's leaves the link's own
 /// words. A Post keeps the identities its body mentions (<see cref="Post.MentionedIds"/>), at most <see cref="Limit"/>,
-/// so nothing parses a body to find them. The command that writes a Post appends one <see cref="EventKind.Mention"/>
-/// per participant its body newly mentions (<see cref="Notify"/>).</summary>
+/// so nothing parses a body to find them. A role is mentioned too, by an <c>@</c> and its word, as <c>@moderators</c>, which
+/// the body keeps as typed and the Post among its roles (<see cref="Post.MentionedRoles"/>); and a Tangent's slug typed
+/// after a <c>#</c> is written as a link to it. The command that writes a Post appends one <see cref="EventKind.Mention"/>
+/// per participant its body newly mentions, and one per role, however many hold it (<see cref="Notify"/>).</summary>
 public static partial class Mentions
 {
     /// <summary>What a mention's target starts with: atproto's URI scheme, whose authority is the DID.</summary>
@@ -36,6 +39,10 @@ public static partial class Mentions
     /// <summary>The most UTF-8 bytes writing one typed handle as its mention adds to a body: <c>[</c> before it, and
     /// <c>](at://</c>, the DID and <c>)</c> after it.</summary>
     public const int TypedWeight = 9 + IdentityLimit;
+
+    /// <summary>The most UTF-8 bytes writing one typed Tangent as its link adds to a body: <c>[</c> before it, and
+    /// <c>](/t/</c>, its slug and <c>)</c> after it.</summary>
+    public const int LinkedWeight = 7 + 4 * Slug.Limit;
 
     /// <summary>The DID a link target names when it is a mention; null for any other target.</summary>
     public static string? Identity(string target)
@@ -91,14 +98,18 @@ public static partial class Mentions
         => Stranded().Replace(RenderedBodies.For(postId, version, body).PlainText(_ => ""), "");
 
     /// <summary>Appends, inside the running command, one <see cref="EventKind.Mention"/> per participant
-    /// <paramref name="post"/> mentions that <paramref name="before"/> — the identities it mentioned before an edit,
-    /// empty for a new Post — did not, targeted at them: not the actor, not a DID that is no participant's, and not a
-    /// participant for whom the Post's Tangent is absent. One keyed read of the participants, then capability's rows for
-    /// each; nothing parses.</summary>
+    /// <paramref name="post"/> mentions that <paramref name="before"/> — the identities and roles it mentioned before an
+    /// edit, empty for a new Post — did not, targeted at them: not the actor, not a DID that is no participant's, and not a
+    /// participant for whom the Post's Tangent is absent; and one per role it newly mentions, naming the role and
+    /// targeting no one, which reaches each holder who may view the Tangent (<see cref="Unread"/>). One keyed read of the
+    /// participants, then capability's rows for each; nothing parses.</summary>
     public static async Task Notify(Post post, string actorId, IReadOnlyList<string> before, DateTimeOffset at,
         CancellationToken ct)
     {
         var earlier = before.ToHashSet(StringComparer.Ordinal);
+        foreach (var role in post.MentionedRoles.Where(role => !earlier.Contains(role)))
+            await Event.Append(EventKind.Mention, at, ct,
+                tangentId: post.TangentId, topicId: post.TopicId, postId: post.Id, actorId: actorId, role: role, version: post.Version);
         var added = post.MentionedIds.Where(id => id != actorId && !earlier.Contains(id)).ToList();
         if (added.Count == 0) return;
         var participants = (await Participant.Get(added, ct)).OfType<Participant>().Select(participant => participant.Id).ToHashSet(StringComparer.Ordinal);
@@ -110,48 +121,107 @@ public static partial class Mentions
         }
     }
 
-    /// <summary><paramref name="body"/> with each handle typed in its prose that names a participant here written as
-    /// their mention, <c>[@handle](at://did)</c> with the words as typed, so the body keeps their identity and a handle
-    /// that changes later changes nothing in it. A typed handle is atproto's handle syntax after an <c>@</c> that begins
-    /// a word (<see cref="BeginsAWord"/>) and is never inside a URL, so an address (<c>ines@bsky.social</c>) and a path
-    /// (<c>/@ines.bsky.social</c>) stay as typed; only prose is read (<see cref="MarkdownHtml.Prose"/>), so code, a link's
-    /// words and an image's description stay as typed too. The first <see cref="Limit"/> handles typed are read in one
-    /// keyed read of the participants, each as typed or in lower case, as atproto writes handles; a handle no participant
-    /// holds stays the words typed. At most <see cref="Limit"/> are written, the first typed, each adding at most
-    /// <see cref="TypedWeight"/>, so the body grows within <see cref="Post.KeptBodyLimit"/>. A body without an <c>@</c>
-    /// is returned unparsed; ask <see cref="MarkdownHtml.Tractable"/> first.</summary>
-    public static async Task<string> Typed(string body, CancellationToken ct)
-    {
-        var typed = TypedHandles(body);
-        if (typed.Count == 0) return body;
-        var handles = typed.Select(handle => handle.Handle).Distinct(StringComparer.OrdinalIgnoreCase).Take(Limit).ToList();
-        var asked = handles.Concat(handles.Select(handle => handle.ToLowerInvariant())).Distinct(StringComparer.Ordinal).ToList();
-        var holders = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var participant in await Participant.Query(participant => asked.Contains(participant.Handle),
-                     new QueryDefinition { Page = 1, PageSize = asked.Count }, ct))
-            if (Identity(Scheme + participant.Id) is not null) holders.TryAdd(participant.Handle, participant.Id);
-        if (holders.Count == 0) return body;
+    /// <summary>A body as its writer typed it, written: <see cref="Body"/> with each handle and Tangent typed in its prose
+    /// written as a link, and the <see cref="Roles"/> it mentions, by key, each once, in the order typed.</summary>
+    public sealed record Written(string Body, IReadOnlyList<string> Roles);
 
-        var written = new StringBuilder(body.Length);
-        int at = 0, count = 0;
-        foreach (var (start, length, handle) in typed)
+    /// <summary><paramref name="body"/> as <see cref="Written"/>: each handle typed in its prose that names a participant
+    /// here written as their mention, <c>[@handle](at://did)</c> with the words as typed, so the body keeps their identity
+    /// and a handle that changes later changes nothing in it; each <c>#</c> and slug of a Tangent written as a link to it,
+    /// <c>[#slug](/t/slug)</c>; and each <c>@</c> and word of a role the place gives (<see cref="Access.Roles.Given"/>) —
+    /// its word, or its word and an <c>s</c>, as <c>@moderators</c> — kept as typed and counted among the roles it
+    /// mentions. A typed handle is atproto's handle syntax after an <c>@</c> that begins a word (<see cref="BeginsAWord"/>),
+    /// a role a slug there, and a Tangent a slug after a <c>#</c> that begins one; none is ever inside a URL, so an address
+    /// (<c>ines@bsky.social</c>), a path (<c>/@ines.bsky.social</c>) and a fragment stay as typed; only prose is read
+    /// (<see cref="MarkdownHtml.Prose"/>), so code, a link's words and an image's description stay as typed too. The
+    /// first <see cref="Limit"/> of each are read in one keyed read each, a handle as typed or in lower case, as atproto
+    /// writes handles; what nothing here holds stays the words typed. At most <see cref="Limit"/> handles and as many
+    /// Tangents are written, the first typed, each adding at most <see cref="TypedWeight"/>, so the body grows within
+    /// <see cref="Post.KeptBodyLimit"/>. A body without an <c>@</c> or a <c>#</c> is returned unparsed; ask
+    /// <see cref="MarkdownHtml.Tractable"/> first.</summary>
+    public static async Task<Written> Typed(string body, CancellationToken ct)
+    {
+        var typed = TypedNames(body);
+        if (typed.Count == 0) return new Written(body, []);
+        var handles = typed.Where(name => name.Sign == '@' && name.Text.Contains('.')).Select(name => name.Text)
+            .Distinct(StringComparer.OrdinalIgnoreCase).Take(Limit).ToList();
+        var words = typed.Where(name => name.Sign == '@' && !name.Text.Contains('.')).Select(name => name.Text.ToLowerInvariant())
+            .Distinct(StringComparer.Ordinal).Take(Limit).ToList();
+        var slugs = typed.Where(name => name.Sign == '#').Select(name => name.Text.ToLowerInvariant())
+            .Distinct(StringComparer.Ordinal).Take(Limit).ToList();
+
+        var holders = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (handles.Count > 0)
         {
-            if ((holders.GetValueOrDefault(handle) ?? holders.GetValueOrDefault(handle.ToLowerInvariant())) is not { } did) continue;
-            written.Append(body, at, start - at).Append('[').Append(body, start, length).Append("](").Append(Scheme).Append(did).Append(')');
-            at = start + length;
-            if (++count == Limit) break;
+            var asked = handles.Concat(handles.Select(handle => handle.ToLowerInvariant())).Distinct(StringComparer.Ordinal).ToList();
+            foreach (var participant in await Participant.Query(participant => asked.Contains(participant.Handle),
+                         new QueryDefinition { Page = 1, PageSize = asked.Count }, ct))
+                if (Identity(Scheme + participant.Id) is not null) holders.TryAdd(participant.Handle, participant.Id);
         }
 
-        return written.Append(body, at, body.Length - at).ToString();
+        var tangents = slugs.Count == 0 ? new HashSet<string>(StringComparer.Ordinal)
+            : (await Tangents.Tangent.Get(slugs, ct)).OfType<Tangents.Tangent>().Select(tangent => tangent.Id).ToHashSet(StringComparer.Ordinal);
+        var roles = await RolesNamed(words, ct);
+        if (holders.Count == 0 && tangents.Count == 0 && roles.Count == 0) return new Written(body, []);
+
+        var written = new StringBuilder(body.Length);
+        var mentioned = new List<string>();
+        int at = 0, people = 0, places = 0;
+        foreach (var (sign, start, length, text) in typed)
+        {
+            string target;
+            if (sign == '#')
+            {
+                var slug = text.ToLowerInvariant();
+                if (places == Limit || !tangents.Contains(slug)) continue;
+                target = "/t/" + slug;
+                places++;
+            }
+            else if (!text.Contains('.'))
+            {
+                if (roles.GetValueOrDefault(text.ToLowerInvariant()) is { } role && !mentioned.Contains(role)) mentioned.Add(role);
+                continue;
+            }
+            else
+            {
+                if (people == Limit || (holders.GetValueOrDefault(text) ?? holders.GetValueOrDefault(text.ToLowerInvariant())) is not { } did) continue;
+                target = Scheme + did;
+                people++;
+            }
+
+            written.Append(body, at, start - at).Append('[').Append(body, start, length).Append("](").Append(target).Append(')');
+            at = start + length;
+        }
+
+        return new Written(written.Append(body, at, body.Length - at).ToString(), mentioned);
     }
 
-    /// <summary>Each handle typed in the prose of <paramref name="body"/>, as <see cref="Typed"/> reads one: where its
-    /// <c>@</c> stands, how long it is with it, and the handle, in the order of the source. One parse, and one walk of
-    /// the source for the words and URLs the <c>@</c>s stand in.</summary>
-    private static List<(int Start, int Length, string Handle)> TypedHandles(string body)
+    /// <summary>The roles the place gives that these typed words name, by word: the role keyed by the word, or else by the
+    /// word without its last <c>s</c>; one keyed read.</summary>
+    private static async Task<IReadOnlyDictionary<string, string>> RolesNamed(IReadOnlyList<string> words, CancellationToken ct)
     {
-        var found = new List<(int Start, int Length, string Handle)>();
-        if (!body.Contains('@')) return found;
+        var named = new Dictionary<string, string>(StringComparer.Ordinal);
+        static IEnumerable<string> Keys(string word)
+        {
+            if (Access.Roles.KeyOf(word) is { } key && Access.Roles.Given(key)) yield return key;
+            if (word.Length > 1 && word.EndsWith('s') && Access.Roles.KeyOf(word[..^1]) is { } singular && Access.Roles.Given(singular)) yield return singular;
+        }
+
+        var keys = words.SelectMany(Keys).Distinct(StringComparer.Ordinal).ToList();
+        if (keys.Count == 0) return named;
+        var found = (await Role.Get(keys.Select(Role.KeyFor).ToList(), ct)).OfType<Role>().Select(role => role.Key).ToHashSet(StringComparer.Ordinal);
+        foreach (var word in words)
+            if (Keys(word).FirstOrDefault(found.Contains) is { } key) named[word] = key;
+        return named;
+    }
+
+    /// <summary>Each name typed in the prose of <paramref name="body"/>, as <see cref="Typed"/> reads one: its sign, where
+    /// the sign stands, how long it is with it, and the name, in the order of the source. One parse, and one walk of the
+    /// source for the words and URLs the signs stand in.</summary>
+    private static List<(char Sign, int Start, int Length, string Text)> TypedNames(string body)
+    {
+        var found = new List<(char Sign, int Start, int Length, string Text)>();
+        if (body.IndexOfAny(Signs) < 0) return found;
         IReadOnlyList<Range> prose;
         try
         {
@@ -167,7 +237,7 @@ public static partial class Mentions
         foreach (var run in prose.OrderBy(run => run.Start.Value))
         {
             var (from, end) = (run.Start.Value, run.End.Value);
-            for (var sign = body.IndexOf('@', from, end - from); sign >= 0; sign = sign + 1 < end ? body.IndexOf('@', sign + 1, end - sign - 1) : -1)
+            for (var sign = body.IndexOfAny(Signs, from, end - from); sign >= 0; sign = sign + 1 < end ? body.IndexOfAny(Signs, sign + 1, end - sign - 1) : -1)
             {
                 for (; walked < sign; walked++)
                 {
@@ -177,22 +247,36 @@ public static partial class Mentions
 
                 if (!BeginsAWord(body, sign) || scheme >= word) continue;
                 var last = sign + 1;
-                while (last < end && (char.IsAsciiLetterOrDigit(body[last]) || body[last] is '.' or '-')) last++;
-                while (last > sign + 1 && body[last - 1] is '.' or '-') last--;
-                var handle = body[(sign + 1)..last];
-                if (handle.Length <= SignIn.HandleLimit && HandleSyntax().IsMatch(handle)) found.Add((sign, last - sign, handle));
+                if (body[sign] == '@')
+                {
+                    while (last < end && (char.IsAsciiLetterOrDigit(body[last]) || body[last] is '.' or '-')) last++;
+                    while (last > sign + 1 && body[last - 1] is '.' or '-') last--;
+                    var name = body[(sign + 1)..last];
+                    if (name.Contains('.') ? name.Length <= SignIn.HandleLimit && HandleSyntax().IsMatch(name) : Slug.IsValid(name.ToLowerInvariant()))
+                        found.Add(('@', sign, last - sign, name));
+                }
+                else
+                {
+                    while (last < end && (char.IsLetterOrDigit(body[last]) || body[last] == '-')) last++;
+                    while (last > sign + 1 && body[last - 1] == '-') last--;
+                    var name = body[(sign + 1)..last];
+                    if (Slug.IsValid(name.ToLowerInvariant())) found.Add(('#', sign, last - sign, name));
+                }
             }
         }
 
         return found;
     }
 
-    /// <summary>Whether the <c>@</c> at <paramref name="sign"/> begins a word: unless the character before it, past any
+    /// <summary>The signs a name is typed after: <c>@</c> for a person or a role, <c>#</c> for a Tangent.</summary>
+    private static readonly char[] Signs = ['@', '#'];
+
+    /// <summary>Whether the sign at <paramref name="sign"/> begins a word: unless the character before it, past any
     /// emphasis marks (<c>*</c> and <c>_</c>) right before it, belongs to a word — a letter, a digit or a mark that joins
     /// one — or to an address or a path: <c>.</c>, <c>+</c>, <c>-</c>, <c>/</c>, <c>\</c>, <c>=</c>, <c>%</c>,
     /// <c>&amp;</c>, <c>~</c>, <c>#</c> or <c>@</c>. So the start of a line, whitespace, a quotation mark of any kind, a
     /// dash other than the hyphen, a colon, a bracket and other punctuation begin one, <c>_@</c> opening emphasis does,
-    /// and <c>snake_@</c> does not.</summary>
+    /// and <c>snake_@</c> does not; so <c>##</c> and <c>&amp;#</c> never begin one.</summary>
     private static bool BeginsAWord(string body, int sign)
     {
         var before = sign;

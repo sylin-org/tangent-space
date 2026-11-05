@@ -47,4 +47,8 @@ public sealed record EditPage(
     string? CoverId = null,
     Form? Bring = null,
     Tangents.TangentPage.Author? Author = null,
-    DateTimeOffset CreatedAt = default);
+    DateTimeOffset CreatedAt = default)
+{
+    /// <summary>The Topic's slug, the last segment of its address.</summary>
+    public string TopicSlug => Uri.UnescapeDataString(TopicAddress[(TopicAddress.LastIndexOf('/') + 1)..]);
+}

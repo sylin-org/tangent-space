@@ -11,6 +11,7 @@ export const article = defineComponent({
     bring: { type: String, default: null },
     participant: { type: String, default: null },
     edit: { type: String, default: null },
+    suggest: { type: String, default: null },
   },
   setup(props) {
     let stop: (() => void) | null = null

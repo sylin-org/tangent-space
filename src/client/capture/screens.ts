@@ -34,7 +34,7 @@ export interface State {
   /** A selector clicked once the page has settled; the state is what the click shows in the page. */
   click?: string
   /** A selector the page shows once the click is answered, for a click the page answers in place or by a navigation
-   *  it starts itself; awaited before the network settles. */
+   *  it starts itself, or, without a click, once the fill is answered; awaited before the network settles. */
   waitFor?: string
   /** The rows the Tangent Space holds, by the name of a seed the capture host writes before any page opens
    *  (src/server/Capture). States with the same seed and settings share one Tangent Space. */
@@ -390,6 +390,17 @@ export const screens: Readonly<Record<string, Screen>> = {
   // report page, the same form on a page of its own; and that page once the persona's report of the reply was
   // received. A signed-in state cancels the seen post the seen island sends once the window's end is on screen,
   // so its control stays on the page and every width and theme reads the same checkpoints.
+  // The reply composer offering what the persona can name as she types: after @, the people of the Topic and the
+  // Tangent, then the roles with how many hold each; after #, the Tangents she may view; and the article editor's visual
+  // view offering the same after @.
+  suggestions: {
+    path: '/t/discussions/what-kind-of-discussions',
+    states: [
+      { name: 'people', seed: 'topic', signedIn: true, cancel: '/seen', fill: { '#reply-body': 'Good question. @' }, waitFor: '.suggestions:not([hidden])' },
+      { name: 'tangents', seed: 'topic', signedIn: true, cancel: '/seen', fill: { '#reply-body': 'This belongs in #' }, waitFor: '.suggestions:not([hidden])' },
+      { name: 'article', seed: 'article', signedIn: true, path: '/t/articles/new', fill: { '.article-surface': 'Mended with @' }, waitFor: '.suggestions:not([hidden])' },
+    ],
+  },
   topic: {
     path: '/t/discussions/what-kind-of-discussions',
     states: [

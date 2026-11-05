@@ -52,3 +52,62 @@
   background: none;
   cursor: pointer;
 }
+
+/* What a writer can name as they type @ or #: a short list under the caret, beside the field it serves. */
+:has(> .suggestions) {
+  position: relative;
+}
+
+.suggestions {
+  position: absolute;
+  z-index: 5;
+  min-width: 260px;
+  max-width: min(420px, 100%);
+  max-height: 320px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-panel);
+  background: var(--ts-page);
+  box-shadow: var(--ts-shadow-popover);
+}
+
+.suggestions [role="option"] {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 8px;
+  align-items: baseline;
+  padding: 6px 10px;
+  border-radius: var(--ts-radius-row);
+  cursor: pointer;
+}
+
+.suggestions [role="option"][aria-selected="true"] {
+  background: var(--ts-hover);
+}
+
+.suggestion-name {
+  color: var(--ts-text);
+  font: var(--ts-type-ui-small);
+  font-weight: 600;
+}
+
+.suggestion-insert {
+  overflow: hidden;
+  color: var(--ts-text-2);
+  font: var(--ts-type-ui-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.suggestion-note {
+  grid-column: 1 / -1;
+  color: var(--ts-text-2);
+  font: var(--ts-type-ui-small);
+}
+
+.suggestion-note:empty {
+  display: none;
+}

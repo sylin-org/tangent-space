@@ -10,10 +10,11 @@ import { preview } from './preview'
 import { search } from './search'
 import { seen } from './seen'
 import { submitting } from './submitting'
+import { suggest } from './suggest'
 import { unseen } from './unseen'
 
 // Every island a page can name in data-island, by that name.
-export const islands: Record<string, Component> = { appearance, article, composer, copy, fragment, live, lobby, preview, search, seen, submitting, unseen }
+export const islands: Record<string, Component> = { appearance, article, composer, copy, fragment, live, lobby, preview, search, seen, submitting, suggest, unseen }
 
 export interface MountedIsland {
   name: string

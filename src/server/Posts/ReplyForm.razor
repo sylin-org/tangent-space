@@ -18,7 +18,8 @@
                 <a href="@(Model.Address + "#reply")" data-reply-to-topic>reply to the topic instead</a>
             </p>
             <label class="field-label" for="reply-body">Your reply</label>
-            <textarea class="post-form-body" id="reply-body" name="@PostWrites.BodyField" rows="5" required></textarea>
+            <textarea class="post-form-body" id="reply-body" name="@PostWrites.BodyField" rows="5" required
+                      data-island="suggest" data-props="@SuggestionsController.Props(Model.Tangent.Address, Model.Slug)"></textarea>
             <div class="post-form-actions">
                 <span class="post-form-as">Posting as <strong>@("@" + who.Handle)</strong></span>
                 <button type="submit" class="sign-in-submit post-form-submit" data-busy-label="Posting…">Post reply</button>

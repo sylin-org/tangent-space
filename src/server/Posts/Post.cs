@@ -20,8 +20,9 @@ public sealed class Post : Entity<Post>
 
     /// <summary>The most UTF-8 bytes a body holds as the Post keeps it: what was sent, within <see cref="BodyLimit"/>,
     /// grown by at most <see cref="Mentions.Limit"/> typed handles written as mentions, each adding at most
-    /// <see cref="Mentions.TypedWeight"/>.</summary>
-    public const int KeptBodyLimit = BodyLimit + Mentions.Limit * Mentions.TypedWeight;
+    /// <see cref="Mentions.TypedWeight"/>, and as many typed Tangents written as links, each adding at most
+    /// <see cref="Mentions.LinkedWeight"/>.</summary>
+    public const int KeptBodyLimit = BodyLimit + Mentions.Limit * (Mentions.TypedWeight + Mentions.LinkedWeight);
 
     public const int TitleLimit = 200;
 
@@ -101,6 +102,10 @@ public sealed class Post : Entity<Post>
     /// <summary>The DIDs the body mentions, each once, in the order of their first mention, at most
     /// <see cref="Mentions.Limit"/>; empty on a tombstone.</summary>
     public List<string> MentionedIds { get; set; } = [];
+
+    /// <summary>The roles the body mentions, by key, each once, in the order typed, at most <see cref="Mentions.Limit"/>;
+    /// empty on a tombstone.</summary>
+    public List<string> MentionedRoles { get; set; } = [];
 
     /// <summary>The body as the request that last wrote it sent it, as <see cref="PostBody.SentHash"/>: read only to
     /// recognize that request sent again, whoever its typed handles name by then; empty on a tombstone.</summary>
@@ -194,6 +199,7 @@ public sealed class Post : Entity<Post>
             Title = title.Trim(),
             Body = text,
             MentionedIds = text.Length > 0 ? [.. body.Mentioned] : [],
+            MentionedRoles = text.Length > 0 ? [.. body.Roles] : [],
             MediaIds = text.Length > 0 ? [.. body.Media] : [],
             SentHash = body.SentHash,
             AuthorId = authorId,
@@ -233,6 +239,7 @@ public sealed class Post : Entity<Post>
             ParentId = parentId,
             Body = body.Text,
             MentionedIds = [.. body.Mentioned],
+            MentionedRoles = [.. body.Roles],
             MediaIds = [.. body.Media],
             SentHash = body.SentHash,
             Sequence = LastSequence,
@@ -295,6 +302,7 @@ public sealed class Post : Entity<Post>
 
         Body = text;
         MentionedIds = text.Length > 0 ? [.. body.Mentioned] : [];
+        MentionedRoles = text.Length > 0 ? [.. body.Roles] : [];
         MediaIds = text.Length > 0 ? [.. body.Media] : [];
         SentHash = body.SentHash;
         var someoneElse = editorId != AuthorId;
@@ -317,6 +325,7 @@ public sealed class Post : Entity<Post>
         RemovedAt = at;
         Body = "";
         MentionedIds = [];
+        MentionedRoles = [];
         MediaIds = [];
         CoverId = null;
         SentHash = "";
