@@ -1,3 +1,5 @@
+using Tangent.Access;
+using Koan.Web.Controllers;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Posts;
 
@@ -8,5 +10,5 @@ namespace Tangent.Render;
 public sealed class NotFoundController : ControllerBase
 {
     [Route("{**path}", Order = int.MaxValue)]
-    public IActionResult Answer() => PostWrites.Absent();
+    public IActionResult Answer() => this.Refused(Capabilities.Absent);
 }

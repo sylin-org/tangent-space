@@ -215,7 +215,7 @@ public sealed class TangentSettingsTests
         Assert.False(settings.TryGetProperty("gate", out _));
         var member = (await Send(ada.Client, HttpMethod.Get, "/t/workshop/settings", json: true)).Json;
         Assert.Equal(Capabilities.NoRoleGrants(Bit.ManageTangent).Word, member.GetProperty("gate").GetString());
-        Assert.Equal(["View", "Post", "Topic"], Strings(member.GetProperty("can")));
+        Assert.Equal(["View", "Post", "Topic", "EditOwn", "RemoveOwn"], Strings(member.GetProperty("can")));
         Assert.False(member.TryGetProperty("change", out _));
         var studio = await Send(ada.Client, HttpMethod.Get, "/t/studio/settings", json: true);
         Assert.Equal((HttpStatusCode.NotFound, "absent"), (studio.Status, studio.Kind));
@@ -227,7 +227,7 @@ public sealed class TangentSettingsTests
             described.Json.GetProperty("description").GetString(), described.Json.GetProperty("audience").GetString()));
         Assert.Contains("ManageTangent", Strings(described.Json.GetProperty("can")));
         var refused = await Json(ada, "/t/workshop", "/t/workshop/settings", new { description = "Mine." });
-        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageTangent).Word), (refused.Status, refused.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageTangent).Word), (refused.Status, refused.Word));
     }
 
     [Fact]
@@ -258,7 +258,7 @@ public sealed class TangentSettingsTests
         Assert.True(administrator.GetProperty("movable").GetBoolean());
         Assert.Equal(("studio", "Articles"), (administrator.GetProperty("before").GetString(), administrator.GetProperty("after").GetString()));
         var moved = await Json(bea, "/t/workshop", "/t/workshop/settings", new { move = "earlier" });
-        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageSpace).Word), (moved.Status, moved.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageSpace).Word), (moved.Status, moved.Word));
         Assert.Equal(["studio", "workshop", "articles"], await DoorOrder(leo));
     }
 

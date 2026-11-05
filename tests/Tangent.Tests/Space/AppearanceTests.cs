@@ -68,7 +68,7 @@ public sealed class AppearanceTests
         Assert.Equal((HttpStatusCode.OK, "iris"), (iris.Status, iris.Json.GetProperty("accent").GetString()));
         Assert.Equal(before + 2, await Event.Count.Exact(Cancellation));
         var unknown = await Json(leo, Path, Path, new { accent = "teal" });
-        Assert.Equal((HttpStatusCode.BadRequest, (string?)null), (unknown.Status, unknown.Gate));
+        Assert.Equal((HttpStatusCode.BadRequest, "invalid"), (unknown.Status, unknown.Word));
         var refusedForm = await Form(leo, Path, Path, Accent("teal"));
         Assert.Equal(HttpStatusCode.BadRequest, refusedForm.Status);
         Assert.Contains("id=\"space-appearance-failure\"", refusedForm.Body);
@@ -101,14 +101,14 @@ public sealed class AppearanceTests
         Assert.Equal(HttpStatusCode.Forbidden, form.Status);
         Assert.Contains($"data-gate=\"{gate}\"", form.Body);
         var json = await Json(ada, "/t/" + Workshop, Path, new { accent = "jade" });
-        Assert.Equal((HttpStatusCode.Forbidden, gate), (json.Status, json.Gate));
+        Assert.Equal((HttpStatusCode.Forbidden, gate), (json.Status, json.Word));
 
         // A moderator lands on what they may use, and is refused the same.
         Assert.Equal(BaseUrl + ApplicationsController.Path, (await Send(mo.Client, HttpMethod.Get, Path)).Location);
         Assert.Equal((HttpStatusCode.Forbidden, gate), Refused(await Json(mo, "/t/" + Workshop, Path, new { accent = "jade" })));
 
         var posted = await Send(visitor, HttpMethod.Post, Path, JsonBody(new { accent = "jade" }), json: true);
-        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (posted.Status, posted.Gate));
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (posted.Status, posted.Word));
 
         Assert.Equal(Space.Accent.Gold, await Held());
         Assert.Equal(before, await Event.Count.Exact(Cancellation));
@@ -173,7 +173,7 @@ public sealed class AppearanceTests
         Assert.DoesNotContain("@layer owner", door);
     }
 
-    private static (HttpStatusCode, string?) Refused(Answered answered) => (answered.Status, answered.Gate);
+    private static (HttpStatusCode, string?) Refused(Answered answered) => (answered.Status, answered.Word);
 
     /// <summary>A page as a browser that holds <paramref name="held"/> revalidates it.</summary>
     private static async Task<(HttpStatusCode Status, EntityTagHeaderValue? ETag, string Body)> Tagged(HttpClient client, string path, EntityTagHeaderValue? held)

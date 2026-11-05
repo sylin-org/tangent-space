@@ -160,7 +160,7 @@ public sealed class SearchTests
         var html = await Send(Agent(tangentSpace), HttpMethod.Get, Path("lantern"));
         Assert.Equal(HttpStatusCode.Unauthorized, html.Status);
         Assert.DoesNotContain("masthead-search", html.Body);
-        Assert.Equal(Capabilities.SignIn.Word, (await Send(Agent(tangentSpace), HttpMethod.Get, Path("lantern"), json: true)).Gate);
+        Assert.Equal(Capabilities.SignIn.Word, (await Send(Agent(tangentSpace), HttpMethod.Get, Path("lantern"), json: true)).Word);
     }
 
     [Fact]
@@ -181,21 +181,23 @@ public sealed class SearchTests
     }
 
     [Fact]
-    public async Task Words_or_a_page_that_cannot_be_searched_say_why_and_no_words_ask_for_some()
+    public async Task Search_never_refuses_what_it_is_asked_and_no_words_ask_for_some()
     {
         var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Furnish(tangentSpace);
         await using var space = tangentSpace;
 
         var punctuation = await Send(tangentSpace.Client, HttpMethod.Get, Path("--"));
-        Assert.Equal(HttpStatusCode.BadRequest, punctuation.Status);
-        Assert.Contains(PostSearch.NeedsText, punctuation.Body);
-        Assert.Equal(PostSearch.TextTooLong, (await Send(tangentSpace.Client, HttpMethod.Get, Path(new string('a', PostSearch.TextLimit + 1)), json: true)).Json.GetProperty("refused").GetString());
-        foreach (var page in new[] { "0", "101", "x", "-1" })
+        Assert.Equal(HttpStatusCode.OK, punctuation.Status);
+        Assert.Contains("Nothing you can read here holds those words.", punctuation.Body);
+        var long_ = await Send(tangentSpace.Client, HttpMethod.Get, Path("lanterns " + new string('a', 500)), json: true);
+        Assert.Equal((HttpStatusCode.OK, PostSearch.TextLimit), (long_.Status, long_.Json.GetProperty("text").GetString()!.Length));
+        Assert.Equal(HttpStatusCode.OK, (await Send(tangentSpace.Client, HttpMethod.Get, Path(""), json: true)).Status);
+        foreach (var page in new[] { "0", "101", "x", "-1", "99" })
         {
-            var refused = await Send(tangentSpace.Client, HttpMethod.Get, Path("lantern") + "&page=" + page, json: true);
-            Assert.Equal(HttpStatusCode.BadRequest, refused.Status);
-            Assert.Equal(PostSearch.NeedsPage, refused.Json.GetProperty("refused").GetString());
+            var held = await Send(tangentSpace.Client, HttpMethod.Get, Path("lantern") + "&page=" + page, json: true);
+            Assert.Equal(HttpStatusCode.OK, held.Status);
+            Assert.False(held.Json.TryGetProperty("refused", out _));
         }
 
         var none = await Send(tangentSpace.Client, HttpMethod.Get, "/search");

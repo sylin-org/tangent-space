@@ -91,7 +91,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
+        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
 
         People.Cursor? cursor = null;
         if (after is not null && (cursor = People.Cursor.Open(after, protection)) is null)
@@ -146,7 +146,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
+        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
 
         if (command(personId ?? "", named ?? "") is not { } sent) return await Refused(personId, unsent!, ct);
         var outcome = await sent.Send();
@@ -184,7 +184,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
         if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
 
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
+        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
         var page = await Page(place, personId, null, null, ct);
         if (page.Gate is null) page = page with { Failure = reason.Text };
         return new ObjectResult(page) { StatusCode = Answers.Status(HttpContext, reason) };

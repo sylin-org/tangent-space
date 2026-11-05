@@ -20,7 +20,7 @@ public enum Move
 /// slug stays), its audience, written as its <c>everyone</c> overwrite as <see cref="CreateTangent"/> writes it, and its
 /// order, one place earlier or later. A field left null stays as it is. The Tangent exists for the actor, who holds
 /// <see cref="Bit.View"/> on it, or the command answers that no Tangent has the slug; the actor holds
-/// <see cref="Bit.ManageTangent"/> or <see cref="Bit.ManageSpace"/> there (<see cref="TangentWrites.MayManage"/>), and
+/// <see cref="Bit.ManageTangent"/> there, which <see cref="Bit.ManageSpace"/> implies, and
 /// <see cref="Bit.ManageSpace"/> in the place for a move, or is refused with the gate word. The moderators' Tangent's
 /// audience and order are fixed (<see cref="ModeratorsTangent"/>): a command that would change either is refused with
 /// <see cref="Fixed"/>. A change appends one <see cref="EventKind.TangentChanged"/> carrying the audience; a command that
@@ -64,14 +64,14 @@ public sealed record ChangeTangent(
     }
 
     /// <summary>Null where the actor may make this change; otherwise why not: the Tangent does not exist for them; they
-    /// may not manage it (<see cref="TangentWrites.ManageGate"/>); a move, which arranges the place's list, without
+    /// may not manage it (<see cref="Bit.ManageTangent"/>); a move, which arranges the place's list, without
     /// <see cref="Bit.ManageSpace"/> in the place; or a change of the moderators' Tangent's audience or order
     /// (<see cref="Fixed"/>), judged against the audience Koan's rows state, <paramref name="actual"/>.</summary>
     private async Task<Reason?> Judge(Space.Audience? actual, CancellationToken ct)
     {
         var capabilities = await Capabilities.Load(ActorId, Slug, null, ct);
         if (!capabilities.Exists) return NoTangent;
-        if (TangentWrites.ManageGate(capabilities) is { } gate) return gate;
+        if (capabilities.Gate(Bit.ManageTangent) is { } gate) return gate;
         if (Move is not null && (await Capabilities.Load(ActorId, null, null, ct)).Gate(Bit.ManageSpace) is { } arranging) return arranging;
         var moderators = (await TangentSpace.Get(TangentSpace.SingleRow, ct))?.ModeratorsTangentId == Slug;
         return moderators && (Move is not null || (Audience is { } asked && asked != actual)) ? Fixed : null;

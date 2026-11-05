@@ -40,8 +40,8 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
         var personId = PostWrites.PersonId(User);
         var rows = await Capabilities.LoadRows(personId, null, ct);
         var place = rows.For(null);
-        if (!place.Exists) return DoorController.Gated(HttpContext, place.Gate(Bit.View) ?? Capabilities.Absent);
-        if (await Holder(handle, ct) is not { } subject) return PostWrites.Absent();
+        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
+        if (await Holder(handle, ct) is not { } subject) return this.Refused(Capabilities.Absent);
 
         RecentPosts.Cursor? cursor = null;
         if (before is not null && (cursor = RecentPosts.Cursor.Parse(before)) is null)

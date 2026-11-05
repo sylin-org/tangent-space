@@ -144,7 +144,7 @@ public sealed class TangentPageTests
         using (var json = await Json(browser.Client, "/t/" + Workshop))
         {
             Assert.All(json.RootElement.GetProperty("topics").EnumerateArray(), topic => Assert.True(topic.GetProperty("new").GetBoolean()));
-            Assert.Equal(["View", "Post", "Topic"], Strings(json.RootElement.GetProperty("can")));
+            Assert.Equal(["View", "Post", "Topic", "EditOwn", "RemoveOwn"], Strings(json.RootElement.GetProperty("can")));
         }
 
         var root = await Post.Get(seen.Id, Cancellation);
@@ -216,14 +216,14 @@ public sealed class TangentPageTests
         Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(Cancellation));
 
         var visitor = await Problem(tangentSpace.Client, "/t/" + Workshop);
-        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (visitor.Status, visitor.Gate));
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (visitor.Status, visitor.Word));
         Assert.Equal(visitor, await Problem(tangentSpace.Client, "/t/nowhere"));
         using var request = new HttpRequestMessage(HttpMethod.Get, "/t/" + Workshop);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
         using var page = await tangentSpace.Client.SendAsync(request, Cancellation);
         Assert.Equal(HttpStatusCode.Unauthorized, page.StatusCode);
         var html = await page.Content.ReadAsStringAsync(Cancellation);
-        Assert.Contains("Sign in to read this place", html);
+        Assert.Contains("Sign in to read here", html);
         Assert.DoesNotContain("The workshop", html);
     }
 
@@ -386,7 +386,7 @@ public sealed class TangentPageTests
         return await response.Content.ReadAsStringAsync(Cancellation);
     }
 
-    private sealed record Answer(HttpStatusCode Status, string? MediaType, string? Title, string? Detail, string? Gate, string? Kind);
+    private sealed record Answer(HttpStatusCode Status, string? MediaType, string? Title, string? Detail, string? Word, string? Kind);
 
     private static async Task<Answer> Problem(HttpClient client, string path)
     {
@@ -395,7 +395,7 @@ public sealed class TangentPageTests
         using var response = await client.SendAsync(request, Cancellation);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Cancellation));
         string? Text(string name) => json.RootElement.TryGetProperty(name, out var value) ? value.GetString() : null;
-        return new Answer(response.StatusCode, response.Content.Headers.ContentType?.MediaType, Text("title"), Text("detail"), Text("gate"), Text("kind"));
+        return new Answer(response.StatusCode, response.Content.Headers.ContentType?.MediaType, Text("title"), Text("detail"), Text("word"), Text("kind"));
     }
 
     private static async Task<(HttpStatusCode Status, EntityTagHeaderValue? ETag)> Tag(HttpClient client, EntityTagHeaderValue? held)

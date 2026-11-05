@@ -73,7 +73,7 @@ public sealed class RefusalPageTests
         var reply = await Send(visitor, HttpMethod.Post, TopicPath(root), FormBody(new Dictionary<string, string> { ["body"] = "Anyone?" }));
         Assert.Equal(HttpStatusCode.Unauthorized, reply.Status);
         Assert.Contains(Masthead, reply.Body);
-        Assert.Contains("data-gate=\"sign-in\"", reply.Body);
+        Assert.Contains("data-word=\"sign-in\"", reply.Body);
         Assert.Contains("href=\"" + BaseUrl + "/sign-in\"", reply.Body);
 
         // A fragment is the component alone.
@@ -99,7 +99,7 @@ public sealed class RefusalPageTests
         Assert.Equal((HttpStatusCode.Unauthorized, "text/html"), (browser.StatusCode, browser.Content.Headers.ContentType?.MediaType));
         Assert.Contains(Masthead, page);
         Assert.Contains(">Sign in first</h1>", page);
-        Assert.Contains("data-gate=\"sign-in\"", page);
+        Assert.Contains("data-word=\"sign-in\"", page);
 
         foreach (var accept in new[] { "*/*", "application/problem+json", "application/json" })
         {
@@ -108,7 +108,7 @@ public sealed class RefusalPageTests
             using var response = await visitor.SendAsync(request, Cancellation);
             using var problem = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync(Cancellation));
             Assert.Equal((HttpStatusCode.Unauthorized, "application/problem+json"), (response.StatusCode, response.Content.Headers.ContentType?.MediaType));
-            Assert.Equal(("gated", Capabilities.SignIn.Word), (problem.RootElement.GetProperty("kind").GetString(), problem.RootElement.GetProperty("gate").GetString()));
+            Assert.Equal(("gated", Capabilities.SignIn.Word), (problem.RootElement.GetProperty("kind").GetString(), problem.RootElement.GetProperty("word").GetString()));
         }
     }
 

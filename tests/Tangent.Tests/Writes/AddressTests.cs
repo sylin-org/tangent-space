@@ -35,13 +35,13 @@ public sealed class AddressTests
 
         Assert.Equal(missing, await Asked("/t/studio/plans/" + hidden.Id + "/edit", JsonBody(new { body = "x" })));
         Assert.Equal(missing, await Asked("/t/studio/plans/" + Tids.Mint() + "/edit", JsonBody(new { body = "x" })));
-        // A body that is not one JSON object is refused before any address is read, so it says nothing of what one holds.
-        var unreadable = (HttpStatusCode.BadRequest, "invalid");
-        Assert.Equal(unreadable, await Asked("/t/studio/plans/" + hidden.Id + "/edit", Array()));
-        Assert.Equal(unreadable, await Asked("/t/studio/plans", Array()));
-        Assert.Equal(unreadable, await Asked("/t/studio/nothing", Array()));
-        Assert.Equal(unreadable, await Asked("/t/studio/new", Array()));
-        Assert.Equal(unreadable, await Asked("/t/nowhere/new", Array()));
+        // The address is judged before anything is read of the body, so a body that is not one JSON object, sent to an address
+        // that holds something hidden or nothing, answers what a missing address answers.
+        Assert.Equal(missing, await Asked("/t/studio/plans/" + hidden.Id + "/edit", Array()));
+        Assert.Equal(missing, await Asked("/t/studio/plans", Array()));
+        Assert.Equal(missing, await Asked("/t/studio/nothing", Array()));
+        Assert.Equal(missing, await Asked("/t/studio/new", Array()));
+        Assert.Equal(missing, await Asked("/t/nowhere/new", Array()));
         // An address no Tangent has, and one whose slug no Tangent uses yet, answer as the hidden one does.
         var unused = await Send(ada.Client, HttpMethod.Get, "/t/unused-slug/new", json: true);
         var nowhere = await Send(ada.Client, HttpMethod.Get, "/t/nowhere/new", json: true);
@@ -83,7 +83,7 @@ public sealed class AddressTests
         foreach (var (method, path, content) in addresses)
         {
             var answered = await Send(visitor, method, path, content, json: true);
-            answers.Add((answered.Status, answered.Title, answered.Gate, System.Text.RegularExpressions.Regex.Replace(answered.Body, "\"next\":\"[^\"]*\"", "")));
+            answers.Add((answered.Status, answered.Title, answered.Word, System.Text.RegularExpressions.Regex.Replace(answered.Body, "\"next\":\"[^\"]*\"", "")));
         }
 
         Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (answers[0].Item1, answers[0].Item3));

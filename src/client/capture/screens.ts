@@ -254,7 +254,8 @@ export const screens: Readonly<Record<string, Screen>> = {
   },
   // The form that starts a Topic in the discussions Tangent, the composer on it: empty for the persona, a member; her
   // words typed, then the page opened again, which brings them back; sent with a body of nothing but spaces, refused
-  // above the fields; and as a visitor reads it, who is told to sign in.
+  // above the fields; opened by a visitor, refused with the sign-in; and opened in a place where newcomers apply by the
+  // persona, whose application waits, refused with the wait.
   'new-topic': {
     path: '/t/discussions/new',
     states: [
@@ -275,6 +276,7 @@ export const screens: Readonly<Record<string, Screen>> = {
         waitFor: 'form[data-composer="refused"]',
       },
       { name: 'visitor', seed: 'write' },
+      { name: 'applicant', seed: 'apply', signedIn: true, path: '/t/general/new' },
     ],
   },
   // The article editor, the persona writing: a new article as it opens; her article, its cover, heading, list, quote and

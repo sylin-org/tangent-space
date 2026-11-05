@@ -73,13 +73,6 @@ public static class TangentWrites
 
     public static string Word(Move move) => move.ToString().ToLowerInvariant();
 
-    /// <summary>Null where the reader may change a Tangent's settings — they hold <see cref="Bit.ManageTangent"/> on it,
-    /// or <see cref="Bit.ManageSpace"/> — otherwise the gate of <see cref="Bit.ManageTangent"/>.</summary>
-    public static Reason? ManageGate(Capabilities capabilities)
-        => capabilities.Holds(Bit.ManageTangent) || capabilities.Holds(Bit.ManageSpace) ? null : capabilities.Gate(Bit.ManageTangent);
-
-    public static bool MayManage(Capabilities capabilities) => ManageGate(capabilities) is null;
-
     /// <summary>The word a field names among <paramref name="words"/>, by its place there; null for none, and false in
     /// <paramref name="valid"/> for a word that is not one of them.</summary>
     public static int? Choice(string? word, IReadOnlyList<string> words, out bool valid)

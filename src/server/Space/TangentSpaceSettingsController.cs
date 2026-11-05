@@ -41,7 +41,7 @@ public sealed record ChangeAppearanceInput(
 /// takes <c>admission</c> (<c>join</c> or <c>apply</c>), appearance's takes <c>base</c> (<c>tangent</c> or a bundled stylesheet), <c>palette</c> (<c>base</c> or <c>accent</c>), <c>accent</c> (<c>gold</c>, <c>jade</c>, <c>iris</c> or <c>copper</c>), <c>css</c> and the slots <c>head</c>, <c>masthead</c>, <c>doorIntro</c>, <c>articleHeader</c> and <c>footer</c>, as a form or a JSON object, a field left as it is when not sent, and
 /// sends <see cref="ChangeTangentSpace"/>: a form is sent on, from general to the door, where the name and the description
 /// show, and from admission and appearance back to themselves; a JSON request reads the place (<c>200</c>); a refusal reads the form
-/// again with the reason inline, or a problem with the gate. A person who may not change these but may use another
+/// again with the reason inline, or a problem with its word. A person who may not change these but may use another
 /// section opens that one instead. A reader for whom the place does not exist receives what an
 /// address with nothing there receives.</summary>
 public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : ControllerBase
@@ -173,20 +173,19 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
+        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
         return Elsewhere(place) ?? Ok(await Page(place, personId, ct));
     }
 
     [HttpPost(Path)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "change_settings", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Needs(Bit.ManageSpace)]
     [Description("Change the place's name, description or audience, for whoever holds ManageSpace. What you send replaces what stood, and a private place serves a visitor only the sign-in.")]
     public async Task<IActionResult> Change(ChangeSpaceInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
-        var personId = PostWrites.PersonId(User);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
+        var personId = Here.Of(HttpContext).PersonId;
 
         Audience? audience = null;
         if (input.Audience is { } sent)
@@ -215,7 +214,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
+        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
         return Elsewhere(place) ?? Ok(await AdmissionPage(place, personId, ct));
     }
 
@@ -228,7 +227,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
+        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
 
         Admission? admission = null;
         var sent = input.Admission;
@@ -257,7 +256,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
         if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
 
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
+        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
         var page = await AdmissionPage(place, personId, ct);
         if (sent is not null && Admissions.Contains(sent, StringComparer.Ordinal)) page = page with { Admission = sent };
         page = reason.Kind == ReasonKind.Gated ? page with { Gate = reason.Word, Change = null } : page with { Failure = reason.Text };
@@ -290,7 +289,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
+        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
         return Elsewhere(place) ?? Ok(await AppearancePage(place, personId, ct));
     }
 
@@ -303,7 +302,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
+        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
         var (accent, @base, palette, refused) = Choices(input);
         if (refused is not null) return await AppearanceRefused(personId, input, refused, ct);
 
@@ -331,7 +330,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
+        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
         if (place.Gate(Bit.ManageSpace) is { } gate) return Answers.Refused(HttpContext, gate);
 
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
@@ -376,7 +375,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
         if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
 
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
+        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
         var page = await AppearancePage(place, personId, ct);
         if (input.Accent is { } sent && Appearance.Accents.Contains(sent, StringComparer.Ordinal)) page = page with { Accent = sent };
         if (input.Base is { } sentBase && Appearance.Bases.Contains(sentBase, StringComparer.Ordinal)) page = page with { Base = sentBase };
@@ -450,7 +449,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
         if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
 
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return PostWrites.Unseen(HttpContext, place.Gate(Bit.View));
+        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
         var page = await Page(place, personId, ct);
         page = page with
         {

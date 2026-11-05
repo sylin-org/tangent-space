@@ -26,7 +26,7 @@ namespace Tangent.Space;
 /// applications wait, linked to where they are decided; one seen form whenever the door has news; and the poll link.
 /// Everything new is new by the one rule (<see cref="Unread"/>). The door's <c>gate</c> is why the reader may not write
 /// in the place, which an applicant's door and a timed-out participant's, with when it ends, say in one sentence. A
-/// reader without <see cref="Bit.View"/> on the place receives its gate.</summary>
+/// reader without <see cref="Bit.View"/> on the place receives its gate, worded for reading.</summary>
 public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers) : ControllerBase
 {
     /// <summary>The most Tangents the door lists: the first page of those the reader may view
@@ -52,7 +52,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
     {
         var personId = PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return Gated(HttpContext, place.Gate(Bit.View) ?? Capabilities.Absent);
+        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct)
             ?? throw new InvalidOperationException("The Tangent Space row is missing.");
         var reader = personId is null ? null : await Participant.Get(personId, ct);
@@ -264,26 +264,6 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
     /// of hidden events only that a whole window of them passed.</summary>
     private static Door.Position Resume(string baseAddress, long at)
         => new(at, baseAddress + EventsController.Path + "?" + EventsController.Since + "=" + at.ToString(CultureInfo.InvariantCulture));
-
-    /// <summary>What a reader without <see cref="Bit.View"/> on the place receives: a missing resource's answer where
-    /// the place is absent to them; otherwise the one step that stands between them and reading.</summary>
-    internal static IActionResult Gated(HttpContext http, Reason gate)
-        => gate.Kind == ReasonKind.Absent ? Answers.Refused(http, gate)
-        : gate == Capabilities.SignIn ? Read(http, SignInToRead, "Sign in to read")
-        : gate == Capabilities.Apply ? Answers.Refused(http, ApplyToRead)
-        : gate == Capabilities.Declined ? Answers.Refused(http, DeclinedToRead)
-        : Read(http, Reason.Gated(gate.Word!, "This Tangent Space is not open to you."), "Not readable");
-
-    /// <summary>A gate on reading the place, titled for reading: its status and its word are the one mapping's.</summary>
-    private static IActionResult Read(HttpContext http, Reason gate, string heading)
-        => new Problem(Answers.Status(http, gate), gate.Text, gate.Word) { Title = heading }.ToResult();
-
-    /// <summary>The gates that keep a reader from the place, worded for reading rather than writing.</summary>
-    private static readonly Reason SignInToRead = Reason.Gated(Capabilities.SignIn.Word!, "This Tangent Space is read by its participants.");
-
-    private static readonly Reason ApplyToRead = Reason.Gated(Capabilities.Apply.Word!, "Your application is waiting: you can read here once someone admits you.");
-
-    private static readonly Reason DeclinedToRead = Reason.Gated(Capabilities.Declined.Word!, "Your application was declined, so this Tangent Space is not open to you.");
 
     /// <summary>One group of new Posts: how many, whether that is a lower bound, and the newest few.</summary>
     private Door.Group Group(IReadOnlyList<Event> events, bool atLeast, IReadOnlyDictionary<string, Post> posts,

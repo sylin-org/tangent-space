@@ -1,3 +1,4 @@
+using Koan.Web.Controllers;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -17,22 +18,22 @@ public sealed class FeedsController(KoanWebBaseUrl baseUrl) : ControllerBase
     [HttpGet("/t/{tangent}/" + Feeds.TangentSegment + AtomFeed.Extension)]
     [HttpHead("/t/{tangent}/" + Feeds.TangentSegment + AtomFeed.Extension)]
     public async Task<IActionResult> TangentAtom(string tangent, CancellationToken ct)
-        => await OfTangent(tangent, ct) is { } feed ? Atom(feed) : PostWrites.Absent();
+        => await OfTangent(tangent, ct) is { } feed ? Atom(feed) : this.Refused(Capabilities.Absent);
 
     [HttpGet("/t/{tangent}/" + Feeds.TangentSegment + JsonFeed.Extension)]
     [HttpHead("/t/{tangent}/" + Feeds.TangentSegment + JsonFeed.Extension)]
     public async Task<IActionResult> TangentJson(string tangent, CancellationToken ct)
-        => await OfTangent(tangent, ct) is { } feed ? Json(feed) : PostWrites.Absent();
+        => await OfTangent(tangent, ct) is { } feed ? Json(feed) : this.Refused(Capabilities.Absent);
 
     [HttpGet(Feeds.ArticlesPath + AtomFeed.Extension)]
     [HttpHead(Feeds.ArticlesPath + AtomFeed.Extension)]
     public async Task<IActionResult> ArticlesAtom(CancellationToken ct)
-        => await OfArticles(ct) is { } feed ? Atom(feed) : PostWrites.Absent();
+        => await OfArticles(ct) is { } feed ? Atom(feed) : this.Refused(Capabilities.Absent);
 
     [HttpGet(Feeds.ArticlesPath + JsonFeed.Extension)]
     [HttpHead(Feeds.ArticlesPath + JsonFeed.Extension)]
     public async Task<IActionResult> ArticlesJson(CancellationToken ct)
-        => await OfArticles(ct) is { } feed ? Json(feed) : PostWrites.Absent();
+        => await OfArticles(ct) is { } feed ? Json(feed) : this.Refused(Capabilities.Absent);
 
     /// <summary>The Tangent's feed; null where a visitor may not read it. The Tangent's row is read before its overwrites,
     /// so an address no Tangent has takes no place in Koan's cache.</summary>

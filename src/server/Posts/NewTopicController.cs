@@ -21,41 +21,39 @@ public sealed record StartInput(
 /// <summary>Where a Topic starts: <c>/t/{tangent}/new</c>, the Tangent page's "new topic". Its <c>GET</c> is the form,
 /// one resource both ways (<see cref="NewTopicPage"/>), with a TID minted into it. Its <c>POST</c> takes
 /// <see cref="StartInput"/> and sends <see cref="StartTopic"/>: a form is sent on to the new Post's address, a JSON
-/// request reads the Post (<c>201</c>); a refusal reads the form again with the reason inline, or a problem with the gate;
-/// the same id with other words is a conflict. Both resolve the address as the Topic page does
-/// (<see cref="PostWrites.Locate"/>) before anything else is judged, so a Tangent the reader may not view and one no row
-/// has answer alike.</summary>
+/// request reads the Post (<c>201</c>); a refusal reads the form again with the reason inline, or a problem with its word;
+/// the same id with other words is a conflict. Both need <see cref="Bit.Topic"/>, which the Doorway judges before anything is
+/// bound (<see cref="Access.Doorway"/>), so a Tangent the reader may not view and one no row has answer alike.</summary>
 public sealed class NewTopicController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
     public const string Route = "/t/{tangent}/" + TangentPageController.NewTopicSegment;
 
     [HttpGet(Route)]
+    [Needs(Bit.Topic)]
     public async Task<IActionResult> Get(string tangent, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
-        var personId = PostWrites.PersonId(User);
-        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, null, null, ct);
-        if (found is null) return unseen!;
-        return Ok(await Page(found, personId, ct));
+        var found = Here.Of(HttpContext);
+        return Ok(await Page(found, found.PersonId, ct));
     }
 
     [HttpPost(Route)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "start_topic", Destructive = false, Idempotent = false, OpenWorld = false)]
-    [Description("Start a Topic in a Tangent, when what you have to say answers nothing already there. Send an id, a TID you mint, and the same call again returns the same Topic, so a retry is safe; without one, each call makes a new Topic. Refused, its gate says why.")]
+    [Needs(Bit.Topic)]
+    [Description("Start a Topic in a Tangent, when what you have to say answers nothing already there. Send an id, a TID you mint, and the same call again returns the same Topic, so a retry is safe; without one, each call makes a new Topic. Refused, its word says why.")]
     public async Task<IActionResult> Start([FromRoute, Description(Holds.Tangent)] string tangent, StartInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
-        var personId = PostWrites.PersonId(User);
-        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, null, null, ct);
-        if (found is null) return unseen!;
+        var found = Here.Of(HttpContext);
+        var personId = found.PersonId;
 
         var title = PostWrites.Title(input.Title) ?? "";
         var cover = input.Cover is { Length: > 0 } named ? named : null;
         var body = await PostWrites.Body(input.Body, found.Capabilities.Holds(Bit.Topic));
         var outcome = await new StartTopic(
             PostWrites.Id(input.Id),
-            found.Tangent.Id,
+            found.Tangent!.Id,
             title,
             body,
             personId ?? "",
@@ -97,8 +95,8 @@ public sealed class NewTopicController(KoanWebBaseUrl baseUrl) : ControllerBase
     private async Task<IActionResult> Again(string tangent, string? personId, StartInput input, int status, bool keepId,
         Func<NewTopicPage, NewTopicPage> refusal, CancellationToken ct)
     {
-        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, null, null, ct);
-        if (found is null) return unseen!;
+        var (found, refused) = await Here.Find(personId, tangent, null, null, ct);
+        if (refused is not null) return this.Refused(refused);
         var page = await Page(found, personId, ct) with
         {
             Title = PostWrites.Title(input.Title),
@@ -109,14 +107,14 @@ public sealed class NewTopicController(KoanWebBaseUrl baseUrl) : ControllerBase
         return new ObjectResult(refusal(page)) { StatusCode = status };
     }
 
-    private async Task<NewTopicPage> Page(PostWrites.Located found, string? personId, CancellationToken ct)
+    private async Task<NewTopicPage> Page(Here found, string? personId, CancellationToken ct)
     {
-        var row = found.Tangent;
+        var row = found.Tangent!;
         var capabilities = found.Capabilities;
         var baseAddress = BaseAddress();
         var address = PostWrites.TangentAddress(baseAddress, row.Id);
         var here = baseUrl.PathBase + "/t/" + row.Id + "/" + TangentPageController.NewTopicSegment;
-        var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
+        var space = found.Rows.Space;
         var gate = capabilities.Gate(Bit.Topic)?.Word;
         return new NewTopicPage(
             row.Id,

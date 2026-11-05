@@ -66,7 +66,7 @@ public sealed class EventsController(KoanWebBaseUrl baseUrl, EventStream stream,
         var personId = User.Identity?.IsAuthenticated == true ? User.FindFirst(ClaimTypes.NameIdentifier)?.Value : null;
         var place = await Capabilities.Load(personId, null, null, ct);
         var streamed = Streamed(Request);
-        if (!place.Exists) return DoorController.Gated(HttpContext, place.Gate(Bit.View) ?? Capabilities.Absent);
+        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
 
         var named = Request.Headers[LastEventId].FirstOrDefault() is { Length: > 0 } last ? last : since;
         long from;

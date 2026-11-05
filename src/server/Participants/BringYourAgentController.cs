@@ -1,3 +1,4 @@
+using Koan.Web.Controllers;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -24,7 +25,7 @@ public sealed class BringYourAgentController(KoanWebBaseUrl baseUrl) : Controlle
             return Redirect(address + SignInController.Path + "?return=" + Uri.EscapeDataString(baseUrl.PathBase + Path));
 
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return DoorController.Gated(HttpContext, place.Gate(Bit.View) ?? Capabilities.Absent);
+        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
         return Ok(new BringYourAgent(space.Name, address + "/", address,
             await PostWrites.Reader(personId, place, address, baseUrl.PathBase + Path, ct)));

@@ -77,7 +77,7 @@ public sealed class HtmlFormatter : TextOutputFormatter
         var renderer = http.RequestServices.GetRequiredService<HtmlRenderer>();
         var fragment = IsFragment(http.Request);
         var card = fragment || resource.Card?.Invoke(value) is not { } values ? null : _cards.RenderHead(values, http.Request);
-        var also = value is Problem { Gate: var gate } && gate == Capabilities.SignIn.Word
+        var also = value is Problem { Word: var word } && word == Capabilities.SignIn.Word
             ? new Dictionary<string, object?> { [nameof(ProblemView.SignIn)] = SignInStep(http) }
             : null;
         var html = fragment

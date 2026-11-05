@@ -33,7 +33,7 @@ public sealed class TangentsController(KoanWebBaseUrl baseUrl, IDataProtectionPr
     {
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return DoorController.Gated(HttpContext, place.Gate(Bit.View) ?? Capabilities.Absent);
+        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
 
         ViewableTangents.Cursor? cursor = null;
         if (after is not null && (cursor = ViewableTangents.Cursor.Open(after, protection)) is null)

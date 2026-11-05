@@ -105,6 +105,7 @@ public sealed partial class DiscoveryTests
         Assert.Contains("`Accept: application/json`", text);
         Assert.Contains("https://tangent.test/ is the door", text);
         Assert.Contains("`gate`", text);
+        Assert.Contains("its `word`", text);
         Assert.DoesNotContain("token`", text);
         var addresses = Addresses().Matches(text).Select(match => match.Value).ToList();
         Assert.NotEmpty(addresses);

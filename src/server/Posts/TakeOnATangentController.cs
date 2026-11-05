@@ -26,7 +26,7 @@ public sealed record TakeInput(
 /// origin: a form is sent on to the new Topic's address,
 /// a JSON request reads its root (<c>201</c>); a refusal reads the form again with the reason inline, or a problem with
 /// the gate; the same id with other words is a conflict. Both resolve the address as the Topic page does
-/// (<see cref="PostWrites.Locate"/>) before anything else is judged, so a Post the reader may not view and one no row
+/// (<see cref="Here.Find"/>) before anything else is judged, so a Post the reader may not view and one no row
 /// has answer alike. A Tangent chosen that no row has, or that is absent to the reader, is refused in one sentence
 /// that says neither.</summary>
 public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, IDataProtectionProvider protection) : ControllerBase
@@ -64,8 +64,8 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, IDataProtec
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, tangent, topic, post, ct);
-        if (found is null) return unseen!;
+        var (found, refused) = await Here.Find(personId, tangent, topic, post, ct);
+        if (refused is not null) return this.Refused(refused);
         ViewableTangents.Cursor? cursor = null;
         if (after is not null && (cursor = ViewableTangents.Cursor.Open(after, protection)) is null)
             return new Problem(StatusCodes.Status400BadRequest,
@@ -76,14 +76,14 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, IDataProtec
     [HttpPost(TakenFrom)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "take_on_a_tangent", Destructive = false, Idempotent = false, OpenWorld = false)]
-    [Description("Make a Post the start of a new Topic in a Tangent you choose, linked both ways, when a reply would wander from its Topic. Send an id, a TID you mint, and the same call again returns the same Topic, so a retry is safe; without one, each call makes a new Topic. Refused, its gate says why.")]
+    [Description("Make a Post the start of a new Topic in a Tangent you choose, linked both ways, when a reply would wander from its Topic. Send an id, a TID you mint, and the same call again returns the same Topic, so a retry is safe; without one, each call makes a new Topic. Refused, its word says why.")]
     public async Task<IActionResult> Take([FromRoute, Description(Holds.TakeFrom)] string from, [FromRoute, Description(Holds.Topic)] string topic,
         [FromRoute, Description(Holds.Post)] string post, TakeInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, from, topic, post, ct);
-        if (found is null) return unseen!;
+        var (found, refused) = await Here.Find(personId, from, topic, post, ct);
+        if (refused is not null) return this.Refused(refused);
 
         var chosen = input.Tangent ?? "";
         // The chosen Tangent's row before its overwrites; one no row has is refused as one absent to the reader is.
@@ -120,7 +120,7 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, IDataProtec
     /// <summary>A refusal: for a JSON request, the problem its reason answers as — a Tangent chosen that the reader may
     /// not start a Topic in, said without saying whether it exists; for a form, the form again with the reason where it
     /// belongs.</summary>
-    private async Task<IActionResult> Refused(PostWrites.Located found, string? personId, TakeInput input, Reason reason, CancellationToken ct)
+    private async Task<IActionResult> Refused(Here found, string? personId, TakeInput input, Reason reason, CancellationToken ct)
     {
         if (reason == StartTopic.NoTangent)
         {
@@ -140,11 +140,11 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, IDataProtec
 
     /// <summary>The form again, read afresh, keeping the choice and the words that were sent, and the Id when it is a TID
     /// and <paramref name="keepId"/>; otherwise a new one is minted, so sending again starts a Topic of its own.</summary>
-    private async Task<IActionResult> Again(PostWrites.Located sent, string? personId, TakeInput input, int status,
+    private async Task<IActionResult> Again(Here sent, string? personId, TakeInput input, int status,
         bool keepId, Func<TakeOnATangentPage, TakeOnATangentPage> refusal, CancellationToken ct)
     {
-        var (found, unseen) = await PostWrites.Locate(HttpContext, personId, sent.Tangent.Id, sent.Root!.Slug ?? sent.Root.Id, sent.Post!.Id, ct);
-        if (found is null) return unseen!;
+        var (found, refused) = await Here.Find(personId, sent.Tangent!.Id, sent.Root!.Slug ?? sent.Root.Id, sent.Post!.Id, ct);
+        if (refused is not null) return this.Refused(refused);
         var page = await Page(found, personId, input.Tangent, null, ct) with { Title = input.Title, Body = input.Body };
         if (keepId && Tid.IsValid(input.Id)) page = page with { Take = page.Take?.With(PostWrites.IdField, input.Id) };
         return new ObjectResult(refusal(page)) { StatusCode = status };
@@ -156,27 +156,27 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, IDataProtec
     /// link away; one chosen: <paramref name="chosen"/> where it is among them, else the origin's Tangent, else the first.
     /// The gate is <see cref="Capabilities.Removed"/> for a tombstone, and where no Tangent is listed, the origin's
     /// Tangent's reason the reader may not start a Topic there.</summary>
-    private async Task<TakeOnATangentPage> Page(PostWrites.Located found, string? personId, string? chosen, ViewableTangents.Cursor? after,
+    private async Task<TakeOnATangentPage> Page(Here found, string? personId, string? chosen, ViewableTangents.Cursor? after,
         CancellationToken ct)
     {
         var origin = found.Post!;
         var root = found.Root!;
         var here = found.Rows.For(null);
         var baseAddress = BaseAddress();
-        var tangentAddress = PostWrites.TangentAddress(baseAddress, found.Tangent.Id);
-        var topicAddress = PostWrites.TopicAddress(baseAddress, found.Tangent.Id, root.Slug ?? root.Id);
+        var tangentAddress = PostWrites.TangentAddress(baseAddress, found.Tangent!.Id);
+        var topicAddress = PostWrites.TopicAddress(baseAddress, found.Tangent!.Id, root.Slug ?? root.Id);
         var address = topicAddress + "/" + Uri.EscapeDataString(origin.Id);
-        var back = baseUrl.PathBase + "/t/" + found.Tangent.Id + "/" + (root.Slug ?? root.Id) + "/" + origin.Id + "/" + Segment;
+        var back = baseUrl.PathBase + "/t/" + found.Tangent!.Id + "/" + (root.Slug ?? root.Id) + "/" + origin.Id + "/" + Segment;
 
         var listed = await Origins.Destinations(personId, after, Origins.DestinationLimit, ct);
         var destinations = listed.Tangents.ToList();
-        if (here.Holds(Bit.Topic) && destinations.All(row => row.Id != found.Tangent.Id)) destinations.Add(found.Tangent);
+        if (here.Holds(Bit.Topic) && destinations.All(row => row.Id != found.Tangent!.Id)) destinations.Add(found.Tangent);
         if (personId is not null && chosen is not null && Slug.IsValid(chosen) && destinations.All(row => row.Id != chosen)
             && await Tangents.Tangent.Get(chosen, ct) is { } kept && (await Capabilities.Load(personId, kept.Id, null, ct)).Holds(Bit.Topic))
             destinations.Add(kept);
         var choices = destinations.Select(row => new TakeOnATangentPage.Choice(row.Id, row.Name, PostWrites.Word(row.DefaultKind))).ToList();
         var choice = choices.FirstOrDefault(listed => listed.Slug == chosen)
-                     ?? choices.FirstOrDefault(listed => listed.Slug == found.Tangent.Id)
+                     ?? choices.FirstOrDefault(listed => listed.Slug == found.Tangent!.Id)
                      ?? choices.FirstOrDefault();
         var gate = origin.Removed ? Capabilities.Removed.Word
             : choices.Count == 0 ? (here.Gate(Bit.Topic) ?? Capabilities.NoRoleGrants(Bit.Topic)).Word
@@ -186,7 +186,7 @@ public sealed class TakeOnATangentController(KoanWebBaseUrl baseUrl, IDataProtec
         var author = people.TryGetValue(origin.AuthorId, out var person) ? person : new TangentPage.Author(origin.AuthorId, origin.AuthorId, origin.AuthorId, "person", null);
         return new TakeOnATangentPage(
             new TakeOnATangentPage.Quoted(origin.Id, address, author, origin.CreatedAt, origin.Removed ? null : TangentPage.Opening(origin, people),
-                origin.Removed, root.Title ?? "", topicAddress, found.Tangent.Name, tangentAddress, TangentPage.EditedOf(origin, people)),
+                origin.Removed, root.Title ?? "", topicAddress, found.Tangent!.Name, tangentAddress, TangentPage.EditedOf(origin, people)),
             choices,
             choice?.Slug,
             gate is null ? TakeForm(address + "/" + Segment, choice?.Slug) : null,

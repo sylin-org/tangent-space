@@ -244,7 +244,7 @@ test('a reload while a submit was on its way checks the Post’s address before 
 test('a refusal reads inline above the fields, keeps the words, and opens no dialog', async () => {
   const alerted = vi.spyOn(window, 'alert').mockImplementation(() => {})
   fetched.mockResolvedValueOnce(
-    json(403, { title: 'Removed', detail: 'This post is removed, so nothing changes it now.', gate: 'removed' }, 'application/problem+json'),
+    json(403, { title: 'Removed', detail: 'This post is removed, so nothing changes it now.', word: 'removed' }, 'application/problem+json'),
   )
   const page = replyPage()
   type(page.body, 'Too late?')

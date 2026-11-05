@@ -39,13 +39,13 @@ public sealed class SignInController(KoanWebBaseUrl baseUrl) : ControllerBase
             with { Private = space?.Audience == Audience.Private });
     }
 
-    /// <summary>What a private place answers a visitor at any page of the tree but this: for JSON, the problem whose gate is
+    /// <summary>What a private place answers a visitor at any page of the tree but this: for JSON, the problem whose word is
     /// <c>sign-in</c>; otherwise this page, which brings them back to the address of a <c>GET</c> once they have signed
     /// in, or to the door from any other request; both <c>401</c>.</summary>
     public static IActionResult Answer(HttpContext http, KoanWebBaseUrl baseUrl, TangentSpace space)
     {
         http.Response.Headers.CacheControl = "no-store";
-        if (PostWrites.WantsJson(http.Request)) return Answers.Refused(http, Capabilities.SignIn);
+        if (PostWrites.WantsJson(http.Request)) return Answers.Refused(http, Capabilities.SignInToRead);
         var requested = HttpMethods.IsGet(http.Request.Method) || HttpMethods.IsHead(http.Request.Method)
             ? http.Request.PathBase + http.Request.Path + http.Request.QueryString
             : null;

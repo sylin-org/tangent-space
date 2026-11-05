@@ -9,7 +9,7 @@ namespace Tangent.Tangents;
 /// <summary>Sets what the role keyed <see cref="RoleKey"/> holds in the Tangent <see cref="Slug"/> beyond what it holds in
 /// the place (<see cref="RoleAccess"/>), as the role's overwrite there. The Tangent exists for the actor, who holds
 /// <see cref="Bit.View"/> on it, or the command answers that no Tangent has the slug; the actor may manage it
-/// (<see cref="TangentWrites.ManageGate"/>), or is refused with the gate word; the moderators' Tangent keeps its access
+/// (<see cref="Bit.ManageTangent"/>, which <see cref="Bit.ManageSpace"/> implies), or is refused with the gate word; the moderators' Tangent keeps its access
 /// (<see cref="ChangeTangent.Fixed"/>); the role is one whose access is set here, neither everyone, whose access is the
 /// Tangent's audience, nor one that administers, which reads and posts everywhere (<see cref="Administers"/>); and the
 /// actor manages it (<see cref="People.Manages"/>). The log records nothing, since the Tangent's audience stays as it
@@ -24,7 +24,7 @@ public sealed record ChangeAccess(string Slug, string ActorId, string RoleKey, R
         if (await Tangent.Get(Slug, ct) is not { } tangent) return new Outcome<Tangent>.Refused(ChangeTangent.NoTangent);
         var capabilities = await Capabilities.Load(ActorId, Slug, null, ct);
         if (!capabilities.Exists) return new Outcome<Tangent>.Refused(ChangeTangent.NoTangent);
-        if (TangentWrites.ManageGate(capabilities) is { } gate) return new Outcome<Tangent>.Refused(gate);
+        if (capabilities.Gate(Bit.ManageTangent) is { } gate) return new Outcome<Tangent>.Refused(gate);
         if (await TangentSpace.Get(TangentSpace.SingleRow, ct) is not { } space) return new Outcome<Tangent>.Refused(ChangeTangent.NoTangent);
         if (space.ModeratorsTangentId == Slug) return new Outcome<Tangent>.Refused(ChangeTangent.Fixed);
         if (RoleKey == Roles.Everyone) return new Outcome<Tangent>.Refused(Administers);

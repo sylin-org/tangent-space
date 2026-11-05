@@ -116,7 +116,7 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, AddressOffers offers
         return StatusCode(StatusCodes.Status303SeeOther);
     }
 
-    private static IActionResult Absent() => PostWrites.Absent();
+    private IActionResult Absent() => this.Refused(Capabilities.Absent);
 
     private static IActionResult NoLongerOpen()
         => new Problem(StatusCodes.Status409Conflict, Offer.NotOpen.Text) { Title = "No longer open" }.ToResult();

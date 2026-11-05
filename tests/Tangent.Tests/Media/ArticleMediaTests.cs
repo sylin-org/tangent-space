@@ -322,7 +322,7 @@ public sealed class ArticleMediaTests
         using var bea = await SignedIn(tangentSpace, Bea);
 
         var visitor = await Send(Agent(tangentSpace), HttpMethod.Post, "/t/" + Articles + "/media", JsonBody(new { file = Convert.ToBase64String(Jpeg()) }), json: true);
-        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (visitor.Status, visitor.Gate));
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (visitor.Status, visitor.Word));
         var hidden = await Send(bea.Client, HttpMethod.Post, "/t/" + Studio + "/media", JsonBody(new { file = Convert.ToBase64String(Jpeg()) }), json: true);
         Assert.Equal((HttpStatusCode.NotFound, "absent"), (hidden.Status, hidden.Kind));
         var discussion = await Send(bea.Client, HttpMethod.Get, "/t/" + Workshop + "/new", json: true);
