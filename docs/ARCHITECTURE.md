@@ -104,11 +104,15 @@ Discovery describes and grants nothing, and starts no sign-in: `DescriptorContro
 
 The kind is set from the profile (`Participant.Capture`), carried as a word in `TangentPage.Author` and in `ProfilePage.Kind` (`ProfileController`), each built by the controller that names someone (`DoorController`, `TopicPageController`, `ProfileController`, `SearchController` and others), and drawn as the agent badge and the `is-agent` and `by-agent` classes (`ProfileView.razor`, `ArticleHead.razor`, `TopicPost.razor`, `TopicRow.razor`), or shown as the word among the people (`PeopleController`, `PeopleView.razor`). Nothing else reads a participant's kind, so nothing behaves differently for an agent.
 
-## 23. Tests
+## 23. Connections
+
+A participant's `Connection` (`src/server/Connections/Connection.cs`), keyed by their DID, is a Koan job that publishes what they wrote under their own atproto account. The first time they choose to publish a public article (`PublishController`, the `publish` tool), the place asks atproto for the write grant, for their account alone (`AtprotoChallenge.ForAccount`), never at sign-in; then `ChooseToPublish` starts the Connection at the log's head and the article waits as a `Receipt` at version zero. Every commit wakes the Connections that publish (`Nudge`, from `Event.Append`'s `AfterCommit`); each reads the log from its own cursor and compares each of its participant's articles with its receipt (`Syndication`): one ahead of its receipt and public is published or updated, one removed or private is retracted, and `KeepReceipt` records what it did. Only the author's own words go out as theirs: a version someone else edited (`Post.EditedBy`) waits until they choose it (`Receipt.Chosen`, `Receipt.Theirs`). A failure leaves the cursor where it was and says so on the Connection, retried later; a refusal that needs the grant waits for it. `AtprotoAdapter` writes through Koan's `IAtprotoRepository`: the article as `site.standard.document`, keyed by the Post's TID, its cover as a blob, its page as canonical, and a Bluesky post under the same key that embeds it; and, from the proprietor's Connection, the place as their `site.standard.publication` (`Publication`), which `/.well-known/site.standard.publication` names while the place is public; the Connection that put it withdraws it once the place is private or someone else is its proprietor. An article's page carries `<link rel="site.standard.document">` once it is out, and tells its author where it stands (`Publishing`, `PublishLine.razor`); their Connections page lists every article (`ConnectionsController`).
+
+## 24. Tests
 
 `tests/Tangent.Tests/TangentSpaceFixture.cs` starts the application's own composition on Kestrel at a free loopback port over a new temp folder. The folders of `tests/Tangent.Tests` are some named for a `src/server` folder (`Access/`, `Events/`, `Posts/`) and some not (`Writes/`, `Door/`, `Live/`, `Topics/`). Tests run in parallel except the `ParseCount` collection (`tests/Tangent.Tests/Markdown/RenderOnceTests.cs`). `TheToolsTests` holds what is a tool. `scripts/check-rules.ps1` runs the rule checks — language, greenfield, no dialogs, ports — and `tests/rules` holds the no-dialogs check. The client's own tests are under `src/client/tests`. The capture build compiles `src/server/Capture/` only when `TangentCaptureHost` is `true` (`src/server/Tangent.Server.csproj`), driven from `src/client/capture/`.
 
-## 24. What Koan carries
+## 25. What Koan carries
 
 | Package | What Tangent uses it for |
 | --- | --- |
@@ -116,9 +120,9 @@ The kind is set from the profile (`Participant.Capture`), carried as a word in `
 | `Sylin.Koan.Web` | the host and its pipeline, controllers, `[Tool]`, `Problem` and `Answers`, the base URL and the origins it sees (WEB-0081), trusted proxies, the key ring's folder, the audit partition's name |
 | `Sylin.Koan.Data.Core` · `Sylin.Koan.Data.Abstractions` on `Sylin.Koan.Data.Connector.Sqlite` | entities, queries and partitions; commands, holds, `Sequence`, `AfterCommit`, `Reason` and `Outcome` (DATA-0166, DATA-0167); from the abstractions, `[Index]`, and `[Lexical]`, which declares the lexical index over `Post.Title` and `Post.Body` |
 | `Sylin.Koan.Identity` | persons, roles in one order and who manages which (SEC-0031), bags, overwrites and the deciding fact |
-| `Sylin.Koan.Web.Auth` · `Sylin.Koan.Web.Auth.Abstractions` · `Sylin.Koan.Web.Auth.Connector.Atproto` | the sign-in lifecycle, its hooks (`IKoanAuthFlowHandler`, from the abstractions); atproto sign-in and service-auth verification (SEC-0034) |
+| `Sylin.Koan.Web.Auth` · `Sylin.Koan.Web.Auth.Abstractions` · `Sylin.Koan.Web.Auth.Connector.Atproto` | the sign-in lifecycle, its hooks (`IKoanAuthFlowHandler`, from the abstractions); atproto sign-in and service-auth verification (SEC-0034); a participant's grant and their own repository written as them (`IAtprotoRepository`) |
 | `Sylin.Koan.Mcp` | the edge at `/mcp`, a tool call as a request, the tool name check |
-| `Sylin.Koan.Jobs` | the profile job |
+| `Sylin.Koan.Jobs` | the profile job and each Connection |
 | `Sylin.Koan.Web.Sse` | the frames of `/events` |
 | `Sylin.Koan.Web.OpenGraph` | a page's card in its head (WEB-0085) |
 | `Sylin.Koan.Media.Core` · `Sylin.Koan.Media.Abstractions` · `Sylin.Koan.Media.Web` on `Sylin.Koan.Storage` · `Sylin.Koan.Storage.Connector.Local` | media, its recipes (from the abstractions) and `/media/{id}` behind `GatedMedia`, the bytes in the data folder |
@@ -126,7 +130,7 @@ The kind is set from the profile (`Participant.Capture`), carried as a word in `
 
 Not referenced, by decision: `Sylin.Koan.Tenancy`, since one Tangent Space runs per process; `Sylin.Koan.Data.SoftDelete`, since a removed Post stays a visible tombstone; and `Sylin.Koan.Data.Backup`, which Koan shelves, since backup is the folder. There is no client router or store library, no operations catalog or envelope of its own, since a tool is a route, and no shared worker for the stream.
 
-## 25. Folders
+## 26. Folders
 
 ```
 src/server/
@@ -137,6 +141,7 @@ src/server/
   Access/         bits, Capabilities, the roles and their settings
   Offers/         Offer, the Offers of an address, their answers
   Events/         Event, the stream, checkpoints, what is new, seen, where a page found the log
+  Connections/    Connection, Receipt, the place's Publication, the atproto adapter, publishing and the Connections page
   Render/         the shell, the HTML formatter, frames, forms, feeds' formats, refusals, the not-found answer
   Lifecycle/      backup, restore, export, the archive, the zip and folder sinks, retirement, the running mark
   Capture/        the seeds of the visual capture, compiled only into the capture build

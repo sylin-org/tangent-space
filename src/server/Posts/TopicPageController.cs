@@ -115,6 +115,8 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
         var shownThrough = window.Replies.Count == 0 ? 0 : window.High;
         var continues = window.Low <= Math.Max(seenSeq, 0) + 1;
         if (reader is not null) Response.Headers.CacheControl = "no-cache, no-store";
+        var (publishing, document) = await Connections.Publishing.For(root, reader?.Id, reader is null ? null : Named(reader).Handle,
+            await Connections.Publishing.Open(space, tangentRow.Id, ct), address, baseAddress, ct);
         return Ok(new TopicPage(
             root.Id,
             root.Slug ?? root.Id,
@@ -150,7 +152,9 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
                 : null,
             TopicPage.HeaderOf(root.Kind, space.Appearance, baseAddress + "/"),
             root.CoverId is { } cover ? baseAddress + Media.Reference(cover) : null,
-            TangentPage.ReadTime(root.Body)));
+            TangentPage.ReadTime(root.Body),
+            publishing,
+            document));
     }
 
     /// <summary>One Post as the page shows it, with what the reader holds on it from the page's rows, where it is

@@ -298,6 +298,15 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'visitor', seed: 'article' },
     ],
   },
+  // The persona's Connections: her Bluesky account publishing her articles, one updated, one published, and one it
+  // couldn't reach Bluesky for, trying again; and her article as it reads once it is out.
+  connections: {
+    path: '/settings/connections',
+    states: [
+      { name: 'publishing', seed: 'connections', signedIn: true },
+      { name: 'article-published', seed: 'connections', signedIn: true, path: '/t/articles/mending-with-gold' },
+    ],
+  },
   // The form that creates a Tangent, read by the persona, who set the place up and so administers it, in a place that
   // holds only the moderators' Tangent: as it opens, the name alone with the rest at its defaults behind one line; and
   // sent with a name of nothing but spaces, refused under the name.

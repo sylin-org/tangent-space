@@ -62,6 +62,8 @@ public sealed class TangentModule : KoanModule
         // The controllers of this assembly, whichever assembly hosts the composition.
         services.AddKoanControllersFrom<TangentModule>();
         Participants.ParticipantsComposition.AddParticipants(services);
+        services.AddSingleton<Connections.AtprotoAdapter>();
+        services.AddSingleton<Connections.Nudge>();
         LiveComposition.AddLive(services);
 
         // The HTML projection: each resource type names its component; the formatter goes first so a request
@@ -92,7 +94,8 @@ public sealed class TangentModule : KoanModule
             .Add<RolesPage, RolesView>(page => "Roles · " + page.Place, frame: RolesView.Frame)
             .Add<Lifecycle.ExportSettingsPage, Lifecycle.ExportSettingsView>(page => "Export · " + page.Place, frame: Lifecycle.ExportSettingsView.Frame)
             .Add<Posts.SearchPage, Posts.SearchView>(page => (page.Text is { } text ? text + " · Search · " : "Search · ") + page.Place, frame: Posts.SearchView.Frame)
-            .Add<Participants.BringYourAgent, Participants.BringYourAgentView>(page => "Bring your agent · " + page.Place, frame: Participants.BringYourAgentView.Frame));
+            .Add<Participants.BringYourAgent, Participants.BringYourAgentView>(page => "Bring your agent · " + page.Place, frame: Participants.BringYourAgentView.Frame)
+            .Add<Connections.ConnectionsPage, Connections.ConnectionsView>(page => "Connections · " + page.Place, frame: Connections.ConnectionsView.Frame));
         services.AddSingleton<HtmlFormatter>();
         services.AddOptions<MvcOptions>().Configure<HtmlFormatter>((mvc, html) =>
         {
@@ -127,6 +130,9 @@ public sealed class TangentModule : KoanModule
         await data.GetRepository<Event, string>().EnsureReady(ct);
         await data.GetRepository<Checkpoint, string>().EnsureReady(ct);
         await data.GetRepository<Offers.Offer, string>().EnsureReady(ct);
+        await data.GetRepository<Connections.Connection, string>().EnsureReady(ct);
+        await data.GetRepository<Connections.Receipt, string>().EnsureReady(ct);
+        await data.GetRepository<Connections.Publication, string>().EnsureReady(ct);
         using (EntityContext.Partition(Posts.AuditPartition.Name)) await data.GetRepository<Posts.Post, string>().EnsureReady(ct);
     }
 

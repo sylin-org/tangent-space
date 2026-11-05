@@ -27,6 +27,9 @@ public sealed class TheToolsTests
     /// its caller (<c>Koan:Mcp:ReadByAddress</c>).</summary>
     private static readonly IReadOnlySet<string> EdgeTools = new HashSet<string> { "read" };
 
+    /// <summary>The tools that reach past the place: publishing writes the author's own repository.</summary>
+    private static readonly IReadOnlySet<string> OpenWorld = new HashSet<string> { "publish" };
+
     /// <summary>Each tool, with the action that is its one definition.</summary>
     private static readonly IReadOnlyDictionary<string, MethodInfo> Tools = new Dictionary<string, MethodInfo>
     {
@@ -70,7 +73,9 @@ public sealed class TheToolsTests
         ["read_tangent_access"] = Action<TangentAccessController>(nameof(TangentAccessController.Get)),
         ["change_tangent_access"] = Action<TangentAccessController>(nameof(TangentAccessController.Change)),
         ["use_offer"] = Action<OfferController>(nameof(OfferController.Use)),
-        ["decline_offer"] = Action<OfferController>(nameof(OfferController.Decline))
+        ["decline_offer"] = Action<OfferController>(nameof(OfferController.Decline)),
+        ["publish"] = Action<Connections.PublishController>(nameof(Connections.PublishController.Publish)),
+        ["read_connections"] = Action<Connections.ConnectionsController>(nameof(Connections.ConnectionsController.Get))
     };
 
     /// <summary>Every public action that is not a tool, with why.</summary>
@@ -99,7 +104,12 @@ public sealed class TheToolsTests
         [Action<DescriptorController>(nameof(DescriptorController.Llms))] = "llms.txt",
         [Action<EventsController>(nameof(EventsController.Get))] = "the event stream",
         [Action<SuggestionsController>(nameof(SuggestionsController.Suggest))] = "a writer's suggestions, which an agent reads through read",
-        [Action<NotFoundController>(nameof(NotFoundController.Answer))] = "the not-found catch-all"
+        [Action<NotFoundController>(nameof(NotFoundController.Answer))] = "the not-found catch-all",
+        [Action<Connections.PublishController>(nameof(Connections.PublishController.Granted))] = "where atproto's permission comes back to a browser",
+        [Action<Connections.PublishController>(nameof(Connections.PublishController.Grant))] = "asks atproto for permission in a browser",
+        [Action<Connections.PublishController>(nameof(Connections.PublishController.NotNow))] = "answers the page's offer, which an agent never meets",
+        [Action<Connections.ConnectionsController>(nameof(Connections.ConnectionsController.OfferAgain))] = "brings back the page's offer",
+        [Action<Connections.PublicationController>(nameof(Connections.PublicationController.Get))] = "a file for the network's readers"
     };
 
     /// <summary>What a client reads of each tool that writes, as it decides whether to ask and whether it may retry: what may
@@ -132,7 +142,8 @@ public sealed class TheToolsTests
         ["change_tangent"] = (true, false),
         ["change_tangent_access"] = (true, true),
         ["use_offer"] = (true, true),
-        ["decline_offer"] = (true, true)
+        ["decline_offer"] = (true, true),
+        ["publish"] = (false, true)
     };
 
     private static MethodInfo Action<TController>(string name)
@@ -180,7 +191,8 @@ public sealed class TheToolsTests
             var stated = action.GetCustomAttribute<ToolAttribute>()!.Stated;
             if (!reads)
             {
-                Assert.True(stated is { Destructive: not null, Idempotent: not null, OpenWorld: false }, name + " says nothing of what it does");
+                Assert.True(stated is { Destructive: not null, Idempotent: not null, OpenWorld: not null }, name + " says nothing of what it does");
+                Assert.Equal(OpenWorld.Contains(name), stated.OpenWorld!.Value);
                 Assert.Equal(Writes[name], (stated.Destructive!.Value, stated.Idempotent!.Value));
             }
         }
@@ -225,7 +237,7 @@ public sealed class TheToolsTests
             // A client reads the annotations as each tool states them, and every tool a description names exists.
             var hints = tool.GetProperty("annotations");
             var (destructive, idempotent) = Writes.TryGetValue(name, out var write) ? write : (false, true);
-            Assert.Equal((name, !Writes.ContainsKey(name), destructive, idempotent, false),
+            Assert.Equal((name, !Writes.ContainsKey(name), destructive, idempotent, OpenWorld.Contains(name)),
                 (name, hints.GetProperty("readOnlyHint").GetBoolean(), hints.GetProperty("destructiveHint").GetBoolean(), hints.GetProperty("idempotentHint").GetBoolean(), hints.GetProperty("openWorldHint").GetBoolean()));
             foreach (System.Text.RegularExpressions.Match named in System.Text.RegularExpressions.Regex.Matches(tool.GetProperty("description").GetString()!, @"[a-z]+(?:_[a-z]+)+"))
                 Assert.True(listed.ContainsKey(named.Value), name + " names " + named.Value);

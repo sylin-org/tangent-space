@@ -24,7 +24,9 @@ namespace Tangent.Posts;
 /// where a Topic taken on a tangent was taken from, as the reader may know it. <see cref="Feeds"/> are its Tangent's
 /// feeds, present only where a visitor may read that Tangent. <see cref="ArticleHeader"/> is the place's article header, its Markdown drawn as a
 /// Post's body is, present only on an article and only where the place wrote one. <see cref="Cover"/> is the address of an
-/// article's cover, while its root stands and has one; <see cref="ReadMinutes"/> what its body takes to read.</summary>
+/// article's cover, while its root stands and has one; <see cref="ReadMinutes"/> what its body takes to read.
+/// <see cref="Publishing"/> is where an article stands on its author's own account, for its author
+/// (<see cref="Connections.Publishing.For"/>), and <see cref="Document"/> its document record there, once it is out.</summary>
 public sealed record TopicPage(
     string Id,
     string Slug,
@@ -54,7 +56,9 @@ public sealed record TopicPage(
     IReadOnlyList<FeedLink>? Feeds = null,
     string? ArticleHeader = null,
     string? Cover = null,
-    int ReadMinutes = 1)
+    int ReadMinutes = 1,
+    Connections.Publishing? Publishing = null,
+    string? Document = null)
 {
     /// <summary>What heads a Topic of this <paramref name="kind"/> from the place's <paramref name="appearance"/>, its images under
     /// <paramref name="door"/>.</summary>

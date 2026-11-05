@@ -45,6 +45,7 @@
                 <ArticleHead Title="@Model.Title" Cover="@Model.Cover" Author="@Model.Root.Author" At="@Model.Root.CreatedAt" Minutes="@Model.ReadMinutes" Header="@Model.ArticleHeader" />
                 <TakenFrom Model="@Model.TakenFrom" />
                 <TopicPost Model="@Model.Root" Today="@Model.Day" Root="true" Article="true" Door="@Model.Door" Anchor="@(Model.Anchor == Model.Root.Id)" Reader="@Model.Who?.Id" />
+                <Tangent.Connections.PublishLine Model="@Model.Publishing" />
             </article>
         }
         else
@@ -101,7 +102,8 @@
     public static Frame Frame(TopicPage page)
     {
         var who = page.Who is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut, reader.Settings, reader.ForYou) : null;
-        return new(page.Place, page.Door, [new Crumb(page.Tangent.Name, page.Tangent.Address), new Crumb(page.Title)], who, page.SignIn, page.Feeds);
+        return new(page.Place, page.Door, [new Crumb(page.Tangent.Name, page.Tangent.Address), new Crumb(page.Title)], who, page.SignIn, page.Feeds,
+            Document: page.Document);
     }
 
     private bool Article => Model.Kind == "article";
