@@ -31,8 +31,9 @@ public sealed record DeleteRoleInput([Description(Holds.DeletedRole)] string? Ro
 
 /// <summary>The place's roles, a section of its settings at <c>/settings/roles</c>, for whoever holds
 /// <see cref="Bit.ManageRoles"/>. Its <c>GET</c> is one page of the roles in Koan's order (<see cref="RolesPage"/>), the
-/// highest first, one resource both ways, by <c>page</c>; a reader who may not shape them reads the gate with no role
-/// listed, answered <c>401</c> to sign in and <c>403</c> otherwise. Its <c>POST</c>s take their fields as a form or a JSON
+/// highest first, one resource both ways, by <c>page</c>; a reader who may not shape them is refused with the gate,
+/// <c>401</c> to sign in and <c>403</c> otherwise: a page reads it with no role listed, and a JSON request as its problem.
+/// Its <c>POST</c>s take their fields as a form or a JSON
 /// object and send one command: <c>/settings/roles</c> creates a role (<see cref="CreateRole"/>) from <c>name</c> and
 /// <c>permissions</c>; <c>/change</c> changes the role whose word <c>role</c> names (<see cref="ReviseRole"/>) by any of
 /// <c>name</c>, <c>permissions</c> and <c>move</c>; <c>/delete</c> deletes it (<see cref="DeleteRole"/>). A form is sent
@@ -63,7 +64,7 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
     /// <summary>The most roles one page holds.</summary>
     public const int PageSize = 50;
 
-    public static readonly Reason MoveRule = Reason.Invalid("A role moves higher or lower.");
+    public static readonly Reason MoveRule = Reason.Invalid(MoveField, "A role moves higher or lower.");
 
     /// <summary>The moves a form offers, as words.</summary>
     public static readonly IReadOnlyList<string> Moves = Enum.GetValues<RoleMove>().Select(Word).ToList();
@@ -84,6 +85,7 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
+        if (place.Gate(Bit.ManageRoles) is { } refused && PostWrites.WantsJson(Request)) return this.Refused(refused);
         var read = await Page(place, personId, Numbered(page), ct);
         return place.Gate(Bit.ManageRoles) is { } gate ? new ObjectResult(read) { StatusCode = Answers.Status(HttpContext, gate) } : Ok(read);
     }

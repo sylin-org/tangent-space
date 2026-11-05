@@ -182,6 +182,32 @@ public sealed class CapabilitiesTests
         Assert.Equal(OnTangent, member.Held);
     }
 
+    /// <summary>Taken out while the Tangent is private, made public, they read it; made private again, they are kept out.
+    /// Only their deny of View gives way: their deny of Post stands, and so does standing in the place.</summary>
+    [Fact]
+    public void A_person_taken_out_reads_a_public_tangent_and_is_kept_out_again_once_it_is_private()
+    {
+        var takenOut = Over(Leo, deny: Bit.View);
+        IReadOnlyList<PermissionOverwrite> members = [ForAudience(Audience.Private), Over(Roles.Member, allow: Bit.View), takenOut];
+        IReadOnlyList<PermissionOverwrite> everyone = [ForAudience(Audience.Public), takenOut];
+
+        var whilePrivate = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, members, Now);
+        var madePublic = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, everyone, Now);
+        var privateAgain = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, members, Now);
+        var postDenied = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, [ForAudience(Audience.Public), Over(Leo, deny: Bit.View | Bit.Post)], Now);
+        var banned = Capabilities.For(Participant(standing: Standing.Banned), Member(), PublicPlace, Workshop, everyone, Now);
+        var applicant = Capabilities.For(Participant(standing: Standing.Applied), Member(), PrivatePlace, Workshop, everyone, Now);
+        var timedOut = Capabilities.For(Participant(standing: Standing.TimedOut), Member(), PublicPlace, Workshop, everyone, Now);
+
+        Assert.Equal((false, Capabilities.Absent), (whilePrivate.Exists, whilePrivate.Gate(Bit.View)));
+        Assert.Equal((true, OnTangent), (madePublic.Exists, madePublic.Held));
+        Assert.Equal((false, Capabilities.Absent), (privateAgain.Exists, privateAgain.Gate(Bit.View)));
+        Assert.Equal((true, Capabilities.Denied(Leo, Bit.Post).Word), (postDenied.Holds(Bit.View), postDenied.Gate(Bit.Post)?.Word));
+        Assert.Equal((false, Capabilities.Absent), (banned.Exists, banned.Gate(Bit.View)));
+        Assert.Equal((false, Capabilities.ApplyToRead), (applicant.Exists, applicant.Gate(Bit.View)));
+        Assert.Equal((true, Capabilities.TimedOut.Word), (timedOut.Holds(Bit.View), timedOut.Gate(Bit.Post)?.Word));
+    }
+
     [Fact]
     public void What_a_reader_may_not_view_does_not_exist_for_them_and_nothing_else_is_said()
     {

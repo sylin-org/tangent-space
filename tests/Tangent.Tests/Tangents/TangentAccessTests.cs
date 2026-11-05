@@ -73,10 +73,10 @@ public sealed class TangentAccessTests
         Assert.Equal(HttpStatusCode.Forbidden, unmanagedPage.Status);
         Assert.Contains("This isn’t open to you here.", WebUtility.HtmlDecode(unmanagedPage.Body));
 
-        // A member manages nothing here; a role no one has is not found; an administrator's access is not set.
+        // A member manages nothing here; a role no one has is refused on its field; an administrator's access is not set.
         var refused = await Json(ada, "/t/" + Studio, access, new { role = "member", access = "post" });
         Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageTangent).Word), (refused.Status, refused.Word));
-        Assert.Equal(HttpStatusCode.NotFound, (await Json(leo, access, access, new { role = "nobody", access = "post" })).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Json(leo, access, access, new { role = "nobody", access = "post" })).Status);
         Assert.Equal(HttpStatusCode.BadRequest, (await Json(leo, access, access, new { role = "administrator", access = "read" })).Status);
         var everyone = await Json(leo, access, access, new { role = "everyone", access = "read" });
         Assert.Equal((HttpStatusCode.BadRequest, ChangeAccess.EveryoneReads.Text), (everyone.Status, everyone.Json.GetProperty("detail").GetString()));

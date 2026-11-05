@@ -1,7 +1,7 @@
 @using global::Tangent.Render
 @* What the reader may change of one participant, inline, each change one form: Lift, at once; Time out, which opens in
    place to say what a timeout leaves and offers its few durations; the roles the reader may give and take, one button
-   each; and Ban, which opens in place to say what a ban does and holds the one button that does it, the confirmation in
+   each, by the name the place now calls them; and Ban, which opens in place to say what a ban does and holds the one button that does it, the confirmation in
    the page, never a dialog. Each form names the participant and the page it returns to. Nothing renders where the
    reader may change nothing. *@
 @if (Person.Can.Count > 0 || Person.Give.Count > 0 || Person.Take.Count > 0)
@@ -37,8 +37,8 @@
             {
                 <form class="give-role" method="post" action="@give.Action">
                     @Fields(give)
-                    <input type="hidden" name="@PeopleController.RoleField" value="@role">
-                    <button type="submit" class="button">Make @Spoken(role)</button>
+                    <input type="hidden" name="@PeopleController.RoleField" value="@role.Word">
+                    <button type="submit" class="button">Give @role.Name role</button>
                 </form>
             }
         }
@@ -48,8 +48,8 @@
             {
                 <form class="take-role" method="post" action="@take.Action">
                     @Fields(take)
-                    <input type="hidden" name="@PeopleController.RoleField" value="@role">
-                    <button type="submit" class="button">Take @Spoken(role) role</button>
+                    <input type="hidden" name="@PeopleController.RoleField" value="@role.Word">
+                    <button type="submit" class="button">Take @role.Name role</button>
                 </form>
             }
         }
@@ -79,9 +79,6 @@
         <input type="hidden" name="@PeopleController.ParticipantField" value="@Person.Id">
         <input type="hidden" name="@PeopleController.BackField" value="@form.Value(PeopleController.BackField)">
     </text>;
-
-    /// <summary>A role's word as a button says it: "night shift" for <c>night-shift</c>.</summary>
-    private static string Spoken(string role) => role.Replace('-', ' ');
 
     /// <summary>A duration's button, in words.</summary>
     private static string For(string duration) => duration switch

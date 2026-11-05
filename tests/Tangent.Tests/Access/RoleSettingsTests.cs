@@ -93,8 +93,9 @@ public sealed class RoleSettingsTests
         Assert.Equal(Bit.View | Bit.Post, Bits.InTokens((await roles.Get("role:night-shift", Cancellation))!.Permissions));
 
         // Given on People as the seeded roles are, and listed among her roles.
-        Assert.Contains("night-shift", Strings((await Send(leo.Client, HttpMethod.Get, PeopleController.Path, json: true)).Json
-            .GetProperty("people").EnumerateArray().Single(row => row.GetProperty("id").GetString() == Ada), "give"));
+        Assert.Contains(("night-shift", "Night watch"), (await Send(leo.Client, HttpMethod.Get, PeopleController.Path, json: true)).Json
+            .GetProperty("people").EnumerateArray().Single(row => row.GetProperty("id").GetString() == Ada).GetProperty("give").EnumerateArray()
+            .Select(role => (role.GetProperty("word").GetString(), role.GetProperty("name").GetString())));
         var given = await Json(leo, PeopleController.Path, PeopleController.GivePath, new { participant = Ada, role = "night-shift" });
         Assert.Equal(HttpStatusCode.OK, given.Status);
         Assert.Contains("Night watch", Strings(given.Json, "roles"));
@@ -110,7 +111,9 @@ public sealed class RoleSettingsTests
         Assert.Null(await roles.Get("role:night-shift", Cancellation));
         Assert.False((await roles.Bag(Ada, authenticated: true, Cancellation)).InRole("role:night-shift"));
         Assert.Equal(["administrator", "moderator", "member", "everyone"], Order((await Send(leo.Client, HttpMethod.Get, path, json: true)).Json));
-        Assert.Equal(HttpStatusCode.NotFound, (await Json(leo, path, RolesController.DeletePath, new { role = "night-shift" })).Status);
+        // A word no role has any longer is refused on its field, at an address that stands.
+        var gone = await Json(leo, path, RolesController.DeletePath, new { role = "night-shift" });
+        Assert.Equal((HttpStatusCode.BadRequest, RoleSettings.NoRole.Text), (gone.Status, gone.Json.GetProperty("errors").GetProperty(RolesController.RoleField)[0].GetString()));
     }
 
     [Fact]
@@ -149,10 +152,10 @@ public sealed class RoleSettingsTests
         using var ada = await SignedIn(tangentSpace, Ada);
         var path = RolesController.Path;
 
-        // A member shapes nothing: the gate, and no role listed.
+        // A member shapes nothing: the gate's problem, and no role listed.
         var member = await Send(ada.Client, HttpMethod.Get, path, json: true);
-        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageRoles).Word), (member.Status, member.Json.GetProperty("gate").GetString()));
-        Assert.Empty(member.Json.GetProperty("roles").EnumerateArray());
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageRoles).Word), (member.Status, member.Json.GetProperty("word").GetString()));
+        Assert.False(member.Json.TryGetProperty("roles", out _));
 
         // The moderator creates a role below their own, granting what they hold.
         var created = await Json(mo, path, path, new { name = "Helpers", permissions = "View Post Topic" });

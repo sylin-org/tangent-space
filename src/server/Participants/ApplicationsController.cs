@@ -17,7 +17,8 @@ public sealed record DecideInput([Description(Holds.Applicant)] string? Particip
 /// <summary>The place's applications, a section of its settings at <c>/settings/applications</c>, for whoever holds
 /// <see cref="Bit.ManageStanding"/>. Its <c>GET</c> is one bounded page of them (<see cref="Applications.Read"/>), one
 /// resource both ways (<see cref="ApplicationsPage"/>), continued from the cursor in <c>after</c>; a reader who may not
-/// decide reads the gate, with no applicant, answered <c>401</c> to sign in and <c>403</c> otherwise. Its two
+/// decide is refused with the gate, <c>401</c> to sign in and <c>403</c> otherwise: a page reads it with no applicant,
+/// and a JSON request as its problem. Its two
 /// <c>POST</c>s take the applicant's id in <c>participant</c>, as a form or a JSON object: <c>admit</c> sends
 /// <see cref="Admit"/>; <c>decline</c> sends <see cref="Decline"/>. A form is sent back to
 /// the applications; a JSON request reads the decision (<see cref="DecidedApplication"/>); a refusal reads the page again
@@ -51,6 +52,7 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
+        if (place.Gate(Bit.ManageStanding) is { } refused && PostWrites.WantsJson(Request)) return this.Refused(refused);
 
         Applications.Cursor? cursor = null;
         if (after is not null && (cursor = Applications.Cursor.Parse(after)) is null)
