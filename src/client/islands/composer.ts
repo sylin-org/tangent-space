@@ -244,7 +244,9 @@ export const composer = defineComponent({
       home = key()
       apply(draft ?? { id: mintTid(), body: '', sent: false })
       show('ready')
-      body!.focus()
+      // Where the visual editor stands over the field, the words are written there.
+      if (body!.hidden) form.querySelector<HTMLElement>('[contenteditable="true"]')?.focus()
+      else body!.focus()
       if (unanswered) {
         takeUp(unanswered)
         void check()

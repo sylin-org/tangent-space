@@ -1,0 +1,232 @@
+/* What a reader and a writer meet in a Topic beyond its Posts: a Post's earlier versions, the reply written in the
+ * article's editor, an article's outline and the passage quoted from it, the way back to a Topic left mid-way, and the
+ * articles filter. */
+
+/* A Post's earlier versions: a quiet disclosure under its body, read when it opens. */
+.post-history {
+  margin: 6px 0 0;
+  font: var(--ts-type-ui-small);
+}
+
+.post-history > summary {
+  width: fit-content;
+  color: var(--ts-text-3);
+  cursor: pointer;
+}
+
+.post-history > summary:hover {
+  color: var(--ts-text-2);
+}
+
+.post-history-body {
+  margin: 8px 0 0;
+  padding: 0 0 0 12px;
+  border-left: 2px solid var(--ts-line);
+}
+
+.post-history-body[aria-busy="true"] {
+  opacity: 0.6;
+}
+
+.post-history-version + .post-history-version {
+  margin-top: 12px;
+}
+
+.post-history-meta {
+  margin: 0 0 4px;
+  display: flex;
+  gap: 8px;
+  color: var(--ts-text-3);
+  font: var(--ts-type-ui-small);
+}
+
+.post-history-meta strong {
+  color: var(--ts-text-2);
+}
+
+.post-history-none {
+  margin: 8px 0 0;
+  color: var(--ts-text-3);
+}
+
+.post-history-body .post-history-back {
+  display: none;
+}
+
+/* A Post written in the article's editor — a reply, a discussion's opening, an edit: its toolbar on the field's frame,
+ * the words in a Post's own type. */
+.post-body-field.is-visual {
+  border: 1px solid var(--ts-line);
+  border-radius: 10px;
+  background: var(--ts-page);
+}
+
+.post-body-field.is-visual:focus-within {
+  border-color: var(--ts-accent);
+  box-shadow: 0 0 0 3px var(--ts-accent-soft);
+}
+
+.post-body-field .article-toolbar {
+  position: static;
+  margin: 0;
+  padding: 4px 6px;
+  border-radius: 10px 10px 0 0;
+  background: transparent;
+}
+
+.post-body-field .article-panel,
+.post-body-field .article-status {
+  margin: 10px 12px 0;
+}
+
+.post-surface {
+  min-height: 140px;
+  padding: 10px 12px;
+}
+
+.post-body-field:not(.is-visual) .post-form-body {
+  min-height: 140px;
+}
+
+/* Copy link, among a Post's actions. */
+.post-copy-link {
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+/* An article's outline: in the rail beside it, and folded above its body where the rail folds. */
+.article-outline a {
+  height: auto;
+  min-height: 32px;
+  padding-block: 6px;
+  line-height: 1.35;
+}
+
+.article-outline-sub a {
+  padding-left: 24px;
+}
+
+.article-outline-folded {
+  display: none;
+  margin: 0 0 24px;
+  padding: 10px 14px;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-row);
+  font: var(--ts-type-ui-small);
+}
+
+.article-outline-folded > summary {
+  color: var(--ts-text-2);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.article-outline-folded ul {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.article-outline-folded .article-outline-sub {
+  padding-left: 16px;
+}
+
+@media (max-width: 1023px) {
+  .article-outline-folded {
+    display: block;
+  }
+}
+
+/* An article's headings stand clear of the masthead when the outline opens them. */
+.article-prose :is(h2, h3)[id] {
+  scroll-margin-top: calc(var(--ts-header-height) + var(--ts-pathbar-height) + 24px);
+}
+
+/* Quote in reply: beside the passage the reader selected. */
+.has-quote-offer {
+  position: relative;
+}
+
+.quote-offer {
+  position: absolute;
+  z-index: 3;
+  box-shadow: var(--ts-shadow-popover);
+}
+
+.quote-offer[hidden] {
+  display: none;
+}
+
+/* The door's way back to a Topic left mid-way: one quiet line. */
+.door-continue {
+  margin: 0 0 20px;
+  font: var(--ts-type-ui);
+}
+
+.door-continue a {
+  color: var(--ts-text-2);
+  text-decoration: none;
+}
+
+.door-continue strong {
+  color: var(--ts-text);
+}
+
+.door-continue a:hover strong {
+  text-decoration: underline;
+}
+
+/* The articles filter: a month and an author among the rail's views, pressed to narrow the page's articles. */
+.article-filter[hidden] {
+  display: none;
+}
+
+.article-filter-choice {
+  width: calc(100% + 20px);
+  min-height: 36px;
+  margin: 0 -10px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 0;
+  border-radius: var(--ts-radius-button);
+  background: none;
+  color: var(--ts-text-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.article-filter-choice:hover {
+  background: var(--ts-hover);
+}
+
+.article-filter-choice[aria-pressed="true"] {
+  background: var(--ts-hover);
+  color: var(--ts-text);
+  font-weight: 600;
+}
+
+.article-filter-count {
+  color: var(--ts-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.article-filter-note:empty {
+  display: none;
+}
+
+.article-filter-note {
+  margin: 10px 0 0;
+  color: var(--ts-text-3);
+}
+
+.article-list > article[hidden] {
+  display: none;
+}

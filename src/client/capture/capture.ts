@@ -188,6 +188,35 @@ async function captureState(browser: Browser, pageBase: URL, baseUrl: URL, path:
           await page.$eval(selector, (field, given) => ((field as HTMLInputElement).value = given), value)
         for (const [selector, value] of Object.entries(state.fill ?? {})) await page.fill(selector, value)
         if (state.reload) await page.reload({ waitUntil: 'networkidle' })
+        if (state.drop)
+          await page.$eval(state.drop, async (target) => {
+            const canvas = document.createElement('canvas')
+            canvas.width = 1200
+            canvas.height = 700
+            const paint = canvas.getContext('2d')!
+            const sky = paint.createLinearGradient(0, 0, 0, 700)
+            sky.addColorStop(0, '#c9a46a')
+            sky.addColorStop(1, '#5b4127')
+            paint.fillStyle = sky
+            paint.fillRect(0, 0, 1200, 700)
+            paint.fillStyle = '#1d232b'
+            paint.beginPath()
+            paint.arc(600, 360, 230, 0, Math.PI * 2)
+            paint.fill()
+            paint.strokeStyle = '#e2b553'
+            paint.lineWidth = 6
+            paint.beginPath()
+            paint.moveTo(380, 380)
+            paint.bezierCurveTo(500, 300, 640, 440, 820, 340)
+            paint.stroke()
+            const blob = await new Promise<Blob>((done) => canvas.toBlob((made) => done(made!), 'image/png'))
+            const carried = new DataTransfer()
+            carried.items.add(new File([blob], 'mended-bowl.png', { type: 'image/png' }))
+            const box = target.getBoundingClientRect()
+            const at = { bubbles: true, cancelable: true, dataTransfer: carried, clientX: box.right - 12, clientY: box.bottom - 12 }
+            target.dispatchEvent(new DragEvent('dragover', at))
+            target.dispatchEvent(new DragEvent('drop', at))
+          })
         if (state.click) await page.click(state.click)
         if (state.click || state.waitFor) {
           if (state.waitFor) await page.waitForSelector(state.waitFor, { timeout: 15_000 })

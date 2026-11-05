@@ -4,7 +4,8 @@
    its settings for a reader who may change them, then the rail and the list. A discussions Tangent lists its Topics as
    a table, an articles Tangent as articles under a lead. An empty list says so in one sentence with one next step: the
    start button for a reader who can start a Topic, signing in for a visitor, neither on a phone, which reads and
-   replies. Zeros are said in words. *@
+   replies. Zeros are said in words. An articles Tangent's rail filters the articles on the page by month and by author,
+   where they differ. *@
 <main class="frame-main">
 <section class="@("tangent-head tangent" + (Articles ? " tangent-head-articles" : "") + (Model.Audience == "public" ? "" : " is-private"))" aria-labelledby="tangent-title">
     <div class="tangent-head-inner">
@@ -37,6 +38,32 @@
         <ul class="rail-views list">
             <li><a href="@Model.Address" aria-current="@(Model.Continued ? null : "page")">@(Articles ? "All articles" : "All topics")</a></li>
         </ul>
+        @if (Articles && !Standalone && (Months.Count > 1 || Authors.Count > 1))
+        {
+            <div class="article-filter" hidden data-island="filter">
+                @if (Months.Count > 1)
+                {
+                    <h2 class="rail-heading rail-heading-spaced">By month</h2>
+                    <ul class="rail-views list">
+                        @foreach (var month in Months)
+                        {
+                            <li><button type="button" class="article-filter-choice" data-month="@month.Key" aria-pressed="false">@month.Name<span class="article-filter-count">@month.Count.ToString(CultureInfo.InvariantCulture)</span></button></li>
+                        }
+                    </ul>
+                }
+                @if (Authors.Count > 1)
+                {
+                    <h2 class="rail-heading rail-heading-spaced">By author</h2>
+                    <ul class="rail-views list">
+                        @foreach (var author in Authors)
+                        {
+                            <li><button type="button" class="article-filter-choice" data-author="@author.Key" aria-pressed="false">@author.Name<span class="article-filter-count">@author.Count.ToString(CultureInfo.InvariantCulture)</span></button></li>
+                        }
+                    </ul>
+                }
+                <p class="article-filter-note" role="status"></p>
+            </div>
+        }
         <h2 class="rail-heading rail-heading-spaced">Who can read</h2>
         <div class="rail-audience">
             <span class="rail-audience-icon">@AudienceIcon(14)</span>
@@ -156,6 +183,25 @@
     private bool Whole => !Model.Continued && Model.Next is null;
 
     /// <summary>How many Topics were started here, as the Tangent's row counts them.</summary>
+    [CascadingParameter(Name = nameof(Shell.Standalone))] public bool Standalone { get; set; }
+
+    /// <summary>One way the articles filter narrows the list on this page: its key, its name and how many it holds.</summary>
+    private sealed record Choice(string Key, string Name, int Count);
+
+    /// <summary>The months the page's articles were published in, newest first.</summary>
+    private IReadOnlyList<Choice> Months => Model.Topics
+        .GroupBy(topic => topic.CreatedAt.ToUniversalTime().ToString("yyyy-MM", CultureInfo.InvariantCulture))
+        .OrderByDescending(month => month.Key, StringComparer.Ordinal)
+        .Select(month => new Choice(month.Key, month.First().CreatedAt.ToUniversalTime().ToString("MMMM yyyy", CultureInfo.InvariantCulture), month.Count()))
+        .ToList();
+
+    /// <summary>Who wrote the page's articles, those with the most first.</summary>
+    private IReadOnlyList<Choice> Authors => Model.Topics
+        .GroupBy(topic => topic.Author.Id, StringComparer.Ordinal)
+        .Select(author => new Choice(author.Key, author.First().Author.Name, author.Count()))
+        .OrderByDescending(author => author.Count).ThenBy(author => author.Name, StringComparer.CurrentCulture)
+        .ToList();
+
     private int Started => Model.Tangents.FirstOrDefault(tangent => tangent.Slug == Model.Slug)?.TopicCount ?? Model.Topics.Count;
 
     /// <summary>What the Tangent holds, in the head, numbers in bold: the Topics started here and, when this page holds

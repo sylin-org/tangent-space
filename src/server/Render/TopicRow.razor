@@ -11,7 +11,7 @@
    count. *@
 @if (Article)
 {
-    <article class="@ArticleClass()">
+    <article class="@ArticleClass()" data-month="@Model.CreatedAt.ToUniversalTime().ToString("yyyy-MM", System.Globalization.CultureInfo.InvariantCulture)" data-author="@Model.Author.Id">
         @if (Lead)
         {
             if (Model.Cover is { } lead)

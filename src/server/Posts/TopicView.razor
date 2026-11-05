@@ -4,7 +4,8 @@
    when it started and how many replies it has, the root, and one window of replies in order, with
    the way to the older window above them and to the newer below, and where the reader replies or why they may not. A
    Topic without replies says so in one sentence. Zeros are said in words. An article opens with its own head, which holds
-   the proprietor's article header, where they wrote one. *@
+   the proprietor's article header, where they wrote one; its outline stands in the rail, and folded above its body where
+   the rail folds; and a reader who may reply can quote a passage of it into the reply box. *@
 <main class="layout layout-reading topic-layout">
     <aside class="rail" aria-label="In this Tangent">
         <h2 class="rail-heading">@Model.Tangent.Name</h2>
@@ -37,6 +38,18 @@
                 }
             </ul>
         }
+        @if (Contents.Count > 1)
+        {
+            <nav class="article-outline" aria-labelledby="article-outline-heading">
+                <h2 id="article-outline-heading" class="rail-heading rail-heading-spaced">In this article</h2>
+                <ul class="rail-views list">
+                    @foreach (var entry in Contents)
+                    {
+                        <li class="@(entry.Level > 2 ? "article-outline-sub" : null)"><a href="@("#" + entry.Id)">@entry.Text</a></li>
+                    }
+                </ul>
+            </nav>
+        }
     </aside>
     <div class="layout-main topic-main topic">
         @if (Article)
@@ -44,7 +57,19 @@
             <article class="article">
                 <ArticleHead Title="@Model.Title" Cover="@Model.Cover" Author="@Model.Root.Author" At="@Model.Root.CreatedAt" Minutes="@Model.ReadMinutes" Header="@Model.ArticleHeader" />
                 <TakenFrom Model="@Model.TakenFrom" />
-                <TopicPost Model="@Model.Root" Today="@Model.Day" Root="true" Article="true" Door="@Model.Door" Anchor="@(Model.Anchor == Model.Root.Id)" Reader="@Model.Who?.Id" />
+                @if (Contents.Count > 1)
+                {
+                    <details class="article-outline-folded">
+                        <summary>In this article</summary>
+                        <ul class="list">
+                            @foreach (var entry in Contents)
+                            {
+                                <li class="@(entry.Level > 2 ? "article-outline-sub" : null)"><a href="@("#" + entry.Id)">@entry.Text</a></li>
+                            }
+                        </ul>
+                    </details>
+                }
+                <TopicPost Model="@Model.Root" Today="@Model.Day" Root="true" Article="true" Door="@Model.Door" Anchor="@(Model.Anchor == Model.Root.Id)" Reader="@Model.Who?.Id" Quote="@QuoteProps" />
                 <Tangent.Connections.PublishLine Model="@Model.Publishing" />
             </article>
         }
@@ -81,6 +106,10 @@
             {
                 <TopicPost Model="@reply" Today="@Model.Day" Door="@Model.Door" Anchor="@(Model.Anchor == reply.Id)" ParentAuthor="@ParentAuthor(reply)" Reader="@Model.Who?.Id" />
             }
+            @if (Model.Who is { } reader && !Standalone)
+            {
+                <span hidden data-island="reading" data-props="@ReadingProps(reader)"></span>
+            }
             <Tangent.Events.TopicSeenForm Model="@Model.Seen" />
             <Tangent.Events.Live Page="topic" Tangent="@Model.Tangent.Slug" Topic="@Model.Id" Address="@Model.Address" Newest="@(Model.Newer is null)" />
             @if (Model.Newer is { } newer)
@@ -107,6 +136,30 @@
     }
 
     private bool Article => Model.Kind == "article";
+
+    [CascadingParameter(Name = nameof(Shell.Standalone))] public bool Standalone { get; set; }
+
+    /// <summary>An article's outline, from its root's body as the page renders it; none for a discussion or a removed root.</summary>
+    private IReadOnlyList<Outline.Entry> Contents => _contents ??= Article && Model.Root.Body is { } body
+        ? Outline.Of(Mentions.Html(Model.Root.Id, Model.Root.Version, body, Model.Root.Mentions)).Entries
+        : [];
+
+    private IReadOnlyList<Outline.Entry>? _contents;
+
+    /// <summary>The reading island's props: whose place it keeps, the Topic, and whether this window is its newest, at
+    /// whose end the Topic has been read through.</summary>
+    private string ReadingProps(TopicPage.Reader reader) => System.Text.Json.JsonSerializer.Serialize(new
+    {
+        participant = reader.Id,
+        topic = Model.Id,
+        title = Model.Title,
+        address = Model.Address,
+        newest = Model.Newer is null
+    });
+
+    /// <summary>The quote island's props, where the reader may reply: the article's address, which a quoted passage's
+    /// link opens at its heading.</summary>
+    private string? QuoteProps => Model.Reply is null ? null : System.Text.Json.JsonSerializer.Serialize(new { address = Model.Address });
 
     /// <summary>The replies the window holds, by their place in the Topic.</summary>
     private static string Range(long from, long through) => from == through

@@ -199,7 +199,7 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl) : ControllerBase
             Edited: row.EditedBy is null ? null : Tangents.TangentPage.EditedOf(row, await QuotedPost.People(row, ct)),
             Kind: PostWrites.Word(row.ParentId is null ? row.Kind : PostKind.Topic),
             CoverId: row.CoverId,
-            Bring: article && editable ? PostWrites.MediaForm(PostWrites.TangentAddress(baseAddress, root.TangentId)) : null,
+            Bring: editable ? PostWrites.MediaForm(PostWrites.TangentAddress(baseAddress, root.TangentId)) : null,
             Author: article ? new Tangents.TangentPage.Author(row.AuthorId, author?.Handle ?? row.AuthorId, author?.Profile.DisplayName is { Length: > 0 } name ? name : author?.Handle ?? row.AuthorId,
                 author?.Kind.ToString().ToLowerInvariant() ?? "person", author?.Profile.Avatar) : null,
             CreatedAt: row.CreatedAt);

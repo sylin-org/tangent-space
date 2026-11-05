@@ -156,7 +156,7 @@ public sealed class NewTopicController(KoanWebBaseUrl baseUrl, IDataProtectionPr
             baseAddress + "/",
             await PostWrites.Reader(personId, capabilities, baseAddress, here, ct),
             Title: quoted?.OfferedTitle(),
-            Bring: gate is null && row.DefaultKind == PostKind.Article ? PostWrites.MediaForm(address) : null,
+            Bring: gate is null ? PostWrites.MediaForm(address) : null,
             Day: DateOnly.FromDateTime(DateTime.UtcNow),
             Origin: quoted);
         if (quoted is null) return page;

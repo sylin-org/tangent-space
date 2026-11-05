@@ -83,6 +83,7 @@ public sealed class TangentModule : KoanModule
             .Add<Posts.TopicPage, Posts.TopicView>(page => page.Title + " · " + page.Tangent.Name, Posts.TopicPage.Version, Posts.TopicView.Frame, Posts.TopicPage.Card)
             .Add<Posts.NewTopicPage, Posts.NewTopicView>(page => page.Origin is { } origin ? "Take this on a tangent · " + origin.Topic : (page.Kind == Posts.PostWrites.Word(Posts.PostKind.Article) ? "New article · " : "New topic · ") + page.TangentName, frame: Posts.NewTopicView.Frame)
             .Add<Posts.EditPage, Posts.EditView>(page => (!page.Root ? "Edit post · " : page.Kind == Posts.PostWrites.Word(Posts.PostKind.Article) ? "Edit article · " : "Edit topic · ") + page.TopicTitle, frame: Posts.EditView.Frame)
+            .Add<Posts.PostHistory, Posts.PostHistoryView>(page => "Earlier versions · " + page.Topic, frame: Posts.PostHistoryView.Frame)
             .Add<Posts.ReportPage, Posts.ReportView>(page => (page.Received ? "Report received · " : "Report · ") + page.Reported.Topic, frame: Posts.ReportView.Frame)
             .Add<Participants.ProfilePage, Participants.ProfileView>(page => page.Name + " · " + page.Place, Participants.ProfilePage.Version, Participants.ProfileView.Frame)
             .Add<FirstRun, FirstRunView>(firstRun => "Set up · " + firstRun.Name, frame: FirstRunView.Frame)

@@ -84,7 +84,7 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
         Assert.All(order, index => Assert.True(index > 0));
         Assert.Equal(order.Order().ToList(), order);
         Assert.Contains($"<a class=\"post-parent\" href=\"{address}/{first.Id}\">In reply to did:plc:leo.example</a>", visitorHtml);
-        Assert.DoesNotContain("post-action", visitorHtml);
+        Assert.DoesNotContain(">Edit</a>", visitorHtml);
         Assert.DoesNotContain("<dialog", visitorHtml);
 
         // Ada reads her own Posts as hers: she may edit them, and the page links each one to its edit address; Leo's

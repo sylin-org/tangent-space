@@ -325,8 +325,9 @@ public sealed class ArticleMediaTests
         Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (visitor.Status, visitor.Word));
         var hidden = await Send(bea.Client, HttpMethod.Post, "/t/" + Studio + "/media", JsonBody(new { file = Convert.ToBase64String(Jpeg()) }), json: true);
         Assert.Equal((HttpStatusCode.NotFound, "absent"), (hidden.Status, hidden.Kind));
+        // A discussion's new Topic brings pictures in as an article's does.
         var discussion = await Send(bea.Client, HttpMethod.Get, "/t/" + Workshop + "/new", json: true);
-        Assert.False(discussion.Json.TryGetProperty("bring", out var bring) && bring.ValueKind == System.Text.Json.JsonValueKind.Object);
+        Assert.Equal(TangentSpaceFixture.DefaultBaseUrl + "/t/" + Workshop + "/media", discussion.Json.GetProperty("bring").GetProperty("action").GetString());
     }
 
     [Fact]

@@ -24,6 +24,9 @@ export interface ArticleProps {
   participant: string | null
   edit: string | null
   suggest?: string | null
+  // A Post that is not an article — a reply, a discussion's opening, an edit of one — is written with the same editor and
+  // fewer tools: no headings and no divider, in a Post's own type.
+  post?: boolean
 }
 
 const noImages = 'Images come in where the place lets you write them.'
@@ -142,6 +145,7 @@ export function writeArticle(props: ArticleProps): () => void {
   let lastEmitted = source.value
 
   const label = host.querySelector('label')
+  const named = label?.textContent?.trim() || 'Post'
   if (label) label.hidden = true
   source.required = false
 
@@ -195,7 +199,12 @@ export function writeArticle(props: ArticleProps): () => void {
   const editor = new Editor({
     extensions: [...articleExtensions(props.door), ImagesComing],
     editorProps: {
-      attributes: { class: 'article-prose article-surface', role: 'textbox', 'aria-multiline': 'true', 'aria-label': 'Article' },
+      attributes: {
+        class: props.post ? 'post-body article-surface post-surface' : 'article-prose article-surface',
+        role: 'textbox',
+        'aria-multiline': 'true',
+        'aria-label': props.post ? named : 'Article',
+      },
       handlePaste(_view, event) {
         // Word and Excel put a picture of what was copied beside its text: the text is what was meant.
         const files = event.clipboardData?.getData('text/plain').trim() ? [] : imagesIn(event.clipboardData)
@@ -275,17 +284,22 @@ export function writeArticle(props: ArticleProps): () => void {
   toolbar.setAttribute('aria-label', 'Text formatting')
   type Tool = { element: HTMLButtonElement; active?: () => boolean }
   const tool = (name: string, title: string, run: () => void, active?: () => boolean): Tool => ({ element: button(name, title, run), active })
+  const article = !props.post
   const tools: Tool[] = [
     tool('B', 'Bold', () => chain().toggleBold().run(), () => editor.isActive('bold')),
     tool('I', 'Italic', () => chain().toggleItalic().run(), () => editor.isActive('italic')),
-    tool('H2', 'Heading 2', () => chain().toggleHeading({ level: 2 }).run(), () => editor.isActive('heading', { level: 2 })),
-    tool('H3', 'Heading 3', () => chain().toggleHeading({ level: 3 }).run(), () => editor.isActive('heading', { level: 3 })),
+    ...(article
+      ? [
+          tool('H2', 'Heading 2', () => chain().toggleHeading({ level: 2 }).run(), () => editor.isActive('heading', { level: 2 })),
+          tool('H3', 'Heading 3', () => chain().toggleHeading({ level: 3 }).run(), () => editor.isActive('heading', { level: 3 })),
+        ]
+      : []),
     tool('• List', 'Bullet list', () => chain().toggleBulletList().run(), () => editor.isActive('bulletList')),
     tool('1. List', 'Numbered list', () => chain().toggleOrderedList().run(), () => editor.isActive('orderedList')),
     tool('❝', 'Quote', () => chain().toggleBlockquote().run(), () => editor.isActive('blockquote')),
     tool('Link', 'Insert link', () => openPanel(linkPanel), () => !linkPanel.hidden),
     tool('Image', 'Insert image', () => openImagePanel(), () => !imagePanel.hidden),
-    tool('—', 'Insert divider', () => chain().setHorizontalRule().run()),
+    ...(article ? [tool('—', 'Insert divider', () => chain().setHorizontalRule().run())] : []),
     tool('↶', 'Undo', () => chain().undo().run()),
     tool('↷', 'Redo', () => chain().redo().run()),
   ]
