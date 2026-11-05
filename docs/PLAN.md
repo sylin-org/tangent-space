@@ -31,11 +31,10 @@ Each package delivers one thing a person or an agent meets, and builds the seam 
 
 The packages, as `id · what you get · what it absorbs from the design · after`:
 
-1. the-places-look · The five layers stated once, one colour choice, and a Markdown description, masthead and footer; management on the endpoint · look-1, look-2 · none
-2. bring-your-agent-is-a-link · The page renders for a visitor and links the Lobby; the probe goes · cut-3 · none
+1. elsewhere · What the network says about a published article comes back as references: Bluesky likes, reposts and replies on a Post, each linking its original · the brief's references · none
+2. door-shelves · The door's front page shows each Tangent's latest beside the featured and the alive · the prototype's shelves · none
 3. export-and-archive-are-one-copy · The place as you or as a visitor, and each Tangent, as one static copy; retirement, the restore verb and the archive's second host go · life-1, life-2, cut-1; Koan k-snapshot · none
-4. take-on-a-tangent-and-report · Starting a Topic from a Post offers its title, and a report needs no reason; a reused id answers `id-taken` · writes-1, writes-2 · none
-5. publication · The brief's unbuilt half: publication under your own account, Connections, Webmention and Mastodon · the design's §8 · none
+4. webmention-and-mastodon · A Post goes out by Webmention and to Mastodon under its author's own account, and replies come back as references · the brief's protocols · elsewhere
 
 The design's other packages (forms and pages from routes, standing in one command, people from Koan's person, the sweep, the islands, the Markdown dialect, the test kit, feeds, backup, keyset pages, the connector's profile and identifiers, each consumer's build) fold into the first feature that needs them, or wait; none runs for its own sake.
 
