@@ -1,0 +1,5 @@
+/* The order of a page's five cascade layers, stated once: every page links this first, so every stylesheet after it
+ * fills a layer whose place is already fixed, and a later layer wins whatever a selector's specificity. The first styles
+ * the plain elements, the next two are Tangent's components, the fourth holds the colours, and the last holds the
+ * place's own CSS, which a management page leaves out. */
+@layer base, shapes, tangent, palette, owner;

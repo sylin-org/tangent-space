@@ -22,8 +22,8 @@ namespace Tangent.Posts;
 /// <see cref="Tangent"/> is where the Topic is; <see cref="Place"/>, <see cref="Door"/> and <see cref="Who"/> say where
 /// the page is and who reads it; <see cref="Day"/> is the UTC day its times are written for. <see cref="TakenFrom"/> is
 /// where a Topic taken on a tangent was taken from, as the reader may know it. <see cref="Feeds"/> are its Tangent's
-/// feeds, present only where a visitor may read that Tangent. <see cref="ArticleHeader"/> is the proprietor's own HTML that
-/// heads an article, present only on an article and only where they wrote some. <see cref="Cover"/> is the address of an
+/// feeds, present only where a visitor may read that Tangent. <see cref="ArticleHeader"/> is the place's article header, its Markdown drawn as a
+/// Post's body is, present only on an article and only where the place wrote one. <see cref="Cover"/> is the address of an
 /// article's cover, while its root stands and has one; <see cref="ReadMinutes"/> what its body takes to read.</summary>
 public sealed record TopicPage(
     string Id,
@@ -56,10 +56,10 @@ public sealed record TopicPage(
     string? Cover = null,
     int ReadMinutes = 1)
 {
-    /// <summary>What heads a Topic of this <paramref name="kind"/> from the place's <paramref name="slots"/>, its images under
+    /// <summary>What heads a Topic of this <paramref name="kind"/> from the place's <paramref name="appearance"/>, its images under
     /// <paramref name="door"/>.</summary>
-    public static string? HeaderOf(PostKind kind, Space.Slots slots, string door)
-        => kind == PostKind.Article && slots.ArticleHeader.Length > 0 ? Media.Placed(slots.ArticleHeader, door) : null;
+    public static string? HeaderOf(PostKind kind, Space.Appearance appearance, string door)
+        => kind == PostKind.Article ? Space.PlaceWords.Html(Space.Appearance.ArticleHeaderPart, appearance.ArticleHeader, door) : null;
 
     /// <summary>One Post as the page shows it: its place in the Topic, its address, author, body and when it was
     /// written, its version, and, for a reply to a Post other than the root, that Post's Id and address. The body is

@@ -365,24 +365,24 @@ public sealed class ArticleMediaTests
     [Fact]
     public async Task An_articles_header_stands_once_in_its_head_between_its_cover_and_its_title()
     {
-        const string header = "<p>From the long reads.</p>";
+        const string header = "From the long reads.";
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
         using var ada = await SignedIn(tangentSpace, Ada);
         var cover = IdOf(await Bring(ada, Jpeg()));
         var article = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Articles, "Lanterns", "Words.", Ada, CoverId: cover).Send(Cancellation)).Result;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
-        space!.Slots.ArticleHeader = header;
+        space!.Appearance.ArticleHeader = header;
         Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(Cancellation));
 
         var page = (await Send(Agent(tangentSpace), HttpMethod.Get, TopicPath(article))).Body;
 
         var head = page.IndexOf("<header class=\"article-head\">", StringComparison.Ordinal);
         var figure = page.IndexOf("class=\"article-figure\"", StringComparison.Ordinal);
-        var slot = page.IndexOf("slot-article-header", StringComparison.Ordinal);
+        var slot = page.IndexOf("class=\"article-header", StringComparison.Ordinal);
         var title = page.IndexOf("<h1 class=\"article-title\"", StringComparison.Ordinal);
         Assert.True(head >= 0 && head < figure && figure < slot && slot < title, "The header is in the article's head, under its cover and over its title.");
-        Assert.Equal(slot, page.LastIndexOf("slot-article-header", StringComparison.Ordinal));
+        Assert.Equal(slot, page.LastIndexOf("class=\"article-header", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -452,7 +452,7 @@ public sealed class ArticleMediaTests
     }
 
     [Fact]
-    public async Task What_a_body_and_a_slot_keep_of_an_image_here_is_one_rule_its_address_satisfies()
+    public async Task What_a_body_keeps_of_an_image_here_is_one_rule_its_address_satisfies()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
@@ -461,18 +461,17 @@ public sealed class ArticleMediaTests
         Assert.Equal(reference, Media.Reference(Media.IdIn(reference)!));
 
         Assert.Contains($"<img src=\"{reference}\"", MarkdownHtml.Render("![A wick](" + reference + ")").Html());
-        Assert.Contains($"<img src=\"{reference}\"", new Slots().Written(null, null, null, $"<img src=\"{reference}\" alt=\"\">", null).ArticleHeader);
     }
 
     private const string Keeper = "did:plc:leo4writes";
 
-    private static string Img(string id) => $"<img src=\"/media/{id}\" alt=\"\">";
+    private static string Img(string id) => $"![](/media/{id})";
 
-    private static async Task Slots(string? masthead = null, string? doorIntro = null, string? footer = null, string? head = null, Audience? audience = null)
-        => Assert.IsType<Outcome<TangentSpace>.Done>(await new ChangeTangentSpace(Keeper, Masthead: masthead, DoorIntro: doorIntro, Footer: footer, Head: head, Audience: audience).Send(Cancellation));
+    private static async Task Parts(string? masthead = null, string? intro = null, string? footer = null, string? image = null, Audience? audience = null)
+        => Assert.IsType<Outcome<TangentSpace>.Done>(await new ChangeTangentSpace(Keeper, Masthead: masthead, Intro: intro, Footer: footer, Image: image, Audience: audience).Send(Cancellation));
 
     [Fact]
-    public async Task An_image_a_slot_names_reaches_whoever_reads_its_page_and_ends_when_no_slot_names_it()
+    public async Task An_image_a_part_of_the_place_names_reaches_whoever_reads_its_page_and_ends_when_no_part_names_it()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
@@ -483,20 +482,20 @@ public sealed class ArticleMediaTests
         var icon = IdOf(await Bring(leo, Jpeg(32)));
         Assert.Equal(HttpStatusCode.NotFound, (await Send(visitor, HttpMethod.Get, "/media/" + logo)).Status);
 
-        await Slots(masthead: Img(logo), head: $"<link rel=\"icon\" href=\"/media/{icon}\">");
+        await Parts(masthead: Img(logo), image: "/media/" + icon);
         Assert.Contains($"src=\"{BaseUrl}/media/{logo}\"", (await Send(visitor, HttpMethod.Get, "/")).Body);
         foreach (var path in new[] { "/media/" + logo, $"/media/{logo}/{MediaRecipes.CardName}", "/media/" + icon })
             Assert.Equal(HttpStatusCode.OK, (await Send(visitor, HttpMethod.Get, path)).Status);
 
-        // Moved to another slot it stays, even for someone who reaches it only through the slot; named in no slot it ends.
-        await Slots(masthead: "", footer: Img(logo));
+        // Moved to another part it stays, even for someone who reaches it only through the part; named in no part it ends.
+        await Parts(masthead: "", footer: Img(logo));
         Assert.Equal(HttpStatusCode.OK, (await Send(visitor, HttpMethod.Get, "/media/" + logo)).Status);
-        Assert.Null(await MediaUse.Get(MediaUse.Key(logo, "slot:" + Space.Slots.MastheadName), Cancellation));
-        await Slots(footer: "");
+        Assert.Null(await MediaUse.Get(MediaUse.Key(logo, "part:" + Appearance.MastheadPart), Cancellation));
+        await Parts(footer: "");
         Assert.Equal(HttpStatusCode.NotFound, (await Send(visitor, HttpMethod.Get, "/media/" + logo)).Status);
         Assert.Equal(HttpStatusCode.OK, (await Send(leo.Client, HttpMethod.Get, "/media/" + logo)).Status);
 
-        // An image used elsewhere goes on being used; a slot is no way to reach an image its writer may not see.
+        // An image used elsewhere goes on being used; a part is no way to reach an image its writer may not see.
         var hidden = IdOf(await Bring(leo, Jpeg(50), Studio, "/t/" + Studio + "/new"));
         await Started(Keeper, "Plans", "![The plan](/media/" + hidden + ")", Studio);
         Assert.Equal(HttpStatusCode.NotFound, (await Send(visitor, HttpMethod.Get, "/media/" + hidden)).Status);
@@ -519,7 +518,7 @@ public sealed class ArticleMediaTests
         using var visitor = Agent(tangentSpace);
         var logo = IdOf(await Bring(leo, Jpeg(64)));
         var welcome = IdOf(await Bring(leo, Jpeg(65)));
-        await Slots(masthead: Img(logo), doorIntro: Img(welcome), audience: Audience.Private);
+        await Parts(masthead: Img(logo), intro: Img(welcome), audience: Audience.Private);
 
         // The sign-in, all a visitor reads here, carries the masthead, so its logo shows; the door's picture stays inside.
         Assert.Contains($"src=\"{BaseUrl}/media/{logo}\"", (await Send(visitor, HttpMethod.Get, "/")).Body);
@@ -541,7 +540,7 @@ public sealed class ArticleMediaTests
         await Given.AParticipant(tangentSpace, Keeper, [Roles.Administrator], ct: Cancellation);
         var logo = await Media.Keep(Jpeg(), Cancellation);
         Assert.IsType<Outcome<MediaUse>.Done>(await new BringMedia(logo.Id, Keeper).Send(Cancellation));
-        await Slots(masthead: Img(logo.Id));
+        await Parts(masthead: Img(logo.Id));
         using var visitor = Agent(tangentSpace);
 
         Assert.Contains($"src=\"{place}/media/{logo.Id}\"", (await Send(visitor, HttpMethod.Get, "/notes/")).Body);

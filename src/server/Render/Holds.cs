@@ -58,23 +58,24 @@ public static class Holds
     public const string ChangedTangentDescription = "What it is for, at most 1000 characters." + Stays;
     public const string ChangedTangentKind = "The kind a Topic started there takes: topic or article." + Stays;
     public const string ChangedTangentAudience = "Who reads it: public or private." + Stays;
+    public const string TangentAccent = "amber, coral, jade, sky, iris or rose: the tone its tile wears wherever it is drawn; sent empty, the one its slug gives it." + Stays;
+    public const string TangentImage = "The image its tile wears in place of its letter: the name of a bundled cover, as image takes it in change_appearance, or /media/ and the id of an image brought in here; sent empty, none." + Stays;
     public const string TangentMove = "earlier or later, to move it one place among the Tangents; sent alone, it changes nothing else.";
     public const string AccessRole = "The word of a role listed here with the access in its offered.";
     public const string Access = "default, as its role allows in the place; read, reading alone; or post, reading and posting.";
 
     public const string PlaceName = "The place's name, 1 to 120 characters on one line." + Stays;
-    public const string PlaceDescription = "The line under its name on the door, at most 300 characters." + Stays;
+    public const string PlaceDescription = "Markdown under the place's name on the door, at most 300 characters; its words are what a link to the door says of it." + Stays;
     public const string PlaceAudience = "public, where anyone reads the place, or private, where its participants alone do and a visitor finds the sign-in." + Stays;
     public const string Admission = "join, where a newcomer who signs in is admitted at once, or apply, where they wait to be admitted; everyone already here stays as they are.";
-    public const string Accent = "gold, jade, iris or copper: the colour links, buttons and what is new take on every page, for every reader, while the palette is accent or the base is tangent." + Stays;
     public const string Base = "What styles the plain elements and sets the fonts, the base layer: tangent, Tangent's own, or a bundled classless stylesheet: simple, mvp, marx, sakura, water or new; or concord, Tangent's own arrangement of the place in a chat app's look." + Stays;
-    public const string Palette = "The palette layer: base, the base's own colours, or accent, Tangent's palette in the place's accent over any base." + Stays;
+    public const string Palette = "The place's colours: base, the base's own, which under Tangent's own base is Tangent's palette in gold; or gold, jade, iris or copper, Tangent's palette in that accent over any base. Links, buttons and what is new take the accent on every page, for every reader." + Stays;
     public const string Css = "The place's own CSS, the owner layer, over every other layer on every page but the settings, at most 50,000 characters; sent empty, none." + Stays;
-    public const string HeadSlot = "HTML for every page's head, sanitized to meta and icon links, at most 4000 characters." + Stays;
-    public const string MastheadSlot = "HTML beside the place's name on every page, sanitized to a line of links, images and words, at most 2000 characters." + Stays;
-    public const string DoorIntroSlot = "HTML under the door's head, sanitized to prose, at most 8000 characters." + Stays;
-    public const string ArticleHeaderSlot = "HTML above every article's title, sanitized to prose, at most 8000 characters." + Stays;
-    public const string FooterSlot = "HTML in every page's footer, sanitized to a line of links, images and words, at most 2000 characters." + Stays;
+    public const string PlaceImage = "The image behind the door's head and every page's icon: the name of a bundled cover (the-commons, midnight-workshop, universe-within, quiet-geometry, paper-current, prism-study, blueprint-exchange, greenhouse, moss-and-signal, coastal-hours, orbital-dawn, neural-loom, companion-circle, afterlight, arcade-bloom or electric-ink), or /media/ and the id of an image brought in here; sent empty, none." + Stays;
+    public const string Masthead = "Markdown beside the place's name on every page, written as a Post is, at most 2000 characters." + Stays;
+    public const string Footer = "Markdown first in every page's footer, written as a Post is, at most 2000 characters." + Stays;
+    public const string Intro = "Markdown under the door's head, the place's welcome, written as a Post is, at most 8000 characters." + Stays;
+    public const string ArticleHeader = "Markdown above every article's title, written as a Post is, at most 8000 characters." + Stays;
 
     public const string Applicant = "The id of an applicant this page lists.";
     public const string Participant = "The id of a participant the people list.";

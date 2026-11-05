@@ -11,39 +11,40 @@ using Tangent.Render;
 
 namespace Tangent.Space;
 
-/// <summary>What changing the place's name, description and audience sends, as a form or one JSON object.</summary>
+/// <summary>What changing the place's name and audience sends, as a form or one JSON object.</summary>
 public sealed record ChangeSpaceInput(
     [Description(Holds.PlaceName)] string? Name = null,
-    [Description(Holds.PlaceDescription)] string? Description = null,
     [Description(Holds.PlaceAudience)] string? Audience = null);
 
 /// <summary>What setting how a newcomer arrives sends, as a form or one JSON object.</summary>
 public sealed record ChangeAdmissionInput([Description(Holds.Admission)] string? Admission = null);
 
-/// <summary>What setting the place's appearance and slots sends, as a form or one JSON object.</summary>
+/// <summary>What setting the place's appearance sends, as a form or one JSON object.</summary>
 public sealed record ChangeAppearanceInput(
     [Description(Holds.Base)] string? Base = null,
     [Description(Holds.Palette)] string? Palette = null,
-    [Description(Holds.Accent)] string? Accent = null,
     [Description(Holds.Css)] string? Css = null,
-    [Description(Holds.HeadSlot)] string? Head = null,
-    [Description(Holds.MastheadSlot)] string? Masthead = null,
-    [Description(Holds.DoorIntroSlot)] string? DoorIntro = null,
-    [Description(Holds.ArticleHeaderSlot)] string? ArticleHeader = null,
-    [Description(Holds.FooterSlot)] string? Footer = null);
+    [Description(Holds.PlaceImage)] string? Image = null,
+    [Description(Holds.PlaceDescription)] string? Description = null,
+    [Description(Holds.Intro)] string? Intro = null,
+    [Description(Holds.Masthead)] string? Masthead = null,
+    [Description(Holds.Footer)] string? Footer = null,
+    [Description(Holds.ArticleHeader)] string? ArticleHeader = null);
 
 /// <summary>The place's settings, in sections shown one at a time, each listed in the rail for whoever may use it
-/// (<see cref="Sections"/>). <c>/settings</c> is general, which names and describes the place; <c>/settings/admission</c> sets how a newcomer
-/// arrives; <c>/settings/appearance</c> sets the place's appearance and its slots, and <c>/settings/appearance/preview</c> draws
+/// (<see cref="Sections"/>). <c>/settings</c> is general, which names the place and says who reads it; <c>/settings/admission</c> sets how a newcomer
+/// arrives; <c>/settings/appearance</c> sets the place's appearance, its description among its words, and
+/// <c>/settings/appearance/image</c> takes an image of the proprietor's own as the place's; <see cref="AppearancePreviewController"/> draws
 /// the door in an appearance sent to it, saving nothing; the applications are <see cref="ApplicationsController"/>'s, the people <see cref="PeopleController"/>'s,
 /// the roles <see cref="RolesController"/>'s and export <see cref="Lifecycle.ExportController"/>'s. Each <c>GET</c> is the section's form, one resource both ways. General's
-/// <c>POST</c> takes <c>name</c>, <c>description</c> and <c>audience</c> (<c>public</c> or <c>private</c>), admission's
-/// takes <c>admission</c> (<c>join</c> or <c>apply</c>), appearance's takes <c>base</c> (<c>tangent</c> or a bundled stylesheet), <c>palette</c> (<c>base</c> or <c>accent</c>), <c>accent</c> (<c>gold</c>, <c>jade</c>, <c>iris</c> or <c>copper</c>), <c>css</c> and the slots <c>head</c>, <c>masthead</c>, <c>doorIntro</c>, <c>articleHeader</c> and <c>footer</c>, as a form or a JSON object, a field left as it is when not sent, and
-/// sends <see cref="ChangeTangentSpace"/>: a form is sent on, from general to the door, where the name and the description
-/// show, and from admission and appearance back to themselves; a JSON request reads the place (<c>200</c>); a refusal reads the form
+/// <c>POST</c> takes <c>name</c> and <c>audience</c> (<c>public</c> or <c>private</c>), admission's
+/// takes <c>admission</c> (<c>join</c> or <c>apply</c>), appearance's takes <c>base</c> (<c>tangent</c> or a bundled stylesheet), <c>palette</c> (<c>base</c>, <c>gold</c>, <c>jade</c>, <c>iris</c> or <c>copper</c>), <c>css</c>, <c>image</c> and the words in Markdown, <c>description</c>, <c>intro</c>, <c>masthead</c>, <c>footer</c> and <c>articleHeader</c>, as a form or a JSON object, a field left as it is when not sent, and
+/// sends <see cref="ChangeTangentSpace"/>: a form is sent on, from general to the door, where the name
+/// shows, and from admission and appearance back to themselves; a JSON request reads the place (<c>200</c>); a refusal reads the form
 /// again with the reason inline, or a problem with its word. A person who may not change these but may use another
 /// section opens that one instead. A reader for whom the place does not exist receives what an
 /// address with nothing there receives.</summary>
+[Managing]
 public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
     public const string Path = "/settings";
@@ -52,45 +53,46 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
 
     public const string AppearancePath = "/settings/appearance";
 
-    public const string PreviewPath = "/settings/appearance/preview";
+    public const string ImagePath = "/settings/appearance/image";
 
     public const string NameField = "name";
     public const string DescriptionField = "description";
     public const string AdmissionField = "admission";
     public const string AudienceField = "audience";
-    public const string AccentField = "accent";
     public const string BaseField = "base";
     public const string PaletteField = "palette";
     public const string CssField = "css";
-    public const string HeadField = "head";
+    public const string ImageField = "image";
+    public const string IntroField = "intro";
     public const string MastheadField = "masthead";
-    public const string DoorIntroField = "doorIntro";
-    public const string ArticleHeaderField = "articleHeader";
     public const string FooterField = "footer";
+    public const string ArticleHeaderField = "articleHeader";
 
-    /// <summary>The form that changes the place's name, description and audience, under <paramref name="baseAddress"/>.</summary>
+    /// <summary>The field the place's own image comes in as, a file of a multipart form.</summary>
+    public const string FileField = "file";
+
+    /// <summary>The form that changes the place's name and audience, under <paramref name="baseAddress"/>.</summary>
     private static Form GeneralForm(string baseAddress) => Form.Posting(baseAddress + Path,
         new Form.Field(NameField, Holds.PlaceName),
-        new Form.Field(DescriptionField, Holds.PlaceDescription),
         new Form.Field(AudienceField, Holds.PlaceAudience));
 
     /// <summary>The form that sets how a newcomer arrives, under <paramref name="baseAddress"/>.</summary>
     private static Form AdmissionForm(string baseAddress) => Form.Posting(baseAddress + AdmissionPath,
         new Form.Field(AdmissionField, Holds.Admission));
 
-    /// <summary>The form that sets the place's appearance and its slots, under <paramref name="baseAddress"/>.</summary>
+    /// <summary>The form that sets the place's appearance, under <paramref name="baseAddress"/>.</summary>
     private static Form AppearanceForm(string baseAddress) => Form.Posting(baseAddress + AppearancePath,
         new Form.Field(BaseField, Holds.Base),
         new Form.Field(PaletteField, Holds.Palette),
-        new Form.Field(AccentField, Holds.Accent),
         new Form.Field(CssField, Holds.Css),
-        new Form.Field(HeadField, Holds.HeadSlot),
-        new Form.Field(MastheadField, Holds.MastheadSlot),
-        new Form.Field(DoorIntroField, Holds.DoorIntroSlot),
-        new Form.Field(ArticleHeaderField, Holds.ArticleHeaderSlot),
-        new Form.Field(FooterField, Holds.FooterSlot));
+        new Form.Field(ImageField, Holds.PlaceImage),
+        new Form.Field(DescriptionField, Holds.PlaceDescription),
+        new Form.Field(IntroField, Holds.Intro),
+        new Form.Field(MastheadField, Holds.Masthead),
+        new Form.Field(FooterField, Holds.Footer),
+        new Form.Field(ArticleHeaderField, Holds.ArticleHeader));
 
-    /// <summary>The section that names and describes the place.</summary>
+    /// <summary>The section that names the place and says who reads it.</summary>
     public const string General = "General";
 
     /// <summary>The section that sets how a newcomer arrives.</summary>
@@ -99,7 +101,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
     /// <summary>The section where applications are decided, listed for whoever holds <see cref="Bit.ManageStanding"/>.</summary>
     public const string ApplicationsSection = "Applications";
 
-    /// <summary>The section that sets the place's appearance and its slots.</summary>
+    /// <summary>The section that sets the place's appearance and its words.</summary>
     public const string AppearanceSection = "Appearance";
 
     /// <summary>The section where the place's people are found, their standing changed and their roles given and taken,
@@ -167,7 +169,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
 
     [HttpGet(Path)]
     [Tool(Name = "read_settings")]
-    [Description("Read the place's name, description and audience, with the sections of its settings you may use. Call this before change_settings.")]
+    [Description("Read the place's name and audience, with the sections of its settings you may use. Call this before change_settings.")]
     public async Task<IActionResult> Get(CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
@@ -181,7 +183,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "change_settings", Destructive = true, Idempotent = true, OpenWorld = false)]
     [Needs(Bit.ManageSpace)]
-    [Description("Change the place's name, description or audience, for whoever holds ManageSpace. What you send replaces what stood, and a private place serves a visitor only the sign-in.")]
+    [Description("Change the place's name or audience, for whoever holds ManageSpace. What you send replaces what stood, and a private place serves a visitor only the sign-in. Its description is change_appearance's.")]
     public async Task<IActionResult> Change(ChangeSpaceInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
@@ -194,7 +196,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
             audience = Enum.Parse<Audience>(sent, ignoreCase: true);
         }
 
-        var outcome = await new ChangeTangentSpace(personId ?? "", input.Name, input.Description, Audience: audience).Send();
+        var outcome = await new ChangeTangentSpace(personId ?? "", input.Name, Audience: audience).Send();
         switch (outcome)
         {
             case Outcome<TangentSpace>.Done { Result: var space }:
@@ -283,7 +285,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
 
     [HttpGet(AppearancePath)]
     [Tool(Name = "read_appearance")]
-    [Description("Read the place's appearance — its base, palette, accent and own CSS — and its slots. Call this before change_appearance.")]
+    [Description("Read the place's appearance — its base, its colours, its own CSS, its image and its words in Markdown: the description, the welcome under the door's head, the masthead and footer lines and the article header. Call this before change_appearance.")]
     public async Task<IActionResult> GetAppearance(CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
@@ -296,18 +298,16 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
     [HttpPost(AppearancePath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "change_appearance", Destructive = true, Idempotent = true, OpenWorld = false)]
-    [Description("Set the place's appearance and slots, which every page shows every reader, for whoever holds ManageSpace: the base layer's stylesheet, the palette, the accent and the place's own CSS, which every page but the settings carries over the rest. Sending a layer its default returns it there: base tangent, palette base, css empty. A slot you send replaces what it held; whatever you leave out stays.")]
+    [Description("Set how the place looks to every reader on every page, for whoever holds ManageSpace: the base layer's stylesheet, the colours, the place's own CSS, which every page but the settings carries over the rest, its image, and its words in Markdown. Sending a part its default returns it there: base tangent, palette base, anything else empty. What you leave out stays.")]
     public async Task<IActionResult> ChangeAppearance(ChangeAppearanceInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
-        var (accent, @base, palette, refused) = Choices(input);
-        if (refused is not null) return await AppearanceRefused(personId, input, refused, ct);
 
-        var outcome = await new ChangeTangentSpace(personId ?? "", Accent: accent, Base: @base, Palette: palette, Css: input.Css, Head: input.Head, Masthead: input.Masthead, DoorIntro: input.DoorIntro,
-            ArticleHeader: input.ArticleHeader, Footer: input.Footer).Send();
+        var outcome = await new ChangeTangentSpace(personId ?? "", Description: input.Description, Base: input.Base, Palette: input.Palette, Css: input.Css,
+            Image: input.Image, Masthead: input.Masthead, Footer: input.Footer, Intro: input.Intro, ArticleHeader: input.ArticleHeader).Send();
         switch (outcome)
         {
             case Outcome<TangentSpace>.Done { Result: var space }:
@@ -319,56 +319,46 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
         }
     }
 
-    /// <summary>The door as the reader would see it in the appearance sent, the place's own where a choice is left out or is
-    /// not one of the choices, with nothing saved: for whoever may change the appearance, framed by the settings page beside
-    /// the form.</summary>
-    [HttpGet(PreviewPath)]
-    [HttpPost(PreviewPath)]
-    [RequestSizeLimit(PostWrites.RequestLimit)]
-    public async Task<IActionResult> Preview(ChangeAppearanceInput input, CancellationToken ct)
+    /// <summary>An image of the proprietor's own, sent as the file of a multipart form, kept as every image is
+    /// (<see cref="Media.Keep"/>) and worn at once as the place's; the form is sent back to the appearance.</summary>
+    [HttpPost(ImagePath)]
+    [RequestSizeLimit(NewMediaController.RequestLimit)]
+    [RequestFormLimits(MultipartBodyLengthLimit = NewMediaController.RequestLimit)]
+    public async Task<IActionResult> TakeImage(CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
-        if (place.Gate(Bit.ManageSpace) is { } gate) return Answers.Refused(HttpContext, gate);
+        if (personId is null || place.Gate(Bit.ManageSpace) is not null) return Answers.Refused(HttpContext, place.Gate(Bit.ManageSpace) ?? Capabilities.SignIn);
 
-        var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
-        var (accent, @base, palette, _) = Choices(input);
-        HttpContext.Items[HtmlFormatter.Previewed] = space.Appearance.With(accent, @base, palette, input.Css is { Length: <= Appearance.CssLimit } css ? css : null);
-        Response.Headers.XFrameOptions = "SAMEORIGIN";
-        var door = ActivatorUtilities.CreateInstance<DoorController>(HttpContext.RequestServices);
-        door.ControllerContext = ControllerContext;
-        return await door.Get(ct);
-    }
+        var file = Request.HasFormContentType ? (await Request.ReadFormAsync(ct)).Files.GetFile(FileField) : null;
+        if (file is null) return await AppearanceRefused(personId, new ChangeAppearanceInput(), Media.NotAnImage, ct);
+        Media media;
+        try
+        {
+            if (file.Length > Media.SentLimit) throw new Refusal(Media.TooLarge);
+            using var bytes = new MemoryStream();
+            await file.CopyToAsync(bytes, ct);
+            media = await Media.Keep(bytes.ToArray(), ct);
+        }
+        catch (Refusal refusal)
+        {
+            return await AppearanceRefused(personId, new ChangeAppearanceInput(), refusal.Reason, ct);
+        }
 
-    /// <summary>The choices an appearance write sends, each null where it is left out, and the reason the first that is not
-    /// one of its choices is refused.</summary>
-    private static (Accent? Accent, Base? Base, Palette? Palette, Reason? Refused) Choices(ChangeAppearanceInput input)
-    {
-        Accent? accent = null;
-        Base? @base = null;
-        Palette? palette = null;
-        if (input.Accent is { } sentAccent)
+        await new BringMedia(media.Id, personId).Send();
+        var outcome = await new ChangeTangentSpace(personId, Image: Media.Reference(media.Id)).Send();
+        return outcome switch
         {
-            if (!Appearance.Accents.Contains(sentAccent, StringComparer.Ordinal)) return (null, null, null, TangentSpace.AccentRule);
-            accent = Enum.Parse<Accent>(sentAccent, ignoreCase: true);
-        }
-        if (input.Base is { } sentBase)
-        {
-            if (!Appearance.Bases.Contains(sentBase, StringComparer.Ordinal)) return (accent, null, null, TangentSpace.BaseRule);
-            @base = Enum.Parse<Base>(sentBase, ignoreCase: true);
-        }
-        if (input.Palette is { } sentPalette)
-        {
-            if (!Appearance.Palettes.Contains(sentPalette, StringComparer.Ordinal)) return (accent, @base, null, TangentSpace.PaletteRule);
-            palette = Enum.Parse<Palette>(sentPalette, ignoreCase: true);
-        }
-        return (accent, @base, palette, null);
+            Outcome<TangentSpace>.Done { Result: var space } => await Written(space, personId, BaseAddress() + AppearancePath, ct),
+            Outcome<TangentSpace>.Refused { Reason: { Kind: not ReasonKind.Absent } reason } => await AppearanceRefused(personId, new ChangeAppearanceInput(), reason, ct),
+            _ => Answers.NotDone(HttpContext, outcome)
+        };
     }
 
     /// <summary>A refused appearance: for a JSON request, the problem its reason answers as; for a form, the form again, read
-    /// afresh, with each choice sent chosen where it is one of the choices, the CSS and the slots as they were sent, and the
+    /// afresh, with each choice sent chosen where it is one of the choices, the words and the CSS as they were sent, and the
     /// reason above the form.</summary>
     private async Task<IActionResult> AppearanceRefused(string? personId, ChangeAppearanceInput input, Reason reason, CancellationToken ct)
     {
@@ -377,20 +367,17 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
         var page = await AppearancePage(place, personId, ct);
-        if (input.Accent is { } sent && Appearance.Accents.Contains(sent, StringComparer.Ordinal)) page = page with { Accent = sent };
-        if (input.Base is { } sentBase && Appearance.Bases.Contains(sentBase, StringComparer.Ordinal)) page = page with { Base = sentBase };
-        if (input.Palette is { } sentPalette && Appearance.Palettes.Contains(sentPalette, StringComparer.Ordinal)) page = page with { Palette = sentPalette };
         page = page with
         {
+            Base = input.Base is { } sentBase && Appearance.Bases.Contains(sentBase, StringComparer.Ordinal) ? sentBase : page.Base,
+            Palette = input.Palette is { } sentPalette && Appearance.Palettes.Contains(sentPalette, StringComparer.Ordinal) ? sentPalette : page.Palette,
+            Image = input.Image is { } sentImage && Art.Judged(sentImage) is { } image ? image : page.Image,
             Css = input.Css ?? page.Css,
-            Slots = page.Slots with
-            {
-                Head = input.Head ?? page.Slots.Head,
-                Masthead = input.Masthead ?? page.Slots.Masthead,
-                DoorIntro = input.DoorIntro ?? page.Slots.DoorIntro,
-                ArticleHeader = input.ArticleHeader ?? page.Slots.ArticleHeader,
-                Footer = input.Footer ?? page.Slots.Footer
-            }
+            Description = input.Description ?? page.Description,
+            Intro = input.Intro ?? page.Intro,
+            Masthead = input.Masthead ?? page.Masthead,
+            Footer = input.Footer ?? page.Footer,
+            ArticleHeader = input.ArticleHeader ?? page.ArticleHeader
         };
         page = reason.Kind == ReasonKind.Gated ? page with { Gate = reason.Word, Change = null } : page with { Failure = reason.Text };
         return new ObjectResult(page) { StatusCode = Answers.Status(HttpContext, reason) };
@@ -402,18 +389,25 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
         var here = baseUrl.PathBase + AppearancePath;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
         var mutable = place.Gate(Bit.ManageSpace) is null;
+        var appearance = space.Appearance;
         return new AppearanceSettingsPage(
             Sections(place, baseAddress, AppearanceSection),
-            Appearance.Word(space.Appearance.Base),
+            Appearance.Word(appearance.Base),
             Appearance.Bases,
-            Appearance.Word(space.Appearance.Palette),
+            Appearance.Word(appearance.Palette),
             Appearance.Palettes,
-            Appearance.Word(space.Appearance.Accent),
-            Appearance.Accents,
-            space.Appearance.Css,
-            space.Slots,
+            appearance.Css,
+            appearance.Image,
+            appearance.ImageAt(baseAddress + "/"),
+            Art.Covers.Select(cover => new AppearanceSettingsPage.Cover(cover.Name, cover.Title, baseAddress + "/" + Art.File(cover.Name))).ToList(),
+            space.Description,
+            appearance.Intro,
+            appearance.Masthead,
+            appearance.Footer,
+            appearance.ArticleHeader,
             mutable ? AppearanceForm(baseAddress) : null,
-            mutable ? baseAddress + PreviewPath : null,
+            mutable ? baseAddress + AppearancePreviewController.Path : null,
+            mutable ? baseAddress + ImagePath : null,
             place.Can,
             place.Gate(Bit.ManageSpace)?.Word,
             personId is null ? baseAddress + SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,
@@ -435,8 +429,8 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
 
         var place = await Capabilities.Load(personId, null, null, ct);
         return new ObjectResult(new WrittenTangentSpace(space.Name, space.Description, Word(space.Admission), Tangents.TangentWrites.Word(space.Audience),
-            Appearance.Word(space.Appearance.Accent), Appearance.Word(space.Appearance.Base), Appearance.Word(space.Appearance.Palette), space.Appearance.Css,
-            space.Slots, door, BaseAddress() + Path, place.Can))
+            Appearance.Word(space.Appearance.Base), Appearance.Word(space.Appearance.Palette), space.Appearance.Css, space.Appearance.Image,
+            space.Appearance.Intro, space.Appearance.Masthead, space.Appearance.Footer, space.Appearance.ArticleHeader, door, BaseAddress() + Path, place.Can))
         {
             ContentTypes = { "application/json" }
         };
@@ -454,12 +448,10 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
         page = page with
         {
             Name = input.Name ?? page.Name,
-            Description = input.Description ?? page.Description,
             Audience = input.Audience is { } audience && Audiences.Contains(audience, StringComparer.Ordinal) ? audience : page.Audience
         };
         page = reason.Kind == ReasonKind.Gated ? page with { Gate = reason.Word, Change = null }
             : reason == TangentSpace.NameRule ? page with { NameFailure = reason.Text }
-            : reason == TangentSpace.DescriptionRule ? page with { DescriptionFailure = reason.Text }
             : page with { Failure = reason.Text };
         return new ObjectResult(page) { StatusCode = Answers.Status(HttpContext, reason) };
     }
@@ -472,7 +464,6 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
         return new TangentSpaceSettingsPage(
             Sections(place, baseAddress, General),
             space.Name,
-            space.Description,
             Tangents.TangentWrites.Word(space.Audience),
             Audiences,
             place.Gate(Bit.ManageSpace) is null ? GeneralForm(baseAddress) : null,

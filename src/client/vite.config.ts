@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { defineConfig, type Plugin } from 'vitest/config'
 
-// The page entry, one module script, and the stylesheet of each of Tangent's layers with fixed names: base.css,
+// The page entry, one module script, the order of the layers, layers.css, and the stylesheet of each of Tangent's layers with fixed names: base.css,
 // tangent.css (shapes and tangent) and palette.css; and each bundled base, bases/<name>.css — a classless stylesheet
 // with its adapter, or Concord — its own palette, bases/<name>.palette.css, and a vendored one's licence,
 // bases/<name>/LICENSE; all written where the server serves its
@@ -35,6 +35,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         tangent: 'tangent.ts',
+        layers: 'layers.css',
         base: 'base.css',
         palette: 'palette.css',
         ...Object.fromEntries(bases.map((base) => [`bases/${base}`, `bases/${base}.css`])),

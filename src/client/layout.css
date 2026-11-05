@@ -334,6 +334,13 @@ body {
   font: 700 calc(var(--tile) * 0.6) / 1 var(--ts-font-display);
 }
 
+.tangent-tile-image {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  object-fit: cover;
+}
+
 .tangent-tile-edge {
   height: var(--tile-edge);
   background: var(--tone);
@@ -648,14 +655,14 @@ body {
   color: var(--ts-text-3);
 }
 
-/* The place's own slots: the masthead's and the footer's a line, the door intro's under the door's head at the width of
-   what follows it, each image held to what it stands in. */
-.slot img {
+/* The place's words: the masthead and footer lines, the door's welcome under its head at the width of what follows it,
+   and the article header, each image held to what it stands in. */
+:is(.masthead-line, .footer-line, .door-intro, .article-header) img {
   max-width: 100%;
   height: auto;
 }
 
-.slot-masthead {
+.masthead-line {
   min-width: 0;
   display: flex;
   align-items: center;
@@ -667,22 +674,59 @@ body {
   white-space: nowrap;
 }
 
-.slot-masthead img {
+.masthead-line img {
   max-height: 28px;
   width: auto;
 }
 
-.slot-footer :is(p, nav) {
+:is(.masthead-line, .footer-line) p {
   margin: 0;
 }
 
-.slot.slot-door-intro {
+.door-intro {
   width: min(100% - 2 * var(--ts-page-gutter), var(--ts-home-container));
   margin: 32px auto 0;
 }
 
-.slot.slot-article-header {
+.article-header {
   margin: 0 0 16px;
+}
+
+/* The door's head over the place's image: the picture fills the band, and a wash of the surface keeps the words on it
+   readable in either theme. */
+.tangent-head.is-pictured {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 72px 0 40px;
+  min-height: 280px;
+  display: flex;
+  align-items: flex-end;
+}
+
+.head-image {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tangent-head.is-pictured::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(to top, var(--ts-surface) 12%, color-mix(in srgb, var(--ts-surface) 72%, transparent) 55%, color-mix(in srgb, var(--ts-surface) 10%, transparent));
+}
+
+.tangent-head.is-pictured .tangent-head-inner {
+  width: min(100% - 2 * var(--ts-page-gutter), var(--ts-home-container));
+}
+
+.door-description p {
+  margin: 0;
 }
 
 /* The one line a page of a retired place's archive opens with. */
@@ -756,6 +800,11 @@ body {
 
 /* The phone: a shorter masthead and path bar, the narrow gutter, 44px targets. */
 @media (max-width: 719px) {
+  /* A phone's masthead holds the place's name and the way in; the masthead line waits for a wider screen. */
+  .masthead-line {
+    display: none;
+  }
+
   html {
     scroll-padding-top: calc(var(--ts-phone-header-height) + var(--ts-phone-pathbar-height) + 16px);
   }
@@ -824,9 +873,14 @@ body {
     margin-top: 24px;
   }
 
-  .slot.slot-door-intro {
+  .door-intro {
     width: calc(100% - 2 * var(--ts-phone-gutter));
     margin-top: 24px;
+  }
+
+  .tangent-head.is-pictured {
+    padding-top: 56px;
+    min-height: 220px;
   }
 
   .footer {

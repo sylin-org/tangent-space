@@ -17,9 +17,9 @@ public sealed class TangentSpaceSettingsTests
 {
     private const string Leo = "did:plc:leo4place";
 
-    private static Dictionary<string, string> General(string name, string description) => new()
+    private static Dictionary<string, string> General(string name) => new()
     {
-        [TangentSpaceSettingsController.NameField] = name, [TangentSpaceSettingsController.DescriptionField] = description
+        [TangentSpaceSettingsController.NameField] = name
     };
 
     [Fact]
@@ -38,7 +38,7 @@ public sealed class TangentSpaceSettingsTests
 
         var page = await Send(leo.Client, HttpMethod.Get, TangentSpaceSettingsController.Path, json: true);
         Assert.Equal(HttpStatusCode.OK, page.Status);
-        Assert.Equal(("Field notes", ""), (page.Json.GetProperty("name").GetString(), page.Json.GetProperty("description").GetString()));
+        Assert.Equal("Field notes", page.Json.GetProperty("name").GetString());
         Assert.Contains(nameof(Bit.ManageSpace), page.Json.GetProperty("can").EnumerateArray().Select(verb => verb.GetString()));
         Assert.False(page.Json.TryGetProperty("gate", out _));
         Assert.Equal([("General", settings, true), ("Admission", settings + "/admission", false), ("Applications", settings + "/applications", false),
@@ -48,41 +48,40 @@ public sealed class TangentSpaceSettingsTests
         var before = await Event.Count.Exact(Cancellation);
 
         var saved = await Form(leo, TangentSpaceSettingsController.Path, TangentSpaceSettingsController.Path,
-            General("Lantern Works", "Kilns, glazes and the people who fire them."));
+            General("Lantern Works"));
 
         Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + "/"), (saved.Status, saved.Location));
         var row = (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!;
-        Assert.Equal(("Lantern Works", "Kilns, glazes and the people who fire them.", 2L), (row.Name, row.Description, row.Version));
+        Assert.Equal(("Lantern Works", 2L), (row.Name, row.Version));
         var logged = Assert.Single(await Event.All(Cancellation), e => e.Seq > before);
         Assert.Equal((EventKind.SpaceChanged, Leo), (logged.Kind, logged.ActorId));
         var door = await Send(leo.Client, HttpMethod.Get, "/");
         Assert.Contains("<h1 id=\"door-title\" class=\"tangent-title\">Lantern Works</h1>", door.Body);
-        Assert.Contains("<p class=\"tangent-description door-description\">Kilns, glazes and the people who fire them.</p>", door.Body);
-        Assert.Equal("Kilns, glazes and the people who fire them.", (await Send(leo.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("description").GetString());
 
-        // As JSON, the description alone; the name stays.
-        var described = await Json(leo, TangentSpaceSettingsController.Path, TangentSpaceSettingsController.Path, new { description = "Fired weekly." });
+        // The description is one of the place's words, written with its appearance, drawn on the door as Markdown.
+        var described = await Json(leo, TangentSpaceSettingsController.Path, TangentSpaceSettingsController.AppearancePath, new { description = "Fired *weekly*." });
         Assert.Equal(HttpStatusCode.OK, described.Status);
-        Assert.Equal(("Lantern Works", "Fired weekly.", BaseUrl + "/"),
+        Assert.Equal(("Lantern Works", "Fired *weekly*.", BaseUrl + "/"),
             (described.Json.GetProperty("name").GetString(), described.Json.GetProperty("description").GetString(), described.Json.GetProperty("door").GetString()));
         Assert.Contains(nameof(Bit.ManageSpace), described.Json.GetProperty("can").EnumerateArray().Select(verb => verb.GetString()));
         Assert.Equal(before + 2, await Event.Count.Exact(Cancellation));
+        Assert.Contains("<div class=\"tangent-description door-description post-body\"><p>Fired <em>weekly</em>.</p>", (await Send(leo.Client, HttpMethod.Get, "/")).Body);
+        Assert.Equal("Fired *weekly*.", (await Send(leo.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("description").GetString());
 
         // A change of nothing writes nothing.
         Assert.Equal(HttpStatusCode.SeeOther, (await Form(leo, TangentSpaceSettingsController.Path, TangentSpaceSettingsController.Path,
-            General("Lantern Works", "Fired weekly."))).Status);
+            General("Lantern Works"))).Status);
         Assert.Equal(before + 2, await Event.Count.Exact(Cancellation));
 
         // A refused name keeps the form, and what was sent, with the reason under the name.
-        var refused = await Form(leo, TangentSpaceSettingsController.Path, TangentSpaceSettingsController.Path, General("   ", "Still fired weekly."));
+        var refused = await Form(leo, TangentSpaceSettingsController.Path, TangentSpaceSettingsController.Path, General("   "));
         Assert.Equal(HttpStatusCode.BadRequest, refused.Status);
         Assert.Contains("id=\"space-settings-name-failure\"", refused.Body);
         Assert.Contains(TangentSpace.NameRule.Text, refused.Body);
-        Assert.Contains(">Still fired weekly.</textarea>", refused.Body);
-        var tooLong = await Json(leo, TangentSpaceSettingsController.Path, TangentSpaceSettingsController.Path,
+        var tooLong = await Json(leo, TangentSpaceSettingsController.Path, TangentSpaceSettingsController.AppearancePath,
             new { description = new string('w', TangentSpace.DescriptionLimit + 1) });
         Assert.Equal((HttpStatusCode.BadRequest, "invalid"), (tooLong.Status, tooLong.Word));
-        Assert.Equal(("Lantern Works", "Fired weekly."), ((await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Name,
+        Assert.Equal(("Lantern Works", "Fired *weekly*."), ((await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Name,
             (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Description));
         Assert.Equal(before + 2, await Event.Count.Exact(Cancellation));
     }
@@ -107,7 +106,7 @@ public sealed class TangentSpaceSettingsTests
 
         var before = await Event.Count.Exact(Cancellation);
         // The settings offer Ada no form, so her session's token comes from the workshop's page, which carries one.
-        var refused = await Form(ada, "/t/" + Workshop, TangentSpaceSettingsController.Path, General("Ada's place", ""));
+        var refused = await Form(ada, "/t/" + Workshop, TangentSpaceSettingsController.Path, General("Ada's place"));
         Assert.Equal(HttpStatusCode.Forbidden, refused.Status);
         Assert.Contains($"data-word=\"{gate}\"", refused.Body);
         var asJson = await Json(ada, "/t/" + Workshop, TangentSpaceSettingsController.Path, new { name = "Ada's place" });

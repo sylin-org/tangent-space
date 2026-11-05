@@ -39,6 +39,7 @@ public sealed record DeleteRoleInput([Description(Holds.DeletedRole)] string? Ro
 /// back to the roles; a JSON request reads the role as the page now lists it, created (<c>201</c>) or changed
 /// (<c>200</c>), or nothing for a deletion (<c>204</c>); a refusal reads the page again with the reason above the list, or
 /// a problem. A reader for whom the place does not exist receives what an address with nothing there receives.</summary>
+[Managing]
 public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles) : ControllerBase
 {
     public const string Path = "/settings/roles";

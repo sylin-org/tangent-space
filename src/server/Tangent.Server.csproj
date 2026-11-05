@@ -38,7 +38,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClientSource Include="$(ClientRoot)**" Exclude="$(ClientRoot)node_modules/**;$(ClientRoot)tests/**" />
-    <ClientOutput Include="wwwroot/tangent.css;wwwroot/tangent.js;wwwroot/theme.js" />
+    <ClientOutput Include="wwwroot/layers.css;wwwroot/tangent.css;wwwroot/tangent.js;wwwroot/theme.js;wwwroot/art/the-commons.webp" />
   </ItemGroup>
 
   <!-- Builds the client when an output is missing or older than a client file; installs its packages first

@@ -17,6 +17,8 @@ public static class TangentWrites
     public const string KindField = "kind";
     public const string AudienceField = "audience";
     public const string MoveField = "move";
+    public const string AccentField = "accent";
+    public const string ImageField = "image";
 
     /// <summary>The settings page's segment under a Tangent's address; <see cref="Slug.Reserved"/> keeps it from every
     /// Topic.</summary>
@@ -62,6 +64,8 @@ public static class TangentWrites
         [
             new(NameField, Holds.ChangedTangentName),
             new(DescriptionField, Holds.ChangedTangentDescription),
+            new(AccentField, Holds.TangentAccent),
+            new(ImageField, Holds.TangentImage),
             new(KindField, Holds.ChangedTangentKind)
         ];
         if (!fixedAudience) fields.Add(new(AudienceField, Holds.ChangedTangentAudience));

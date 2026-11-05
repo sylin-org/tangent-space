@@ -17,7 +17,7 @@ public enum Move
 }
 
 /// <summary>Changes a Tangent's settings: its name, description and default kind (<see cref="Tangent.Change"/>; the
-/// slug stays), its audience, written as its <c>everyone</c> overwrite as <see cref="CreateTangent"/> writes it, and its
+/// slug stays), its accent and image (<see cref="Tangent.Wear"/>), the image's use in step, its audience, written as its <c>everyone</c> overwrite as <see cref="CreateTangent"/> writes it, and its
 /// order, one place earlier or later. A field left null stays as it is. The Tangent exists for the actor, who holds
 /// <see cref="Bit.View"/> on it, or the command answers that no Tangent has the slug; the actor holds
 /// <see cref="Bit.ManageTangent"/> there, which <see cref="Bit.ManageSpace"/> implies, and
@@ -33,6 +33,8 @@ public sealed record ChangeTangent(
     PostKind? DefaultKind = null,
     Audience? Audience = null,
     Move? Move = null,
+    string? Accent = null,
+    string? Image = null,
     DateTimeOffset? At = null) : ICommand<Tangent>
 {
     public static readonly Reason NoTangent = Reason.Absent("No Tangent has this slug.");
@@ -50,7 +52,8 @@ public sealed record ChangeTangent(
         // Judged before the audience moves, since a new audience can take the actor's own View away.
         if (await Judge(actual, ct) is { } refusal) return new Outcome<Tangent>.Refused(refusal);
 
-        var changed = tangent.Change(Name ?? tangent.Name, Description ?? tangent.Description, DefaultKind ?? tangent.DefaultKind);
+        var wore = tangent.Image;
+        var changed = tangent.Change(Name ?? tangent.Name, Description ?? tangent.Description, DefaultKind ?? tangent.DefaultKind) | tangent.Wear(Accent, Image);
         var audienceChanged = Audience is { } wanted && actual != wanted;
         if (audienceChanged) await Overwrites.SetAudience(Collection(), Slug, Audience!.Value, ct);
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct);
@@ -58,6 +61,7 @@ public sealed record ChangeTangent(
         if (!changed && !moved && !audienceChanged) return new Outcome<Tangent>.Done(tangent);
 
         if (!moved) await tangent.Save(ct);
+        await MediaUse.Record(tangent.Id, wore, tangent.Image, ActorId, ct);
         await Event.Append(EventKind.TangentChanged, At ?? DateTimeOffset.UtcNow, ct, tangentId: tangent.Id, actorId: ActorId,
             audience: Audience ?? actual ?? Space.Audience.Public);
         return new Outcome<Tangent>.Done(tangent);

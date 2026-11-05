@@ -292,7 +292,7 @@ public sealed partial class ExportTests
         var article = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Articles, "Lanterns",
             "![Lit](/media/" + inline + ")\n\nAnd ![Lit again](/media/" + inline + ")\n\n![Not mine](/media/" + hidden + ")", Ada, CoverId: cover).Send(Cancellation)).Result;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
-        space!.Slots.ArticleHeader = "<p>From the long reads.</p>";
+        space!.Appearance.ArticleHeader = "From the long reads.";
         Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(Cancellation));
 
         using var answer = await keeping.Client.GetAsync(Path + ".zip", Cancellation);
@@ -320,7 +320,7 @@ public sealed partial class ExportTests
         Assert.DoesNotContain("srcset", page);
         Assert.Contains("<h1 class=\"article-title\">Lanterns", page);
         Assert.Contains("article-byline", page);
-        Assert.Contains("slot-article-header", page);
+        Assert.Contains("class=\"article-header", page);
         foreach (var offer in new[] { "article-form", "article-source", "ProseMirror", "site-search" }) Assert.DoesNotContain(offer, page);
 
         // Its Tangent lists it with its cover, which has no render here to read.
@@ -336,7 +336,7 @@ public sealed partial class ExportTests
     }
 
     [Fact]
-    public async Task An_image_a_slot_names_comes_along_for_a_holder_who_did_not_bring_it()
+    public async Task An_image_the_places_words_name_comes_along_for_a_holder_who_did_not_bring_it()
     {
         const string keeper = "role:keeper";
         const string Keeping = "did:plc:keeper4export";
@@ -349,7 +349,7 @@ public sealed partial class ExportTests
         using var leo = await SignedIn(tangentSpace, Leo);
         using var keeping = await SignedIn(tangentSpace, Keeping);
         var logo = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(60)));
-        Assert.IsType<Outcome<TangentSpace>.Done>(await new ChangeTangentSpace(Leo, Masthead: $"<img src=\"/media/{logo}\" alt=\"\">").Send(Cancellation));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new ChangeTangentSpace(Leo, Masthead: $"![](/media/{logo})").Send(Cancellation));
 
         var zip = await Downloaded(keeping, Path + ".zip");
 

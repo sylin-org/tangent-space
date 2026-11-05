@@ -36,7 +36,7 @@ public sealed partial class Media : MediaEntity<Media>
     /// <summary>The Id of the media a body's image names, or null where it names anything else.</summary>
     public static string? IdIn(string? target) => target is not null && Referenced().Match(target) is { Success: true } match ? match.Groups[1].Value : null;
 
-    /// <summary>A body's or a slot's HTML with each image held here, as an image or a link's target, at its address under
+    /// <summary>A body's or one of the place's words' HTML with each image held here, as an image or a link's target, at its address under
     /// the base URL, which ends in a slash.</summary>
     public static string Placed(string html, string door) => html
         .Replace("src=\"/media/", "src=\"" + door + "media/", StringComparison.Ordinal)

@@ -45,14 +45,22 @@ public sealed record Door(
     /// <summary>What a link to the door previews, where a visitor may read the place, which is where it has
     /// <see cref="Feeds"/>: the place's name, its description and its address, all read for the page.</summary>
     public static SocialCard? Card(Door door)
-        => door.Feeds is null ? null : new SocialCard(door.Name, door.Description, Url: door.Address, SiteName: door.Name);
+        => door.Feeds is null ? null : new SocialCard(door.Name, Space.PlaceWords.Plain(Space.PlaceWords.DescriptionPart, door.Description), Url: door.Address,
+            SiteName: door.Name, Image: Koan.Web.OpenGraph.CardImage.Url(door.Image));
 
-    /// <summary>What the place is, in its proprietor's line; empty until they write one.</summary>
+    /// <summary>What the place is, in its proprietor's line of Markdown; empty until they write one.</summary>
     public string Description { get; init; } = "";
 
-    /// <summary>The proprietor's own HTML that opens the door, sanitized when it was written: present only where they wrote
-    /// some.</summary>
+    /// <summary>The description as the door draws it, its Markdown rendered as a Post's body is; absent while it is empty.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? DescriptionHtml { get; init; }
+
+    /// <summary>The place's welcome under the door's head, its Markdown rendered as a Post's body is; present only where the
+    /// place wrote one.</summary>
     public string? Intro { get; init; }
+
+    /// <summary>The address of the place's image, behind the door's head; present only where the place wears one.</summary>
+    public string? Image { get; init; }
 
     /// <summary>The place's articles feeds: present only where a visitor may read the place.</summary>
     public IReadOnlyList<Render.FeedLink>? Feeds { get; init; }

@@ -103,15 +103,18 @@ public sealed class Export
         await zip.Finish();
     }
 
-    /// <summary>What a page's stylesheets need, from where the place serves them: its base, Tangent's components and its
-    /// palette, the base's licence where it is a bundled one, and the fonts.</summary>
+    /// <summary>What a page's stylesheets need, from where the place serves them: the order of the layers, its base, Tangent's
+    /// components and its palette, the base's licence where it is a bundled one, the fonts, and the place's image where it
+    /// is a bundled cover and its Tangents' covers.</summary>
     internal async Task Assets(CancellationToken ct)
     {
         var root = _services.GetRequiredService<IWebHostEnvironment>().WebRootFileProvider;
-        foreach (var path in new[] { _appearance.BaseSheet, HtmlFormatter.Stylesheet, _appearance.PaletteSheet, _appearance.Licence }.OfType<string>())
+        foreach (var path in new[] { HtmlFormatter.Layers, _appearance.BaseSheet, HtmlFormatter.Stylesheet, _appearance.PaletteSheet, _appearance.Licence }.OfType<string>())
             if (root.GetFileInfo(path) is { Exists: true } file) await Copied(path, file, ct);
         foreach (var font in root.GetDirectoryContents(HtmlFormatter.Fonts).Where(file => !file.IsDirectory))
             await Copied(HtmlFormatter.Fonts + "/" + font.Name, font, ct);
+        foreach (var cover in root.GetDirectoryContents("art").Where(file => !file.IsDirectory))
+            await Copied("art/" + cover.Name, cover, ct);
     }
 
     private async Task Copied(string path, Microsoft.Extensions.FileProviders.IFileInfo file, CancellationToken ct)
@@ -277,7 +280,7 @@ public sealed class Export
             Undated,
             takenFrom,
             FeedsOf(tangent),
-            TopicPage.HeaderOf(root.Kind, _space.Slots, _base + "/"),
+            TopicPage.HeaderOf(root.Kind, _appearance, _base + "/"),
             root.CoverId is { } cover ? _base + Media.Reference(cover) : null,
             TangentPage.ReadTime(root.Body));
     }
@@ -426,7 +429,7 @@ public sealed class Export
         var resource = _components.For(typeof(TResource));
         string html;
         await using (var renderer = new HtmlRenderer(_services, _logs))
-            html = await HtmlFormatter.Whole(renderer, resource, model, up, _appearance, _space.Slots.Placed(_base + "/"), frame ?? resource.Frame?.Invoke(model), standalone: true, retired: _retired);
+            html = await HtmlFormatter.Whole(renderer, resource, model, up, _appearance, frame ?? resource.Frame?.Invoke(model), standalone: true, retired: _retired, mediaBase: _base + "/");
         await _files.Write(path + ".html", Encoding.UTF8.GetBytes(await WithImages(Render.Feed.Rooted(html, _origin), up, ct)), ct);
         if (!Retired) await _files.Write(path + ".json", Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(model, _json)), ct);
     }

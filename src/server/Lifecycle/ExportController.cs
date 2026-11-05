@@ -10,6 +10,8 @@ using Tangent.Posts;
 using Tangent.Space;
 using Tangent.Tangents;
 
+using Tangent.Render;
+
 namespace Tangent.Lifecycle;
 
 /// <summary>Taking the place along, a section of its settings at <c>/settings/export</c>, for whoever holds
@@ -19,6 +21,7 @@ namespace Tangent.Lifecycle;
 /// to sign in and <c>403</c> otherwise. <c>/settings/export.zip</c> and <c>/settings/export/{tangent}.zip</c> answer the zip
 /// as <see cref="Export"/> writes it, as it is read, and never hold it; a Tangent the reader may not view answers as one
 /// no Tangent has. A reader for whom the place does not exist receives what an address with nothing there receives.</summary>
+[Managing]
 public sealed class ExportController(KoanWebBaseUrl baseUrl, IDataProtectionProvider protection) : ControllerBase
 {
     public const string Path = "/settings/export";

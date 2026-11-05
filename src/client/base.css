@@ -2,8 +2,6 @@
  * the plain elements in them (elements.css). A bundled stylesheet (bases/<name>.css) takes this file's place, and with it
  * these fonts. */
 
-@layer base, shapes, tangent, palette, owner;
-
 @import './fonts.css' layer(base);
 @import './elements.css' layer(base);
 

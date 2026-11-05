@@ -2,8 +2,6 @@
  * (mvp.css, MIT: mvp/LICENSE, github.com/andybrewer/mvp), and its adapter: its own variables read the --ts-* tokens, so
  * any palette colours it, and Tangent's shapes and tangent layers read its fonts through --ts-font-*. */
 
-@layer base, shapes, tangent, palette, owner;
-
 @import './mvp/mvp.css' layer(base);
 
 @layer base {

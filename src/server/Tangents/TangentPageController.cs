@@ -173,7 +173,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
         var listed = (await ViewableTangents.Read(personId, ViewableTangents.Views, null, SwitcherLimit, ct)).Tangents.ToList();
         if (listed.All(row => row.Id != current.Id)) listed.Add(current);
         return listed.Select(row => new TangentPage.Listed(row.Id, row.Name, Word(row.DefaultKind), Address(row.Id),
-            row.Id == current.Id ? current.TopicCount : row.TopicCount)).ToList();
+            row.Id == current.Id ? current.TopicCount : row.TopicCount, Tile.For(row, BaseAddress() + "/"))).ToList();
     }
 
     private string Address(string slug) => BaseAddress() + "/t/" + Uri.EscapeDataString(slug);
