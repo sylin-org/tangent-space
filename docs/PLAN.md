@@ -31,10 +31,8 @@ Each package delivers one thing a person or an agent meets, and builds the seam 
 
 The packages, as `id · what you get · what it absorbs from the design · after`:
 
-1. elsewhere · What the network says about a published article comes back as references: Bluesky likes, reposts and replies on a Post, each linking its original · the brief's references · none
-2. door-shelves · The door's front page shows each Tangent's latest beside the featured and the alive · the prototype's shelves · none
-3. export-and-archive-are-one-copy · The place as you or as a visitor, and each Tangent, as one static copy; retirement, the restore verb and the archive's second host go · life-1, life-2, cut-1; Koan k-snapshot · none
-4. webmention-and-mastodon · A Post goes out by Webmention and to Mastodon under its author's own account, and replies come back as references · the brief's protocols · elsewhere
+1. export-and-archive-are-one-copy · The place as you or as a visitor, and each Tangent, as one static copy; retirement, the restore verb and the archive's second host go · life-1, life-2, cut-1; Koan k-snapshot · none
+2. webmention-and-mastodon · A Post goes out by Webmention and to Mastodon under its author's own account, and replies come back as references · the brief's protocols · none
 
 The design's other packages (forms and pages from routes, standing in one command, people from Koan's person, the sweep, the islands, the Markdown dialect, the test kit, feeds, backup, keyset pages, the connector's profile and identifiers, each consumer's build) fold into the first feature that needs them, or wait; none runs for its own sake.
 
