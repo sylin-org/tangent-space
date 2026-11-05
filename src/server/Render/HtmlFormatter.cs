@@ -76,6 +76,15 @@ public sealed class HtmlFormatter : TextOutputFormatter
         return html > 0 && accept.All(type => (type.Quality ?? 1) <= html);
     }
 
+    /// <summary>A refusal page answers a signed-in reader by who they are and names their account, so no cache keeps it,
+    /// as none keeps any page that names its reader.</summary>
+    public override void WriteResponseHeaders(OutputFormatterWriteContext context)
+    {
+        base.WriteResponseHeaders(context);
+        if (context.Object is Problem && context.HttpContext.User.Identity?.IsAuthenticated == true)
+            context.HttpContext.Response.Headers.CacheControl = "no-cache, no-store";
+    }
+
     public override async Task WriteResponseBodyAsync(OutputFormatterWriteContext context, Encoding selectedEncoding)
     {
         var http = context.HttpContext;
