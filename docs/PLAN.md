@@ -31,12 +31,11 @@ Each package delivers one thing a person or an agent meets, and builds the seam 
 
 The packages, as `id · what you get · what it absorbs from the design · after`:
 
-1. every-door-says-what-to-do · A refusal names the next step, search never refuses, and nobody is told to fix input before being told to sign in; the gate runs once, before binding, on the routes people hit · access-1, gate-1, gate-2, k-refuse's Tangent half; Koan k-refuse and k-gate as it needs them · none
-2. the-places-look · The five layers stated once, one colour choice, and a Markdown description, masthead and footer; management on the endpoint · look-1, look-2 · none
-3. bring-your-agent-is-a-link · The page renders for a visitor and links the Lobby; the probe goes · cut-3 · none
-4. export-and-archive-are-one-copy · The place as you or as a visitor, and each Tangent, as one static copy; retirement, the restore verb and the archive's second host go · life-1, life-2, cut-1; Koan k-snapshot · none
-5. take-on-a-tangent-and-report · Starting a Topic from a Post offers its title, and a report needs no reason; a reused id answers `id-taken` · writes-1, writes-2 · every-door-says-what-to-do
-6. publication · The brief's unbuilt half: publication under your own account, Connections, Webmention and Mastodon · the design's §8 · every-door-says-what-to-do
+1. the-places-look · The five layers stated once, one colour choice, and a Markdown description, masthead and footer; management on the endpoint · look-1, look-2 · none
+2. bring-your-agent-is-a-link · The page renders for a visitor and links the Lobby; the probe goes · cut-3 · none
+3. export-and-archive-are-one-copy · The place as you or as a visitor, and each Tangent, as one static copy; retirement, the restore verb and the archive's second host go · life-1, life-2, cut-1; Koan k-snapshot · none
+4. take-on-a-tangent-and-report · Starting a Topic from a Post offers its title, and a report needs no reason; a reused id answers `id-taken` · writes-1, writes-2 · none
+5. publication · The brief's unbuilt half: publication under your own account, Connections, Webmention and Mastodon · the design's §8 · none
 
 The design's other packages (forms and pages from routes, standing in one command, people from Koan's person, the sweep, the islands, the Markdown dialect, the test kit, feeds, backup, keyset pages, the connector's profile and identifiers, each consumer's build) fold into the first feature that needs them, or wait; none runs for its own sake.
 
@@ -46,8 +45,7 @@ Each decision is cited by its number, and each package builds the default given 
 
 - **1 · Positions and volume.** May a position reveal how much happened where its reader cannot see? Until he answers it may not, and events-4 keeps the scan that hides it.
 - **2 · `read(address)`.** It is offered beside the thirteen named read tools. The measure, five reading tasks by a fresh agent each way, took 8 calls with `read` against 6 with the named reads and lost two tasks, so the named reads stay until he says otherwise.
-- **3 · The direct-invocation spike.** k-invoke decides the base of the refused form's page, of `read` and of the static copy, and who owns the web pipeline. It is his next ordered step; until it lands, the packages that start after k-invoke wait.
-- **4 · ARCH-0143.** Amending it a day after its acceptance is a Koan decision for him, not for a package. Until he answers, k-refuse carries ARCH-0145's amendment of §1, §2 and §4, k-html the §5 amendment and k-answer the §3 one as proposals, each landing only on his word.
+- **4 · ARCH-0143.** Amending it a day after its acceptance is a Koan decision for him, not for a package. ARCH-0145, its amendment of §1, §2 and §4, is in Koan as a proposal; the §5 and §3 amendments come with the HTML projection and the answer packages, each a proposal until he answers.
 - **5 · Companion Lobby's move.** Should one release keep aliases for the tools that change, and `Form.Token` past render-3? Until he answers, no: Tangent shapes nothing for the Lobby.
 - **7 · Standard MCP clients.** A client with no atproto identity stays a visitor. That is product scope, named for him.
 - **8 · The profile at sign-in.** Does sign-in wait a short bound for the public profile, or does the fill run just after? Until he answers, k-atproto-1 reads the profile in the sign-in step, best-effort within a short bound, and sign-in never fails on it.
