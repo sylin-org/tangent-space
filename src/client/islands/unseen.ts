@@ -24,9 +24,10 @@ export const applied = 'Applied'
 // the page's stream delivers past where the count reads through that someone else did and that targets the reader or
 // is a report, and, for a reader whose count holds the applications that wait (applications), by one for each
 // application; the stream only delivers rows that reach the reader, a report only to whoever may view the moderators'
-// Tangent and an application only to whoever decides it. Hidden while it is zero. It only ever counts up: the link it
-// is leads to the door, where they are read, and reading a Topic, saying seen or deciding an application brings it
-// down on the next page.
+// Tangent and an application only to whoever decides it. A Post that reached the reader as a reply, a Topic taken from
+// theirs or a report is one thing, as on the door: a mention it carries raises nothing more. Hidden while it is zero.
+// It only ever counts up: the link it is leads to the door, where they are read, and reading a Topic, saying seen or
+// deciding an application brings it down on the next page.
 export const unseen = defineComponent({
   name: 'UnseenIsland',
   props: {
@@ -40,6 +41,7 @@ export const unseen = defineComponent({
   setup(props, { expose }) {
     let count = props.count
     let through = props.through
+    const arrived = new Set<string>()
 
     function show(): void {
       props.host.hidden = count === 0
@@ -56,8 +58,10 @@ export const unseen = defineComponent({
         if (row.seq <= through) continue
         through = row.seq
         if (row.actor === props.reader) continue
-        if (row.target === props.reader || row.report === true
-          || (props.applications && row.kind === 'standing.changed' && row.standing === applied)) raised++
+        const forReader = row.target === props.reader || row.report === true
+        if (row.post && row.kind === 'mention' && arrived.has(row.post)) continue
+        if (row.post && row.kind === 'post.created' && forReader) arrived.add(row.post)
+        if (forReader || (props.applications && row.kind === 'standing.changed' && row.standing === applied)) raised++
       }
       if (raised === 0) return
       count += raised

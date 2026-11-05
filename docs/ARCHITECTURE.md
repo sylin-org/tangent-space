@@ -78,7 +78,7 @@ A command is Koan's `ICommand<T>`, sent in its sender's flow and run under `Enti
 
 ## 16. The stream
 
-Tangent's `EventStream` (`src/server/Events/EventStream.cs`) holds the open streams and the committed head. `EventsController` writes frames through Koan's `Sse.Stream`, and answers the poll, a bounded page, without the stream header. `PagePosition.Taken` (`src/server/Events/PagePosition.cs`), which `LiveComposition` registers as a filter, takes the head as each action begins, so a page's stream starts where its request found the log. Koan's `SseHub<T>` is not used. In the browser, `mountIslands` mounts a Vue app for each `data-island` (`src/client/islands/index.ts`), each rendering nothing and acting on the server's HTML, and `src/client/live.ts` parses the stream.
+Tangent's `EventStream` (`src/server/Events/EventStream.cs`) holds the open streams and the committed head. `EventsController` writes frames through Koan's `Sse.Stream`, and answers the poll, a bounded page, without the stream header. `PagePosition.Taken` (`src/server/Events/PagePosition.cs`), which `LiveComposition` registers as a filter, takes the head as each action begins, so a page's stream starts where its request found the log. Koan's `SseHub<T>` is not used. In the browser, `mountIslands` mounts a Vue app for each `data-island` (`src/client/islands/index.ts`), each rendering nothing and acting on the server's HTML, at load and in each Post the live island places in the page later (`postPlaced`, `src/client/islands/live.ts`), and `src/client/live.ts` parses the stream.
 
 ## 17. Appearance
 

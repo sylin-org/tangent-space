@@ -83,6 +83,16 @@ test('what nobody changed is never rewritten, and a change writes Markdown back 
   })
 })
 
+test('pictures written one under the other open in the visual view, each in its own paragraph', () => {
+  const pictures = '![](/media/a)\n\n![](/media/b)'
+  const { host, source, surface } = page(pictures)
+
+  expect(host.classList.contains('is-visual')).toBe(true)
+  expect(surface().querySelectorAll('p > img[src]')).toHaveLength(2)
+  expect(surface().querySelectorAll('p')).toHaveLength(2)
+  expect(source.value).toBe(pictures)
+})
+
 test('where the visual view cannot hold the meaning the source view stands, says why, and keeps every byte', () => {
   const table = 'Before\n\n| Name | Value |\n| --- | --- |\n| One | Two |'
   const { host, source, surface } = page(table)
@@ -152,7 +162,7 @@ test('a cover comes in the page: it shows at once, the form waits for it, and th
   expect(document.querySelector('.article-cover-offer')).not.toBeNull()
 })
 
-test('an image pasted into the words stands where it was put while it comes, joins the Markdown once it has, and never writes its preview', async () => {
+test('an image pasted into the words stands where it was put while it comes, joins the Markdown once it has, undescribed, and never writes its preview', async () => {
   let answer!: (response: Response) => void
   fetched.mockImplementation(() => new Promise<Response>((resolve) => (answer = resolve)))
   const { source, surface, submit } = page('Above.\n\nBelow.')
@@ -166,7 +176,7 @@ test('an image pasted into the words stands where it was put while it comes, joi
   expect(source.value).not.toContain('blob:')
 
   answer(new Response(JSON.stringify({ id: 'abc', reference: '/media/abc', address: 'https://tangent.example/media/abc' }), { status: 201 }))
-  await vi.waitFor(() => expect(source.value).toContain('![kiln at dusk](/media/abc)'))
+  await vi.waitFor(() => expect(source.value).toContain('![](/media/abc)'))
   expect(source.value).toContain('Above.')
   expect(source.value).toContain('Below.')
   expect(source.value).not.toContain('blob:')
@@ -315,7 +325,7 @@ test('pasted text that carries a picture of itself stays text, and an image alon
 
   surface().dispatchEvent(pasteOf([new File(['x'], 'kiln.png', { type: 'image/png' })]))
   expect(fetched).toHaveBeenCalledOnce()
-  await vi.waitFor(() => expect(source.value).toContain('![kiln](/media/abc)'))
+  await vi.waitFor(() => expect(source.value).toContain('![](/media/abc)'))
 })
 
 test('the source view waits for an image on its way, says so, and the image lands', async () => {
@@ -334,12 +344,12 @@ test('the source view waits for an image on its way, says so, and the image land
   expect(surface().querySelector('.article-image-coming')).not.toBeNull()
 
   answer(new Response(JSON.stringify({ id: 'abc', reference: '/media/abc', address: 'https://tangent.example/media/abc' }), { status: 201 }))
-  await vi.waitFor(() => expect(source.value).toContain('![kiln](/media/abc)'))
+  await vi.waitFor(() => expect(source.value).toContain('![](/media/abc)'))
   expect(host.querySelector<HTMLElement>('.article-status')!.hidden).toBe(true)
 
   tool(host, 'Markdown source').click()
   expect(source.hidden).toBe(false)
-  expect(source.value).toContain('![kiln](/media/abc)')
+  expect(source.value).toContain('![](/media/abc)')
 })
 
 test('words set aside with Cancel do not come back on the next edit', () => {
