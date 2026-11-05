@@ -1,0 +1,48 @@
+@using System.Globalization
+@* Under a published article, for everyone: what happened to it on Bluesky — its likes, reposts, quotes and replies,
+   linked to its post there — and the newest replies and quotes, each attributed and linked to where it is read. *@
+@if (Model is { } line)
+{
+    <section class="elsewhere" aria-labelledby="elsewhere-title">
+        <p class="elsewhere-line">
+            <span id="elsewhere-title">On Bluesky:</span>
+            @string.Join(" · ", Counts(line))
+            <a href="@line.Address" rel="noopener noreferrer">View on Bluesky</a>
+        </p>
+        @if (line.References.Count > 0)
+        {
+            <ul class="elsewhere-references">
+                @foreach (var reference in line.References)
+                {
+                    <li class="elsewhere-reference" data-kind="@reference.Kind">
+                        <p class="elsewhere-who">
+                            <span class="elsewhere-name">@(reference.Name ?? reference.Handle)</span>
+                            <span class="topic-row-none">@@@reference.Handle @(reference.Kind == Reference.Quote ? "quoted" : "replied")</span>
+                            <time datetime="@reference.At.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture)">@reference.At.ToUniversalTime().ToString("d MMM yyyy", CultureInfo.InvariantCulture)</time>
+                        </p>
+                        @if (reference.Text.Length > 0)
+                        {
+                            <p class="elsewhere-text">@reference.Text</p>
+                        }
+                        <a class="elsewhere-original" href="@reference.Address" rel="noopener noreferrer nofollow ugc">Read on Bluesky</a>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+}
+
+@code {
+    [Parameter] public Elsewhere.Line? Model { get; set; }
+
+    private static IEnumerable<string> Counts(Elsewhere.Line line)
+    {
+        yield return Count(line.Likes, "like", "likes");
+        yield return Count(line.Reposts, "repost", "reposts");
+        if (line.Quotes > 0) yield return Count(line.Quotes, "quote", "quotes");
+        yield return Count(line.Replies, "reply", "replies");
+    }
+
+    private static string Count(int count, string one, string many)
+        => count.ToString("N0", CultureInfo.InvariantCulture) + " " + (count == 1 ? one : many);
+}

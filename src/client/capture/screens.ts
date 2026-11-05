@@ -322,6 +322,12 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'article-published', seed: 'connections', signedIn: true, path: '/t/articles/mending-with-gold' },
     ],
   },
+  // A published article as a visitor reads it, with what Bluesky said about it underneath: its counts there and the
+  // newest replies and quotes, each attributed and linked to the original.
+  elsewhere: {
+    path: '/t/articles/mending-with-gold',
+    states: [{ name: 'visitor', seed: 'connections' }],
+  },
   // The form that creates a Tangent, read by the persona, who set the place up and so administers it, in a place that
   // holds only the moderators' Tangent: as it opens, the name alone with the rest at its defaults behind one line; and
   // sent with a name of nothing but spaces, refused under the name.

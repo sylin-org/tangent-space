@@ -10,7 +10,7 @@ namespace Tangent.Capture;
 
 /// <summary>The rows the Connections captures show: the article seed's place and articles, two more articles by the
 /// persona, and her Connection publishing them on Bluesky — one updated, one published, and one it couldn't reach
-/// Bluesky for, trying again. Compiled only into the capture host; fixed names, words and times.</summary>
+/// Bluesky for, trying again — and what Bluesky said about the updated one. Compiled only into the capture host; fixed names, words and times.</summary>
 public sealed class ConnectionsSeedController(RoleCollection roles) : ControllerBase
 {
     private const string Persona = "did:plc:capture4persona";
@@ -33,12 +33,28 @@ public sealed class ConnectionsSeedController(RoleCollection roles) : Controller
         }), ct);
         await Write(new Keep<Receipt>(Written(gold, At(29, 8, 12), updated: true)), ct);
         await Write(new Keep<Receipt>(Written(leaf, At(28, 10, 6), updated: false)), ct);
+        await Write(new Keep<Elsewhere>(new Elsewhere
+        {
+            Id = gold.Id, AuthorId = Persona, Likes = 128, Reposts = 17, Quotes = 3, Replies = 9,
+            References =
+            [
+                Heard(Reference.Reply, "did:plc:capture4mira", "mira.example", "Mira Okafor",
+                    "I've been putting off mending my grandmother's teapot for a year. This is the push I needed.", At(29, 18, 4)),
+                Heard(Reference.Quote, "did:plc:capture4tomas", "tomas.example", "Tomás",
+                    "The best thing I read this week: a crack as the most honest part of an object.", At(29, 12, 41)),
+                Heard(Reference.Reply, "did:plc:capture4june", "june.example", null,
+                    "Do you use urushi or the epoxy kits? Curious what holds up for something that sees daily use.", At(29, 9, 15))
+            ]
+        }), ct);
         await Write(new Keep<Receipt>(new Receipt
         {
             Id = Receipt.Key(Persona, bench.Id), ConnectionId = Persona, PostId = bench.Id, TangentId = "articles", At = At(30, 21, 41)
         }), ct);
         return NoContent();
     }
+
+    private static Reference Heard(string kind, string did, string handle, string? name, string text, DateTimeOffset at)
+        => new(kind, did, handle, name, text, at, $"https://bsky.app/profile/{did}/post/3capture{handle[..4]}");
 
     private static Receipt Written(Post post, DateTimeOffset at, bool updated) => new()
     {

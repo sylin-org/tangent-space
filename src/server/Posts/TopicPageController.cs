@@ -32,7 +32,7 @@ namespace Tangent.Posts;
 /// tangent from and the Topics taken from each Post on the page, as far as the reader may view them
 /// (<see cref="Origins"/>); and, for a signed-in reader who may not start a Topic in this Tangent, the Tangents where they
 /// may, which decide whether each Post offers to take it on a tangent.</summary>
-public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
+public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Readers readers) : ControllerBase
 {
     /// <summary>The query parameter naming the sequence the window ends before.</summary>
     public const string Before = "before";
@@ -123,6 +123,7 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
         if (reader is not null) Response.Headers.CacheControl = "no-cache, no-store";
         var (publishing, document) = await Connections.Publishing.For(root, reader?.Id, reader is null ? null : Named(reader).Handle,
             await Connections.Publishing.Open(space, tangentRow.Id, ct), address, baseAddress, ct);
+        var elsewhere = document is null ? null : await Connections.Elsewhere.For(root, readers, ct);
         return Ok(new TopicPage(
             root.Id,
             root.Slug ?? root.Id,
@@ -160,7 +161,8 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
             root.CoverId is { } cover ? baseAddress + Media.Reference(cover) : null,
             TangentPage.ReadTime(root.Body),
             publishing,
-            document));
+            document,
+            elsewhere));
     }
 
     /// <summary>One Post as the page shows it, with what the reader holds on it from the page's rows, where it is

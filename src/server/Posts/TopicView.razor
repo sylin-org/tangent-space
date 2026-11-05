@@ -71,6 +71,7 @@
                 }
                 <TopicPost Model="@Model.Root" Today="@Model.Day" Root="true" Article="true" Door="@Model.Door" Anchor="@(Model.Anchor == Model.Root.Id)" Reader="@Model.Who?.Id" Quote="@QuoteProps" />
                 <Tangent.Connections.PublishLine Model="@Model.Publishing" />
+                <Tangent.Connections.ElsewhereLine Model="@Model.Elsewhere" />
             </article>
         }
         else

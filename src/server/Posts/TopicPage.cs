@@ -26,7 +26,8 @@ namespace Tangent.Posts;
 /// Post's body is, present only on an article and only where the place wrote one. <see cref="Cover"/> is the address of an
 /// article's cover, while its root stands and has one; <see cref="ReadMinutes"/> what its body takes to read.
 /// <see cref="Publishing"/> is where an article stands on its author's own account, for its author
-/// (<see cref="Connections.Publishing.For"/>), and <see cref="Document"/> its document record there, once it is out.</summary>
+/// (<see cref="Connections.Publishing.For"/>), and <see cref="Document"/> its document record there, once it is out;
+/// <see cref="Elsewhere"/> is what the network says about it since, for everyone (<see cref="Connections.Elsewhere.For"/>).</summary>
 public sealed record TopicPage(
     string Id,
     string Slug,
@@ -58,7 +59,8 @@ public sealed record TopicPage(
     string? Cover = null,
     int ReadMinutes = 1,
     Connections.Publishing? Publishing = null,
-    string? Document = null)
+    string? Document = null,
+    Connections.Elsewhere.Line? Elsewhere = null)
 {
     /// <summary>What heads a Topic of this <paramref name="kind"/> from the place's <paramref name="appearance"/>, its images under
     /// <paramref name="door"/>.</summary>
