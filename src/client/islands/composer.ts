@@ -1,5 +1,6 @@
 import { defineComponent, type PropType } from 'vue'
 import { draftKey, draftsUnder, mintTid, postScope, readDraft, reconcile, send, sentKey, writeDraft, type Draft, type Settled } from '../composer'
+import { postPlaced } from './live'
 
 // What the composer does beyond the page, replaceable where it is tested: where a confirmed Post is shown, and how long
 // a send or a check waits for its answer before its outcome counts as uncertain.
@@ -256,32 +257,38 @@ export const composer = defineComponent({
       }
     }
 
+    // Each reply on the page, and each the live island places later, offers to be answered.
+    const answerable = 'article.post[id]:not(.post-root):not(.is-removed)'
+    function offerReply(post: HTMLElement) {
+      if (!post.matches(answerable)) return
+      let footer = post.querySelector(':scope > footer')
+      if (!footer) {
+        footer = document.createElement('footer')
+        footer.className = 'post-footer'
+        post.append(footer)
+      }
+      let actions = footer.querySelector('.post-actions')
+      if (!actions) {
+        actions = document.createElement('div')
+        actions.className = 'post-actions'
+        footer.append(actions)
+      }
+      const action = document.createElement('button')
+      action.type = 'button'
+      action.className = 'post-action composer-reply-to'
+      action.textContent = 'Reply'
+      const author = post.querySelector('.post-author')?.textContent?.trim() || 'this post'
+      action.addEventListener('click', () => replyTo(post.id, author))
+      actions.append(action)
+    }
+
     if (parent && replyingTo) {
       replyingTo.querySelector('[data-reply-to-topic]')?.addEventListener('click', (event) => {
         event.preventDefault()
         replyTo(null, '')
       })
-      for (const post of form.ownerDocument.querySelectorAll<HTMLElement>('article.post[id]:not(.post-root):not(.is-removed)')) {
-        let footer = post.querySelector(':scope > footer')
-        if (!footer) {
-          footer = document.createElement('footer')
-          footer.className = 'post-footer'
-          post.append(footer)
-        }
-        let actions = footer.querySelector('.post-actions')
-        if (!actions) {
-          actions = document.createElement('div')
-          actions.className = 'post-actions'
-          footer.append(actions)
-        }
-        const action = document.createElement('button')
-        action.type = 'button'
-        action.className = 'post-action composer-reply-to'
-        action.textContent = 'Reply'
-        const author = post.querySelector('.post-author')?.textContent?.trim() || 'this post'
-        action.addEventListener('click', () => replyTo(post.id, author))
-        actions.append(action)
-      }
+      for (const post of form.ownerDocument.querySelectorAll<HTMLElement>(answerable)) offerReply(post)
+      form.ownerDocument.addEventListener(postPlaced, (event) => offerReply((event as CustomEvent<HTMLElement>).detail))
     }
 
     // A page restored from the back-forward cache after its Post was confirmed starts a new one.

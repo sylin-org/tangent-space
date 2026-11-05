@@ -101,9 +101,9 @@ public sealed record TopicPage(
         Form? Report = null,
         TangentPage.Edited? Edited = null);
 
-    /// <summary>A participant a body mentions: their DID, which the body's link names, their handle now, and their
-    /// address.</summary>
-    public sealed record Mention(string Id, string Handle, string Address);
+    /// <summary>A participant or a role a body mentions, by what the body's link names: a participant's DID, their handle
+    /// now and their address; a role's key, its word, as an <c>@</c> names it, and no address.</summary>
+    public sealed record Mention(string Id, string Handle, string? Address);
 
     /// <summary>Where a Topic was taken on a tangent from. For a reader who may view the origin: its address — a
     /// tombstone's where it is <see cref="Removed"/> — the title of its Topic, the name of its Tangent and who wrote it.

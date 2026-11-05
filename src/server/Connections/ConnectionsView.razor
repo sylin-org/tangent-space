@@ -1,13 +1,24 @@
 @using System.Globalization
 @using global::Tangent.Render
-@* A participant's Connections: one panel, their Bluesky account with where it stands and the one thing they may do about
-   it, then each article it carries with its state and its Bluesky post once it is out. *@
+@* A participant's Connections: one panel, first why a permission Bluesky was asked for was not given, where that is what
+   brought them here, then their Bluesky account with where it stands and the one thing they may do about it, then each
+   article it carries with its state and its Bluesky post once it is out. *@
 <main class="layout">
     <div class="layout-main">
         <section class="sign-in-panel post-form-panel connections" aria-labelledby="connections-heading">
             <div class="sign-in-body">
                 <p class="post-form-where">Yours, at <a href="@Model.Door">@Model.Place</a></p>
                 <h1 id="connections-heading" class="sign-in-title">Connections</h1>
+                @if (Model.Failure is { } failure)
+                {
+                    <p class="sign-in-failure" id="connections-failure" role="alert">
+                        @failure.Sentence
+                        @if (failure.Article is { } article)
+                        {
+                            @(" ")<a href="@article">Back to the article</a>
+                        }
+                    </p>
+                }
                 <ul class="door-offers connection-accounts">
                     <li class="door-offer connection" data-state="@Model.Bluesky.State">
                         <p class="door-offer-line">

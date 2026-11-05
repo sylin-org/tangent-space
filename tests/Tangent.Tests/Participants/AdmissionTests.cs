@@ -235,8 +235,8 @@ public sealed class AdmissionTests
         // A member sees no applications, in the rail or the page, and is refused.
         var refusedPage = await Send(ada.Client, HttpMethod.Get, path, json: true);
         var gate = Capabilities.NoRoleGrants(Bit.ManageStanding).Word;
-        Assert.Equal((HttpStatusCode.Forbidden, gate), (refusedPage.Status, refusedPage.Json.GetProperty("gate").GetString()));
-        Assert.Empty(refusedPage.Json.GetProperty("applications").EnumerateArray());
+        Assert.Equal((HttpStatusCode.Forbidden, gate), (refusedPage.Status, refusedPage.Json.GetProperty("word").GetString()));
+        Assert.False(refusedPage.Json.TryGetProperty("applications", out _));
         Assert.DoesNotContain("ivy4admission", (await Send(ada.Client, HttpMethod.Get, path)).Body);
         Assert.DoesNotContain("Applications", (await Send(ada.Client, HttpMethod.Get, TangentSpaceSettingsController.Path, json: true)).Json
             .GetProperty("sections").EnumerateArray().Select(section => section.GetProperty("name").GetString()));
@@ -245,7 +245,7 @@ public sealed class AdmissionTests
         Assert.Equal(Standing.Applied, (await Participant.Get(Ivy, Cancellation))!.Standing);
         using var visitor = Agent(tangentSpace);
         var visiting = await Send(visitor, HttpMethod.Get, path, json: true);
-        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (visiting.Status, visiting.Json.GetProperty("gate").GetString()));
+        Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (visiting.Status, visiting.Json.GetProperty("word").GetString()));
         Assert.Equal(events, await Event.Count.Exact(Cancellation));
     }
 

@@ -29,7 +29,7 @@ public sealed class NewTangentTests
         var form = await Send(leo.Client, HttpMethod.Get, "/t/new");
         Assert.Equal(HttpStatusCode.OK, form.Status);
         Assert.Contains("id=\"new-tangent-name\"", form.Body);
-        Assert.Contains("Discussions · Public · no description", WebUtility.HtmlDecode(form.Body));
+        Assert.Contains("Description, kind and audience", WebUtility.HtmlDecode(form.Body));
         Assert.DoesNotContain("data-gate", form.Body);
 
         var created = await Form(leo, "/t/new", "/t/new", new() { ["name"] = "The garden" });

@@ -62,9 +62,9 @@ public static class People
 
     public static readonly Reason NotManaged = Reason.Gated("not managed", "You give and take only the roles below your own highest role.");
 
-    public static readonly Reason NotARole = Reason.Invalid("Give or take a role this place has; the member role is admission’s.");
+    public static readonly Reason NotARole = Reason.Invalid(PeopleController.RoleField, "Give or take a role this place has; the member role is admission’s.");
 
-    public static readonly Reason NotADuration = Reason.Invalid("A timeout lasts an hour, a day or a week: send hour, day or week.");
+    public static readonly Reason NotADuration = Reason.Invalid(PeopleController.ForField, "A timeout lasts an hour, a day or a week: send hour, day or week.");
 
     /// <summary>How long a timeout lasts, by the word a form sends, shortest first.</summary>
     public static readonly IReadOnlyList<(string Word, TimeSpan Length)> Durations =
@@ -122,8 +122,8 @@ public static class People
     public static bool Holds(Capabilities actor, Bit bits) => actor.Holds(bits);
 
     /// <summary>What a reader may do to one participant, by <see cref="Refusal"/>: the standing verbs (<see cref="Verb"/>),
-    /// in <c>can</c>, and the roles they may give and take, by word.</summary>
-    public sealed record Offer(IReadOnlyList<string> Can, IReadOnlyList<string> Give, IReadOnlyList<string> Take)
+    /// in <c>can</c>, and the roles they may give and take, each by its word and its name.</summary>
+    public sealed record Offer(IReadOnlyList<string> Can, IReadOnlyList<PeoplePage.Offered> Give, IReadOnlyList<PeoplePage.Offered> Take)
     {
         public static readonly Offer None = new([], [], []);
     }
@@ -149,15 +149,15 @@ public static class People
             });
         }
 
-        var give = new List<string>();
-        var take = new List<string>();
+        var give = new List<PeoplePage.Offered>();
+        var take = new List<PeoplePage.Offered>();
         if (Refusal(actor, actorId, target, targetBag, space, Bit.ManageRoles, now) is null)
         {
             foreach (var role in given)
             {
                 if (!Roles.Given(role.Key) || Holding(actor, role) is not null || !Manages(actor, actorId, space, role)) continue;
-                if (targetBag.InRole(role.Key)) take.Add(Roles.Word(role.Key));
-                else if (target.StandingAt(now) != Standing.Banned) give.Add(Roles.Word(role.Key));
+                if (targetBag.InRole(role.Key)) take.Add(new PeoplePage.Offered(Roles.Word(role.Key), role.Name));
+                else if (target.StandingAt(now) != Standing.Banned) give.Add(new PeoplePage.Offered(Roles.Word(role.Key), role.Name));
             }
         }
 

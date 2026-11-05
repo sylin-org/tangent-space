@@ -133,6 +133,19 @@
   font-weight: 600;
 }
 
+/* Where the rail stands above the settings, their sections run in a row. */
+@media (max-width: 1023px) {
+  .layout-settings > .rail .rail-views {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .layout-settings > .rail .rail-views a {
+    margin: 0;
+  }
+}
+
 .rail-audience {
   display: flex;
   gap: 10px;
@@ -776,6 +789,16 @@
   overflow-wrap: anywhere;
 }
 
+/* A quiet clause inside an offer's sentence wraps with it; the publish offer's stands on its own line, under its
+   question. */
+.door-offer-line .topic-row-none {
+  white-space: normal;
+}
+
+.publish-line .topic-row-none {
+  display: block;
+}
+
 .door-offer-answers {
   display: flex;
   gap: 10px;
@@ -1038,6 +1061,15 @@
 
   .tangent-new {
     display: none;
+  }
+
+  /* The door keeps its welcome's steps and its Mark all seen on a phone. */
+  .door .tangent-new {
+    display: inline-flex;
+  }
+
+  .door .topic-empty-link {
+    display: block;
   }
 
   .topic-table {

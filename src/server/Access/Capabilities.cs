@@ -239,16 +239,18 @@ public sealed class Capabilities
 
     /// <summary>Koan's resolution in Discord's order (<see cref="RoleBag.On"/>) over the bag, with everyone's
     /// <see cref="Bit.View"/> on a public place in its base, and the overwrites on the resource of
-    /// <paramref name="tangentId"/>, or on the place where it names no Tangent; an administrator holds every bit and no
-    /// overwrite touches it. For each bit withheld, Koan's deciding fact in
-    /// Tangent's words: the overwrite whose deny decided it, by its subject, or that no role grants it.</summary>
+    /// <paramref name="tangentId"/>, or on the place where it names no Tangent, as a public Tangent meets them
+    /// (<see cref="AsPublic"/>); an administrator holds every bit and no overwrite touches it. For each bit withheld,
+    /// Koan's deciding fact in Tangent's words: the overwrite whose deny decided it, by its subject, or that no role
+    /// grants it.</summary>
     private static Resolved Resolve(Participant? participant, RoleBag bag, TangentSpace space, string? tangentId,
         IReadOnlyList<PermissionOverwrite> overwrites, DateTimeOffset now)
     {
         var view = Bits.Token(Bit.View);
         if (space.Audience == Audience.Public && !bag.Permissions.Contains(view, StringComparer.Ordinal))
             bag = new RoleBag(bag.PersonId, bag.IsAuthenticated, bag.Roles, [.. bag.Permissions, view], bag.Highest);
-        var here = bag.On(ResourceOf(tangentId) ?? Place, overwrites, now);
+        var resource = ResourceOf(tangentId) ?? Place;
+        var here = bag.On(resource, AsPublic(resource, overwrites, now), now);
         var granted = here.IsAdministrator ? Bits.All : Bits.InTokens(here.Permissions);
         var withheld = Bits.Each.Where(bit => !granted.HasFlag(bit))
             .Select(bit => (bit, Deciding(here.Explain(Bits.Token(bit)), bit))).ToList();
@@ -256,6 +258,25 @@ public sealed class Capabilities
             ? []
             : bag.Roles.Where(role => role is not (RoleTokens.Everyone or RoleTokens.Authenticated)).ToList();
         return new Resolved(granted, withheld, roleIds, bag);
+    }
+
+    /// <summary>The overwrites on <paramref name="resource"/> as its audience reads them: where its <c>everyone</c>
+    /// overwrite allows <see cref="Bit.View"/>, a public Tangent, everyone who reads the place reads it, so a person's own
+    /// deny of <see cref="Bit.View"/> is left out and every other bit of theirs stands; the row stays stored and keeps
+    /// them out again once the Tangent is private. A filter over the rows already loaded.</summary>
+    private static IReadOnlyList<PermissionOverwrite> AsPublic(string resource, IReadOnlyList<PermissionOverwrite> overwrites, DateTimeOffset now)
+    {
+        var view = Bits.Token(Bit.View);
+        if (!overwrites.Any(row => row.ResourceId == resource && row.SubjectKind == OverwriteSubjectKind.Role
+                && row.SubjectId == RoleTokens.Everyone && row.AppliesAt(now) && row.Allow.Contains(view)))
+            return overwrites;
+        return overwrites.Select(row => row.SubjectKind == OverwriteSubjectKind.Person && row.Deny.Contains(view)
+            ? new PermissionOverwrite
+            {
+                Id = row.Id, ResourceId = row.ResourceId, SubjectKind = row.SubjectKind, SubjectId = row.SubjectId,
+                Allow = [.. row.Allow], Deny = [.. row.Deny.Where(token => token != view)], ExpiresAt = row.ExpiresAt
+            }
+            : row).ToList();
     }
 
     /// <summary>Koan's deciding fact for a missing bit, in Tangent's words.</summary>

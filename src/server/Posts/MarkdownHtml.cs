@@ -87,8 +87,9 @@ public static class MarkdownHtml
     /// <summary>How many times this process has parsed Markdown.</summary>
     public static long Parses => Interlocked.Read(ref _parses);
 
-    /// <summary>What a caller writes for a held link: its target and its words.</summary>
-    public sealed record Link(string Url, string Words);
+    /// <summary>What a caller writes for a held link: its target and its words; with no target, the link's own words,
+    /// marked as a mention that has no page of its own.</summary>
+    public sealed record Link(string? Url, string Words);
 
     /// <summary>A piece of a rendered result: words as they stand, or a held link (<see cref="Held"/> its index) with
     /// its own words as the source wrote them.</summary>
@@ -109,15 +110,23 @@ public static class MarkdownHtml
         public bool Fits => HtmlBytes + (long)Held.Count * LinkLimit <= HtmlLimit;
 
         /// <summary>The HTML, each held link written as <paramref name="link"/> answers for its target: an anchor to a safe
-        /// URL with those words, within <see cref="LinkLimit"/>; otherwise, or where it answers null, its own words.</summary>
+        /// URL with those words, within <see cref="LinkLimit"/>, or, with no URL, its own words in <c>strong</c>; otherwise,
+        /// or where it answers null, its own words.</summary>
         public string Html(Func<string, Link?>? link = null)
         {
             var builder = new StringBuilder();
             foreach (var piece in html)
             {
-                if (piece.Held >= 0 && link?.Invoke(Held[piece.Held]) is { } written && SafeUrl(written.Url))
+                var written = piece.Held >= 0 ? link?.Invoke(Held[piece.Held]) : null;
+                if (written is { Url: null })
                 {
-                    var anchor = "<a href=\"" + WebUtility.HtmlEncode(written.Url) + "\">" + WebUtility.HtmlEncode(written.Words) + "</a>";
+                    builder.Append("<strong>").Append(piece.Text).Append("</strong>");
+                    continue;
+                }
+
+                if (written is { Url: { } url } && SafeUrl(url))
+                {
+                    var anchor = "<a href=\"" + WebUtility.HtmlEncode(url) + "\">" + WebUtility.HtmlEncode(written.Words) + "</a>";
                     if (Encoding.UTF8.GetByteCount(anchor) <= LinkLimit)
                     {
                         builder.Append(anchor);

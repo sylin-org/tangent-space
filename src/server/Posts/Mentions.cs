@@ -18,9 +18,10 @@ namespace Tangent.Posts;
 /// shown, a mention resolves to the participant with that DID: in HTML a link to their address reading <c>@</c> and
 /// their current handle, in plain text <c>@</c> and that handle; a DID that is no participant's leaves the link's own
 /// words. A Post keeps the identities its body mentions (<see cref="Post.MentionedIds"/>), at most <see cref="Limit"/>,
-/// so nothing parses a body to find them. A role is mentioned too, by an <c>@</c> and its word, as <c>@moderators</c>, which
-/// the body keeps as typed and the Post among its roles (<see cref="Post.MentionedRoles"/>); and a Tangent's slug typed
-/// after a <c>#</c> is written as a link to it. The command that writes a Post appends one <see cref="EventKind.Mention"/>
+/// so nothing parses a body to find them. A role is mentioned the same way, by a link whose target is its key —
+/// <c>[@moderators](role:moderator)</c>, written from an <c>@</c> and its word typed — which the Post keeps among its roles
+/// (<see cref="Post.MentionedRoles"/>) and a page shows as its words, marked, while the role exists; and a Tangent's slug
+/// typed after a <c>#</c> is written as a link to it. The command that writes a Post appends one <see cref="EventKind.Mention"/>
 /// per participant its body newly mentions, and one per role, however many hold it (<see cref="Notify"/>).</summary>
 public static partial class Mentions
 {
@@ -44,6 +45,10 @@ public static partial class Mentions
     /// <c>](/t/</c>, its slug and <c>)</c> after it.</summary>
     public const int LinkedWeight = 7 + 4 * Slug.Limit;
 
+    /// <summary>The most UTF-8 bytes writing one typed role as its mention adds to a body: <c>[</c> before it, and
+    /// <c>](role:</c>, its word and <c>)</c> after it.</summary>
+    public const int RoleWeight = 9 + Slug.Limit;
+
     /// <summary>The DID a link target names when it is a mention; null for any other target.</summary>
     public static string? Identity(string target)
     {
@@ -52,30 +57,45 @@ public static partial class Mentions
         return did.Length <= IdentityLimit && Did().IsMatch(did) ? did : null;
     }
 
-    /// <summary>The participants these Posts mention, by DID, as a page shows them, in one keyed read of at most
-    /// <see cref="Limit"/> identities a Post.</summary>
+    /// <summary>The key of the role a link target names when it is a role's mention: <c>role:</c> and the word of a role
+    /// the place gives (<see cref="Access.Roles.Given"/>); null for any other target.</summary>
+    public static string? RoleOf(string target)
+        => target.StartsWith(RoleTokens.RolePrefix, StringComparison.Ordinal) && Access.Roles.KeyOf(target[RoleTokens.RolePrefix.Length..]) == target
+           && Access.Roles.Given(target) ? target : null;
+
+    /// <summary>The participants these Posts mention, by DID, and the roles they mention that still exist, by key, as a page
+    /// shows them, in one keyed read of at most <see cref="Limit"/> identities a Post and one of their roles.</summary>
     public static async Task<IReadOnlyDictionary<string, TopicPage.Mention>> Resolve(IEnumerable<Post> posts, string baseUrl,
         CancellationToken ct)
     {
-        var ids = posts.SelectMany(post => post.MentionedIds).Distinct(StringComparer.Ordinal).ToList();
-        if (ids.Count == 0) return new Dictionary<string, TopicPage.Mention>();
-        return (await Participant.Get(ids, ct)).OfType<Participant>().ToDictionary(participant => participant.Id, participant =>
-        {
-            var handle = participant.Handle.Length > 0 ? participant.Handle : participant.Id;
-            return new TopicPage.Mention(participant.Id, handle, ProfilePage.AddressOf(baseUrl, handle));
-        }, StringComparer.Ordinal);
+        var shown = posts.ToList();
+        var resolved = new Dictionary<string, TopicPage.Mention>(StringComparer.Ordinal);
+        var ids = shown.SelectMany(post => post.MentionedIds).Distinct(StringComparer.Ordinal).ToList();
+        if (ids.Count > 0)
+            foreach (var participant in (await Participant.Get(ids, ct)).OfType<Participant>())
+            {
+                var handle = participant.Handle.Length > 0 ? participant.Handle : participant.Id;
+                resolved[participant.Id] = new TopicPage.Mention(participant.Id, handle, ProfilePage.AddressOf(baseUrl, handle));
+            }
+
+        var keys = shown.SelectMany(post => post.MentionedRoles).Distinct(StringComparer.Ordinal).ToList();
+        if (keys.Count > 0)
+            foreach (var role in (await Role.Get(keys.Select(Role.KeyFor).ToList(), ct)).OfType<Role>())
+                resolved[role.Key] = new TopicPage.Mention(role.Key, Access.Roles.Word(role.Key), null);
+        return resolved;
     }
 
     /// <summary>The participants among <paramref name="resolved"/> that <paramref name="post"/> mentions, in the order of
-    /// their first mention.</summary>
+    /// their first mention, then the roles it mentions.</summary>
     public static IReadOnlyList<TopicPage.Mention> Of(Post post, IReadOnlyDictionary<string, TopicPage.Mention> resolved)
-        => post.MentionedIds.Select(id => resolved.GetValueOrDefault(id)).OfType<TopicPage.Mention>().ToList();
+        => post.MentionedIds.Concat(post.MentionedRoles).Select(id => resolved.GetValueOrDefault(id)).OfType<TopicPage.Mention>().ToList();
 
-    /// <summary>A Post's body at a version as safe HTML, each mention of one of <paramref name="mentioned"/> a link to
-    /// their address reading <c>@</c> and their current handle, and every other mention its own words.</summary>
+    /// <summary>A Post's body at a version as safe HTML, each mention of a participant among <paramref name="mentioned"/> a
+    /// link to their address reading <c>@</c> and their current handle, each mention of a role among them its own words
+    /// marked, and every other mention its own words.</summary>
     public static string Html(string postId, long version, string body, IReadOnlyList<TopicPage.Mention> mentioned)
-        => RenderedBodies.For(postId, version, body).Html(target => Identity(target) is { } did
-            && mentioned.FirstOrDefault(mention => mention.Id == did) is { } mention
+        => RenderedBodies.For(postId, version, body).Html(target => (Identity(target) ?? RoleOf(target)) is { } id
+            && mentioned.FirstOrDefault(mention => mention.Id == id) is { } mention
                 ? new MarkdownHtml.Link(mention.Address, "@" + mention.Handle)
                 : null);
 
@@ -92,10 +112,10 @@ public static partial class Mentions
     private static Func<string, string?> Words(IReadOnlyDictionary<string, TangentPage.Author> people)
         => target => Identity(target) is { } did && people.TryGetValue(did, out var person) ? "@" + person.Handle : null;
 
-    /// <summary>A Post's body at a version as plain text on one line with its mentions left out, so it names no one, and
-    /// no punctuation stranded where one stood.</summary>
+    /// <summary>A Post's body at a version as plain text on one line with its mentions of participants left out, so it
+    /// names no one, and no punctuation stranded where one stood.</summary>
     public static string Unnamed(string postId, long version, string body)
-        => Stranded().Replace(RenderedBodies.For(postId, version, body).PlainText(_ => ""), "");
+        => Stranded().Replace(RenderedBodies.For(postId, version, body).PlainText(target => Identity(target) is null ? null : ""), "");
 
     /// <summary>Appends, inside the running command, one <see cref="EventKind.Mention"/> per participant
     /// <paramref name="post"/> mentions that <paramref name="before"/> — the identities and roles it mentioned before an
@@ -121,28 +141,25 @@ public static partial class Mentions
         }
     }
 
-    /// <summary>A body as its writer typed it, written: <see cref="Body"/> with each handle and Tangent typed in its prose
-    /// written as a link, and the <see cref="Roles"/> it mentions, by key, each once, in the order typed.</summary>
-    public sealed record Written(string Body, IReadOnlyList<string> Roles);
-
-    /// <summary><paramref name="body"/> as <see cref="Written"/>: each handle typed in its prose that names a participant
-    /// here written as their mention, <c>[@handle](at://did)</c> with the words as typed, so the body keeps their identity
-    /// and a handle that changes later changes nothing in it; each <c>#</c> and slug of a Tangent written as a link to it,
-    /// <c>[#slug](/t/slug)</c>; and each <c>@</c> and word of a role the place gives (<see cref="Access.Roles.Given"/>) —
-    /// its word, or its word and an <c>s</c>, as <c>@moderators</c> — kept as typed and counted among the roles it
-    /// mentions. A typed handle is atproto's handle syntax after an <c>@</c> that begins a word (<see cref="BeginsAWord"/>),
-    /// a role a slug there, and a Tangent a slug after a <c>#</c> that begins one; none is ever inside a URL, so an address
-    /// (<c>ines@bsky.social</c>), a path (<c>/@ines.bsky.social</c>) and a fragment stay as typed; only prose is read
-    /// (<see cref="MarkdownHtml.Prose"/>), so code, a link's words and an image's description stay as typed too. The
-    /// first <see cref="Limit"/> of each are read in one keyed read each, a handle as typed or in lower case, as atproto
-    /// writes handles; what nothing here holds stays the words typed. At most <see cref="Limit"/> handles and as many
-    /// Tangents are written, the first typed, each adding at most <see cref="TypedWeight"/>, so the body grows within
-    /// <see cref="Post.KeptBodyLimit"/>. A body without an <c>@</c> or a <c>#</c> is returned unparsed; ask
-    /// <see cref="MarkdownHtml.Tractable"/> first.</summary>
-    public static async Task<Written> Typed(string body, CancellationToken ct)
+    /// <summary><paramref name="body"/> as its writer typed it, written: each handle typed in its prose that names a
+    /// participant here written as their mention, <c>[@handle](at://did)</c> with the words as typed, so the body keeps
+    /// their identity and a handle that changes later changes nothing in it; each <c>#</c> and slug of a Tangent written as
+    /// a link to it, <c>[#slug](/t/slug)</c>; and each <c>@</c> and word of a role the place gives
+    /// (<see cref="Access.Roles.Given"/>) — its word, or its word and an <c>s</c>, as <c>@moderators</c> — written as its
+    /// mention, <c>[@moderators](role:moderator)</c> with the words as typed. A typed handle is atproto's handle syntax
+    /// after an <c>@</c> that begins a word (<see cref="BeginsAWord"/>), a role a slug there, and a Tangent a slug after a
+    /// <c>#</c> that begins one; none is ever inside a URL, so an address (<c>ines@bsky.social</c>), a path
+    /// (<c>/@ines.bsky.social</c>) and a fragment stay as typed; only prose is read (<see cref="MarkdownHtml.Prose"/>), so
+    /// code, a link's words and an image's description stay as typed too. The first <see cref="Limit"/> of each are read
+    /// in one keyed read each, a handle as typed or in lower case, as atproto writes handles; what nothing here holds stays
+    /// the words typed. At most <see cref="Limit"/> handles, as many Tangents and as many roles are written, the first
+    /// typed, each adding at most <see cref="TypedWeight"/>, <see cref="LinkedWeight"/> or <see cref="RoleWeight"/>, so the
+    /// body grows within <see cref="Post.KeptBodyLimit"/>. A body without an <c>@</c> or a <c>#</c> is returned unparsed;
+    /// ask <see cref="MarkdownHtml.Tractable"/> first.</summary>
+    public static async Task<string> Typed(string body, CancellationToken ct)
     {
         var typed = TypedNames(body);
-        if (typed.Count == 0) return new Written(body, []);
+        if (typed.Count == 0) return body;
         var handles = typed.Where(name => name.Sign == '@' && name.Text.Contains('.')).Select(name => name.Text)
             .Distinct(StringComparer.OrdinalIgnoreCase).Take(Limit).ToList();
         var words = typed.Where(name => name.Sign == '@' && !name.Text.Contains('.')).Select(name => name.Text.ToLowerInvariant())
@@ -162,11 +179,10 @@ public static partial class Mentions
         var tangents = slugs.Count == 0 ? new HashSet<string>(StringComparer.Ordinal)
             : (await Tangents.Tangent.Get(slugs, ct)).OfType<Tangents.Tangent>().Select(tangent => tangent.Id).ToHashSet(StringComparer.Ordinal);
         var roles = await RolesNamed(words, ct);
-        if (holders.Count == 0 && tangents.Count == 0 && roles.Count == 0) return new Written(body, []);
+        if (holders.Count == 0 && tangents.Count == 0 && roles.Count == 0) return body;
 
         var written = new StringBuilder(body.Length);
-        var mentioned = new List<string>();
-        int at = 0, people = 0, places = 0;
+        int at = 0, people = 0, places = 0, named = 0;
         foreach (var (sign, start, length, text) in typed)
         {
             string target;
@@ -179,8 +195,9 @@ public static partial class Mentions
             }
             else if (!text.Contains('.'))
             {
-                if (roles.GetValueOrDefault(text.ToLowerInvariant()) is { } role && !mentioned.Contains(role)) mentioned.Add(role);
-                continue;
+                if (named == Limit || roles.GetValueOrDefault(text.ToLowerInvariant()) is not { } role) continue;
+                target = role;
+                named++;
             }
             else
             {
@@ -193,7 +210,7 @@ public static partial class Mentions
             at = start + length;
         }
 
-        return new Written(written.Append(body, at, body.Length - at).ToString(), mentioned);
+        return written.Append(body, at, body.Length - at).ToString();
     }
 
     /// <summary>The roles the place gives that these typed words name, by word: the role keyed by the word, or else by the

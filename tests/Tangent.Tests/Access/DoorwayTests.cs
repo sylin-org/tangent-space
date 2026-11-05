@@ -114,7 +114,7 @@ public sealed class DoorwayTests
     }
 
     [Fact]
-    public async Task An_applicant_of_a_private_place_who_opens_a_topic_is_told_they_wait()
+    public async Task An_applicant_of_a_private_place_who_opens_a_topic_is_told_they_wait_on_a_page_naming_them_that_no_cache_keeps()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Given.AnEstablishedTangentSpace(tangentSpace, "Field notes", Audience.Private, Admission.Apply, Cancellation);
@@ -126,10 +126,15 @@ public sealed class DoorwayTests
 
         var page = await Send(ivy.Client, HttpMethod.Get, TopicPath(root));
         var json = await Send(ivy.Client, HttpMethod.Get, TopicPath(root), json: true);
+        using var request = new HttpRequestMessage(HttpMethod.Get, TopicPath(root));
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
+        using var cached = await ivy.Client.SendAsync(request, Cancellation);
 
         Assert.Equal(HttpStatusCode.Forbidden, page.Status);
         Assert.Contains(">Waiting to be admitted</h1>", page.Body);
         Assert.Contains(Capabilities.ApplyToRead.Text, page.Body);
+        Assert.Contains("Signed in as", page.Body);
+        Assert.Equal((true, true), (cached.Headers.CacheControl?.NoCache == true, cached.Headers.CacheControl?.NoStore == true));
         Assert.Equal((HttpStatusCode.Forbidden, Capabilities.Apply.Word, Capabilities.ApplyToRead.Text),
             (json.Status, json.Word, json.Json.GetProperty("detail").GetString()));
         Assert.DoesNotContain("How do you hang yours?", page.Body);

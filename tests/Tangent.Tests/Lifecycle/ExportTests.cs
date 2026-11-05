@@ -190,10 +190,9 @@ public sealed partial class ExportTests
         using var visitor = Agent(tangentSpace);
 
         var refused = await Send(ada.Client, HttpMethod.Get, Path, json: true);
-        Assert.Equal(HttpStatusCode.Forbidden, refused.Status);
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageSpace).Word), (refused.Status, refused.Json.GetProperty("word").GetString()));
         Assert.False(refused.Json.TryGetProperty("whole", out _));
-        Assert.Equal(0, refused.Json.GetProperty("tangents").GetArrayLength());
-        Assert.False(string.IsNullOrEmpty(refused.Json.GetProperty("gate").GetString()));
+        Assert.False(refused.Json.TryGetProperty("tangents", out _));
         var refusedPage = await Send(ada.Client, HttpMethod.Get, Path);
         Assert.Equal(HttpStatusCode.Forbidden, refusedPage.Status);
         Assert.DoesNotContain(".zip", refusedPage.Body);

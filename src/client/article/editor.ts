@@ -31,7 +31,7 @@ export interface ArticleProps {
 
 const noImages = 'Images come in where the place lets you write them.'
 const viewWaits = 'Source opens once your image has come.'
-const notSafe = 'This article uses formatting the visual editor cannot preserve. Edit its Markdown source to keep every part intact.'
+const notSafe = (what: string) => `This ${what} uses formatting the visual editor cannot preserve. Edit its Markdown source to keep every part intact.`
 
 // Where images on their way stand: a mark in the text that moves with it and is never part of the words.
 const comingKey = new PluginKey<DecorationSet>('articleImagesComing')
@@ -70,11 +70,12 @@ function comingAt(view: EditorView, id: number): number | null {
 }
 
 /** Puts an image in the words at `at`: in a paragraph of its own, as an article shows one, splitting the paragraph it
- *  lands in; alone in an empty paragraph it takes that one. */
-function placeImage(view: EditorView, at: number, src: string, alt: string, id: number) {
+ *  lands in; alone in an empty paragraph it takes that one. It has no description until the person writes one in the
+ *  image's panel: a file's name describes nothing. */
+function placeImage(view: EditorView, at: number, src: string, id: number) {
   const { state } = view
   const { image, paragraph } = state.schema.nodes
-  const node = image.create({ src, alt })
+  const node = image.create({ src })
   const tr = state.tr.setMeta(comingKey, { remove: id } satisfies Coming)
   const $at = state.doc.resolve(at)
   if ($at.parent.type !== paragraph) tr.insert(at, node)
@@ -263,7 +264,7 @@ export function writeArticle(props: ArticleProps): () => void {
       if (editor.isDestroyed) return
       const place = comingAt(editor.view, id)
       if (place === null) return
-      placeImage(editor.view, place, brought.reference, file.name.replace(/\.[^.]+$/, ''), id)
+      placeImage(editor.view, place, brought.reference, id)
     } catch (cause) {
       if (uploads.signal.aborted || editor.isDestroyed) return
       editor.view.dispatch(editor.state.tr.setMeta(comingKey, { remove: id } satisfies Coming))
@@ -433,7 +434,7 @@ export function writeArticle(props: ArticleProps): () => void {
     // Loading is no step of the writing: undo stops at what was loaded.
     editor.chain().setMeta('addToHistory', false).setContent(source.value, { contentType: 'markdown', emitUpdate: false }).run()
     if (!canEditMarkdownRichly(source.value, editor.getMarkdown())) {
-      say(notSafe)
+      say(notSafe(props.post ? 'post' : 'article'))
       showSource(true)
       return
     }

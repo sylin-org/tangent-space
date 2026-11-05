@@ -14,7 +14,8 @@ namespace Tangent.Posts;
 /// <summary>What the write routes of a Post share. A write comes as a form a page posted, as JSON an agent sent or as a
 /// tool's call, to the same address and the same typed input, and is answered in kind: a form is sent on to the Post's
 /// address (<c>303</c>) or, refused, reads its page again with the reason inline; a JSON request reads the Post with its
-/// <c>can</c>, or a problem carrying its word. Refusals answer by their kind, in Koan's one mapping (<see cref="Answers"/>). A
+/// <c>can</c>, or a problem carrying its word, and the field a value broke where its rule concerns one
+/// (<see cref="Refused"/>). Refusals answer by their kind, in Koan's one mapping (<see cref="Answers"/>). A
 /// write answers to its sender's session cookie; one a page of another site sent is refused before it reaches
 /// here.</summary>
 public static class PostWrites
@@ -32,7 +33,7 @@ public static class PostWrites
 
 
     /// <summary>The refusal of an edit that names no version.</summary>
-    public static readonly Reason VersionRule = Reason.Invalid("An edit carries the version of the Post its editor read, as a whole number.");
+    public static readonly Reason VersionRule = Reason.Invalid(VersionField, "An edit carries the version of the Post its editor read, as a whole number.");
 
     /// <summary>Where a form shows a refusal: under a field of what was sent, above what was sent as a whole, or as a gate,
     /// a verb the sender does not hold.</summary>
@@ -137,8 +138,28 @@ public static class PostWrites
 
     /// <summary>Where a form shows a refusal: its kind says a gate; the title's and body's rules name their field; anything
     /// else is about what was sent as a whole.</summary>
-    public static About Concerning(Reason reason)
-        => reason.Kind == ReasonKind.Gated ? About.Gate : TitleRules.Contains(reason) ? About.Title : BodyRules.Contains(reason) ? About.Body : About.Sent;
+    public static About Concerning(Reason reason) => reason.Kind == ReasonKind.Gated ? About.Gate : FieldOf(reason) switch
+    {
+        TitleField => About.Title,
+        BodyField => About.Body,
+        _ => About.Sent
+    };
+
+    /// <summary>The field of what was sent that <paramref name="reason"/> concerns, as a write's form names it: the one the
+    /// reason names, else the title's, the body's, the Id's, the cover's or the parent's for their rules; null for a
+    /// reason about what was sent as a whole.</summary>
+    public static string? FieldOf(Reason reason) => reason.Field
+        ?? (TitleRules.Contains(reason) ? TitleField
+            : BodyRules.Contains(reason) ? BodyField
+            : reason == Post.NeedsTid ? IdField
+            : reason == Post.NoCover || reason == Post.CoverOnArticle ? CoverField
+            : reason == Reply.NoParent ? ParentField
+            : null);
+
+    /// <summary>A write's refusal as a JSON request reads it: the problem of its reason, with an invalid value's sentence
+    /// under the field it concerns (<see cref="FieldOf"/>) in <c>errors</c>.</summary>
+    public static IActionResult Refused(HttpContext http, Reason reason)
+        => Answers.Refused(http, reason is { Kind: ReasonKind.Invalid, Field: null } && FieldOf(reason) is { } field ? Reason.Invalid(field, reason.Text) : reason);
 
     private static readonly Reason[] TitleRules = [Post.NeedsTitle, Post.TitleTooLong];
 

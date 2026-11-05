@@ -90,11 +90,11 @@ public sealed class NewTopicController(KoanWebBaseUrl baseUrl, IDataProtectionPr
         }
     }
 
-    /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the form again with the
-    /// reason where it belongs.</summary>
+    /// <summary>A refusal: for a JSON request, the problem its reason answers as, under the field it concerns; for a form,
+    /// the form again with the reason where it belongs.</summary>
     private async Task<IActionResult> Refused(string tangent, string? personId, StartInput input, Reason reason, CancellationToken ct)
     {
-        if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
+        if (PostWrites.WantsJson(Request)) return PostWrites.Refused(HttpContext, reason);
         return await Again(tangent, personId, input, Answers.Status(HttpContext, reason), keepId: true, page => PostWrites.Concerning(reason) switch
         {
             PostWrites.About.Title => page with { TitleFailure = reason.Text },

@@ -1,6 +1,7 @@
 @using global::Tangent.Render
 @* An article's line about its author's own account, shown to its author alone: the offer to publish it there, with not
-   now the first time, or where it stands there, with its Bluesky post once it is out and their Connections page. *@
+   now the first time, or where it stands there, with its Bluesky post once it is out and their Connections page; for an
+   article no longer public here or removed, that its copy is still out there, and what takes it down. *@
 @if (Model is { } line)
 {
     <div class="door-offer bar offer publish-line" data-state="@line.State">
@@ -8,14 +9,14 @@
             @line.Sentence
             @if (line.Detail is { } detail)
             {
-                <span class="topic-row-none"> @detail</span>
+                <span class="topic-row-none">@(" " + detail)</span>
             }
         </p>
         <div class="door-offer-answers">
             @if (line.Publish is { } publish)
             {
                 <form class="publish" method="post" action="@publish.Action">
-                    <button type="submit" class="tangent-new">@(line.State == Publishing.Offer ? "Publish" : "Grant it again")</button>
+                    <button type="submit" class="tangent-new">@(line.Publishes ? "Publish" : "Grant it again")</button>
                 </form>
             }
             @if (line.NotNow is { } notNow)

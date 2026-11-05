@@ -52,7 +52,7 @@ public sealed record Door(
     public string Description { get; init; } = "";
 
     /// <summary>The description as the door draws it, its Markdown rendered as a Post's body is; absent while it is empty.</summary>
-    [System.Text.Json.Serialization.JsonIgnore]
+    [Newtonsoft.Json.JsonIgnore]
     public string? DescriptionHtml { get; init; }
 
     /// <summary>The place's welcome under the door's head, its Markdown rendered as a Post's body is; present only where the
@@ -81,7 +81,7 @@ public sealed record Door(
     public Welcome? Welcoming { get; init; }
 
     /// <summary>For a visitor and a reader with nothing new, a shelf for each of the first Tangents the reader may view
-    /// that holds a Topic, the moderators' Tangent aside; absent otherwise.</summary>
+    /// that holds a Topic the front page does not show above, the moderators' Tangent aside; absent otherwise.</summary>
     public IReadOnlyList<Shelf>? Shelves { get; init; }
 
     /// <summary>Where every Tangent the reader may view is listed, present where more follow those the door lists.</summary>
@@ -105,7 +105,7 @@ public sealed record Door(
     /// <see cref="Roles"/>, the roles someone gave them or took from them since, the newest change of each;
     /// <see cref="Edited"/>, their Posts someone else edited since that still stand, each once, and
     /// <see cref="Removed"/>, those someone else removed, each with who did it. Then what is new in each Tangent
-    /// (<see cref="PerTangent"/>) and the new <see cref="Articles"/>. A Post's entry stays while the Post is new, so
+    /// (<see cref="PerTangent"/>) and the new <see cref="Articles"/>, past those for the reader. A Post's entry stays while the Post is new, so
     /// reading its Topic clears it here. <see cref="Seen"/> is the form that says all of it is seen, through
     /// <see cref="Through"/>, present while there is news.</summary>
     public sealed record Since(
@@ -148,9 +148,9 @@ public sealed record Door(
     /// <see cref="Until"/>.</summary>
     public sealed record Decision(TangentPage.Author Who, DateTimeOffset At, string? Was = null, DateTimeOffset? Until = null);
 
-    /// <summary>A role someone gave the reader or took from them: who, when, the role (<c>moderator</c> or
-    /// <c>administrator</c>) and whether it was given.</summary>
-    public sealed record RoleChange(TangentPage.Author Who, DateTimeOffset At, string Role, bool Given);
+    /// <summary>A role someone gave the reader or took from them: who, when, the role by its word (<c>moderator</c>),
+    /// whether it was given, and the role's name now, its word where the role is gone.</summary>
+    public sealed record RoleChange(TangentPage.Author Who, DateTimeOffset At, string Role, bool Given, string Name);
 
     /// <summary>How many of a kind are new, whether that is a lower bound because a read the door made was full, and
     /// the newest of them, a few at most.</summary>
@@ -161,8 +161,10 @@ public sealed record Door(
     public sealed record NewPost(string PostId, TangentPage.Author Who, string Topic, string Tangent, string Address, string Line, DateTimeOffset At,
         TangentPage.Edited? Edited = null);
 
-    /// <summary>What is new in one Tangent: its Topics and its replies.</summary>
-    public sealed record InTangent(string Slug, string Name, string Address, int Topics, int Replies, bool AtLeast);
+    /// <summary>What is new in one Tangent of its kind: its Topics and its replies, and how many of them no other part of
+    /// the news counts (<see cref="Others"/>) — neither for the reader nor a new article — so a sentence that adds the
+    /// parts counts each new Post once.</summary>
+    public sealed record InTangent(string Slug, string Name, string Kind, string Address, int Topics, int Replies, int Others, bool AtLeast);
 
     /// <summary>The open Offer as its decider reads it: what it would do (<c>address</c>: use <see cref="Subject"/>, an
     /// origin, as the place's address), and the evidence Koan holds since this process started — how many requests arrived
@@ -173,9 +175,9 @@ public sealed record Door(
     /// the applications, where each is admitted or declined.</summary>
     public sealed record Waiting(int Count, bool AtLeast, string Address);
 
-    /// <summary>Where the place's manager makes it theirs: the first Topic, in its first Tangent where it has one; its
-    /// name and line; who comes in; and bringing their agent.</summary>
-    public sealed record Welcome(string? FirstTopic, string Settings, string Admission, string BringYourAgent);
+    /// <summary>Where the place's manager makes it theirs: the first Topic, in its first Tangent where it has one; the
+    /// line that says what the place is, at its field (<see cref="Describe"/>); who comes in; and bringing their agent.</summary>
+    public sealed record Welcome(string? FirstTopic, string Describe, string Admission, string BringYourAgent);
 
     /// <summary>A Tangent the reader may view: its slug, name, kind, address, how many Topics were started there, and
     /// how many of its Posts are new to the reader.</summary>

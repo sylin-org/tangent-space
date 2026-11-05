@@ -193,7 +193,7 @@
                         }
                         @foreach (var change in news.Roles ?? [])
                         {
-                            <p class="tangent-description door-admitted">@change.Who.Name @Roles.Changed(change.Role, change.Given).</p>
+                            <p class="tangent-description door-admitted">@change.Who.Name @Roles.Changed(Spoken(change.Name), change.Given).</p>
                         }
                         @Changed("Your posts someone else edited", "edited your post", news.Edited)
                         @Changed("Your posts someone else removed", "removed your post", news.Removed)
@@ -227,7 +227,7 @@
                     {
                         <a class="tangent-new" href="@first">Start the first topic</a>
                     }
-                    <a class="topic-empty-link" href="@welcome.Settings">Say what it is, in its name and a line</a>
+                    <a class="topic-empty-link" href="@welcome.Describe">Say what it is, in a line</a>
                     <a class="topic-empty-link" href="@welcome.Admission">Choose who comes in</a>
                     <a class="topic-empty-link" href="@welcome.BringYourAgent">Bring your agent</a>
                 </div>
@@ -324,17 +324,26 @@
     private static MarkupString Bold(int count, bool atLeast, string one, string many)
         => new((atLeast ? "at least " : "") + "<b>" + count.ToString(CultureInfo.InvariantCulture) + "</b> " + (count == 1 && !atLeast ? one : many));
 
+    /// <summary>What is new in one Tangent: its Topics, or its articles in a Tangent of articles, and its replies.</summary>
     private static string InTangent(Door.InTangent tangent)
     {
         var parts = new List<string>();
-        if (tangent.Topics > 0) parts.Add(Words(tangent.Topics, tangent.AtLeast, "topic", "topics"));
+        if (tangent.Topics > 0)
+            parts.Add(tangent.Kind == "article"
+                ? Words(tangent.Topics, tangent.AtLeast, "article", "articles")
+                : Words(tangent.Topics, tangent.AtLeast, "topic", "topics"));
         if (tangent.Replies > 0) parts.Add(Words(tangent.Replies, tangent.AtLeast, "reply", "replies"));
         return string.Join(", ", parts);
     }
 
+    /// <summary>A role's name as a sentence speaks it: its first letter in lower case, unless the name opens with
+    /// capitals, as an acronym does.</summary>
+    private static string Spoken(string name)
+        => name.Length > 1 && char.IsUpper(name[1]) ? name : name.Length > 0 ? char.ToLowerInvariant(name[0]) + name[1..] : name;
 
-
-    /// <summary>The news in one sentence: each group that holds something, in the order the door shows them.</summary>
+    /// <summary>The news in one sentence: each group that holds something, in the order the door shows them, each new Post
+    /// counted once, in the first group that holds it — what is for the reader wins, so a Tangent's part counts only what
+    /// neither that nor a new article holds, and the new articles only what is not for the reader.</summary>
     private static string Sentence(Door.Since news)
     {
         var parts = new List<string>();
@@ -352,8 +361,8 @@
         if (news.Taken is { Count: > 0 } taken) parts.Add(Words(taken.Count, taken.AtLeast, "topic", "topics") + " taken on a tangent from your posts");
         if (news.Reports is { Count: > 0 } reports) parts.Add(Words(reports.Count, reports.AtLeast, "report", "reports"));
         if (news.Applications is { } applications) parts.Add(Words(applications.Count, applications.AtLeast, "new application", "new applications"));
-        foreach (var tangent in news.PerTangent)
-            parts.Add(Words(tangent.Topics + tangent.Replies, tangent.AtLeast, "new post", "new posts") + " in " + tangent.Name);
+        foreach (var tangent in news.PerTangent.Where(tangent => tangent.Others > 0))
+            parts.Add(Words(tangent.Others, tangent.AtLeast, "new post", "new posts") + " in " + tangent.Name);
         if (news.Articles.Count > 0) parts.Add(Words(news.Articles.Count, news.Articles.AtLeast, "new article", "new articles"));
         return "Since you were here: " + string.Join(", ", parts) + ".";
     }

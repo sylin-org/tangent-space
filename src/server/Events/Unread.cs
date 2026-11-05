@@ -72,7 +72,8 @@ public sealed class Unread
 
     /// <summary>What is for the reader and new to them: each row of the log that names them as its target, each mention of
     /// a role they hold, and, while they may view the moderators' Tangent, each report, that someone else made past the
-    /// floor and that reaches them, a Post that mentions them more than once counting once;
+    /// floor and that reaches them, a Post that mentions them more than once counting once, and a Post that reaches them
+    /// itself, as a reply to them, a Topic taken from theirs or a report, counting once whatever it mentions;
     /// and, while they hold <c>ManageStanding</c>, the applications that wait past it. A row that brought a Post
     /// (<see cref="Arrival"/>) stays while that Post and its Topic stand and the Post is new in its Topic, so reading the
     /// Topic clears it here too; someone else's edits of one Post are its newest, a change of the reader's standing is
@@ -133,6 +134,10 @@ public sealed class Unread
 
         var through = new[] { floor, kept.Count > 0 ? kept[0].Seq : floor, waiting.Count > 0 ? waiting[0].WaitingSeq!.Value : floor }.Max();
         var atLeast = targeted.Count > CountLimit || reports.Count > CountLimit || named.Count > CountLimit || waiting.Count > CountLimit;
+        // A Post that reaches the reader as a reply, a Topic taken from theirs or a report is one thing for them, whatever
+        // it mentions.
+        var arrived = kept.Where(row => row.Kind == EventKind.PostCreated).Select(row => row.PostId).OfType<string>().ToHashSet(StringComparer.Ordinal);
+        kept.RemoveAll(row => row.Kind == EventKind.Mention && row.PostId is { } postId && arrived.Contains(postId));
         return new ForYou(kept, waiting.Count, atLeast, through, decides, posts);
     }
 

@@ -36,10 +36,13 @@ public sealed record PeoplePage(
     /// <c>timed-out</c>, <c>banned</c>, or for an applicant <c>applied</c> or <c>declined</c>) with when a timeout
     /// ends, the roles they hold by name, highest first, and what the reader may do to them: the standing verbs in
     /// <see cref="Can"/> (<c>time-out</c>, <c>ban</c>, <c>lift</c>) and the roles they may <see cref="Give"/> and
-    /// <see cref="Take"/>, each by its word (<c>moderator</c>, <c>administrator</c>, or a word of the place's own), lowest
-    /// first. Nothing is offered that the reader may not do.</summary>
+    /// <see cref="Take"/>, lowest first. Nothing is offered that the reader may not do.</summary>
     public sealed record Listed(string Id, string Name, string Handle, string Profile, string Kind, string Standing, DateTimeOffset? Until,
-        IReadOnlyList<string> Roles, IReadOnlyList<string> Can, IReadOnlyList<string> Give, IReadOnlyList<string> Take);
+        IReadOnlyList<string> Roles, IReadOnlyList<string> Can, IReadOnlyList<Offered> Give, IReadOnlyList<Offered> Take);
+
+    /// <summary>A role the reader may give or take: its word, which a form sends and which never changes
+    /// (<c>moderator</c>, <c>administrator</c>, or a word of the place's own), and its name as the place now calls it.</summary>
+    public sealed record Offered(string Word, string Name);
 }
 
 /// <summary>The forms of the inline changes of standing and roles, each taking the participant's id in
