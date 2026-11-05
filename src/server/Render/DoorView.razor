@@ -12,7 +12,8 @@
    browser kept; for a signed-in reader with news, what is new since they were here — one sentence, then who admitted
    them, who lifted their timeout or ban, who timed them out and until when, who declined their application, and who gave them a role or took one, where someone did, how many applications arrived for whoever decides them, their Posts someone else edited or removed, with who did, replies to them, mentions of them, the Topics taken on a tangent from their Posts, the reports for whoever may view the moderators' Tangent, the new articles and what is new in each Tangent, with the form that says
    all of it seen — and then the front page: the featured Topics and the ones alive now, or, for its manager while
-   nothing is written yet, a welcome with the few steps that make the place theirs. A reader with nothing new reads
+   nothing is written yet, a welcome with the few steps that make the place theirs; and, for a visitor and a reader with
+   nothing new, a shelf for each of the first Tangents, in its tile and tone, with its latest Topics, articles with their covers, and the way to the rest. A reader with nothing new reads
    that in one sentence above the front page. A count the door could not finish reads "at least". The whole door is the
    fragment island's host, so it refreshes itself from its own address, unless it stands alone, with nothing to refresh from. *@
 <main class="door" data-island="@(Standalone ? null : "fragment")" data-props="@(Standalone ? null : JsonSerializer.Serialize(new { url = Model.Address }))">
@@ -239,6 +240,42 @@
             }
             @Shelf("door-featured", "Featured", Model.Featured)
             @Shelf("door-alive", Standalone ? "Last alive" : "Alive now", Model.Alive)
+            @foreach (var shelf in Model.Shelves ?? [])
+            {
+                <section class="door-shelf tone-@shelf.Tile.Tone" aria-labelledby="@("shelf-" + shelf.Slug)">
+                    <div class="door-shelf-head">
+                        <a class="door-shelf-tile" href="@shelf.Address" tabindex="-1" aria-hidden="true"><TangentTile Tile="@shelf.Tile" Size="shelf" /></a>
+                        <div class="door-shelf-text">
+                            <h2 id="@("shelf-" + shelf.Slug)" class="door-shelf-name"><a href="@shelf.Address">@shelf.Name</a></h2>
+                            @if (shelf.Description.Length > 0)
+                            {
+                                <p class="door-shelf-line">@shelf.Description</p>
+                            }
+                        </div>
+                        <a class="door-shelf-all" href="@shelf.Address">@All(shelf)</a>
+                    </div>
+                    @if (shelf.Kind == "article")
+                    {
+                        <div class="article-list door-shelf-articles">
+                            @foreach (var topic in shelf.Topics)
+                            {
+                                <TopicRow Model="@topic" Today="@Model.Day" Reader="@Model.Who?.Id" Article="true" TangentName="@shelf.Name" TangentTile="@shelf.Tile" />
+                            }
+                        </div>
+                    }
+                    else if (shelf.Topics.Count > 0)
+                    {
+                        <div class="topic-table">
+                            <ul class="topic-rows list">
+                                @foreach (var topic in shelf.Topics)
+                                {
+                                    <li @key="topic.Id"><TopicRow Model="@topic" Today="@Model.Day" Reader="@Model.Who?.Id" /></li>
+                                }
+                            </ul>
+                        </div>
+                    }
+                </section>
+            }
         </div>
     </div>
     <Tangent.Events.Live Page="door" />
@@ -268,6 +305,12 @@
         }</text>;
 
     private string Initial => Model.Name.Length > 0 ? char.ToUpperInvariant(Model.Name[0]).ToString() : "T";
+
+    /// <summary>The way from a shelf to the rest of its Tangent, with how many it holds.</summary>
+    private static string All(Door.Shelf shelf)
+        => shelf.Kind == "article"
+            ? "All " + TopicRow.Count(shelf.TopicCount, "article", "articles", "articles")
+            : "All " + TopicRow.Count(shelf.TopicCount, "topic", "topics", "topics");
 
     /// <summary>How many applications wait, in a sentence; "at least" where the door could not finish counting.</summary>
     private static string Waiting(Door.Waiting waiting)

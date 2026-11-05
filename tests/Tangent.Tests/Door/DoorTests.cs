@@ -336,6 +336,30 @@ public sealed class DoorTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task A_visitor_reads_a_shelf_of_each_tangents_latest_past_what_the_front_page_shows()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        await Place(tangentSpace);
+        var topics = new List<Post>();
+        for (var index = 0; index < DoorController.AliveLimit + 2; index++) topics.Add(await Started(Workshop, $"Question {index}", "ada"));
+        await Started(Articles, "On lanterns", "leo");
+
+        using (var json = await Json(tangentSpace.Client, "/"))
+        {
+            var shelves = json.RootElement.GetProperty("shelves");
+            Assert.Equal([Articles, Workshop], shelves.EnumerateArray().Select(shelf => shelf.GetProperty("slug").GetString()!).ToList());
+            Assert.Empty(shelves[0].GetProperty("topics").EnumerateArray());
+            var workshop = shelves[1];
+            Assert.Equal((DoorController.AliveLimit + 2, $"{BaseUrl}/t/{Workshop}"), (workshop.GetProperty("topicCount").GetInt32(), workshop.GetProperty("address").GetString()));
+            Assert.Equal([topics[1].Id, topics[0].Id], workshop.GetProperty("topics").EnumerateArray().Select(topic => topic.GetProperty("id").GetString()!).ToList());
+        }
+
+        var html = WebUtility.HtmlDecode(await Html(tangentSpace.Client, "/"));
+        Assert.Contains($"<a href=\"{BaseUrl}/t/{Workshop}\">The workshop</a></h2>", html);
+        Assert.Contains("All 8 topics", html);
+    }
+
+    [Fact]
     public async Task A_visitor_on_a_public_place_reads_the_front_page_and_on_a_private_one_the_sign_in_gate()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);

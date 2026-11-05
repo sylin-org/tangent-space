@@ -21,7 +21,8 @@ namespace Tangent.Space;
 /// named reads, each bounded and keyed: what is for a signed-in reader and new to them (<see cref="Unread.ForYouNow"/>);
 /// what is new in each Tangent and the front page, both from one window of the log (<see cref="LogWindow"/>): the Topics
 /// that gained a Post in it, newest first, articles <see cref="Door.Featured"/> and the rest <see cref="Door.Alive"/>,
-/// and their writers <see cref="Door.Around"/>; for the place's operator, the open Offer of an address
+/// and their writers <see cref="Door.Around"/>; for a visitor and a reader with nothing new, a shelf of each of the first
+/// Tangents' latest Topics (<see cref="Shelves"/>); for the place's operator, the open Offer of an address
 /// (<see cref="AddressOffers.Open"/>), shown first; for whoever holds <see cref="Bit.ManageStanding"/>, how many
 /// applications wait, linked to where they are decided; one seen form whenever the door has news; and the poll link.
 /// Everything new is new by the one rule (<see cref="Unread"/>). The door's <c>gate</c> is why the reader may not write
@@ -39,6 +40,11 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
     public const int AliveLimit = 6;
 
     public const int AroundLimit = 8;
+
+    /// <summary>The most Tangents that get a shelf, and the most Topics a shelf holds.</summary>
+    public const int ShelfLimit = 6;
+
+    public const int ShelfTopicLimit = 3;
 
     /// <summary>The most new Posts a group shows; its count says how many there are.</summary>
     public const int ItemLimit = 5;
@@ -122,6 +128,12 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
 
         var asking = reader is null ? [] : await Tangents.Asking.For(reader.Id, baseAddress, ct);
 
+        var welcome = Welcome(place, space, listed, page.Next is not null, baseAddress);
+        var shelves = welcome is null && (news is null || news.Quiet)
+            ? await Shelves(page.Tangents.Where(tangent => tangent.Id != space.ModeratorsTangentId).ToList(),
+                featured.Concat(alive).Select(root => root.Id).ToHashSet(StringComparer.Ordinal), people, baseAddress, ct)
+            : null;
+
         var freshIn = fresh.GroupBy(e => e.TopicId!, StringComparer.Ordinal).ToDictionary(topic => topic.Key, topic => topic.Count(), StringComparer.Ordinal);
         var newIn = news?.PerTangent.ToDictionary(tangent => tangent.Slug, tangent => tangent.Topics + tangent.Replies, StringComparer.Ordinal);
         var door = baseAddress + "/";
@@ -155,7 +167,8 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             Image = appearance.ImageAt(baseAddress + "/"),
             Feeds = space.Audience == Audience.Public ? Feeds.ArticlesLinks(baseAddress, space.Name) : null,
             Offer = offered,
-            Welcoming = Welcome(place, space, listed, page.Next is not null, baseAddress),
+            Welcoming = welcome,
+            Shelves = shelves is { Count: > 0 } ? shelves : null,
             Applications = waiting.Count == 0
                 ? null
                 : new Door.Waiting(waiting.Count, waiting.Count > Unread.CountLimit, baseAddress + ApplicationsController.Path),
@@ -178,6 +191,42 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             baseAddress + TangentSpaceSettingsController.Path,
             baseAddress + TangentSpaceSettingsController.AdmissionPath,
             baseAddress + BringYourAgentController.Path);
+    }
+
+    /// <summary>The shelves of the first <see cref="ShelfLimit"/> Tangents that hold a Topic: each Tangent's latest
+    /// <see cref="ShelfTopicLimit"/> Topics past those <paramref name="above"/> holds, one bounded read of its topic list
+    /// each, then one keyed read of their latest replies and one of the people they name whom <paramref name="known"/>
+    /// does not hold.</summary>
+    private static async Task<List<Door.Shelf>> Shelves(IReadOnlyList<Tangents.Tangent> tangents, IReadOnlySet<string> above,
+        IReadOnlyDictionary<string, TangentPage.Author> known, string baseAddress, CancellationToken ct)
+    {
+        var read = new List<(Tangents.Tangent Tangent, List<Post> Topics)>();
+        foreach (var tangent in tangents.Where(tangent => tangent.TopicCount > 0).Take(ShelfLimit))
+        {
+            var size = Math.Min(TopicList.PageSize, ShelfTopicLimit + above.Count);
+            var topics = (await TopicList.Read(tangent.Id, null, ct, size)).Topics.Where(root => !root.Removed && !above.Contains(root.Id))
+                .Take(ShelfTopicLimit).ToList();
+            read.Add((tangent, topics));
+        }
+
+        var roots = read.SelectMany(shelf => shelf.Topics).ToList();
+        var latest = await TangentPageController.LatestReplies(roots, ct);
+        var people = new Dictionary<string, TangentPage.Author>(known, StringComparer.Ordinal);
+        foreach (var (id, person) in await People(baseAddress, roots
+                     .SelectMany(root => root.RecentAuthorIds.Take(Post.RecentAuthorLimit).Append(root.AuthorId).Concat(root.MentionedIds))
+                     .Concat(latest.Values.SelectMany(reply => reply.MentionedIds.Append(reply.AuthorId).Append(reply.EditedBy)))
+                     .Concat(roots.Select(root => root.EditedBy))
+                     .Where(id => id is not null && !known.ContainsKey(id)), ct))
+            people[id] = person;
+
+        var marks = new Dictionary<string, long>();
+        return read.Select(shelf =>
+        {
+            var address = PostWrites.TangentAddress(baseAddress, shelf.Tangent.Id);
+            return new Door.Shelf(shelf.Tangent.Id, shelf.Tangent.Name, Word(shelf.Tangent.DefaultKind), shelf.Tangent.Description, address,
+                Tile.For(shelf.Tangent, baseAddress + "/"), shelf.Tangent.TopicCount,
+                shelf.Topics.Select(root => TangentPageController.Topic(root, address, people, latest, null, marks)).ToList());
+        }).ToList();
     }
 
     /// <summary>The Posts the window's new Topics and replies brought that are new to the reader by the one rule: in a
