@@ -1,0 +1,35 @@
+@using System.Globalization
+@using global::Tangent.Render
+@* A Post's earlier versions, newest first: who wrote each and when, then its words as they stood, and, where older ones
+   stand beyond these, that only the most recent are shown. Under a Post its disclosure takes this component alone. *@
+<section class="post-history-versions" aria-label="Earlier versions">
+    @if (Model.Versions.Count == 0)
+    {
+        <p class="post-history-none">No earlier version is kept.</p>
+    }
+    @foreach (var version in Model.Versions)
+    {
+        <article class="post-history-version">
+            <p class="post-history-meta">
+                <strong>@version.By.Name</strong>
+                <time datetime="@version.At.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture)" title="@version.At.ToUniversalTime().ToString("MMM d, yyyy, h:mm tt 'UTC'", CultureInfo.InvariantCulture)">@TopicRow.When(version.At, Model.Day)</time>
+            </p>
+            <div class="post-body">@((MarkupString)global::Tangent.Posts.Media.Placed(Mentions.Html(Model.PostId, version.Number, version.Body, version.Mentions), Model.Door))</div>
+        </article>
+    }
+    @if (Model.More)
+    {
+        <p class="post-history-none">Only the most recent earlier versions are shown.</p>
+    }
+    <p class="post-history-back"><a href="@Model.Address">Back to the post as it is</a></p>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public PostHistory Model { get; set; } = default!;
+
+    /// <summary>The frame the shell draws around the page: the place; the Post's Tangent and Topic and its history as
+    /// crumbs; and who reads, or where a visitor signs in.</summary>
+    public static Frame Frame(PostHistory page)
+        => new(page.Place, page.Door, [new Crumb(page.Tangent, page.TangentAddress), new Crumb(page.Topic, page.TopicAddress), new Crumb("Earlier versions")],
+            page.Who, page.SignIn);
+}

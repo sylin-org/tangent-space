@@ -401,6 +401,16 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'article', seed: 'article', signedIn: true, path: '/t/articles/new', fill: { '.article-surface': 'Mended with @' }, waitFor: '.suggestions:not([hidden])' },
     ],
   },
+  // What a reader and a writer meet beyond a Topic's Posts, read by the persona: the reply a moderator rewrote, its
+  // earlier version open under it; the reply box with the article editor's tools; and an article with its outline.
+  reading: {
+    path: '/t/discussions/is-a-visible-repair-a-better-repair',
+    states: [
+      { name: 'history-open', seed: 'topic', signedIn: true, cancel: '/seen', click: '.post-history > summary', waitFor: '.post-history-versions' },
+      { name: 'reply-toolbar', seed: 'topic', signedIn: true, cancel: '/seen', waitFor: '.reply-body-field.is-visual' },
+      { name: 'article-outline', seed: 'article', signedIn: true, cancel: '/seen', path: '/t/articles/mending-with-gold' },
+    ],
+  },
   topic: {
     path: '/t/discussions/what-kind-of-discussions',
     states: [

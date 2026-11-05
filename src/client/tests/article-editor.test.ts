@@ -358,3 +358,20 @@ test('words set aside with Cancel do not come back on the next edit', () => {
 
   expect(localStorage.getItem(key)).toBeNull()
 })
+
+test('a reply is written in the same editor, in a Post’s type, with no headings and no divider', () => {
+  document.body.innerHTML =
+    '<form method="post" action="https://tangent.example/t/field-notes/cotton"><div class="host"><label>Your reply</label>' +
+    '<textarea name="body" required></textarea></div><button type="submit">Post reply</button></form>'
+  const host = document.querySelector<HTMLElement>('.host')!
+  stops.push(writeArticle({ host, door: '/', bring: 'https://tangent.example/t/field-notes/media', participant, edit: null, reply: true }))
+
+  const surface = host.querySelector<HTMLElement>('.ProseMirror')!
+  const tools = [...host.querySelectorAll<HTMLButtonElement>('.article-tools button')].map((button) => button.title)
+  expect(surface.classList.contains('reply-surface')).toBe(true)
+  expect(surface.getAttribute('aria-label')).toBe('Your reply')
+  expect(tools).toContain('Bold')
+  expect(tools).toContain('Insert image')
+  expect(tools).not.toContain('Heading 2')
+  expect(tools).not.toContain('Insert divider')
+})

@@ -8,7 +8,8 @@
 @* The door: the place's name, the line that describes it, whose place this is, in the head with what it holds; the proprietor's door intro under it, where they wrote one; the first page of the Tangents the reader may view, the moderators' Tangent after them for whoever may view it, and all of them a link away, where a new one is
    created for whoever may, and who is around in the rail, each name linked to their profile; and in the column, first, for the operator, the open Offer as one line with its evidence and its two
    answers; for whoever decides applications, how many wait, in an Offer's line, with the way to them; for an applicant, in one sentence, that their application is waiting, or was declined; for a participant timed
-   out, until when; for a signed-in reader with news, what is new since they were here — one sentence, then who admitted
+   out, until when; for a signed-in reader who left a Topic mid-way, one link back to where they stopped, which their
+   browser kept; for a signed-in reader with news, what is new since they were here — one sentence, then who admitted
    them, who lifted their timeout or ban, who timed them out and until when, who declined their application, and who gave them a role or took one, where someone did, how many applications arrived for whoever decides them, their Posts someone else edited or removed, with who did, replies to them, mentions of them, the Topics taken on a tangent from their Posts, the reports for whoever may view the moderators' Tangent, the new articles and what is new in each Tangent, with the form that says
    all of it seen — and then the front page: the featured Topics and the ones alive now. A reader with nothing new reads
    that in one sentence above the front page. A count the door could not finish reads "at least". The whole door is the
@@ -116,6 +117,10 @@
                         </div>
                     </div>
                 </section>
+            }
+            @if (Model.Who is { } reading && !Standalone)
+            {
+                <p class="door-continue" hidden data-island="continue" data-props="@JsonSerializer.Serialize(new { participant = reading.Id })"><a href="#">Continue reading</a></p>
             }
             @if (Model.News is { } news)
             {

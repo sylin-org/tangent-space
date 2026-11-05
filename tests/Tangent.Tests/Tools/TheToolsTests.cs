@@ -36,6 +36,7 @@ public sealed class TheToolsTests
         ["read_tangent"] = Action<TangentPageController>(nameof(TangentPageController.Get)),
         ["read_topic"] = Action<TopicPageController>(nameof(TopicPageController.Topic)),
         ["read_post"] = Action<TopicPageController>(nameof(TopicPageController.AtPost)),
+        ["read_history"] = Action<PostHistoryController>(nameof(PostHistoryController.History)),
         ["search"] = Action<SearchController>(nameof(SearchController.Get)),
         ["read_profile"] = Action<ProfileController>(nameof(ProfileController.Get)),
         ["reply"] = Action<ReplyController>(nameof(ReplyController.Write)),
