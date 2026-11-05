@@ -27,97 +27,20 @@ PLAN holds the roles, the order of the packages and the decisions they wait on. 
 
 ## The order
 
-- **Small Koan changes first.** Access lands on k-refuse, k-gate and k-edge, not behind the HTML projection.
-- **Nets before repeats.** The sweep lands after the first access package on routes and before the repeat across every route, and one render package lands before the render repeat.
-- **No shared files.** No two packages in flight touch the same files. Tangent worktrees that share the pinned checkout run beside each other only once k-build lands. A Koan package in its own Koan worktree, with its own `TEMP`, shares no `obj` or `bin` with the pinned checkout, so it runs beside the Tangent packages that do not depend on it now. Group 0's Tangent packages run one at a time, in this line: docs-arch, cut-3, cut-1, cut-2, look-1 and look-2. k-refuse's Tangent half runs after look-2, or in a gap between two packages that do not touch its files.
-- **Koan packages start in this line.** k-invoke and k-head start now, side by side; k-build starts once docs-0 has landed, and never runs beside docs-arch; k-refuse runs alone once k-invoke and k-head have landed; then k-page beside k-atproto-1. k-atproto-1 never runs beside K43, since both own Koan.Identity. k-data, k-jobs and k-test wait behind this line, after k-atproto-1, one at a time under the same rule of no shared files. Access waits on k-refuse, so nothing else starts ahead of it.
-- **A walk closes each group.** A live walk ends each group, and its findings become packages. A walk drives the real place in a browser, and at `/mcp` as Lumen, an agent signed in with its own account. Where Companion Lobby's adapter has not caught up with what Tangent answers, the walk reaches `/mcp` through a plain MCP client, and the Lobby's breakage is written up for the Lobby, a separate product never built here.
-- **The tree works.** Every package lands with the tree working.
-- **Each package carries its own words:** the ARCHITECTURE seam paragraph, the LANGUAGE words, the AGENTS rule, the FEATURES rows and the ADRs its change touches.
-- **Stored shapes move by script.** A package that changes a stored shape carries a one-off script for the real-run folder at `scripts/once/<what-it-moves>`. It runs right after its own package's merge, before the next merged build opens the real-run folder, and the commit after that run deletes only that package's script.
+Each package delivers one thing a person or an agent meets, and builds the seam it needs inside it. Koan work happens only as a feature needs it, under Koan's law, and lands by rebase and fast-forward with the pinned revision following. No two packages in flight touch the same files; the lead schedules by the files. Every package lands with the tree working, carries its own words (the ARCHITECTURE paragraph, the LANGUAGE words, the FEATURES rows), and moves a stored shape with a one-off script at `scripts/once/<what-it-moves>`, run once after its merge and then deleted. A live walk of the real place, in a browser and at `/mcp` as Lumen, follows every two or three packages, and its findings become the next work.
 
-The packages, as `id · name · role · after`:
+The packages, as `id · what you get · what it absorbs from the design · after`:
 
-**Group 0, clearing the ground**
+1. since-you-were-here · The door tells you what is new, once and truthfully, and it clears when you have read it: one Unread rule, one `Seen`, for-you read on the door; the notifications page, watch, lock, pin, the Tangent checkpoint and the first-arrival sentence go · events-1, events-2, events-3, cut-2 · none
+2. every-door-says-what-to-do · A refusal names the next step, search never refuses, and nobody is told to fix input before being told to sign in; the gate runs once, before binding, on the routes people hit · access-1, gate-1, gate-2, k-refuse's Tangent half; Koan k-refuse and k-gate as it needs them · 1
+3. the-agent-reads-any-address · `read(address)`, one text behind `llms.txt`, `tangent.json` and the instructions, and the Problem on every failure at `/mcp`, measured with Lumen · k-mcp-1, k-mcp-2, tools-1 · K44 landed
+4. the-places-look · The five layers stated once, one colour choice, and a Markdown description, masthead and footer; management on the endpoint · look-1, look-2 · 1
+5. bring-your-agent-is-a-link · The page renders for a visitor and links the Lobby; the probe goes · cut-3 · none
+6. export-and-archive-are-one-copy · The place as you or as a visitor, and each Tangent, as one static copy; retirement, the restore verb and the archive's second host go · life-1, life-2, cut-1; Koan k-snapshot · 3
+7. take-on-a-tangent-and-report · Starting a Topic from a Post offers its title, and a report needs no reason; a reused id answers `id-taken` · writes-1, writes-2 · 2
+8. publication · The brief's unbuilt half: publication under your own account, Connections, Webmention and Mastodon · the design's §8 · 1, 2, 3
 
-- docs-arch · ARCHITECTURE states the seams as they stand · first of its kind · docs-0
-- k-build · Each consumer builds the pin apart · koan · docs-0 (its Tangent half merges with its landing)
-- k-invoke · One action invoked in process, Leo's ordered spike · koan · none
-- cut-3 · Bring your agent is a link · mechanic · docs-arch
-- cut-1 · Delete what nothing in the place needs · mechanic · cut-3
-- cut-2 · Delete what nothing in a conversation needs · mechanic · cut-1
-- look-1 · Five layers stated once, management on the endpoint · first of its kind · cut-2
-- look-2 · Slots fold into Appearance · repeat · look-1, cut-2
-- The walk: the place without retirement, bring your agent, and the appearance preview
-
-**Group 1, access, judged once**
-
-- k-refuse · A reason may name its word and its field, and a refusal at the route carries a reason · koan · k-invoke, k-head (its Tangent half after look-2)
-- k-gate · Every routed action is judged once, before binding · koan · k-refuse
-- k-edge · Every answer at the web edge is the Problem · koan · k-gate
-- k-mcp-1 · Koan's MCP edge fails in one shape · koan · k-refuse, k-edge, k-invoke
-- access-1 · `For` words each refusal for what it refuses, and implies what it implies · first of its kind · cut-2
-- access-2 · The member role is Koan's, and standing caps by the anonymous bag · first of its kind · access-1
-- gate-1 · One judgement before binding, on three routes · first of its kind · k-gate, access-2
-- sweep-1 · One sweep over the route table · first of its kind · gate-1, k-mcp-1
-- gate-2 · Every route under `/t` declares its bit · repeat · sweep-1
-- gate-3 · The door and the reader's own routes declare their bit · repeat · gate-2
-- gate-4 · Every settings route declares its bit, and the start check is on · repeat · gate-3
-- The walk: every route and every refusal, on both doors
-
-**Group 2, how a write is made**
-
-- k-head · The log's head and a command's clock · koan · none
-- writes-1 · A Post write is a judgement and a verb · first of its kind · gate-4, k-refuse
-- writes-2 · Take on a tangent and report are Post verbs · repeat · writes-1
-- writes-3 · Every other command is a judgement and a verb · repeat · writes-2, k-head
-- The walk: a reused id, take on a tangent and report, on both doors
-
-**Group 3, what is new, and who is here**
-
-- k-page · Keyset pages · koan · k-refuse
-- events-1 · Since you were here: one rule in two units · first of its kind · writes-3
-- events-2 · One `Seen`, and what is for you read on the door · repeat · events-1
-- events-3 · The door is a composition · repeat · events-2, k-page
-- events-4 · The live stream on Koan's server-sent events · repeat · events-3, k-head
-- k-atproto-1 · The connector knows the person · koan · k-refuse
-- k-atproto-2 · atproto's identifiers and the proof door are the connector's · koan · k-atproto-1, k-edge
-- people-1 · Standing in one command · first of its kind · events-3, writes-3, k-page
-- people-2 · People from Koan's person · repeat · people-1, k-atproto-2
-- The walk: what is new since you were here, and an idle place
-
-**Group 4, how an address answers**
-
-- k-html · Koan projects an application's components · koan · k-gate, k-invoke
-- k-answer · A write answers in kind · koan · k-html, k-refuse
-- k-forms · A form comes from its route · koan · k-answer
-- render-1 · Topic and new topic on the projection · first of its kind · k-forms, gate-4, look-2, events-3
-- render-2 · Every read page sheds its frame · repeat · render-1, people-2, events-4
-- render-3 · Every form comes from its route · repeat · render-2
-- The walk: every page and every refused form
-
-**Group 5, the agent door and the lifecycle**
-
-- k-mcp-2 · Reading by address, and instructions from a provider · koan · k-mcp-1, k-invoke
-- tools-1 · One text, and reading is an address · mechanic · k-mcp-2, render-3, people-1
-- k-feeds · Feeds are Koan's · koan · k-html
-- feeds-1 · Tangent's feeds on Koan's · mechanic · k-feeds, render-2
-- k-snapshot · A static copy of an application's GET routes · koan · k-answer, k-invoke
-- life-1 · Export and the archive are one static copy · repeat · k-snapshot, render-3, feeds-1
-- k-data · Backup and the data root are Koan's · koan · k-atproto-1
-- life-2 · Backup is a copy, restore is putting it back · repeat · k-data, life-1, k-build, k-atproto-2
-- k-jobs · A quiet Jobs · koan · k-atproto-1
-- The walk: the agent door's instructions, with `read` measured
-
-**Group 6, tests, client, Markdown**
-
-- k-test · Koan's web test kit · koan · k-atproto-1
-- tests-1 · Fixtures on Koan's kit · mechanic · k-test, render-3
-- tests-2 · Tests only of Tangent's decisions · mechanic · tests-1
-- client-1 · Islands are functions · first of its kind · tests-2, events-4
-- client-2 · The live page on `EventSource` · repeat · client-1, render-3
-- md-1 · One Markdown dialect · mechanic · client-2, look-2
-- The walk: the live page
+The design's other packages (forms and pages from routes, standing in one command, people from Koan's person, the sweep, the islands, the Markdown dialect, the test kit, feeds, backup, keyset pages, the connector's profile and identifiers, each consumer's build) fold into the first feature that needs them, or wait; none runs for its own sake. K44 (one request answered in process) and K46 (the log's head and a command's clock) are built and land now.
 
 ## Open for Leo
 
