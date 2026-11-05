@@ -4,12 +4,9 @@ A row is something the place does not do yet, said by what someone gets, and it 
 
 ## Publication and Connections
 
-References from the network wait on Koan's atproto connector resolving records and reading an AppView.
-
 | Work | Koan | Size |
 | --- | --- | --- |
 | The protocol contract recorded from code in an ADR of its own: `IConnectionAdapter`, `IReferenceSource`, `IAsserter`; the three events as a filter over the log | — | S |
-| References on a Post: Constellation and Spacedust as an optional source; "elsewhere" on the topic page | — | M |
 | Webmention: send on `post.created`, receive at an endpoint; Bridgy Fed opt-in | — | S |
 | The Mastodon package: a status under the participant's own account; replies as references | — | M |
 

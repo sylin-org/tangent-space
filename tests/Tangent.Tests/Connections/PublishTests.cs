@@ -84,7 +84,7 @@ public sealed class PublishTests
     }
 
     /// <summary>An author's repository that holds their grant and keeps every record put in it.</summary>
-    private sealed class Repository : IAtprotoRepository
+    internal sealed class Repository : IAtprotoRepository
     {
         private int _cids;
 

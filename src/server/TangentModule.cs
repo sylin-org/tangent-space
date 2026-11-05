@@ -64,6 +64,10 @@ public sealed class TangentModule : KoanModule
         Participants.ParticipantsComposition.AddParticipants(services);
         services.AddSingleton<Connections.AtprotoAdapter>();
         services.AddSingleton<Connections.Nudge>();
+        services.AddSingleton<Connections.Readers>();
+        // What the network says about a published article: one bounded answer per read, no redirect, no cookie.
+        services.AddHttpClient<Connections.AppView>(client => client.MaxResponseContentBufferSize = Connections.AppView.MaximumResponseBytes)
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false });
         LiveComposition.AddLive(services);
 
         // The HTML projection: each resource type names its component; the formatter goes first so a request
@@ -134,6 +138,7 @@ public sealed class TangentModule : KoanModule
         await data.GetRepository<Connections.Connection, string>().EnsureReady(ct);
         await data.GetRepository<Connections.Receipt, string>().EnsureReady(ct);
         await data.GetRepository<Connections.Publication, string>().EnsureReady(ct);
+        await data.GetRepository<Connections.Elsewhere, string>().EnsureReady(ct);
         using (EntityContext.Partition(Posts.AuditPartition.Name)) await data.GetRepository<Posts.Post, string>().EnsureReady(ct);
     }
 

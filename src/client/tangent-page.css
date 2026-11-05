@@ -793,6 +793,53 @@
   cursor: pointer;
 }
 
+/* What the network says under a published article: its counts on Bluesky in one line, and the newest replies and
+   quotes there, each attributed and linked to where it is read. */
+.elsewhere {
+  margin-top: 16px;
+}
+
+.elsewhere-line {
+  margin: 0;
+  color: var(--ts-text-3);
+  font: var(--ts-type-ui);
+}
+
+.elsewhere-line a {
+  margin-left: 8px;
+}
+
+.elsewhere-references {
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.elsewhere-reference {
+  padding: 12px 16px;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-card);
+  background: var(--ts-surface);
+}
+
+.elsewhere-who,
+.elsewhere-text {
+  margin: 0 0 6px;
+  overflow-wrap: anywhere;
+}
+
+.elsewhere-name {
+  font-weight: 600;
+}
+
+.elsewhere-who time {
+  margin-left: 6px;
+  color: var(--ts-text-3);
+}
+
 /* The applications in the place's settings: each an Offer's line, with Admit and Decline, which opens in place to
    say what declining leaves. */
 .applications {

@@ -15,6 +15,7 @@ namespace Tangent.Connections;
 /// delivered against the Post's own. A public article that is ahead of its receipt is published or updated — one that
 /// arrived after the Connection began, or one they chose — and one that is removed or private is retracted. Only the
 /// author's own words go out as theirs: a version someone else edited waits until they choose it (<see cref="Receipt.Theirs"/>).
+/// An article that goes out starts hearing what the network says about it (<see cref="Elsewhere"/>).
 /// The proprietor's Connection first puts the place as their publication where it is missing or has changed, and a
 /// Connection withdraws the publication it put once the place is private or someone else is its proprietor. Every
 /// write is a put at a fixed key, so a run repeated after a failure lands once. The network is read and written outside
@@ -120,6 +121,7 @@ public static class Syndication
             if (!wanted || !Receipt.Theirs(article, receipt)) return;
             var written = await adapter.Deliver(article, receipt, publication, ct);
             await Sent(new KeepReceipt(connection.Id, article.Id, article.TangentId, article.Version, written, DateTimeOffset.UtcNow), ct);
+            if (receipt?.IsLive() != true) await Elsewhere.Start(article, ct);
             return;
         }
 
