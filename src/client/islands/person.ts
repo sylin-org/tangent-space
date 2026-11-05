@@ -28,9 +28,12 @@ export const person = defineComponent({
     let opener: HTMLElement | null = null
     let pressed: ReturnType<typeof setTimeout> | undefined
     let pressedAt = { x: 0, y: 0 }
+    // Whether the touch press in hand opened the card, and until when the click its own lift makes is its own.
     let pressOpened = false
+    let pressClickUntil = 0
 
-    // The profile address an element names, where it is a link to one or a mark that carries one.
+    // The profile address an element names, where it is a link to one or a mark that carries one; a link with a query or a
+    // fragment, as a profile's own pages are, is never a person's link.
     function profileOf(element: Element | null): { at: HTMLElement; address: string } | null {
       const at = element?.closest<HTMLElement>('a[href], [data-person]')
       if (!at || at.closest('.person-card, .masthead, .article-surface, [contenteditable="true"]')) return null
@@ -41,7 +44,7 @@ export const person = defineComponent({
       } catch {
         return null
       }
-      if (url.origin !== location.origin || !url.pathname.startsWith(profiles)) return null
+      if (url.origin !== location.origin || url.search || url.hash || !url.pathname.startsWith(profiles)) return null
       const rest = url.pathname.slice(profiles.length)
       return rest.length > 0 && !rest.includes('/') ? { at, address: url.href } : null
     }
@@ -138,8 +141,14 @@ export const person = defineComponent({
       into.append(actions)
     }
 
+    // A click on the name that opened the card closes it; anything else that opens it on that name leaves it open.
+    function toggle(at: HTMLElement, address: string) {
+      if (opener === at) close()
+      else void open(at, address)
+    }
+
     async function open(at: HTMLElement, address: string) {
-      if (opener === at) return close()
+      if (opener === at) return
       close()
       opener = at
       card = document.createElement('section')
@@ -177,8 +186,9 @@ export const person = defineComponent({
     }
 
     const onClick = (event: MouseEvent) => {
-      if (pressOpened) {
-        pressOpened = false
+      // The click a long press's own lift makes on the name is the press's, already answered.
+      if (performance.now() < pressClickUntil && opener?.contains(event.target as Node)) {
+        pressClickUntil = 0
         event.preventDefault()
         return
       }
@@ -187,7 +197,7 @@ export const person = defineComponent({
       const found = profileOf(event.target as Element)
       if (!found) return
       event.preventDefault()
-      void open(found.at, found.address)
+      toggle(found.at, found.address)
     }
 
     const onContextMenu = (event: MouseEvent) => {
@@ -200,6 +210,7 @@ export const person = defineComponent({
     const onPointerDown = (event: PointerEvent) => {
       if (card && !card.contains(event.target as Node) && !opener?.contains(event.target as Node)) close()
       clearTimeout(pressed)
+      pressOpened = false
       if (event.pointerType !== 'touch') return
       const found = profileOf(event.target as Element)
       if (!found) return
@@ -211,6 +222,11 @@ export const person = defineComponent({
     }
 
     const endPress = () => clearTimeout(pressed)
+    const onPointerUp = () => {
+      endPress()
+      if (pressOpened) pressClickUntil = performance.now() + 400
+      pressOpened = false
+    }
     // A press that moves is a scroll, not a hold.
     const onPointerMove = (event: PointerEvent) => {
       if (Math.hypot(event.clientX - pressedAt.x, event.clientY - pressedAt.y) > 10) endPress()
@@ -227,7 +243,7 @@ export const person = defineComponent({
     document.addEventListener('click', onClick)
     document.addEventListener('contextmenu', onContextMenu)
     document.addEventListener('pointerdown', onPointerDown)
-    document.addEventListener('pointerup', endPress)
+    document.addEventListener('pointerup', onPointerUp)
     document.addEventListener('pointercancel', endPress)
     document.addEventListener('pointermove', onPointerMove)
     document.addEventListener('keydown', onKeydown)
@@ -237,7 +253,7 @@ export const person = defineComponent({
       document.removeEventListener('click', onClick)
       document.removeEventListener('contextmenu', onContextMenu)
       document.removeEventListener('pointerdown', onPointerDown)
-      document.removeEventListener('pointerup', endPress)
+      document.removeEventListener('pointerup', onPointerUp)
       document.removeEventListener('pointercancel', endPress)
       document.removeEventListener('pointermove', onPointerMove)
       document.removeEventListener('keydown', onKeydown)

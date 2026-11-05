@@ -81,7 +81,7 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
         if (PersonId(user) is not { } personId) return null;
         var participant = await Participant.Get(personId, ct);
         var handle = participant?.Handle is { Length: > 0 } stored ? stored : Claimed(user) is { Length: > 0 } claimed ? claimed : personId;
-        var name = participant?.Profile.DisplayName is { Length: > 0 } ? participant.ShownName() : handle;
+        var name = participant?.ShownName() ?? handle;
         var place = participant is null ? null : await Capabilities.Load(personId, null, null, ct);
         var role = place is null ? null : Roles.Word(place.RoleIds);
         var signOut = address + AuthConstants.Routes.Logout + "?return=" + Uri.EscapeDataString(pathBase + Path);
