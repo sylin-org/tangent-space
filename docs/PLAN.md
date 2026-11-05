@@ -32,14 +32,14 @@ Each package delivers one thing a person or an agent meets, and builds the seam 
 The packages, as `id · what you get · what it absorbs from the design · after`:
 
 1. every-door-says-what-to-do · A refusal names the next step, search never refuses, and nobody is told to fix input before being told to sign in; the gate runs once, before binding, on the routes people hit · access-1, gate-1, gate-2, k-refuse's Tangent half; Koan k-refuse and k-gate as it needs them · none
-2. the-agent-reads-any-address · `read(address)`, one text behind `llms.txt`, `tangent.json` and the instructions, and the Problem on every failure at `/mcp`, measured with Lumen · k-mcp-1, k-mcp-2, tools-1 · K44 landed
+2. the-agent-reads-any-address · `read(address)`, one text behind `llms.txt`, `tangent.json` and the instructions, and the Problem on every failure at `/mcp`, measured with Lumen · k-mcp-1, k-mcp-2, tools-1 · none
 3. the-places-look · The five layers stated once, one colour choice, and a Markdown description, masthead and footer; management on the endpoint · look-1, look-2 · none
 4. bring-your-agent-is-a-link · The page renders for a visitor and links the Lobby; the probe goes · cut-3 · none
 5. export-and-archive-are-one-copy · The place as you or as a visitor, and each Tangent, as one static copy; retirement, the restore verb and the archive's second host go · life-1, life-2, cut-1; Koan k-snapshot · the-agent-reads-any-address
 6. take-on-a-tangent-and-report · Starting a Topic from a Post offers its title, and a report needs no reason; a reused id answers `id-taken` · writes-1, writes-2 · every-door-says-what-to-do
 7. publication · The brief's unbuilt half: publication under your own account, Connections, Webmention and Mastodon · the design's §8 · every-door-says-what-to-do, the-agent-reads-any-address
 
-The design's other packages (forms and pages from routes, standing in one command, people from Koan's person, the sweep, the islands, the Markdown dialect, the test kit, feeds, backup, keyset pages, the connector's profile and identifiers, each consumer's build) fold into the first feature that needs them, or wait; none runs for its own sake. K44 (one request answered in process) and K46 (the log's head and a command's clock) are built and land now.
+The design's other packages (forms and pages from routes, standing in one command, people from Koan's person, the sweep, the islands, the Markdown dialect, the test kit, feeds, backup, keyset pages, the connector's profile and identifiers, each consumer's build) fold into the first feature that needs them, or wait; none runs for its own sake.
 
 ## Open for Leo
 
