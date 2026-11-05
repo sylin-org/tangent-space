@@ -223,7 +223,7 @@ public sealed class TangentPageTests
         using var page = await tangentSpace.Client.SendAsync(request, Cancellation);
         Assert.Equal(HttpStatusCode.Unauthorized, page.StatusCode);
         var html = await page.Content.ReadAsStringAsync(Cancellation);
-        Assert.Contains("Sign in to read this place", html);
+        Assert.Contains("Sign in to read here", html);
         Assert.DoesNotContain("The workshop", html);
     }
 

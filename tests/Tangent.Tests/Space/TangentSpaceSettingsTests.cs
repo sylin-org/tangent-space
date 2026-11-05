@@ -208,7 +208,7 @@ public sealed class TangentSpaceSettingsTests
         {
             var (status, body, robots) = await Page(visitor, path);
             Assert.Equal((HttpStatusCode.Unauthorized, "noindex"), (status, robots));
-            Assert.Contains("Sign in to read this place", body);
+            Assert.Contains("Sign in to read here", body);
             Assert.Contains("return=" + Uri.EscapeDataString(path), body);
             Assert.DoesNotContain("What should we build?", body);
         }

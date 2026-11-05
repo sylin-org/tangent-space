@@ -3,12 +3,12 @@
    with Bluesky, whose own account chooser does the rest, and behind a disclosure the handle form for an account on
    another server, open with the field focused when a sign-in by handle came back. A failure of the sign-in shows above
    the action; a failure of the handle shows under the field it concerns. For a private place it asks to sign in to
-   read it, and says nothing of reading without an account. *@
+   read here, in the sentence a refusal of reading carries, and says nothing of reading without an account. *@
 <main class="sign-in">
     <section class="sign-in-panel panel" aria-labelledby="sign-in-title">
         <PanelHead Frame="@Frame(Model)" />
         <div class="sign-in-body">
-            <h1 id="sign-in-title" class="sign-in-title">@(Model.Private ? "Sign in to read this place" : "Sign in to reply")</h1>
+            <h1 id="sign-in-title" class="sign-in-title">@(Model.Private ? Access.Capabilities.SignInToRead.Text.TrimEnd('.') : "Sign in to reply")</h1>
             <p class="sign-in-lede">Use your Bluesky account, or any AT&nbsp;Protocol account.</p>
             @if (Model.Failure is { } failure)
             {
