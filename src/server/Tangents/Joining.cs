@@ -5,6 +5,7 @@ using Koan.Data.Core.Model;
 using Koan.Data.Core.Sorting;
 using Koan.Identity.Roles;
 using Tangent.Access;
+using Tangent.Space;
 
 namespace Tangent.Tangents;
 
@@ -56,13 +57,35 @@ public sealed class Ask : Entity<Ask>
 /// <summary>Who is in a private Tangent by their own place: a participant's own overwrite on it that allows
 /// <see cref="Bit.View"/>, written allowing reading, posting and starting Topics when they join or are let in, and removed
 /// when they leave. Taking them out writes it denying <see cref="Bit.View"/>, which wins over what their roles allow there
-/// and keeps them from joining or asking until they are let in again. No other store says who is in.</summary>
+/// and keeps them from joining or asking until they are let in again; it is done only where it keeps them out
+/// (<see cref="NotKept"/>). No other store says who is in.</summary>
 public static class Inside
 {
     public static readonly Reason Closed = Reason.Gated("closed", "This Tangent takes in only the people its managers let in.");
     public static readonly Reason AskDeclined = Reason.Gated("declined", "Your ask to join was declined; whoever manages this Tangent can still let you in.");
     public static readonly Reason NotIn = Reason.Conflict("You are not in this Tangent by joining it, so there is nothing to leave.");
-    public static readonly Reason NoOne = Reason.Absent("No one by that id has arrived here.");
+    public static readonly Reason NoOne = Reason.Invalid(TangentPeopleController.PersonField, "No one by that id has arrived here.");
+
+    /// <summary>The answer to taking someone out of a public Tangent, which they read signed out whatever is written.</summary>
+    public static readonly Reason Public = Reason.Conflict("public", "Everyone who reads the place reads a public Tangent, signed in or not: make it private to keep someone out.");
+
+    /// <summary>The answer to taking oneself out.</summary>
+    public static readonly Reason Themselves = Reason.Gated("themselves", "No one takes themselves out of a Tangent.");
+
+    /// <summary>The answer to taking out someone whose role administers, which reads every Tangent.</summary>
+    public static readonly Reason Administers = Reason.Gated("administers", "Someone who administers reads every Tangent, so no one keeps them out.");
+
+    /// <summary>Why taking a participant out of a Tangent with this audience would not keep them out, or null where it would:
+    /// no one takes themselves out (<see cref="Themselves"/>), everyone who reads the place reads a public Tangent, as one
+    /// that states no audience is (<see cref="Public"/>), and someone who administers reads every Tangent
+    /// (<see cref="Administers"/>).</summary>
+    public static Reason? NotKept(Audience? audience, bool themselves, bool administers)
+        => themselves ? Themselves : audience != Audience.Private ? Public : administers ? Administers : null;
+
+    /// <summary>Whether asks to join a Tangent wait on whoever manages it: it is private, and its joining is not join, under
+    /// which anyone joins at once. An ask that does not wait is shown nowhere and asks nothing of anyone; it waits again
+    /// should the Tangent come back to asking.</summary>
+    public static bool AsksWait(Tangent tangent, Audience? audience) => audience == Audience.Private && tangent.Joining != Joining.Join;
 
     /// <summary>The participant's own overwrite on the Tangent, one keyed read; null where there is none.</summary>
     public static Task<PermissionOverwrite?> Own(string tangentId, string personId, CancellationToken ct)

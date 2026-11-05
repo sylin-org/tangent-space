@@ -17,7 +17,8 @@ public sealed record ReportInput(
     [Description(Holds.Id)] string? Id = null);
 
 /// <summary>Where a Post is reported: <c>/t/{tangent}/{topic}/{post}/report</c>, beside its edit. Its <c>POST</c> takes
-/// <see cref="ReportInput"/> and sends <see cref="ReportPost"/>: a form is sent
+/// <see cref="ReportInput"/> and sends <see cref="ReportPost"/>, with the opening its Topic would start with
+/// (<see cref="ReportPost.OpeningOf"/>): a form is sent
 /// on to this address with <c>received</c> naming the report, and a JSON request reads that the report was received;
 /// neither is told where the report is. A refusal reads the form again with the reason inline, or a problem with its word.
 /// The same id from the same reporter about the same Post reads that the report was received, whatever became of it. Its <c>GET</c> is the form, one resource both ways
@@ -45,7 +46,9 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl) : ControllerBase
         var theirs = Tid.IsValid(received) && found.Rows.Space.ModeratorsTangentId is { } moderators
                      && await Post.Get(received!, ct) is { } report && await ReportPost.IsReport(report, moderators, personId, found.Post!.Id, ct);
         var page = await Page(found, personId, theirs, ct);
-        return page.Failure == ReportPost.InModerators.Text ? new ObjectResult(page) { StatusCode = StatusCodes.Status400BadRequest } : Ok(page);
+        return page.Failure == ReportPost.InModerators.Text || page.Failure == ReportPost.Own.Text
+            ? new ObjectResult(page) { StatusCode = StatusCodes.Status400BadRequest }
+            : Ok(page);
     }
 
     [HttpPost(Route)]
@@ -61,7 +64,9 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl) : ControllerBase
         var personId = found.PersonId!;
 
         var body = await PostWrites.Body(input.Body, !found.Post!.Removed);
-        var outcome = await new ReportPost(PostWrites.Id(input.Id), found.Post!.Id, body, personId).Send();
+        var opening = found.Post!.Removed ? null
+            : await ReportPost.OpeningOf(input.Body, found.Post!, found.Root!, found.Tangent!, found.Rows.Space, BaseAddress(), ct);
+        var outcome = await new ReportPost(PostWrites.Id(input.Id), found.Post!.Id, body, personId, Opening: opening).Send();
         switch (outcome)
         {
             case Outcome<Post>.Done { Result: var report }:
@@ -103,8 +108,8 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl) : ControllerBase
 
     /// <summary>The page for the Post the address names: the Post quoted, and the form — with a gate where the reader
     /// may not report it, <see cref="Capabilities.Removed"/> for a tombstone — or, where <paramref name="received"/>, only
-    /// that the report was received. A Post of the moderators'
-    /// Tangent carries no form and no Id, only <see cref="ReportPost.InModerators"/>, as sending one is answered.</summary>
+    /// that the report was received. A Post of the moderators' Tangent, and the reader's own, carry no form and no Id, only
+    /// <see cref="ReportPost.InModerators"/> or <see cref="ReportPost.Own"/>, as sending one is answered.</summary>
     private async Task<ReportPage> Page(Here found, string? personId, bool received, CancellationToken ct)
     {
         var reported = found.Post!;
@@ -115,17 +120,18 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl) : ControllerBase
         var back = baseUrl.PathBase + "/t/" + tangent.Id + "/" + (root.Slug ?? root.Id) + "/" + reported.Id + "/" + Segment;
         var gate = received ? null : reported.Removed ? Capabilities.Removed.Word : null;
         var inModerators = !received && reported.TangentId == found.Rows.Space.ModeratorsTangentId;
+        var own = !received && !inModerators && reported.AuthorId == personId;
 
         return new ReportPage(
             await QuotedPost.Of(reported, root, tangent, baseAddress, ct),
             received,
-            received || inModerators || gate is not null ? null : PostWrites.ReportForm(address + "/" + Segment, Tid.Mint(DateTimeOffset.UtcNow)),
+            received || inModerators || own || gate is not null ? null : PostWrites.ReportForm(address + "/" + Segment, Tid.Mint(DateTimeOffset.UtcNow)),
             gate,
             personId is null ? baseAddress + SignInController.Path + "?return=" + Uri.EscapeDataString(back) : null,
             found.Rows.Space.Name,
             baseAddress + "/",
             await PostWrites.Reader(personId, found.Rows.For(null), baseAddress, back, ct),
-            Failure: inModerators ? ReportPost.InModerators.Text : null);
+            Failure: inModerators ? ReportPost.InModerators.Text : own ? ReportPost.Own.Text : null);
     }
 
     /// <summary>The reported Post's address.</summary>

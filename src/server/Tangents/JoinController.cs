@@ -10,45 +10,45 @@ using Tangent.Render;
 
 namespace Tangent.Tangents;
 
-/// <summary>Joining and leaving a private Tangent: <c>POST /t/{slug}/join</c> sends <see cref="JoinTangent"/>, which
-/// lets the participant in or records their ask, and <c>POST /t/{slug}/leave</c> sends <see cref="LeaveTangent"/>. Both
-/// are judged in the place, since someone outside a private Tangent does not view it: a form is sent on, to the Tangent
-/// once they are in and to the Tangents otherwise, and a JSON request reads where they stand (<see cref="Standing"/>).
-/// </summary>
+/// <summary>Joining and leaving a private Tangent: <c>POST /t/{tangent}/join</c> sends <see cref="JoinTangent"/>, which
+/// lets the participant in or records their ask, and <c>POST /t/{tangent}/leave</c> sends <see cref="LeaveTangent"/>. Both
+/// judge for themselves, off the Doorway, since someone outside a private Tangent does not view it: a visitor is told to
+/// sign in, and the commands judge the rest. A form is sent on, to the Tangent once they are in and to the Tangents
+/// otherwise, and a JSON request reads where they stand (<see cref="Standing"/>).</summary>
 public sealed class JoinController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
     public const string JoinSegment = "join";
     public const string LeaveSegment = "leave";
-    public const string JoinRoute = "/t/{slug}/" + JoinSegment;
-    public const string LeaveRoute = "/t/{slug}/" + LeaveSegment;
+    public const string JoinRoute = "/t/{tangent}/" + JoinSegment;
+    public const string LeaveRoute = "/t/{tangent}/" + LeaveSegment;
 
     /// <summary>Where a participant stands with a Tangent, as a JSON answer says it: its slug, its address, and
     /// <c>in</c>, <c>asked</c>, <c>declined</c> or <c>out</c>.</summary>
     public sealed record Standing(string Slug, string Address, string State);
 
     [HttpPost(JoinRoute)]
-    [Needs(Bit.View, Participant = true)]
     [Tool(Name = "join_tangent", Destructive = false, Idempotent = true, OpenWorld = false)]
     [Description("Join a members-only Tangent read_tangents lists with joining join, or ask to join one with joining ask, which whoever manages it decides; your door tells you. Answers in, asked or declined.")]
-    public async Task<IActionResult> Join([FromRoute, Description(Holds.Tangent)] string slug, CancellationToken ct)
+    public async Task<IActionResult> Join([FromRoute, Description(Holds.Tangent)] string tangent, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
-        var outcome = await new JoinTangent(slug, Here.Of(HttpContext).PersonId!).Send();
+        if (PostWrites.PersonId(User) is not { } personId) return this.Refused(Capabilities.SignIn);
+        var outcome = await new JoinTangent(tangent, personId).Send();
         return outcome is Outcome<Joined>.Done { Result: var joined }
-            ? Sent(slug, joined.State)
+            ? Sent(tangent, joined.State)
             : outcome is Outcome<Joined>.Refused { Reason: var reason } ? this.Refused(reason) : Answers.NotDone(HttpContext, outcome);
     }
 
     [HttpPost(LeaveRoute)]
-    [Needs(Bit.View, Participant = true)]
     [Tool(Name = "leave_tangent", Destructive = true, Idempotent = false, OpenWorld = false)]
     [Description("Leave a members-only Tangent you joined, or withdraw your waiting ask to join it. Your Posts stay; you may no longer read it.")]
-    public async Task<IActionResult> Leave([FromRoute, Description(Holds.Tangent)] string slug, CancellationToken ct)
+    public async Task<IActionResult> Leave([FromRoute, Description(Holds.Tangent)] string tangent, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
-        var outcome = await new LeaveTangent(slug, Here.Of(HttpContext).PersonId!).Send();
+        if (PostWrites.PersonId(User) is not { } personId) return this.Refused(Capabilities.SignIn);
+        var outcome = await new LeaveTangent(tangent, personId).Send();
         return outcome is Outcome<Tangent>.Done
-            ? Sent(slug, "out")
+            ? Sent(tangent, "out")
             : outcome is Outcome<Tangent>.Refused { Reason: var reason } ? this.Refused(reason) : Answers.NotDone(HttpContext, outcome);
     }
 

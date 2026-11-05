@@ -84,8 +84,11 @@ public sealed partial class ReportTests
         Assert.Equal((HttpStatusCode.SeeOther, AddressOf(topic, reply) + "/report?received=" + minted), (sent.Status, sent.Location));
         var report = await Post.Get(minted, Cancellation);
         Assert.NotNull(report);
-        Assert.Equal((Moderators, (string?)null, reply.Id, Ada, "This mocks someone in the workshop.", "Report: Lanterns at dusk"),
-            (report.TangentId, report.ParentId, report.OriginId, report.AuthorId, report.Body, report.Title));
+        Assert.Equal((Moderators, (string?)null, reply.Id, Ada, "Report: Lanterns at dusk"),
+            (report.TangentId, report.ParentId, report.OriginId, report.AuthorId, report.Title));
+        // It opens with the reason, then the reported words, quoted and linked to them.
+        Assert.StartsWith("This mocks someone in the workshop.\n\n> [", report.Body);
+        Assert.EndsWith("](" + AddressOf(topic, reply) + ")", report.Body);
         Assert.Equal(1, (await Tangents.Tangent.Get(Moderators, Cancellation))?.TopicCount);
 
         var received = await Send(ada.Client, HttpMethod.Get, new Uri(sent.Location!).PathAndQuery);
@@ -236,7 +239,8 @@ public sealed partial class ReportTests
         var empty = await Form(ada, rootAction, rootAction, new Dictionary<string, string> { ["id"] = wordless, ["body"] = "   " });
         Assert.Equal(HttpStatusCode.SeeOther, empty.Status);
         var unsaid = await Post.Get(wordless, Cancellation);
-        Assert.Equal((Moderators, topic.Id, "", "Report: Lanterns at dusk"), (unsaid!.TangentId, unsaid.OriginId, unsaid.Body, unsaid.Title));
+        Assert.Equal((Moderators, topic.Id, "Report: Lanterns at dusk"), (unsaid!.TangentId, unsaid.OriginId, unsaid.Title));
+        Assert.Equal("> [Who lights theirs first\\?](" + AddressOf(topic, topic) + ")", unsaid.Body);
         afterFirst = await Counted();
         var tooLong = await Form(ada, action, action, new Dictionary<string, string> { ["id"] = Tids.Mint(), ["body"] = new string('a', Post.BodyLimit + 1) });
         Assert.Equal(HttpStatusCode.BadRequest, tooLong.Status);
@@ -297,6 +301,12 @@ public sealed partial class ReportTests
 
         Assert.Contains("This names a seller", topic.Body);
         Assert.Contains("Taken on a tangent from a post you can’t see", WebUtility.HtmlDecode(Between(topic.Body, "topic-taken-from")));
+        // Its opening says who wrote it and where, and none of its words.
+        var opening = await ReportPost.OpeningOf("Unkind.", secret, secret, (await Tangents.Tangent.Get(Studio, Cancellation))!,
+            (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!, BaseUrl, Cancellation);
+        Assert.Contains("which moderators can’t read", opening!.Text);
+        Assert.DoesNotContain("kiln shop", opening.Text);
+        Assert.DoesNotContain("/t/" + Studio, opening.Text);
         // Where the moderators may view the reported Tangent, the title names the reported Topic.
         var open = await Started(Bea, "Lanterns at dusk", "Who lights theirs first?");
         Assert.Equal("Report: Lanterns at dusk", (await Reported(Ada, open, "Unkind.")).Title);
@@ -356,6 +366,8 @@ public sealed partial class ReportTests
         Assert.True(Present(Shown(json.Json, topic.Id), "report"));
         Assert.False(Present(moderators.Json.GetProperty("root"), "report"));
         Assert.Equal(ReportPost.InModerators, Assert.IsType<Outcome<Post>.Refused>(nested).Reason);
+        var mine = await new ReportPost(Tids.Mint(), own.Id, PostBody.Of("Mine."), Ada).Send(Cancellation);
+        Assert.Equal(ReportPost.Own, Assert.IsType<Outcome<Post>.Refused>(mine).Reason);
 
         // Its report address answers the refusal the post would get: no form, no Id.
         var form = await Send(mo.Client, HttpMethod.Get, PostPath(report, report) + "/report");
