@@ -21,7 +21,7 @@ public sealed record ChangeAccessInput(
 /// <summary>A Tangent's access: <c>/t/{tangent}/settings/access</c>, which roles read and post there beyond its
 /// audience. Its <c>GET</c> is one page of the roles in Koan's order with what each holds there, one resource both ways
 /// (<see cref="TangentAccessPage"/>), by <c>page</c>; a reader who may not manage the Tangent reads the gate with no role
-/// listed, answered <c>401</c> to sign in and <c>403</c> otherwise. Its <c>POST</c> takes <c>role</c>, a role's word, and
+/// listed, answered <c>401</c> to sign in and <c>403</c> otherwise, and a JSON reader the problem with its word. Its <c>POST</c> takes <c>role</c>, a role's word, and
 /// <c>access</c>, one of <see cref="Accesses"/>, as a form or a JSON object, and sends <see cref="ChangeAccess"/>: a form
 /// is sent back to the access, and a JSON request reads the role as the page now lists it; a refusal reads the page again
 /// with the reason above the list, or a problem. Both resolve the address as the Tangent page does
@@ -54,8 +54,10 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, RoleCollecti
         var personId = PostWrites.PersonId(User);
         var (found, refused) = await Here.Find(personId, tangent, null, null, ct);
         if (refused is not null) return this.Refused(refused);
+        var gate = found.Capabilities.Gate(Bit.ManageTangent);
+        if (gate is not null && PostWrites.WantsJson(Request)) return this.Refused(gate);
         var read = await Page(found, personId, RolesController.Numbered(page), ct);
-        return found.Capabilities.Gate(Bit.ManageTangent) is { } gate ? new ObjectResult(read) { StatusCode = Answers.Status(HttpContext, gate) } : Ok(read);
+        return gate is not null ? new ObjectResult(read) { StatusCode = Answers.Status(HttpContext, gate) } : Ok(read);
     }
 
     [HttpPost(Route)]

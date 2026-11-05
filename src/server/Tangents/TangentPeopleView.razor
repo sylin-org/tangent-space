@@ -1,7 +1,8 @@
 @using global::Tangent.Render
-@* A Tangent's people: one panel that says how someone outside it comes in, with a choice for each way; the asks that
-   wait, each let in or declined with one button; who reads and posts here by role, linked to the access, and by
-   person, each taken out with one button; and a search by the start of a handle, each found participant let in. The
+@* A Tangent's people: one panel that says how someone outside it comes in, with a choice for each way while it is
+   private; the asks that wait, each let in or declined with one button; a search by the start of a handle, each found
+   participant with what may be done for them; and who reads and posts here by role, linked to the access, and by
+   person, paged both ways. Taking someone out, offered only where it keeps them out, opens in place to confirm. The
    moderators' Tangent says instead that its access stays. A refusal shows above it all. *@
 <main class="sign-in post-form">
     <section class="sign-in-panel post-form-panel" aria-labelledby="people-heading">
@@ -39,36 +40,10 @@
                     {
                         <li class="door-offer" @key="person.Id">
                             <p class="door-offer-line"><a href="@person.Profile">@person.Name</a> <span class="topic-row-none">· @@@person.Handle@Agent(person)</span></p>
-                            @Choices(person, ("in", "Let in"), ("out", "Decline"))
+                            @Actions(person)
                         </li>
                     }
                 </ul>
-            }
-
-            <h2 class="rail-heading rail-heading-spaced">Who reads and posts here</h2>
-            <ul class="door-offers applications people tangent-people">
-                <li class="door-offer"><p class="door-offer-line">Administrators <span class="topic-row-none">· read and post in every Tangent</span></p></li>
-                @foreach (var role in Model.Roles)
-                {
-                    <li class="door-offer" @key="role.Word">
-                        <p class="door-offer-line">@role.Name <span class="topic-row-none">· @(role.Access == "post" ? "read and post here" : "read here") · <a href="@Model.Access">change</a></span></p>
-                    </li>
-                }
-                @foreach (var person in Model.People)
-                {
-                    <li class="door-offer" @key="person.Id">
-                        <p class="door-offer-line"><a href="@person.Profile">@person.Name</a> <span class="topic-row-none">· @@@person.Handle@Agent(person) · @StateLine(person.State)</span></p>
-                        @Actions(person)
-                    </li>
-                }
-            </ul>
-            @if (Model.People.Count == 0)
-            {
-                <p class="post-form-note">No one is in or kept out by name yet.</p>
-            }
-            @if (Model.Next is { } next)
-            {
-                <nav class="topic-pages" aria-label="More people"><a class="topic-pages-next" href="@next">More people →</a></nav>
             }
 
             @if (!Model.Fixed)
@@ -97,6 +72,42 @@
                     </ul>
                 }
             }
+
+            <h2 class="rail-heading rail-heading-spaced">Who reads and posts here</h2>
+            <ul class="door-offers applications people tangent-people">
+                <li class="door-offer"><p class="door-offer-line">Administrators <span class="topic-row-none">· read and post in every Tangent</span></p></li>
+                @foreach (var role in Model.Roles)
+                {
+                    <li class="door-offer" @key="role.Word">
+                        <p class="door-offer-line">@role.Name <span class="topic-row-none">· @(role.Access == "post" ? "read and post here" : "read here") · <a href="@Model.Access">change</a></span></p>
+                    </li>
+                }
+                @foreach (var person in Model.People)
+                {
+                    <li class="door-offer" @key="person.Id">
+                        <p class="door-offer-line"><a href="@person.Profile">@person.Name</a> <span class="topic-row-none">· @@@person.Handle@Agent(person) · @StateLine(person.State)</span></p>
+                        @Actions(person)
+                    </li>
+                }
+            </ul>
+            @if (Model.People.Count == 0)
+            {
+                <p class="post-form-note">No one is in or kept out by name yet.</p>
+            }
+            @if (Model.First is not null || Model.Next is not null)
+            {
+                <nav class="topic-pages" aria-label="More people">
+                    @if (Model.First is { } first)
+                    {
+                        <a href="@first">First people</a>
+                    }
+                    @if (Model.Next is { } next)
+                    {
+                        <a class="topic-pages-next" href="@next">More people →</a>
+                    }
+                </nav>
+            }
+
             <div class="post-form-actions">
                 <a class="post-form-cancel" href="@Model.Settings">Back to the settings</a>
             </div>
@@ -107,27 +118,36 @@
 @code {
     [Parameter, EditorRequired] public TangentPeoplePage Model { get; set; } = default!;
 
-    /// <summary>The buttons that let one person in or out, each its own small form.</summary>
-    private RenderFragment Choices(TangentPeoplePage.Person person, params (string Choice, string Label)[] choices) => @<div class="door-offer-answers people-answers">
+    /// <summary>What may be done for one person, by the choices the page offers for them, each its own small form: an ask
+    /// let in or declined with one button, anyone else let in with one, and someone in taken out once confirmed in place.</summary>
+    private RenderFragment Actions(TangentPeoplePage.Person person) => @<div class="door-offer-answers people-answers">
         @if (Model.Change is { } change)
         {
-            @foreach (var (choice, label) in choices)
+            @foreach (var choice in person.Choices)
             {
-                <form class="let-into-tangent" method="post" action="@change.Action">
-                    <input type="hidden" name="@TangentPeopleController.PersonField" value="@person.Id">
-                    <button type="submit" class="button" name="@TangentPeopleController.ChoiceField" value="@choice">@label</button>
-                </form>
+                @if (choice == TangentPeopleController.OutChoice && person.State != "asked")
+                {
+                    <details class="application-decline people-take-out">
+                        <summary class="button">Take out</summary>
+                        <div class="post-remove-confirm">
+                            <p class="post-remove-note">They stop reading it at once, and cannot join or ask again until you let them in.</p>
+                            @Choice(change, person, choice, "Take out", "post-remove-submit")
+                        </div>
+                    </details>
+                }
+                else
+                {
+                    @Choice(change, person, choice, choice == TangentPeopleController.InChoice ? "Let in" : "Decline", "button")
+                }
             }
         }
     </div>;
 
-    /// <summary>What may be done about one person, by where they stand.</summary>
-    private RenderFragment Actions(TangentPeoplePage.Person person) => person.State switch
-    {
-        "in" or TangentPeopleController.RoleState => Choices(person, ("out", "Take out")),
-        "asked" => Choices(person, ("in", "Let in"), ("out", "Decline")),
-        _ => Choices(person, ("in", "Let in"))
-    };
+    private static RenderFragment Choice(Form change, TangentPeoplePage.Person person, string choice, string label, string style) =>
+        @<form class="let-into-tangent" method="post" action="@change.Action">
+            <input type="hidden" name="@TangentPeopleController.PersonField" value="@person.Id">
+            <button type="submit" class="@style" name="@TangentPeopleController.ChoiceField" value="@choice">@label</button>
+        </form>;
 
     private static string Agent(TangentPeoplePage.Person person) => person.Kind == "agent" ? " · agent" : "";
 

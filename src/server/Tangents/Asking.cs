@@ -9,9 +9,10 @@ namespace Tangent.Tangents;
 /// (<see cref="For"/>), and to the asker, who decided (<see cref="Decided"/>).</summary>
 public static class Asking
 {
-    /// <summary>The asks that wait in the Tangents <paramref name="personId"/> manages, by Tangent, newest first: one read
-    /// of at most <see cref="Ask.ReadSize"/> and one more waiting asks, what capability reads for the Tangents they name,
-    /// and one keyed read of those Tangents. A count is a lower bound where the read was full.</summary>
+    /// <summary>The asks that wait in the Tangents <paramref name="personId"/> manages, by Tangent, newest first, where asks
+    /// wait there (<see cref="Inside.AsksWait"/>): one read of at most <see cref="Ask.ReadSize"/> and one more waiting asks,
+    /// what capability reads for the Tangents they name, one keyed read of those Tangents, and the audience of each that
+    /// still asks. A count is a lower bound where the read was full.</summary>
     public static async Task<IReadOnlyList<Door.Asking>> For(string personId, string baseAddress, CancellationToken ct)
     {
         var waiting = await Ask.Waiting(null, Ask.ReadSize + 1, ct);
@@ -22,10 +23,11 @@ public static class Asking
         var managed = ids.Where(id => each[id].Holds(Bit.ManageTangent)).ToList();
         if (managed.Count == 0) return [];
         var rows = (await Tangent.Get(managed, ct)).OfType<Tangent>().ToDictionary(row => row.Id, StringComparer.Ordinal);
-        return managed.Where(rows.ContainsKey)
-            .Select(id => new Door.Asking(rows[id].Name, waiting.Count(ask => ask.TangentId == id), full,
-                TangentPeopleController.PeopleAddress(baseAddress, id)))
-            .ToList();
+        var asking = new List<Door.Asking>();
+        foreach (var id in managed.Where(id => rows.TryGetValue(id, out var row) && row.Joining != Joining.Join))
+            if (Inside.AsksWait(rows[id], await Overwrites.AudienceOf(id, ct)))
+                asking.Add(new Door.Asking(rows[id].Name, waiting.Count(ask => ask.TangentId == id), full, TangentPeopleController.PeopleAddress(baseAddress, id)));
+        return asking;
     }
 
     /// <summary>The decisions about the reader's asks, from their rows of the log, with one keyed read of the Tangents

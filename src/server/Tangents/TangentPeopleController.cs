@@ -23,11 +23,11 @@ public sealed record JoiningInput([Description(Holds.Joining)] string? Joining =
 
 /// <summary>A Tangent's people at <c>/t/{tangent}/settings/people</c>, for whoever holds <see cref="Bit.ManageTangent"/>
 /// there (<see cref="TangentPeoplePage"/>). Its <c>GET</c> is one page of who is in by role and by person, from Koan's
-/// overwrites on the Tangent's resource, continued by <c>after</c>, with the asks that wait and, by <c>find</c>, the
-/// participants whose handles start with it. Its <c>POST</c> takes <c>person</c> and <c>choice</c> and sends
-/// <see cref="LetIn"/>; <c>POST /t/{tangent}/settings/joining</c> takes <c>joining</c> and sends
-/// <see cref="ChangeJoining"/>. A form is sent back to the people; a JSON request reads the page as it now
-/// stands.</summary>
+/// overwrites on the Tangent's resource, continued by <c>after</c>, with the asks that wait (<see cref="Inside.AsksWait"/>)
+/// and, by <c>find</c>, the participants whose handles start with it, each with the choices the reader may send for them.
+/// Its <c>POST</c> takes <c>person</c> and <c>choice</c> and sends <see cref="LetIn"/>; <c>POST /t/{tangent}/settings/joining</c>
+/// takes <c>joining</c> and sends <see cref="ChangeJoining"/>, offered while the Tangent is private. A form is sent back to
+/// the people; a JSON request reads the page as it now stands.</summary>
 [Managing]
 public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollection roles) : ControllerBase
 {
@@ -39,6 +39,8 @@ public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollecti
     public const string AfterQuery = "after";
     public const string PersonField = "person";
     public const string ChoiceField = "choice";
+    public const string InChoice = "in";
+    public const string OutChoice = "out";
     public const string JoiningField = "joining";
 
     /// <summary>Where a person stands whose own overwrite keeps them out.</summary>
@@ -78,8 +80,8 @@ public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollecti
     {
         Response.Headers.CacheControl = "no-store";
         var found = Here.Of(HttpContext);
-        if (input.Choice is not ("in" or "out")) return await Refused(found, ChoiceRule, ct);
-        var outcome = await new LetIn(found.Tangent!.Id, found.PersonId!, input.Person ?? "", input.Choice == "in").Send();
+        if (input.Choice is not (InChoice or OutChoice)) return await Refused(found, ChoiceRule, ct);
+        var outcome = await new LetIn(found.Tangent!.Id, found.PersonId!, input.Person ?? "", input.Choice == InChoice).Send();
         return await Answered(found, outcome, ct);
     }
 
@@ -138,6 +140,8 @@ public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollecti
         var people = settings + "/" + Segment;
         var space = found.Rows.Space;
         var isFixed = space.ModeratorsTangentId == row.Id;
+        var audience = await Overwrites.AudienceOf(row.Id, ct) ?? Audience.Public;
+        var asksWait = Inside.AsksWait(row, audience);
 
         var read = await roles.Overwrites(Overwrites.Resource(row.Id), after, PageSize, ct);
         var roleRows = new List<TangentPeoplePage.RoleHere>();
@@ -147,7 +151,7 @@ public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollecti
         var personal = read.Items.Where(o => o.SubjectKind == OverwriteSubjectKind.Person && (Inside.In(o) || Inside.Out(o))).ToList();
         var inIds = personal.Select(o => o.SubjectId).ToList();
 
-        var asks = await Ask.Waiting(row.Id, Ask.ReadSize, ct);
+        var asks = asksWait ? await Ask.Waiting(row.Id, Ask.ReadSize, ct) : [];
         var start = Participants.People.Start(find);
         var matched = start is null ? [] : (await Participants.People.Read(start, null, ct)).Participants;
         var named = await Named(inIds.Concat(asks.Select(ask => ask.PersonId)).Distinct(StringComparer.Ordinal).ToList(), ct);
@@ -160,15 +164,28 @@ public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollecti
                 PermissionOverwrite.KeyFor(Overwrites.Resource(row.Id), OverwriteSubjectKind.Person, p.Id)).ToList(), ct);
             var asked = await Ask.Get(matched.Select(p => Ask.Key(row.Id, p.Id)).ToList(), ct);
             // Each found participant by what they can do here: kept out, in by their own place, reading through a role, or
-            // asked, declined or out.
-            var states = new List<string>(matched.Count);
+            // asked, declined or out, where asks wait.
+            var listed = new List<TangentPeoplePage.Person>(matched.Count);
             for (var index = 0; index < matched.Count; index++)
-                states.Add(Inside.Out(own[index]) ? KeptOutState
-                    : Inside.In(own[index]) ? Joined.InState
-                    : (await Capabilities.Load(matched[index].Id, row.Id, null, ct)).Exists ? RoleState
-                    : asked[index] is { } ask ? ask.Declined ? Joined.DeclinedState : Joined.AskedState
-                    : "out");
-            foundPeople = matched.Select((participant, index) => Person(participant, baseAddress, states[index])).ToList();
+            {
+                var participant = matched[index];
+                var administers = false;
+                string state;
+                if (Inside.Out(own[index])) state = KeptOutState;
+                else if (Inside.In(own[index])) state = Joined.InState;
+                else
+                {
+                    var there = await Capabilities.Load(participant.Id, row.Id, null, ct);
+                    administers = there.Bag.Contains(RoleTokens.Administrator);
+                    state = there.Exists ? RoleState
+                        : asksWait && asked[index] is { } ask ? ask.Declined ? Joined.DeclinedState : Joined.AskedState
+                        : "out";
+                }
+
+                listed.Add(Person(participant, baseAddress, state, Choices(state, participant.Id, administers)));
+            }
+
+            foundPeople = listed;
         }
 
         return new TangentPeoplePage(
@@ -177,22 +194,35 @@ public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollecti
             address,
             settings,
             settings + "/" + TangentAccessController.Segment,
-            TangentWrites.Word(await Overwrites.AudienceOf(row.Id, ct) ?? Audience.Public),
+            TangentWrites.Word(audience),
             isFixed,
             Word(row.Joining),
             Joinings,
-            isFixed ? null : Form.Posting(settings + "/" + JoiningSegment, new Form.Field(JoiningField, Holds.Joining, Word(row.Joining))),
-            asks.Where(ask => named.ContainsKey(ask.PersonId)).Select(ask => Person(named[ask.PersonId], baseAddress, Joined.AskedState)).ToList(),
+            isFixed || audience != Audience.Private
+                ? null
+                : Form.Posting(settings + "/" + JoiningSegment, new Form.Field(JoiningField, Holds.Joining, Word(row.Joining))),
+            asks.Where(ask => named.ContainsKey(ask.PersonId)).Select(ask => Shown(ask.PersonId, Joined.AskedState)).ToList(),
             roleRows,
-            personal.Where(o => named.ContainsKey(o.SubjectId))
-                .Select(o => Person(named[o.SubjectId], baseAddress, Inside.Out(o) ? KeptOutState : Joined.InState)).ToList(),
+            personal.Where(o => named.ContainsKey(o.SubjectId)).Select(o => Shown(o.SubjectId, Inside.Out(o) ? KeptOutState : Joined.InState)).ToList(),
             read.Next is { } next ? people + "?" + AfterQuery + "=" + Uri.EscapeDataString(next) : null,
             start,
             foundPeople,
             isFixed ? null : Form.Posting(people, new Form.Field(PersonField, Holds.Member), new Form.Field(ChoiceField, Holds.Letting)),
             space.Name,
             baseAddress + "/",
-            await PostWrites.Reader(found.PersonId, found.Capabilities, baseAddress, baseUrl.PathBase + "/t/" + row.Id + "/" + TangentWrites.SettingsSegment + "/" + Segment, ct));
+            await PostWrites.Reader(found.PersonId, found.Capabilities, baseAddress, baseUrl.PathBase + "/t/" + row.Id + "/" + TangentWrites.SettingsSegment + "/" + Segment, ct),
+            First: after is null ? null : people);
+
+        // What the reader may send for someone where they stand: an ask let in or declined; someone in taken out, only
+        // where that keeps them out (Inside.NotKept); anyone else let in. Nothing in the moderators' Tangent.
+        IReadOnlyList<string> Choices(string state, string personId, bool administers) => isFixed ? [] : state switch
+        {
+            Joined.AskedState => [InChoice, OutChoice],
+            Joined.InState or RoleState => Inside.NotKept(audience, personId == found.PersonId, administers) is null ? [OutChoice] : [],
+            _ => [InChoice]
+        };
+
+        TangentPeoplePage.Person Shown(string personId, string state) => Person(named[personId], baseAddress, state, Choices(state, personId, false));
     }
 
     private static async Task<Dictionary<string, Participant>> Named(IReadOnlyList<string> ids, CancellationToken ct)
@@ -200,12 +230,12 @@ public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollecti
             ? new Dictionary<string, Participant>(StringComparer.Ordinal)
             : (await Participant.Get(ids, ct)).OfType<Participant>().ToDictionary(p => p.Id, StringComparer.Ordinal);
 
-    private static TangentPeoplePage.Person Person(Participant participant, string baseAddress, string state)
+    private static TangentPeoplePage.Person Person(Participant participant, string baseAddress, string state, IReadOnlyList<string> choices)
     {
         var handle = participant.Handle.Length > 0 ? participant.Handle : participant.Id;
         var name = participant.Profile.DisplayName is { Length: > 0 } shown ? shown : handle;
         return new TangentPeoplePage.Person(participant.Id, name, handle, participant.Kind.ToString().ToLowerInvariant(),
-            ProfilePage.AddressOf(baseAddress, handle), state);
+            ProfilePage.AddressOf(baseAddress, handle), state, choices);
     }
 
     private string BaseAddress() => baseUrl.Resolve(HttpContext);

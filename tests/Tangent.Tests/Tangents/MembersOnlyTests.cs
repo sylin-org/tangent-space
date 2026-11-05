@@ -59,6 +59,14 @@ public sealed class MembersOnlyTests
         Assert.Equal(HttpStatusCode.NotFound, (await Json(ada, "/t", "/t/" + Studio + "/join", new { })).Status);
         Assert.DoesNotContain(Studio, (await Send(ada.Client, HttpMethod.Get, "/t", json: true)).Json.GetProperty("tangents").EnumerateArray()
             .Select(tangent => tangent.GetProperty("slug").GetString()));
+
+        // Taking out is done only where it keeps someone out: never oneself, and never in a public Tangent, read signed out.
+        var themselves = await Json(leo, people, people, new { person = Leo, choice = "out" });
+        Assert.Equal((HttpStatusCode.Forbidden, Inside.Themselves.Word), (themselves.Status, themselves.Word));
+        var workshop = "/t/" + Workshop + "/settings/people";
+        var everyone = await Json(leo, workshop, workshop, new { person = Ada, choice = "out" });
+        Assert.Equal((HttpStatusCode.Conflict, Inside.Public.Word), (everyone.Status, everyone.Word));
+        Assert.Equal(HttpStatusCode.OK, (await Send(ada.Client, HttpMethod.Get, "/t/" + Workshop)).Status);
     }
 
     private static JsonElement Listed(JsonElement page, string slug)

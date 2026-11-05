@@ -1,5 +1,6 @@
 using Koan.Data.Core;
 using Koan.Data.Core.Commands;
+using Koan.Identity.Roles;
 using Tangent.Access;
 using Tangent.Events;
 using Tangent.Participants;
@@ -19,8 +20,8 @@ public sealed record Joined(Tangent Tangent, string State)
 /// <summary>A participant joins the Tangent <see cref="Slug"/>, or asks to, as its joining says. They take part in the
 /// place (<see cref="Bit.Post"/> there), or are refused with its gate; a Tangent they read already leaves them as they are;
 /// one whose joining is closed, one that keeps them out (<see cref="Inside.Out"/>), or one that no row has, is absent to them. Joining lets them in at once
-/// (<see cref="Inside.LetIn"/>); asking writes their <see cref="Ask"/>, once, and a declined ask is not made
-/// again.</summary>
+/// (<see cref="Inside.LetIn"/>), whatever they asked before, and ends that ask; asking writes their <see cref="Ask"/>, once,
+/// and a declined ask is not made again.</summary>
 public sealed record JoinTangent(string Slug, string ActorId, DateTimeOffset? At = null) : ICommand<Joined>
 {
     public async Task<Outcome<Joined>> Run(CancellationToken ct)
@@ -37,6 +38,7 @@ public sealed record JoinTangent(string Slug, string ActorId, DateTimeOffset? At
         if (tangent.Joining == Joining.Join)
         {
             await Inside.LetIn(RoleSettings.Collection(), Slug, ActorId, ct);
+            if (await Ask.Get(Ask.Key(Slug, ActorId), ct) is { } before) await Ask.Remove(before.Id, ct);
             return new Outcome<Joined>.Done(new Joined(tangent, Joined.InState));
         }
 
@@ -74,10 +76,12 @@ public sealed record LeaveTangent(string Slug, string ActorId) : ICommand<Tangen
 
 /// <summary>Whoever manages the Tangent <see cref="Slug"/> lets the participant <see cref="PersonId"/> in, or keeps them
 /// out. The actor holds <see cref="Bit.ManageTangent"/> there, or is refused with its gate; the moderators' Tangent keeps
-/// its access (<see cref="ChangeTangent.Fixed"/>); the participant has arrived. Letting in writes their own overwrite and
-/// ends their ask, replacing any overwrite that kept them out; keeping out declines a waiting ask, or else writes their own
-/// overwrite denying <see cref="Bit.View"/> (<see cref="Inside.KeepOut"/>), which wins over their roles. Deciding an ask appends one
-/// <see cref="EventKind.TangentLet"/> with the participant as its target, so their door tells them.</summary>
+/// its access (<see cref="ChangeTangent.Fixed"/>); the participant has arrived (<see cref="Inside.NoOne"/>). Letting in writes
+/// their own overwrite and ends their ask, replacing any overwrite that kept them out; keeping out declines a waiting ask,
+/// or else writes their own overwrite denying <see cref="Bit.View"/> (<see cref="Inside.KeepOut"/>), which wins over their
+/// roles, only where it keeps them out (<see cref="Inside.NotKept"/>): not the actor, not in a public Tangent, and not
+/// someone who administers. Deciding an ask appends one <see cref="EventKind.TangentLet"/> with the participant as its
+/// target, so their door tells them.</summary>
 public sealed record LetIn(string Slug, string ActorId, string PersonId, bool In, DateTimeOffset? At = null) : ICommand<Tangent>
 {
     public async Task<Outcome<Tangent>> Run(CancellationToken ct)
@@ -108,6 +112,9 @@ public sealed record LetIn(string Slug, string ActorId, string PersonId, bool In
         }
         else
         {
+            var administers = (await Capabilities.Load(PersonId, null, null, ct)).Bag.Contains(RoleTokens.Administrator);
+            if (Inside.NotKept(await Overwrites.AudienceOf(Slug, ct), PersonId == ActorId, administers) is { } kept)
+                return new Outcome<Tangent>.Refused(kept);
             await Inside.KeepOut(roles, Slug, PersonId, ct);
         }
 

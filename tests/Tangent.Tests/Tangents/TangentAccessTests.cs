@@ -65,10 +65,13 @@ public sealed class TangentAccessTests
         Assert.DoesNotContain(nameof(Bit.Topic), (await Send(ada.Client, HttpMethod.Get, "/t/" + Studio, json: true)).Json
             .GetProperty("can").EnumerateArray().Select(verb => verb.GetString()));
 
-        // A member who reads the Tangent reads the gate on its access, and no role.
+        // A member who reads the Tangent reads the gate on its access, and no role; a JSON reader the problem with its word.
         var unmanaged = await Send(ada.Client, HttpMethod.Get, access, json: true);
-        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageTangent).Word), (unmanaged.Status, unmanaged.Json.GetProperty("gate").GetString()));
-        Assert.Empty(unmanaged.Json.GetProperty("roles").EnumerateArray());
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageTangent).Word), (unmanaged.Status, unmanaged.Json.GetProperty("word").GetString()));
+        Assert.False(unmanaged.Json.TryGetProperty("roles", out _));
+        var unmanagedPage = await Send(ada.Client, HttpMethod.Get, access);
+        Assert.Equal(HttpStatusCode.Forbidden, unmanagedPage.Status);
+        Assert.Contains("This isn’t open to you here.", WebUtility.HtmlDecode(unmanagedPage.Body));
 
         // A member manages nothing here; a role no one has is not found; an administrator's access is not set.
         var refused = await Json(ada, "/t/" + Studio, access, new { role = "member", access = "post" });

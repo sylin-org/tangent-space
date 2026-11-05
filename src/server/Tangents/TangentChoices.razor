@@ -1,13 +1,14 @@
 @using global::Tangent.Posts
 @using global::Tangent.Space
 @* A Tangent's description, its default kind and its audience as fields of a form: the description in a box, the kind and
-   the audience each a choice of two cards. Quiet, they sit behind one line that says what they stand at, opening in
-   place, and open by themselves when one is not at its default or a refusal concerns the description. Where the
+   the audience each a choice of two cards. Quiet, they sit behind one line that names them, which stays true whatever
+   is chosen, opening in place to their defaults, and open by themselves when one is not at its default or a refusal
+   concerns the description. Where the
    audience is fixed, a sentence says so instead of the cards. *@
 @if (Quiet)
 {
     <details class="post-form-more" open="@Open">
-        <summary class="sign-in-other-toggle">@Summary()</summary>
+        <summary class="sign-in-other-toggle">Description, kind and audience</summary>
         <div class="post-form-more-body">@Fields</div>
     </details>
 }
@@ -35,7 +36,7 @@ else
 
     [Parameter] public bool ReadOnly { get; set; }
 
-    /// <summary>Behind one line that says what the fields stand at.</summary>
+    /// <summary>Behind one line that names the fields.</summary>
     [Parameter] public bool Quiet { get; set; }
 
     /// <summary>The sentence shown where the audience is fixed.</summary>
@@ -43,8 +44,6 @@ else
 
     private bool Open => DescriptionFailure is not null || Description.Length > 0 || Kind != PostWrites.Word(PostKind.Topic)
                          || Audience != TangentWrites.Word(Space.Audience.Public);
-
-    private string Summary() => KindName(Kind) + " · " + AudienceName(Audience) + " · " + (Description.Length > 0 ? "described" : "no description");
 
     private static string KindName(string kind) => kind == PostWrites.Word(PostKind.Article) ? "Articles" : "Discussions";
 
