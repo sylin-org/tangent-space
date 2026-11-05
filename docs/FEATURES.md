@@ -4,17 +4,14 @@ A row is something the place does not do yet, said by what someone gets, and it 
 
 ## Publication and Connections
 
-Publication waits on Koan's atproto connector writing records and blobs in an account's repository, resolution and AppView reads.
+References from the network wait on Koan's atproto connector resolving records and reading an AppView.
 
 | Work | Koan | Size |
 | --- | --- | --- |
-| Connections: the row per participant, the dispatch job as a log reader with a cursor, receipts by version, attention on repeated failure. A person grants a Connection's write permission when they first choose to publish, never at sign-in. The adapter compares the version a Receipt delivered with the Post's and decides to publish, update, retract or requote, while a failure leaves the cursor where it was | `Sylin.Koan.Jobs` | M |
-| The atproto package: the Tangent Space as `site.standard.publication` under the proprietor's Connection; each public article as `site.standard.document` with the cover blob and a Bluesky post embedding it; `<link rel="site.standard.document">`; retract on removal or audience change | Koan's atproto connector writing records and blobs in an account's repository, resolution and AppView reads | M |
 | The protocol contract recorded from code in an ADR of its own: `IConnectionAdapter`, `IReferenceSource`, `IAsserter`; the three events as a filter over the log | — | S |
 | References on a Post: Constellation and Spacedust as an optional source; "elsewhere" on the topic page | — | M |
 | Webmention: send on `post.created`, receive at an endpoint; Bridgy Fed opt-in | — | S |
 | The Mastodon package: a status under the participant's own account; replies as references | — | M |
-| Connections settings: each Connection, its account, every Post's state derived from Receipt against Version | — | S |
 
 ## People
 
@@ -41,4 +38,4 @@ Publication waits on Koan's atproto connector writing records and blobs in an ac
 | --- | --- | --- |
 | Phone layouts for the door and the Tangent; on a phone the door hides its rail, so New Tangent is reached only from a Tangent's switcher | — | S |
 | Phone layout for the topic | — | S |
-| The visual gate: every screen holds a mean of 8.5 with no dimension below 7, scored by an independent reviewer, at 1440, 1024 and 390 in Light and Dark. Owing it: sign-in, first-run, tangent, door, bring-your-agent, topic, article-editor, article, new-topic, edit, take-this-on-a-tangent, new-tangent, tangent-settings-details, tangent-space-settings-general, tangent-space-settings-admission, tangent-space-settings-appearance, tangent-space-settings-export, tangent-space-settings-applications, profile, tangent-space-settings-people, tangent-space-settings-roles, tangent-settings-access, tangents, search and suggestions; and, named in words since the capture registry has no screen for them, every screen under each bundled base, every screen under Concord, the archive's pages, which owe the placement of their retired line, and a report. Seen at 390: a long Topic title overlaps the path bar's separator, and a report's path bar crumbs overlap. Seen under the bundled bases: MVP.css reaches past Tangent's parts in its button margins and table box, and Marx in its scrollbar gutter | — | L |
+| The visual gate: every screen holds a mean of 8.5 with no dimension below 7, scored by an independent reviewer, at 1440, 1024 and 390 in Light and Dark. Owing it: sign-in, first-run, tangent, door, bring-your-agent, topic, article-editor, article, connections, new-topic, edit, take-this-on-a-tangent, new-tangent, tangent-settings-details, tangent-space-settings-general, tangent-space-settings-admission, tangent-space-settings-appearance, tangent-space-settings-export, tangent-space-settings-applications, profile, tangent-space-settings-people, tangent-space-settings-roles, tangent-settings-access, tangents, search and suggestions; and, named in words since the capture registry has no screen for them, every screen under each bundled base, every screen under Concord, the archive's pages, which owe the placement of their retired line, and a report. Seen at 390: a long Topic title overlaps the path bar's separator, and a report's path bar crumbs overlap. Seen under the bundled bases: MVP.css reaches past Tangent's parts in its button margins and table box, and Marx in its scrollbar gutter | — | L |

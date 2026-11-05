@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $destination = Join-Path $repoRoot '.local/upstream/koan-framework'
 $repository = 'https://github.com/sylin-org/koan-framework.git'
-$revision = 'be15d638c552debd624c315d4075c5cbc82a7920'
+$revision = '6249eb5c1194189f45ac2da5b0ca551f2cf26588'
 if (-not (Test-Path -LiteralPath $destination)) {
     git clone $repository $destination
     if ($LASTEXITCODE -ne 0) { throw 'The pinned Koan checkout could not be cloned.' }

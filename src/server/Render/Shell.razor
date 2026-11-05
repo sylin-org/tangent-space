@@ -42,6 +42,10 @@
     {
         <link rel="alternate" type="@feed.Type" title="@feed.Title" href="@feed.Address">
     }
+    @if (Frame?.Document is { } document)
+    {
+        <link rel="site.standard.document" href="@document">
+    }
     @if (Card is not null)
     {
         @((MarkupString)Card)
@@ -109,6 +113,7 @@
                                 <li><a class="account-item" href="@settings">@Icon(SettingsIcon)Settings</a></li>
                             }
                             <li><a class="account-item" href="@(frame.Door.TrimEnd('/') + Participants.BringYourAgentController.Path)">@Icon(AgentIcon)Bring your agent</a></li>
+                            <li><a class="account-item" href="@(frame.Door.TrimEnd('/') + Connections.ConnectionsController.Path)">@Icon(ConnectionsIcon)Connections</a></li>
                             <li><form method="post" action="@who.SignOut"><button class="account-item account-action">@Icon(SignOutIcon)Sign out</button></form></li>
                         </ul>
                     </div>
@@ -234,6 +239,7 @@ else
     private const string SignOutIcon = "<path d=\"M8 4.5H5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h3\"></path><path d=\"M12.5 6.5L16 10l-3.5 3.5\"></path><path d=\"M16 10H8\"></path>";
     private const string ForYouIcon = "<path d=\"M5.5 13.5V9a4.5 4.5 0 0 1 9 0v4.5l1.5 1.5H4z\"></path><path d=\"M8.5 17a1.5 1.5 0 0 0 3 0\"></path>";
     private const string AgentIcon = "<rect x=\"4\" y=\"7\" width=\"12\" height=\"9\" rx=\"2\"></rect><path d=\"M10 7V3.5\"></path><path d=\"M7.5 11.5h.01M12.5 11.5h.01\"></path>";
+    private const string ConnectionsIcon = "<path d=\"M8.5 11.5a3 3 0 0 0 4.2 0l2.6-2.6a3 3 0 0 0-4.2-4.2l-.9.9\"></path><path d=\"M11.5 8.5a3 3 0 0 0-4.2 0l-2.6 2.6a3 3 0 0 0 4.2 4.2l.9-.9\"></path>";
     private const string CheckIcon = "<path d=\"M5 10.5l3.2 3.2L15 7\"></path>";
     private const string NewIcon = "<path d=\"M10 4.5v11M4.5 10h11\"></path>";
     private const string AllIcon = "<rect x=\"3.5\" y=\"3.5\" width=\"5\" height=\"5\" rx=\"1\"></rect><rect x=\"11.5\" y=\"3.5\" width=\"5\" height=\"5\" rx=\"1\"></rect><rect x=\"3.5\" y=\"11.5\" width=\"5\" height=\"5\" rx=\"1\"></rect><rect x=\"11.5\" y=\"11.5\" width=\"5\" height=\"5\" rx=\"1\"></rect>";

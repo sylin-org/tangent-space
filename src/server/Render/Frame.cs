@@ -5,9 +5,10 @@ namespace Tangent.Render;
 /// page is, as crumbs in the path bar, and the feeds the page advertises. A resource that
 /// names a frame gets the masthead, the path bar and the footer; one that names none gets its component alone in the
 /// page. The masthead holds the search box, with <see cref="Searched"/> in it, unless the page is not
-/// <see cref="Searchable"/>: a step of signing in or setting up, where nothing is there to find yet.</summary>
+/// <see cref="Searchable"/>: a step of signing in or setting up, where nothing is there to find yet. <see cref="Document"/> is the
+/// <c>site.standard.document</c> record of an article published under its author's account, which the head names.</summary>
 public sealed record Frame(string Place, string Door, IReadOnlyList<Crumb> Crumbs, Who? Who = null, string? SignIn = null, IReadOnlyList<FeedLink>? Feeds = null,
-    bool Searchable = true, string? Searched = null)
+    bool Searchable = true, string? Searched = null, string? Document = null)
 {
     /// <summary>Where the search box sends its words.</summary>
     public string Search => Door.TrimEnd('/') + Posts.SearchPage.Path;

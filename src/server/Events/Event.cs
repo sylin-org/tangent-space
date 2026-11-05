@@ -75,7 +75,7 @@ public sealed class Event : Entity<Event>
     public bool? Report { get; set; }
 
     /// <summary>Appends the next row of the log, inside the running command; once it commits, the event stream's head
-    /// moves to it.</summary>
+    /// moves to it and the Connections that publish wake (<see cref="Connections.Nudge"/>).</summary>
     public static async Task<Event> Append(string kind, DateTimeOffset at, CancellationToken ct,
         string? tangentId = null, string? topicId = null, string? postId = null, string? actorId = null,
         string? targetId = null, long? version = null, Audience? audience = null,
@@ -86,7 +86,7 @@ public sealed class Event : Entity<Event>
         EntityContext.UncommittedScope!.AfterCommit(_ =>
         {
             AppHost.GetRequiredService<EventStream>(nameof(Append)).Committed(seq);
-            return Task.CompletedTask;
+            return AppHost.GetRequiredService<Connections.Nudge>(nameof(Append)).Moved();
         });
         return await new Event
         {
