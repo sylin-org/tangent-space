@@ -265,7 +265,7 @@ public sealed partial class ArchiveTests
     }
 
     [Fact]
-    public async Task An_image_a_slot_names_is_in_the_archive_at_its_address_and_one_named_no_more_is_not()
+    public async Task An_image_a_part_of_the_place_names_is_in_the_archive_at_its_address_and_one_named_no_more_is_not()
     {
         const string Leo = "did:plc:leo4archive";
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
@@ -276,9 +276,9 @@ public sealed partial class ArchiveTests
         var logo = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(60)));
         var icon = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(61)));
         var gone = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(62)));
-        Assert.IsType<Outcome<TangentSpace>.Done>(await new ChangeTangentSpace(Leo, Footer: $"<img src=\"/media/{gone}\" alt=\"\">").Send(Cancellation));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new ChangeTangentSpace(Leo, Footer: $"![](/media/{gone})").Send(Cancellation));
         Assert.IsType<Outcome<TangentSpace>.Done>(await new ChangeTangentSpace(Leo,
-            Masthead: $"<img src=\"/media/{logo}\" alt=\"\">", Head: $"<link rel=\"icon\" href=\"/media/{icon}\">", Footer: "").Send(Cancellation));
+            Masthead: $"![](/media/{logo})", Image: "/media/" + icon, Footer: "").Send(Cancellation));
         var bytes = await visitor.GetByteArrayAsync("/media/" + logo, Cancellation);
 
         var folder = Path.Combine(tangentSpace.Folder, "archive");

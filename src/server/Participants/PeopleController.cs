@@ -49,6 +49,7 @@ public sealed record TakeRoleInput(
 /// forms are — and a JSON request reads the participant as this page now lists them; a refusal reads the page again with
 /// the reason above the list, or a problem. A reader for whom the place does not exist receives what an address with
 /// nothing there receives.</summary>
+[Managing]
 public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection roles, IDataProtectionProvider protection) : ControllerBase
 {
     public const string Path = "/settings/people";

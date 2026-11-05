@@ -8,22 +8,22 @@ using static Tangent.Posts.Writing;
 
 namespace Tangent.Space;
 
-/// <summary>The place's appearance at <c>/settings/appearance</c>: whoever holds ManageSpace sets its accent, its base, its
-/// palette and its own CSS, as a form or as JSON, appending space.changed, and previews the door in them first; anyone else
-/// is refused; and every page, for every reader, carries it, the settings without the place's own CSS.</summary>
+/// <summary>The place's appearance at <c>/settings/appearance</c>: whoever holds ManageSpace sets its colours, its base, its
+/// own CSS, its image and its words, as a form or as JSON, appending space.changed, and previews the door in them first;
+/// anyone else is refused; and every page, for every reader, carries it, the settings without the place's own CSS.</summary>
 public sealed class AppearanceTests
 {
     private const string Leo = "did:plc:leo4appearance";
     private const string Path = TangentSpaceSettingsController.AppearancePath;
 
-    private static Dictionary<string, string> Accent(string word) => new() { [TangentSpaceSettingsController.AccentField] = word };
+    private static Dictionary<string, string> Colours(string word) => new() { [TangentSpaceSettingsController.PaletteField] = word };
 
     private static string Carrying(string word) => $"<html lang=\"en\" data-accent=\"{word}\">";
 
-    private static async Task<Accent> Held() => (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Appearance.Accent;
+    private static async Task<Palette> Held() => (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Appearance.Palette;
 
     [Fact]
-    public async Task Whoever_holds_manage_space_sets_the_accent_which_appends_space_changed_and_every_page_and_reader_carries_it()
+    public async Task Whoever_holds_manage_space_sets_the_colours_which_appends_space_changed_and_every_page_and_reader_carries_them()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
@@ -31,10 +31,10 @@ public sealed class AppearanceTests
         using var leo = await SignedIn(tangentSpace, Leo);
         using var visitor = Agent(tangentSpace);
 
-        // A place starts gold, and the settings rail offers the section.
+        // A place starts in the base's own colours, Tangent's palette in gold, and the settings rail offers the section.
         var page = await Send(leo.Client, HttpMethod.Get, Path, json: true);
-        Assert.Equal((HttpStatusCode.OK, "gold"), (page.Status, page.Json.GetProperty("accent").GetString()));
-        Assert.Equal(["gold", "jade", "iris", "copper"], page.Json.GetProperty("accents").EnumerateArray().Select(word => word.GetString()));
+        Assert.Equal((HttpStatusCode.OK, "base"), (page.Status, page.Json.GetProperty("palette").GetString()));
+        Assert.Equal(["base", "gold", "jade", "iris", "copper"], page.Json.GetProperty("palettes").EnumerateArray().Select(word => word.GetString()));
         Assert.Contains(page.Json.GetProperty("sections").EnumerateArray(),
             section => section.GetProperty("name").GetString() == "Appearance" && section.GetProperty("address").GetString() == BaseUrl + Path && section.GetProperty("current").GetBoolean());
         Assert.False(page.Json.TryGetProperty("gate", out _));
@@ -42,10 +42,10 @@ public sealed class AppearanceTests
         var held = await Tagged(visitor, "/t/" + Workshop, null);
         var before = await Event.Count.Exact(Cancellation);
 
-        var saved = await Form(leo, Path, Path, Accent("jade"));
+        var saved = await Form(leo, Path, Path, Colours("jade"));
 
         Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + Path), (saved.Status, saved.Location));
-        Assert.Equal(Space.Accent.Jade, await Held());
+        Assert.Equal(Palette.Jade, await Held());
         var logged = Assert.Single(await Event.All(Cancellation), e => e.Seq > before);
         Assert.Equal((EventKind.SpaceChanged, Leo), (logged.Kind, logged.ActorId));
         Assert.Contains("value=\"jade\" checked", (await Send(leo.Client, HttpMethod.Get, Path)).Body);
@@ -63,22 +63,22 @@ public sealed class AppearanceTests
         Assert.Contains(Carrying("jade"), revalidated.Body);
         Assert.Equal(HttpStatusCode.NotModified, (await Tagged(visitor, "/t/" + Workshop, revalidated.ETag)).Status);
 
-        // As JSON: another accent, read back; a word outside the four is refused; the same choice writes nothing.
-        var iris = await Json(leo, Path, Path, new { accent = "iris" });
-        Assert.Equal((HttpStatusCode.OK, "iris"), (iris.Status, iris.Json.GetProperty("accent").GetString()));
+        // As JSON: another accent, read back; a word outside the five is refused; the same choice writes nothing.
+        var iris = await Json(leo, Path, Path, new { palette = "iris" });
+        Assert.Equal((HttpStatusCode.OK, "iris"), (iris.Status, iris.Json.GetProperty("palette").GetString()));
         Assert.Equal(before + 2, await Event.Count.Exact(Cancellation));
-        var unknown = await Json(leo, Path, Path, new { accent = "teal" });
+        var unknown = await Json(leo, Path, Path, new { palette = "teal" });
         Assert.Equal((HttpStatusCode.BadRequest, "invalid"), (unknown.Status, unknown.Word));
-        var refusedForm = await Form(leo, Path, Path, Accent("teal"));
+        var refusedForm = await Form(leo, Path, Path, Colours("teal"));
         Assert.Equal(HttpStatusCode.BadRequest, refusedForm.Status);
         Assert.Contains("id=\"space-appearance-failure\"", refusedForm.Body);
-        Assert.Equal(HttpStatusCode.OK, (await Json(leo, Path, Path, new { accent = "iris" })).Status);
-        Assert.Equal(Space.Accent.Iris, await Held());
+        Assert.Equal(HttpStatusCode.OK, (await Json(leo, Path, Path, new { palette = "iris" })).Status);
+        Assert.Equal(Palette.Iris, await Held());
         Assert.Equal(before + 2, await Event.Count.Exact(Cancellation));
     }
 
     [Fact]
-    public async Task Anyone_who_does_not_hold_manage_space_is_refused_and_the_accent_stays()
+    public async Task Anyone_who_does_not_hold_manage_space_is_refused_and_the_colours_stay()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
@@ -97,20 +97,20 @@ public sealed class AppearanceTests
         Assert.DoesNotContain("aria-label=\"Settings\"", read.Body);
 
         // The settings offer Ada no form, so her session's token comes from the workshop's page, which carries one.
-        var form = await Form(ada, "/t/" + Workshop, Path, Accent("jade"));
+        var form = await Form(ada, "/t/" + Workshop, Path, Colours("jade"));
         Assert.Equal(HttpStatusCode.Forbidden, form.Status);
         Assert.Contains($"data-gate=\"{gate}\"", form.Body);
-        var json = await Json(ada, "/t/" + Workshop, Path, new { accent = "jade" });
+        var json = await Json(ada, "/t/" + Workshop, Path, new { palette = "jade" });
         Assert.Equal((HttpStatusCode.Forbidden, gate), (json.Status, json.Word));
 
         // A moderator lands on what they may use, and is refused the same.
         Assert.Equal(BaseUrl + ApplicationsController.Path, (await Send(mo.Client, HttpMethod.Get, Path)).Location);
-        Assert.Equal((HttpStatusCode.Forbidden, gate), Refused(await Json(mo, "/t/" + Workshop, Path, new { accent = "jade" })));
+        Assert.Equal((HttpStatusCode.Forbidden, gate), Refused(await Json(mo, "/t/" + Workshop, Path, new { palette = "jade" })));
 
-        var posted = await Send(visitor, HttpMethod.Post, Path, JsonBody(new { accent = "jade" }), json: true);
+        var posted = await Send(visitor, HttpMethod.Post, Path, JsonBody(new { palette = "jade" }), json: true);
         Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (posted.Status, posted.Word));
 
-        Assert.Equal(Space.Accent.Gold, await Held());
+        Assert.Equal(Palette.Base, await Held());
         Assert.Equal(before, await Event.Count.Exact(Cancellation));
     }
 
@@ -154,12 +154,12 @@ public sealed class AppearanceTests
         Assert.DoesNotContain("@layer owner", refusal.Body);
 
         // Tangent's palette over the base; a stylesheet Tangent does not bundle is refused.
-        Assert.Equal(HttpStatusCode.OK, (await Json(leo, Path, Path, new { palette = "accent" })).Status);
+        Assert.Equal(HttpStatusCode.OK, (await Json(leo, Path, Path, new { palette = "copper" })).Status);
         Assert.Contains($"href=\"{BaseUrl}/palette.css\"", (await Send(visitor, HttpMethod.Get, "/")).Body);
         Assert.Equal(HttpStatusCode.BadRequest, (await Json(leo, Path, Path, new { @base = "bootstrap" })).Status);
 
         // The preview draws the door in what it is sent and saves nothing.
-        var preview = await Form(leo, Path, TangentSpaceSettingsController.PreviewPath, new() { [TangentSpaceSettingsController.BaseField] = "water", [TangentSpaceSettingsController.PaletteField] = "base" });
+        var preview = await Form(leo, Path, AppearancePreviewController.Path, new() { [TangentSpaceSettingsController.BaseField] = "water", [TangentSpaceSettingsController.PaletteField] = "base" });
         Assert.Equal(HttpStatusCode.OK, preview.Status);
         Assert.Contains($"href=\"{BaseUrl}/bases/water.css\"", preview.Body);
         Assert.Contains($"href=\"{BaseUrl}/bases/water.palette.css\"", preview.Body);
@@ -171,6 +171,39 @@ public sealed class AppearanceTests
         Assert.Contains($"href=\"{BaseUrl}/base.css\"", door);
         Assert.Contains($"href=\"{BaseUrl}/palette.css\"", door);
         Assert.DoesNotContain("@layer owner", door);
+    }
+
+    [Fact]
+    public async Task The_place_wears_its_image_and_its_words_on_the_door_and_its_lines_on_every_page()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
+        using var leo = await SignedIn(tangentSpace, Leo);
+        using var visitor = Agent(tangentSpace);
+
+        var dressed = await Json(leo, Path, Path, new
+        {
+            image = "greenhouse",
+            description = "A workshop for people who make things *by hand*.",
+            intro = "## Welcome\n\nRead anything; say hello before you post.",
+            masthead = "[Our site](https://sylin.org/)",
+            footer = "[Rules](https://sylin.org/rules)"
+        });
+        Assert.Equal((HttpStatusCode.OK, "greenhouse"), (dressed.Status, dressed.Json.GetProperty("image").GetString()));
+
+        var door = (await Send(visitor, HttpMethod.Get, "/")).Body;
+        Assert.Contains($"<img class=\"head-image\" src=\"{BaseUrl}/art/greenhouse.webp\"", door);
+        Assert.Contains($"<link rel=\"icon\" href=\"{BaseUrl}/art/greenhouse.webp\"", door);
+        Assert.Contains("make things <em>by hand</em>.", door);
+        Assert.Contains("<h2", door);
+        Assert.Contains("<div class=\"masthead-line\"><p><a href=\"https://sylin.org/\"", door);
+        Assert.Contains("<div class=\"footer-line\">", door);
+        Assert.Contains("<div class=\"masthead-line\">", (await Send(leo.Client, HttpMethod.Get, Path)).Body);
+
+        // A cover Tangent does not bundle is refused, and nothing changes.
+        Assert.Equal(HttpStatusCode.BadRequest, (await Json(leo, Path, Path, new { image = "elsewhere" })).Status);
+        Assert.Equal("greenhouse", (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Appearance.Image);
     }
 
     private static (HttpStatusCode, string?) Refused(Answered answered) => (answered.Status, answered.Word);

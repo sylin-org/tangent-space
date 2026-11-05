@@ -27,25 +27,13 @@ public sealed class TangentSpace : Entity<TangentSpace>
     public const int DescriptionLimit = 300;
 
     /// <summary>The refusal a description outside the rule meets.</summary>
-    public static readonly Reason DescriptionRule = Reason.Invalid("Describe the Tangent Space in at most 300 characters.");
+    public static readonly Reason DescriptionRule = Reason.Invalid("Describe the Tangent Space in at most 300 characters of Markdown.");
 
     /// <summary>The refusal an admission other than join or apply meets.</summary>
     public static readonly Reason AdmissionRule = Reason.Invalid("A newcomer joins at once or applies and waits: choose join or apply.");
 
     /// <summary>The refusal an audience other than public or private meets.</summary>
     public static readonly Reason AudienceRule = Reason.Invalid("The place is read by anyone or by its participants alone: choose public or private.");
-
-    /// <summary>The refusal an accent outside the four meets.</summary>
-    public static readonly Reason AccentRule = Reason.Invalid("The place's accent is one of four: choose gold, jade, iris or copper.");
-
-    /// <summary>The refusal a base outside Tangent's own and the bundled stylesheets meets.</summary>
-    public static readonly Reason BaseRule = Reason.Invalid("The base is Tangent's own or a bundled stylesheet: choose tangent, simple, mvp, marx, sakura, water, new or concord.");
-
-    /// <summary>The refusal a palette other than the base's own or Tangent's in the accent meets.</summary>
-    public static readonly Reason PaletteRule = Reason.Invalid("The palette is the base's own or Tangent's in the place's accent: choose base or accent.");
-
-    /// <summary>The refusal the place's own CSS meets past its bound.</summary>
-    public static readonly Reason CssRule = Reason.Invalid("The place's own CSS holds at most 50,000 characters.");
 
     /// <summary>The name first run gives a place set up by someone whose sign-in verified no handle.</summary>
     public const string PlainName = "Tangent Space";
@@ -63,7 +51,7 @@ public sealed class TangentSpace : Entity<TangentSpace>
 
     private static readonly object OnRequest = new();
 
-    /// <summary>The place as this request's page carries it: its accent, its slots and its version, and as
+    /// <summary>The place as this request's page carries it: its appearance and its version, and as
     /// <see cref="Unestablished"/> before first run. One bounded read of the row by its key per request, however many
     /// ask.</summary>
     public static async ValueTask<TangentSpace> OfRequest(HttpContext http)
@@ -103,8 +91,8 @@ public sealed class TangentSpace : Entity<TangentSpace>
 
     public string Name { get; set; } = "";
 
-    /// <summary>What the place is, in a line: shown under its name on the door; empty until its proprietor writes
-    /// one.</summary>
+    /// <summary>What the place is, in a line of Markdown: drawn under its name on the door, and its words are what a card or a
+    /// feed says of the place; empty until its proprietor writes one.</summary>
     public string Description { get; set; } = "";
 
     /// <summary>The participant whose place this is and whose voice fronts it: whoever set it up at first run; null
@@ -142,25 +130,19 @@ public sealed class TangentSpace : Entity<TangentSpace>
 
     public Appearance Appearance { get; set; } = new();
 
-    public Slots Slots { get; set; } = new();
-
-    /// <summary>Renames and describes the place, sets how a newcomer arrives, who reads it, its appearance and its slots, a
-    /// change to the row, or refuses with <see cref="NameRule"/>, <see cref="DescriptionRule"/>, <see cref="AdmissionRule"/>,
-    /// <see cref="AudienceRule"/>, <see cref="AccentRule"/>, <see cref="BaseRule"/>, <see cref="PaletteRule"/> or
-    /// <see cref="CssRule"/>; the name and the description are kept trimmed. Answers whether anything changed.</summary>
-    public bool Change(string name, string description, Admission admission, Audience audience, Appearance appearance, Slots slots)
+    /// <summary>Renames and describes the place, sets how a newcomer arrives, who reads it and its appearance, judged as
+    /// <see cref="Appearance.With"/> judges it, a change to the row, or refuses with <see cref="NameRule"/>,
+    /// <see cref="DescriptionRule"/>, <see cref="AdmissionRule"/> or <see cref="AudienceRule"/>; the name and the description are
+    /// kept trimmed. Answers whether anything changed.</summary>
+    public bool Change(string name, string description, Admission admission, Audience audience, Appearance appearance)
     {
         var named = Named(name);
-        var described = description.Trim();
-        if (described.Length > DescriptionLimit) throw new Refusal(DescriptionRule);
+        var described = description.Replace("\r\n", "\n", StringComparison.Ordinal).Trim();
+        if (described.Length > DescriptionLimit || described.Contains('\0') || !Posts.MarkdownHtml.Tractable(described)) throw new Refusal(DescriptionRule);
         if (!Enum.IsDefined(admission)) throw new Refusal(AdmissionRule);
         if (!Enum.IsDefined(audience)) throw new Refusal(AudienceRule);
-        if (!Enum.IsDefined(appearance.Accent)) throw new Refusal(AccentRule);
-        if (!Enum.IsDefined(appearance.Base)) throw new Refusal(BaseRule);
-        if (!Enum.IsDefined(appearance.Palette)) throw new Refusal(PaletteRule);
-        if (appearance.Css.Length > Appearance.CssLimit) throw new Refusal(CssRule);
-        if (Name == named && Description == described && Admission == admission && Audience == audience && Appearance.Same(appearance) && Slots == slots) return false;
-        (Name, Description, Admission, Audience, Appearance, Slots) = (named, described, admission, audience, appearance.Copy(), slots);
+        if (Name == named && Description == described && Admission == admission && Audience == audience && Appearance.Same(appearance)) return false;
+        (Name, Description, Admission, Audience, Appearance) = (named, described, admission, audience, appearance.Copy());
         Version = checked(Version + 1);
         return true;
     }

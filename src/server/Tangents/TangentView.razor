@@ -8,7 +8,7 @@
 <main class="frame-main">
 <section class="@("tangent-head tangent" + (Articles ? " tangent-head-articles" : "") + (Model.Audience == "public" ? "" : " is-private"))" aria-labelledby="tangent-title">
     <div class="tangent-head-inner">
-        <TangentTile Tile="@Tile.For(Model.Slug, Model.Name)" Size="@(Articles ? "head-articles" : "head")" />
+        <TangentTile Tile="@Worn(Model)" Size="@(Articles ? "head-articles" : "head")" />
         <div class="tangent-head-text">
             <h1 id="tangent-title" class="tangent-title">@Model.Name</h1>
             @if (Model.Description.Length > 0)
@@ -77,7 +77,7 @@
                     @for (var index = 0; index < Model.Topics.Count; index++)
                     {
                         <TopicRow Model="@Model.Topics[index]" Today="@Model.Day" Reader="@Model.Who?.Id" Article="true" Lead="@(index == 0 && !Model.Continued)"
-                                  TangentName="@Model.Name" TangentTile="@Tile.For(Model.Slug, Model.Name)" />
+                                  TangentName="@Model.Name" TangentTile="@Worn(Model)" />
                     }
                 </div>
             }
@@ -120,13 +120,16 @@
 @code {
     [Parameter, EditorRequired] public TangentPage Model { get; set; } = default!;
 
+    /// <summary>The tile this Tangent wears: its own, as the page lists it, or the one its slug gives it.</summary>
+    private static Tile Worn(TangentPage page) => page.Tangents.FirstOrDefault(tangent => tangent.Slug == page.Slug)?.Worn ?? Tile.For(page.Slug, page.Name);
+
     /// <summary>The frame the shell draws around the page: the place; the Tangent as the one crumb, a switcher listing
     /// the Tangents the reader may view and, for one who may, where a new one is created; and who reads, or where a
     /// visitor signs in.</summary>
     public static Frame Frame(TangentPage page)
     {
-        var switcher = new Switcher(Tile.For(page.Slug, page.Name), page.Tangents
-            .Select(tangent => new SwitcherItem(tangent.Name, tangent.Address, Detail(tangent), Tile.For(tangent.Slug, tangent.Name), tangent.Slug == page.Slug))
+        var switcher = new Switcher(Worn(page), page.Tangents
+            .Select(tangent => new SwitcherItem(tangent.Name, tangent.Address, Detail(tangent), tangent.Worn, tangent.Slug == page.Slug))
             .ToList(), page.Door + TangentsController.Route.TrimStart('/'), page.NewTangent);
         var who = page.Who is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut, reader.Settings, reader.ForYou) : null;
         return new(page.Place, page.Door, [new Crumb(page.Name, page.Address, switcher)], who, page.SignIn, page.Feeds);

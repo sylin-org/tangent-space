@@ -82,8 +82,13 @@ public sealed partial record TangentPage(
     /// the page links their name, their profile's address.</summary>
     public sealed record Author(string Id, string Handle, string Name, string Kind, string? Avatar, string? Profile = null);
 
-    /// <summary>A Tangent the reader may view: its slug, name, kind, address and how many Topics were started there.</summary>
-    public sealed record Listed(string Slug, string Name, string Kind, string Address, int TopicCount);
+    /// <summary>A Tangent the reader may view: its slug, name, kind, address and how many Topics were started there, and the
+    /// tile it wears, where the page draws it.</summary>
+    public sealed record Listed(string Slug, string Name, string Kind, string Address, int TopicCount, Render.Tile? Tile = null)
+    {
+        /// <summary>The tile it wears: its own, or the one its slug gives it.</summary>
+        public Render.Tile Worn => Tile ?? Render.Tile.For(Slug, Name);
+    }
 
     /// <summary>The signed-in participant reading the page: their id, the name to show, their handle, the highest role
     /// they hold where they hold one, their avatar, where they sign out, coming back to this page, and the place's

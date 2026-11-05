@@ -93,7 +93,7 @@ export const screens: Readonly<Record<string, Screen>> = {
     path: '/',
     states: [
       { name: 'visitor', seed: 'door' },
-      { name: 'slots', seed: 'slots' },
+      { name: 'dressed', seed: 'dressed' },
       { name: 'signed-in-with-news', seed: 'door', signedIn: true },
       { name: 'quiet', seed: 'door-quiet', signedIn: true },
       { name: 'administrator', place: 'persona', seed: 'door', signedIn: true },
@@ -189,15 +189,15 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'refused', signedIn: true },
     ],
   },
-  // The place's appearance, read by the persona, who set the place up and so holds ManageSpace: gold, the accent a place
-  // starts with, jade once the place says so, and slots, each written, with the frame around the form carrying them; and
+  // The place's appearance, read by the persona, who set the place up and so holds ManageSpace: the base's own colours, as a place
+  // starts, jade once the place says so, and dressed, with a cover, jade and every word written, the frame carrying the lines; and
   // by the persona in a place someone else set up, refused above disabled choices.
   'tangent-space-settings-appearance': {
     path: '/settings/appearance',
     states: [
       { name: 'proprietor', place: 'persona', signedIn: true },
       { name: 'jade', place: 'persona', seed: 'jade', signedIn: true },
-      { name: 'slots', place: 'persona', seed: 'slots', signedIn: true },
+      { name: 'dressed', place: 'persona', seed: 'dressed', signedIn: true },
       { name: 'refused', signedIn: true },
     ],
   },
@@ -317,6 +317,7 @@ export const screens: Readonly<Record<string, Screen>> = {
     path: '/t/discussions/settings',
     states: [
       { name: 'administrator', place: 'persona', seed: 'tangent', signedIn: true },
+      { name: 'dressed', place: 'persona', seed: 'tangent-dressed', signedIn: true },
       { name: 'manager', seed: 'tangent-manager', signedIn: true },
       {
         name: 'closed',
@@ -364,6 +365,7 @@ export const screens: Readonly<Record<string, Screen>> = {
     path: '/t/discussions',
     states: [
       { name: 'discussions', seed: 'tangent', signedIn: true },
+      { name: 'discussions-dressed', place: 'persona', seed: 'tangent-dressed', signedIn: true, click: '.switcher-button' },
       { name: 'discussions-visitor', seed: 'tangent' },
       { name: 'discussions-account', seed: 'tangent', signedIn: true, click: '.account-button' },
       { name: 'discussions-switcher', seed: 'tangent', signedIn: true, click: '.switcher-button' },

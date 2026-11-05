@@ -11,12 +11,12 @@ using Tangent.Space;
 namespace Tangent.Posts;
 
 /// <summary>What lets someone see a piece of <see cref="Media"/>, one row each: a Post that uses it, as its cover or an
-/// image in its body, in its Tangent; a slot of the place that names it; or a participant who brought it. An image reaches
-/// whoever may view a Tangent one of its Posts is in, whoever reads a page that carries a slot naming it
-/// (<see cref="Slots.OnEveryPage"/>), and whoever brought it while the place exists for them, and is absent to everyone else: the same
+/// image in its body, in its Tangent; a Tangent that wears it as its image; a part of the place's appearance that names it; or a participant who brought it. An image reaches
+/// whoever may view a Tangent one of its Posts is in or that wears it, whoever reads a page that carries a part naming it
+/// (<see cref="Appearance.OnEveryPage"/>), and whoever brought it while the place exists for them, and is absent to everyone else: the same
 /// picture in a public and a private Tangent reads as it does in the public one, since whoever sent it there held it
-/// already. Removing a Post, an edit that drops the image, or a slot that no longer names it ends its use. Keyed
-/// <c>{media}/{post, participant or slot:name}</c>, one index range per image.</summary>
+/// already. Removing a Post, an edit that drops the image, a Tangent that takes another image, or a part that no longer names it ends its use. Keyed
+/// <c>{media}/{post, participant, tangent:slug or part:name}</c>, one index range per image.</summary>
 public sealed class MediaUse : Entity<MediaUse>
 {
     /// <summary>How many rows one read of an image's uses holds.</summary>
@@ -25,17 +25,20 @@ public sealed class MediaUse : Entity<MediaUse>
     [Index(Name = "ix_media_use")]
     public string MediaId { get; set; } = "";
 
-    /// <summary>The name of the slot that names it; null on every other row.</summary>
-    public string? Slot { get; set; }
+    /// <summary>The name of the part of the place's appearance that names it; null on every other row.</summary>
+    public string? Part { get; set; }
 
-    /// <summary>The Post that uses it; null on the row of who brought it or of a slot.</summary>
+    /// <summary>The Post that uses it; null on every other row.</summary>
     public string? PostId { get; set; }
 
-    /// <summary>The Tangent that Post is in; null on the row of who brought it or of a slot.</summary>
+    /// <summary>The Tangent that Post is in, or that wears it as its image; null on the row of who brought it or of a part.</summary>
     public string? TangentId { get; set; }
 
-    /// <summary>What begins the holder of a slot's row, which no Post's or participant's Id does.</summary>
-    private const string SlotHolder = "slot:";
+    /// <summary>What begins the holder of a part's row, which no Post's or participant's Id does.</summary>
+    private const string PartHolder = "part:";
+
+    /// <summary>What begins the holder of a Tangent's image's row.</summary>
+    private const string TangentHolder = "tangent:";
 
     public static string Key(string mediaId, string holder) => mediaId + "/" + holder;
 
@@ -62,9 +65,9 @@ public sealed class MediaUse : Entity<MediaUse>
             var uses = await Query(use => use.MediaId == mediaId, query, ct);
             foreach (var use in uses)
             {
-                if (use.Slot is { } slot)
+                if (use.Part is { } part)
                 {
-                    if (Slots.OnEveryPage(slot) || (await Capabilities.LoadRows(personId, null, ct)).For(null).Exists) return true;
+                    if (Appearance.OnEveryPage(part) || (await Capabilities.LoadRows(personId, null, ct)).For(null).Exists) return true;
                     continue;
                 }
 
@@ -91,18 +94,28 @@ public sealed class MediaUse : Entity<MediaUse>
                 await new MediaUse { Id = Key(added, post.Id), MediaId = added, PostId = post.Id, TangentId = post.TangentId }.Save(ct);
     }
 
-    /// <summary>Inside the running command, brings the slots' rows in step with what they name now: each image a slot newly
-    /// names begins where <paramref name="actorId"/> may see it, so naming an image is no way to reach it, and then each it
-    /// no longer names ends, so an image moved from one slot to another stays theirs to name.</summary>
-    public static async Task Record(Slots before, Slots now, string actorId, CancellationToken ct)
+    /// <summary>Inside the running command, brings the appearance's rows in step with what its parts name now: each image a
+    /// part newly names begins where <paramref name="actorId"/> may see it, so naming an image is no way to reach it, and then
+    /// each it no longer names ends, so an image moved from one part to another stays theirs to name.</summary>
+    public static async Task Record(Appearance before, Appearance now, string actorId, CancellationToken ct)
     {
         var was = before.Images();
         var named = now.Images();
-        foreach (var (slot, media) in named.Except(was))
+        foreach (var (part, media) in named.Except(was))
             if (await Reaches(actorId, media, ct))
-                await new MediaUse { Id = Key(media, SlotHolder + slot), MediaId = media, Slot = slot }.Save(ct);
-        foreach (var (slot, media) in was.Except(named))
-            if (await Get(Key(media, SlotHolder + slot), ct) is { } use) await use.Remove(ct);
+                await new MediaUse { Id = Key(media, PartHolder + part), MediaId = media, Part = part }.Save(ct);
+        foreach (var (part, media) in was.Except(named))
+            if (await Get(Key(media, PartHolder + part), ct) is { } use) await use.Remove(ct);
+    }
+
+    /// <summary>Inside the running command, brings a Tangent's image's row in step: the image it newly wears begins where
+    /// <paramref name="actorId"/> may see it, reaching whoever may view the Tangent, and the one it wore ends.</summary>
+    public static async Task Record(string tangentId, string before, string now, string actorId, CancellationToken ct)
+    {
+        if (before == now) return;
+        if (Media.IdIn(now) is { } added && await Reaches(actorId, added, ct))
+            await new MediaUse { Id = Key(added, TangentHolder + tangentId), MediaId = added, TangentId = tangentId }.Save(ct);
+        if (Media.IdIn(before) is { } gone && await Get(Key(gone, TangentHolder + tangentId), ct) is { } use) await use.Remove(ct);
     }
 }
 

@@ -7,8 +7,6 @@
  * base's own palette (bases/<name>.palette.css) takes this file's
  * place when the palette is left to the base. */
 
-@layer base, shapes, tangent, palette, owner;
-
 @layer palette {
 :root {
   --ts-accent-light: #8a5f12; --ts-accent-dark: #d9ab55;

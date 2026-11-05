@@ -2,8 +2,6 @@
  * the frame and its shared shapes (layout.css) and the panel (sign-in.css); the tangent layer holds each page's own
  * subjects and states. Both read the base's fonts and the palette's colours through the --ts-* tokens. */
 
-@layer base, shapes, tangent, palette, owner;
-
 @import './tokens.css' layer(shapes);
 @import './layout.css' layer(shapes);
 @import './sign-in.css' layer(shapes);

@@ -23,7 +23,7 @@ public sealed class TangentSettingsTests
     /// <summary>The fields the settings form sends for the workshop as Writing's place holds it, with the changes given.</summary>
     private static Dictionary<string, string> Workshop(string? name = null, string? audience = null) => new()
     {
-        ["name"] = name ?? "workshop", ["description"] = "", ["kind"] = "topic", ["audience"] = audience ?? "public"
+        ["name"] = name ?? "workshop", ["description"] = "", ["accent"] = "", ["image"] = "", ["kind"] = "topic", ["audience"] = audience ?? "public"
     };
 
     [Fact]
@@ -210,7 +210,7 @@ public sealed class TangentSettingsTests
         Assert.Equal(("workshop", "workshop", "topic", "public", BaseUrl + "/t/workshop/settings", false),
             (settings.GetProperty("slug").GetString(), settings.GetProperty("name").GetString(), settings.GetProperty("kind").GetString(),
                 settings.GetProperty("audience").GetString(), settings.GetProperty("change").GetProperty("action").GetString(), settings.GetProperty("fixed").GetBoolean()));
-        Assert.Equal(["name", "description", "kind", "audience", "move"], FieldNames(settings.GetProperty("change")));
+        Assert.Equal(["name", "description", "accent", "image", "kind", "audience", "move"], FieldNames(settings.GetProperty("change")));
         Assert.Contains("ManageTangent", Strings(settings.GetProperty("can")));
         Assert.False(settings.TryGetProperty("gate", out _));
         var member = (await Send(ada.Client, HttpMethod.Get, "/t/workshop/settings", json: true)).Json;

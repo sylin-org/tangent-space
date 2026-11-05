@@ -5,8 +5,6 @@
  * data-base="concord" on <html>, so its rules win there without the place's own CSS. It reads every colour from the tokens,
  * so its own palette (concord.palette.css) or Tangent's colours it. */
 
-@layer base, shapes, tangent, palette, owner;
-
 @import '../elements.css' layer(base);
 
 @layer base {
@@ -303,7 +301,7 @@
     max-width: 860px;
   }
 
-  & .slot-door-intro {
+  & .door-intro {
     margin: 12px 16px 0;
   }
 

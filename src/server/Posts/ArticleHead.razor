@@ -17,7 +17,10 @@
     {
         <figure class="article-figure"><img src="@cover" srcset="@(cover + "/" + MediaRecipes.CardName + " " + MediaRecipes.CardWidth.ToString(CultureInfo.InvariantCulture) + "w, " + cover + " " + Media.LongestEdge.ToString(CultureInfo.InvariantCulture) + "w")" sizes="(max-width: 719px) 100vw, 680px" alt="" decoding="async"></figure>
     }
-    <Slot Name="article-header" Html="@Header" Prose="true" />
+    @if (Header is { } header)
+    {
+        <div class="article-header post-body">@((MarkupString)header)</div>
+    }
     @if (TitleSlot is not null)
     {
         @TitleSlot

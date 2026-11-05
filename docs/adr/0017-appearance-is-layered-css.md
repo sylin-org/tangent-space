@@ -6,7 +6,7 @@ Date: 3 November 2026. Status: proposed. It records Leo's direction of 3 Novembe
 
 Leo looked at his own door and couldn't tell three things: where to manage the place, how to create a Tangent or start a Topic, or whether Moderators was a Tangent or a link. A design search followed, with two rounds of generated proposals. Proposals specified tightly came out alike; proposals left open came out gaudy. The lesson is to divide the work. Tangent owns what a page *means*, and the proprietor owns how it *looks*.
 
-Today a place's Appearance is its Accent, one of four, plus its Slots ([LANGUAGE](../LANGUAGE.md)). Every page is a record, rendered to HTML through one view per record (`TangentModule.cs:66-89`). An agent reads the same record as JSON. The markup underneath doesn't say what things are:
+Before this decision a place's Appearance was its Accent, one of four, plus slots of its own HTML ([LANGUAGE](../LANGUAGE.md)). Every page is a record, rendered to HTML through one view per record (`TangentModule.cs:66-89`). An agent reads the same record as JSON. The markup underneath doesn't say what things are:
 
 - `main` sits inside a `div`.
 - A Post's meta and actions are `div.post-head` and `div.post-actions` (`Render/TopicPost.razor`).
@@ -47,12 +47,14 @@ No standard defines themes for HTML. Several existing collections fit the work a
    @layer base, shapes, tangent, palette, owner;
    ```
 
+   The order is stated once, in `layers.css`, which every page links first; no other stylesheet states it.
+
    | Layer | What it styles | What can fill it |
    |---|---|---|
    | `base` | plain elements | nothing, or one bundled classless stylesheet |
    | `shapes` | the shape classes | Tangent's own shapes, or Bootstrap's components |
    | `tangent` | subjects and states | Tangent's own |
-   | `palette` | the `--ts-*` values, in Light and Dark | Tangent's palette for the Accent, a role-named palette, a Bootswatch theme's colours, or one derived from the proprietor's own |
+   | `palette` | the `--ts-*` values, in Light and Dark | the base's own colours, or Tangent's palette in one of its four accents, one choice; later, a role-named palette, a Bootswatch theme's colours, or one derived from the proprietor's own |
    | `owner` | anything | the proprietor's own CSS |
 
    - Each layer holds at most one stylesheet, and an empty layer adds nothing. With every layer left at its default, the place wears Tangent's own design.
@@ -71,12 +73,15 @@ No standard defines themes for HTML. Several existing collections fit the work a
    - The `shapes` layer can hold Bootstrap's components, built without its reset, its utility classes or its script.
    - A Bootswatch theme comes in through `palette`, from the variables Bootstrap 5.3 exposes. Its reset would restyle the plain elements the `base` layer owns, and its utility classes would turn the markup back into presentation.
 
-7. **Management pages leave out the owner layer.** Every page under `/settings` renders with the first four layers only. No stylesheet can hide the way back.
+7. **Management pages leave out the owner layer.** Every page a controller marked `[Managing]` answers, a refusal included, renders with the first four layers only. No stylesheet can hide the way back.
+
+8. **The place's words and image are Appearance too.** Its description, its welcome under the door's head, its masthead and footer lines and its article header are Markdown, drawn as a Post's body is through the same sanitizer, so no HTML of the proprietor's own reaches a page. Its image, a bundled cover or one brought in here, stands behind the door's head and is every page's icon.
 
 ## What does not exist
 
 - A template language.
 - Script of the proprietor's own.
+- HTML of the proprietor's own.
 - Bootstrap's utilities or its script.
 - Two stylesheets in one layer.
 - A stylesheet for one Tangent or one Topic.

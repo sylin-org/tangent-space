@@ -81,7 +81,8 @@ public sealed class TheToolsTests
         [Action<TakeOnATangentController>(nameof(TakeOnATangentController.Get))] = "only shows a form",
         [Action<ReportController>(nameof(ReportController.Get))] = "only shows a form",
         [Action<NewTangentController>(nameof(NewTangentController.Get))] = "only shows a form",
-        [Action<TangentSpaceSettingsController>(nameof(TangentSpaceSettingsController.Preview))] = "only shows the door in an appearance, saving nothing",
+        [Action<AppearancePreviewController>(nameof(AppearancePreviewController.Preview))] = "only shows the door in an appearance, saving nothing",
+        [Action<TangentSpaceSettingsController>(nameof(TangentSpaceSettingsController.TakeImage))] = "a form's file, which an agent sends as bring_in and change_appearance's image",
         [Action<BringYourAgentController>(nameof(BringYourAgentController.Get))] = "hands the place to an agent, so an agent has it already",
         [Action<SignInController>(nameof(SignInController.Get))] = "sign-in",
         [Action<FirstRunController>(nameof(FirstRunController.Get))] = "first run",
@@ -198,11 +199,10 @@ public sealed class TheToolsTests
         Says(Holds.ChangedTangentDescription, Tangents.Tangent.DescriptionLimit);
         Says(Holds.PlaceName, TangentSpace.NameLimit);
         Says(Holds.PlaceDescription, TangentSpace.DescriptionLimit);
-        Says(Holds.HeadSlot, Slots.HeadLimit);
-        Says(Holds.MastheadSlot, Slots.MastheadLimit);
-        Says(Holds.DoorIntroSlot, Slots.DoorIntroLimit);
-        Says(Holds.ArticleHeaderSlot, Slots.ArticleHeaderLimit);
-        Says(Holds.FooterSlot, Slots.FooterLimit);
+        Says(Holds.Masthead, Appearance.LineLimit);
+        Says(Holds.Footer, Appearance.LineLimit);
+        Says(Holds.Intro, Appearance.ProseLimit);
+        Says(Holds.ArticleHeader, Appearance.ProseLimit);
         Says(Holds.RoleName, RoleSettings.NameLimit);
         Says(Holds.ChangedRoleName, RoleSettings.NameLimit);
         Assert.Equal(["hour", "day", "week"], People.Durations.Select(duration => duration.Word));

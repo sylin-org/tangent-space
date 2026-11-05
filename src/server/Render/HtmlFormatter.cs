@@ -25,12 +25,19 @@ public sealed class HtmlFormatter : TextOutputFormatter
     /// URL between the place's base and its palette (<see cref="Appearance.BaseSheet"/>, <see cref="Appearance.PaletteSheet"/>).</summary>
     public const string Stylesheet = "tangent.css";
 
+    /// <summary>The order of the five layers, <c>@layer base, shapes, tangent, palette, owner;</c>, stated once and linked
+    /// first by every page, so every stylesheet after it fills a layer whose place is already fixed.</summary>
+    public const string Layers = "layers.css";
+
     /// <summary>The folder the base's fonts are in, beside the stylesheets.</summary>
     public const string Fonts = "fonts";
 
     /// <summary>The request item that names the appearance a page is drawn in instead of the place's own, for a preview
     /// that saves nothing.</summary>
     public const string Previewed = "Tangent.Appearance.Previewed";
+
+    /// <summary>The request item that names the description a preview draws the door with instead of the place's own.</summary>
+    public const string PreviewedDescription = "Tangent.Description.Previewed";
 
     /// <summary>The parameter every resource component declares for the value it renders.</summary>
     private const string ModelParameter = "Model";
@@ -108,28 +115,20 @@ public sealed class HtmlFormatter : TextOutputFormatter
             ? ProblemView.Frame(problem, space.Name, address + "/", http.User.Identity?.IsAuthenticated == true ? null : address + Participants.SignInController.Path)
             : resource.Frame?.Invoke(value);
         var appearance = http.Items[Previewed] as Appearance ?? space.Appearance;
-        return await Whole(renderer, resource, value, address, appearance, space.Slots.Placed(address + "/"), frame, card: card, also: also,
-            management: resource.Management || Managing(http.Request.Path));
-    }
-
-    /// <summary>Whether <paramref name="path"/> is one of the place's management addresses — <c>/settings</c> and everything
-    /// under it, and a Tangent's settings and access — so whatever answers there, a refusal included, leaves out the owner
-    /// layer.</summary>
-    public static bool Managing(PathString path)
-    {
-        var segments = (path.Value ?? "").Split('/', StringSplitOptions.RemoveEmptyEntries);
-        return segments is ["settings", ..] || segments is ["t", _, "settings", ..];
+        return await Whole(renderer, resource, value, address, appearance, frame, card: card, also: also,
+            management: http.GetEndpoint()?.Metadata.GetMetadata<ManagingAttribute>() is not null);
     }
 
     /// <summary>A resource as a whole page: its component in the shell and the <paramref name="frame"/> around it, its files
     /// at <paramref name="baseUrl"/>, in the place's <paramref name="appearance"/>, the owner layer left out of a
-    /// management page, and with its <paramref name="slots"/>. A
+    /// <paramref name="management"/> page. A
     /// <paramref name="standalone"/> page opens with no server and counts on no script; <paramref name="retired"/> is the
     /// line that says the place is retired, on a page of its archive. The component reads <paramref name="also"/>, where
-    /// given, beside its value; <paramref name="management"/>, where given, says whether the page leaves out the owner layer,
-    /// which is otherwise its resource's own say.</summary>
-    public static Task<string> Whole(HtmlRenderer renderer, ResourceComponent resource, object value, string baseUrl, Appearance appearance, Slots slots, Frame? frame,
-        bool standalone = false, string? card = null, string? retired = null, IReadOnlyDictionary<string, object?>? also = null, bool? management = null) =>
+    /// given, beside its value; <paramref name="mediaBase"/>, where given, is where the images of the place's words are
+    /// named.</summary>
+    public static Task<string> Whole(HtmlRenderer renderer, ResourceComponent resource, object value, string baseUrl, Appearance appearance, Frame? frame,
+        bool standalone = false, string? card = null, string? retired = null, IReadOnlyDictionary<string, object?>? also = null, bool management = false,
+        string? mediaBase = null) =>
         renderer.Dispatcher.InvokeAsync(async () =>
     {
         var shell = ParameterView.FromDictionary(new Dictionary<string, object?>
@@ -137,8 +136,8 @@ public sealed class HtmlFormatter : TextOutputFormatter
             [nameof(Shell.Title)] = resource.Title(value),
             [nameof(Shell.BaseUrl)] = baseUrl,
             [nameof(Shell.Appearance)] = appearance,
-            [nameof(Shell.Management)] = management ?? resource.Management,
-            [nameof(Shell.Slots)] = slots,
+            [nameof(Shell.Management)] = management,
+            [nameof(Shell.MediaBase)] = mediaBase,
             [nameof(Shell.Card)] = card,
             [nameof(Shell.Frame)] = frame,
             [nameof(Shell.Standalone)] = standalone,

@@ -27,6 +27,7 @@ public sealed record ChangeAccessInput(
 /// with the reason above the list, or a problem. Both resolve the address as the Tangent page does
 /// (<see cref="Here.Find"/>) before anything else is judged, so a Tangent the reader may not view and one no row
 /// has answer alike.</summary>
+[Managing]
 public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, RoleCollection roles) : ControllerBase
 {
     public const string Segment = "access";

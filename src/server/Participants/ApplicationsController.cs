@@ -23,6 +23,7 @@ public sealed record DecideInput([Description(Holds.Applicant)] string? Particip
 /// the applications; a JSON request reads the decision (<see cref="DecidedApplication"/>); a refusal reads the page again
 /// with the reason above the list, or a problem. A reader for whom the place does not exist receives what an address with
 /// nothing there receives.</summary>
+[Managing]
 public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
     public const string Path = "/settings/applications";

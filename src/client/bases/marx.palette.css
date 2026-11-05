@@ -1,8 +1,6 @@
 /* Marx 5.3.2's own palette, which the palette layer holds when it is left to the base: the --ts-* values
  * taken from its colours, for Light and Dark, in the reader's theme. What follows from them is Tangent's (tokens.css). */
 
-@layer base, shapes, tangent, palette, owner;
-
 @layer palette {
 :root {
   --ts-page: light-dark(oklch(100% 0 0), oklch(18% .01 260));

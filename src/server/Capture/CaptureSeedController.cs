@@ -50,8 +50,14 @@ public sealed class CaptureSeedController(RoleCollection roles) : ControllerBase
             case "jade":
                 await Jade(ct);
                 return NoContent();
-            case "slots":
-                await WrittenSlots(ct);
+            case "dressed":
+                await Dressed(ct);
+                return NoContent();
+            case "tangent-dressed":
+                await TangentScreen(ct);
+                var discussions = await Tangents.Tangent.Get("discussions", ct) ?? throw new InvalidOperationException("The discussions Tangent is missing.");
+                discussions.Wear("rose", "midnight-workshop");
+                await Write(new Keep<Tangents.Tangent>(discussions), ct);
                 return NoContent();
             default:
                 return NotFound();
@@ -66,24 +72,25 @@ public sealed class CaptureSeedController(RoleCollection roles) : ControllerBase
         await Write(new Keep<TangentSpace>(space), ct);
     }
 
-    /// <summary>The place's accent set to jade.</summary>
+    /// <summary>The place's colours set to jade.</summary>
     private async Task Jade(CancellationToken ct)
     {
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? throw new InvalidOperationException("The Tangent Space row is missing.");
-        space.Appearance.Accent = Accent.Jade;
+        space.Appearance.Palette = Palette.Jade;
         await Write(new Keep<TangentSpace>(space), ct);
     }
 
-    /// <summary>The place's slots written, each with what a proprietor would put there.</summary>
-    private async Task WrittenSlots(CancellationToken ct)
+    /// <summary>The place made its proprietor's: a cover behind the door's head, jade, and each of its words written with
+    /// what a proprietor would put there.</summary>
+    private async Task Dressed(CancellationToken ct)
     {
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? throw new InvalidOperationException("The Tangent Space row is missing.");
-        space.Slots = space.Slots.Written(
-            "<meta name=\"theme-color\" content=\"#2f6f5e\">\n<link rel=\"me\" href=\"https://sylin.org/\">",
-            "<a href=\"https://sylin.org/\">Our site</a>",
-            "<h2>Welcome to the workshop</h2><p>This place is for people who make things by hand. Read anything; <a href=\"https://sylin.org/\">say hello</a> before you post.</p>",
-            "<p><small>From the workshop's long reads.</small></p>",
-            "<nav><a href=\"https://sylin.org/about\">About</a> <a href=\"https://sylin.org/rules\">Rules</a></nav>");
+        space.Description = "A workshop for people who make things *by hand*.";
+        space.Appearance = space.Appearance.With(palette: "jade", image: "greenhouse",
+            masthead: "[Our site](https://sylin.org/)",
+            footer: "[About](https://sylin.org/about) · [Rules](https://sylin.org/rules)",
+            intro: "## Welcome to the workshop\n\nRead anything; [say hello](https://sylin.org/) before you post, and show what you made.",
+            articleHeader: "*From the workshop's long reads.*");
         await Write(new Keep<TangentSpace>(space), ct);
     }
 

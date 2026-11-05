@@ -55,6 +55,8 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
         if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct)
             ?? throw new InvalidOperationException("The Tangent Space row is missing.");
+        var appearance = HttpContext.Items[HtmlFormatter.Previewed] as Appearance ?? space.Appearance;
+        var description = HttpContext.Items[HtmlFormatter.PreviewedDescription] as string ?? space.Description;
         var reader = personId is null ? null : await Participant.Get(personId, ct);
         var unread = reader is null ? null : await Unread.Of(reader, ct);
         var baseAddress = BaseAddress();
@@ -144,8 +146,10 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             Resume(baseAddress, through > 0 ? through : window.Count > 0 ? window[0].Seq : 0),
             place.Holds(Bit.ManageSpace) ? baseAddress + NewTangentController.Route : null)
         {
-            Description = space.Description,
-            Intro = space.Slots.DoorIntro.Length > 0 ? Media.Placed(space.Slots.DoorIntro, baseAddress + "/") : null,
+            Description = description,
+            DescriptionHtml = PlaceWords.Html(PlaceWords.DescriptionPart, description, baseAddress + "/"),
+            Intro = PlaceWords.Html(Appearance.IntroPart, appearance.Intro, baseAddress + "/"),
+            Image = appearance.ImageAt(baseAddress + "/"),
             Feeds = space.Audience == Audience.Public ? Feeds.ArticlesLinks(baseAddress, space.Name) : null,
             Offer = offered,
             Applications = waiting.Count == 0

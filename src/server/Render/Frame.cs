@@ -35,9 +35,9 @@ public sealed record Switcher(Tile Tile, IReadOnlyList<SwitcherItem> Tangents, s
 /// <summary>One Tangent in the switcher: its name, address, kind and count in words, tile, and whether it is the page's.</summary>
 public sealed record SwitcherItem(string Name, string Address, string Detail, Tile Tile, bool Current);
 
-/// <summary>A Tangent's letter tile: its tone and the first letter of its name. The tone comes from the slug, the same
-/// wherever the Tangent is drawn.</summary>
-public sealed record Tile(string Tone, string Initial)
+/// <summary>A Tangent's tile: its tone and the first letter of its name, or its image in the letter's place. The tone is
+/// the one the Tangent chose, or else comes from the slug, the same wherever the Tangent is drawn.</summary>
+public sealed record Tile(string Tone, string Initial, string? Image = null)
 {
     /// <summary>The six tones of the design's Tangent tiles.</summary>
     public static readonly IReadOnlyList<string> Tones = ["amber", "coral", "jade", "sky", "iris", "rose"];
@@ -49,6 +49,14 @@ public sealed record Tile(string Tone, string Initial)
         var hash = 2166136261u;
         foreach (var unit in System.Text.Encoding.UTF8.GetBytes(slug)) hash = unchecked((hash ^ unit) * 16777619u);
         return new Tile(Tones[(int)((hash >> 8) % (uint)Tones.Count)], name.Length > 0 ? char.ToUpperInvariant(name[0]).ToString() : "T");
+    }
+
+    /// <summary>The tile a Tangent wears: its own accent and image where it chose them, its image under
+    /// <paramref name="door"/>, the base URL ending in a slash.</summary>
+    public static Tile For(Tangents.Tangent tangent, string door)
+    {
+        var tile = For(tangent.Id, tangent.Name);
+        return tile with { Tone = tangent.Accent.Length > 0 ? tangent.Accent : tile.Tone, Image = Space.Art.Address(tangent.Image, door) };
     }
 }
 

@@ -26,10 +26,32 @@ public sealed class Tangent : Entity<Tangent>
     public static readonly Reason NeedsName = Reason.Invalid("A Tangent has a name.");
     public static readonly Reason NameTooLong = Reason.Invalid("A Tangent's name holds at most 80 characters.");
     public static readonly Reason DescriptionTooLong = Reason.Invalid("A Tangent's description holds at most 1000 characters.");
+    public static readonly Reason AccentRule = Reason.Invalid("A Tangent's accent is one of six: choose amber, coral, jade, sky, iris or rose, or send it empty for the one its slug gives it.");
+    public static readonly Reason ImageRule = Reason.Invalid("A Tangent's image is one of the bundled covers, by its name, or an image brought in here, as /media/ and its id; empty takes it away.");
 
     public string Name { get; set; } = "";
 
     public string Description { get; set; } = "";
+
+    /// <summary>The tone its tile and its accent wear, one of <see cref="Render.Tile.Tones"/>; empty for the one its slug gives
+    /// it (<see cref="Render.Tile.For(Tangent, string)"/>).</summary>
+    public string Accent { get; set; } = "";
+
+    /// <summary>The image its tile wears in place of its letter: a bundled cover's name (<see cref="Space.Art"/>) or an image
+    /// brought in here, as <c>/media/{id}</c>; empty for none.</summary>
+    public string Image { get; set; } = "";
+
+    /// <summary>Takes <paramref name="accent"/> and <paramref name="image"/>, each left as it is where null, or refuses with
+    /// <see cref="AccentRule"/> or <see cref="ImageRule"/>. Answers whether anything changed.</summary>
+    public bool Wear(string? accent, string? image)
+    {
+        var tone = accent?.Trim() ?? Accent;
+        if (tone.Length > 0 && !Render.Tile.Tones.Contains(tone)) throw new Refusal(AccentRule);
+        var picture = image is null ? Image : Space.Art.Judged(image) ?? throw new Refusal(ImageRule);
+        if (tone == Accent && picture == Image) return false;
+        (Accent, Image) = (tone, picture);
+        return true;
+    }
 
     /// <summary>The kind a Topic started here has unless its author says otherwise.</summary>
     public PostKind DefaultKind { get; set; }

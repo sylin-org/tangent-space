@@ -17,24 +17,27 @@ public sealed record ChangeTangentInput(
     [Description(Holds.ChangedTangentDescription)] string? Description = null,
     [Description(Holds.ChangedTangentKind)] string? Kind = null,
     [Description(Holds.ChangedTangentAudience)] string? Audience = null,
-    [Description(Holds.TangentMove)] string? Move = null);
+    [Description(Holds.TangentMove)] string? Move = null,
+    [Description(Holds.TangentAccent)] string? Accent = null,
+    [Description(Holds.TangentImage)] string? Image = null);
 
 /// <summary>A Tangent's settings: <c>/t/{tangent}/settings</c>. Its <c>GET</c> is the form, one resource both ways
 /// (<see cref="TangentSettingsPage"/>). Its <c>POST</c> takes <c>name</c>, <c>description</c>, <c>kind</c>,
-/// <c>audience</c> and <c>move</c>, as a form or a JSON object, each left as it is when not sent, and sends
+/// <c>audience</c>, <c>move</c>, <c>accent</c> and <c>image</c>, as a form or a JSON object, each left as it is when not sent, and sends
 /// <see cref="ChangeTangent"/>: a form is sent on to the Tangent's page, or back to its settings after a move, or, where
 /// the change closed the Tangent to its sender, reads that it is saved (<see cref="TangentClosed"/>), as a JSON request
 /// does; a JSON
 /// request reads the Tangent (<c>200</c>); a refusal reads the form again with the reason inline, or a problem with the
 /// gate. Both resolve the address as the Tangent page does (<see cref="Here.Find"/>) before anything else is
 /// judged, so a Tangent the reader may not view and one no row has answer alike.</summary>
+[Managing]
 public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
     public const string Route = "/t/{tangent}/" + TangentWrites.SettingsSegment;
 
     [HttpGet(Route)]
     [Tool(Name = "read_tangent_settings")]
-    [Description("Read a Tangent's name, description, default kind and audience, for whoever may change them. Call this before change_tangent.")]
+    [Description("Read a Tangent's name, description, default kind, audience, accent and image, for whoever may change them. Call this before change_tangent.")]
     public async Task<IActionResult> Get([Description(Holds.Tangent)] string tangent, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
@@ -47,7 +50,7 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
     [HttpPost(Route)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "change_tangent", Destructive = true, Idempotent = false, OpenWorld = false)]
-    [Description("Change a Tangent's name, description, default kind or audience, or move it among the Tangents, for whoever holds ManageTangent there or ManageSpace. What you send replaces what stood, and sending a move again moves it again.")]
+    [Description("Change a Tangent's name, description, default kind, audience, accent or image, or move it among the Tangents, for whoever holds ManageTangent there or ManageSpace. What you send replaces what stood, and sending a move again moves it again.")]
     public async Task<IActionResult> Change([FromRoute, Description(Holds.Tangent)] string tangent, ChangeTangentInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
@@ -69,7 +72,9 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
             input.Description,
             kind is { } chosenKind ? Enum.GetValues<PostKind>()[chosenKind] : null,
             audience is { } chosenAudience ? Enum.GetValues<Audience>()[chosenAudience] : null,
-            move is { } chosenMove ? Enum.GetValues<Move>()[chosenMove] : null).Send();
+            move is { } chosenMove ? Enum.GetValues<Move>()[chosenMove] : null,
+            input.Accent,
+            input.Image).Send();
         switch (outcome)
         {
             case Outcome<Tangent>.Done { Result: var changed }:
@@ -107,6 +112,8 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
         {
             Name = input.Name ?? page.Name,
             Description = input.Description ?? page.Description,
+            Accent = input.Accent is { } accent && (accent.Length == 0 || Render.Tile.Tones.Contains(accent)) ? accent : page.Accent,
+            Image = input.Image is { } image && Space.Art.Judged(image) is { } kept ? kept : page.Image,
             Kind = TangentWrites.Choice(input.Kind, TangentWrites.Kinds, out _) is { } kind ? TangentWrites.Kinds[kind] : page.Kind,
             Audience = TangentWrites.Choice(input.Audience, TangentWrites.Audiences, out _) is { } audience
                 ? TangentWrites.Audiences[audience]
@@ -137,6 +144,10 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
             row.Id,
             row.Name,
             row.Description,
+            row.Accent,
+            Render.Tile.For(row, baseAddress + "/").Tone,
+            row.Image,
+            Space.Art.Covers.Select(cover => new Space.AppearanceSettingsPage.Cover(cover.Name, cover.Title, baseAddress + "/" + Space.Art.File(cover.Name))).ToList(),
             PostWrites.Word(row.DefaultKind),
             TangentWrites.Word(await Overwrites.AudienceOf(row.Id, ct) ?? Audience.Public),
             neighbours ? (await Neighbour(personId, row, earlier: true, ct))?.Name : null,

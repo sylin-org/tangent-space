@@ -2,8 +2,6 @@
  * in the reader's theme, and the three of its own its arrangement reads — the title bar, a chosen row and a name — which
  * it draws from the tokens under any other palette. What follows from them is Tangent's (tokens.css). */
 
-@layer base, shapes, tangent, palette, owner;
-
 @layer palette {
 :root {
   --ts-page: light-dark(#ffffff, #2e3035);

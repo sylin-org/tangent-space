@@ -306,3 +306,102 @@
 .appearance-css {
   min-height: 160px;
 }
+
+/* The place's image: the bundled covers and the place's own as cards of their pictures, the chosen one ringed in the
+ * accent, and the way to bring one's own beneath them. */
+.cover-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 10px;
+}
+
+.cover-choice {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+  font: var(--ts-type-ui);
+  font-size: 13px;
+  color: var(--ts-text-2);
+}
+
+.cover-choice input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cover-picture {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--ts-line);
+  background: var(--ts-surface-2, var(--ts-surface));
+}
+
+.cover-choice:has(input:checked) .cover-picture {
+  outline: 2px solid var(--ts-accent);
+  outline-offset: 2px;
+}
+
+.cover-choice:has(input:checked) .cover-name {
+  color: var(--ts-text);
+  font-weight: 600;
+}
+
+.cover-choice:has(input:focus-visible) .cover-picture {
+  outline: 2px solid var(--ts-accent);
+  outline-offset: 4px;
+}
+
+.cover-upload {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.cover-upload .post-form-note {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+/* A Tangent's accent: its tile in each of the six tones, and in the one its name gives it. */
+.tone-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tone-choice {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--ts-line);
+  border-radius: 999px;
+  cursor: pointer;
+  font: var(--ts-type-ui);
+  font-size: 13px;
+}
+
+.tone-choice input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tone-choice:has(input:checked) {
+  border-color: var(--ts-accent);
+  box-shadow: 0 0 0 1px var(--ts-accent);
+}
+
+.tone-choice:has(input:focus-visible) {
+  outline: 2px solid var(--ts-accent);
+  outline-offset: 2px;
+}
