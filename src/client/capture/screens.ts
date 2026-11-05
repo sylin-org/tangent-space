@@ -81,7 +81,8 @@ const localSettings = { 'Koan:Web:ApplicationUrl': 'http://localhost', ASPNETCOR
 export const screens: Readonly<Record<string, Screen>> = {
   // A visitor's front page; the capture persona with news since her place checkpoint — replies to her Topic, a
   // mention of her, new articles and new Posts in each Tangent; and the same persona with her checkpoint at the
-  // log's last sequence, quiet; and the persona as the one who set the place up, who administers it and is offered a
+  // log's last sequence, quiet; a visitor's door whose Tangents wear their looks and hold older Topics, each Tangent's shelf
+  // holding its latest past the front page; and the persona as the one who set the place up, who administers it and is offered a
   // new Tangent, with her account open, where the place's settings are offered; and her first door after setup,
   // holding the first Tangent and the moderators', with nothing new. Then the persona as the operator of a place reached at a public
   // origin while it has no address: the Offer on her door, with its evidence and its two answers; where Use it lands, first run's
@@ -97,6 +98,7 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'dressed', seed: 'dressed' },
       { name: 'signed-in-with-news', seed: 'door', signedIn: true },
       { name: 'quiet', seed: 'door-quiet', signedIn: true },
+      { name: 'shelves', seed: 'door-shelves' },
       { name: 'administrator', place: 'persona', seed: 'door', signedIn: true },
       { name: 'administrator-account', place: 'persona', seed: 'door', signedIn: true, click: '.account-button' },
       { name: 'first', place: 'persona', signedIn: true },

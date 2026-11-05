@@ -81,7 +81,7 @@ public sealed class ArticleSeedController(RoleCollection roles) : ControllerBase
     }
 
     /// <summary>A dark glazed bowl on a warm ground, a gold seam across it, seen from above; fixed by its arguments.</summary>
-    private static byte[] Bowl(int width, int height, double centre, double middle, double reach)
+    internal static byte[] Bowl(int width, int height, double centre, double middle, double reach)
     {
         using var image = new SkiaSharp.SKBitmap(new SkiaSharp.SKImageInfo(width, height, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Opaque));
         var (cx, cy, radius) = (width * centre, height * middle, Math.Min(width, height) * reach * 1.25);

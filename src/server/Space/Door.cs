@@ -10,8 +10,8 @@ namespace Tangent.Space;
 /// <see cref="Name"/>, its <see cref="Description"/>, its <see cref="Address"/> and its <see cref="Proprietor"/> — what they <see cref="Can"/> do
 /// here, and, for a signed-in reader, <see cref="News"/>: what is new to them since they were here and the sequence
 /// the door read through. For everyone, and alone for a visitor or a reader with nothing new, the front page: the
-/// <see cref="Tangents"/> the reader may view, the Topics <see cref="Featured"/> and <see cref="Alive"/> in them, and
-/// who is <see cref="Around"/>. Every list is bounded, and a count the door could not finish says it is a lower bound
+/// <see cref="Tangents"/> the reader may view, the Topics <see cref="Featured"/> and <see cref="Alive"/> in them, a
+/// shelf of each Tangent's latest (<see cref="Shelves"/>), and who is <see cref="Around"/>. Every list is bounded, and a count the door could not finish says it is a lower bound
 /// with <c>atLeast</c>; nothing is a total over the log. Every link is absolute under the base URL. <see cref="Who"/>
 /// is the signed-in reader and <see cref="SignIn"/> where a visitor signs in; <see cref="Day"/> is the UTC day the
 /// times are written for. <see cref="Poll"/> is where the reader asks for what happens after this door: the poll past the
@@ -79,6 +79,10 @@ public sealed record Door(
     /// <summary>The few steps that make the place its manager's own: present only for a reader who holds
     /// <c>ManageSpace</c>, and only while nothing has been written in any Tangent but the moderators'.</summary>
     public Welcome? Welcoming { get; init; }
+
+    /// <summary>For a visitor and a reader with nothing new, a shelf for each of the first Tangents the reader may view
+    /// that holds a Topic, the moderators' Tangent aside; absent otherwise.</summary>
+    public IReadOnlyList<Shelf>? Shelves { get; init; }
 
     /// <summary>Where every Tangent the reader may view is listed, present where more follow those the door lists.</summary>
     public string? AllTangents { get; init; }
@@ -176,6 +180,11 @@ public sealed record Door(
     /// <summary>A Tangent the reader may view: its slug, name, kind, address, how many Topics were started there, and
     /// how many of its Posts are new to the reader.</summary>
     public sealed record Listed(string Slug, string Name, string Kind, string Address, int TopicCount, int New);
+
+    /// <summary>One Tangent's shelf: its slug, name, kind, line, address, tile, how many Topics were started there, and its
+    /// latest few, newest activity first, leaving out those the front page shows above it.</summary>
+    public sealed record Shelf(string Slug, string Name, string Kind, string Description, string Address, Render.Tile Tile, int TopicCount,
+        IReadOnlyList<TangentPage.Topic> Topics);
 
     /// <summary>A Topic on the front page and the Tangent it is in.</summary>
     public sealed record Shown(string Tangent, string TangentName, TangentPage.Topic Topic);
