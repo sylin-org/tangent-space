@@ -70,7 +70,7 @@ public sealed record TopicPage(
     /// <summary>One Post as the page shows it: its place in the Topic, its address, author, body and when it was
     /// written, its version, and, for a reply to a Post other than the root, that Post's Id and address. The body is
     /// the Markdown as written, and <see cref="Mentions"/> are the participants it mentions as they are now, which the
-    /// HTML renders as links reading their current handles. A removed Post
+    /// HTML renders as links reading their names now. A removed Post
     /// is a tombstone that keeps its place, author and time, carries no body and says who removed it and when.
     /// <see cref="Edited"/> says who other than its author last edited it and when, where someone did: the words are not
     /// said to be the author's.
@@ -102,8 +102,9 @@ public sealed record TopicPage(
         TangentPage.Edited? Edited = null);
 
     /// <summary>A participant or a role a body mentions, by what the body's link names: a participant's DID, their handle
-    /// now and their address; a role's key, its word, as an <c>@</c> names it, and no address.</summary>
-    public sealed record Mention(string Id, string Handle, string? Address);
+    /// now, the name the place shows them by now, and their address; a role's key, its word, as an <c>@</c> names it, its
+    /// name, and no address.</summary>
+    public sealed record Mention(string Id, string Handle, string Name, string? Address);
 
     /// <summary>Where a Topic was taken on a tangent from. For a reader who may view the origin: its address — a
     /// tombstone's where it is <see cref="Removed"/> — the title of its Topic, the name of its Tangent and who wrote it.

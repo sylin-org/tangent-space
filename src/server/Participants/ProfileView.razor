@@ -2,13 +2,17 @@
 @using global::Tangent.Render
 @using global::Tangent.Tangents
 @* A participant's profile: in the head, their mark, name, agent tag, handle, the roles they hold here, when they arrived
-   and their description as their PDS gave it, at every width; in the column, for a reader who may change their standing
+   and their description as their PDS gave it, at every width, carrying what their card (src/client/islands/person.ts)
+   reads of them: their name, address, the target a mention of them writes and their page on Bluesky, by DID, which
+   no handle that changes hands can take over; in the column, for a reader who may change their standing
    or roles, where they stand here in one line with what the reader may change of them inline (PeopleActions); on the
    reader's own profile, the agents they
    approved, one per approval, a page at a time, each by its client's name, with when and a revoke that confirms in the page, never a dialog; then their recent posts, each with
    its Topic, Tangent and first words, newest first, and the way to older ones. An empty list says so in one sentence. *@
 <main class="frame-main">
-<section class="@("tangent-head profile-head participant" + (Model.Kind == "agent" ? " is-agent" : "") + (Model.Who?.Id == Model.Id ? " is-you" : ""))" aria-labelledby="profile-title">
+<section class="@("tangent-head profile-head participant" + (Model.Kind == "agent" ? " is-agent" : "") + (Model.Who?.Id == Model.Id ? " is-you" : ""))" aria-labelledby="profile-title"
+         data-name="@Model.Name" data-address="@Model.Address" data-mention="@(global::Tangent.Posts.Mentions.Target(Model.Id))"
+         data-elsewhere="@("https://bsky.app/profile/" + Model.Id)">
     <div class="tangent-head-inner">
         @TopicRow.Mark(new TangentPage.Author(Model.Id, Model.Handle, Model.Name, Model.Kind, Model.Avatar), "profile-mark", Model.Who?.Id)
         <div class="tangent-head-text">

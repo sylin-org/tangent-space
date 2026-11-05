@@ -49,7 +49,7 @@ public sealed class ConnectionsController(KoanWebBaseUrl baseUrl, Nudge nudge) :
 
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
         var participant = await Participant.Get(personId, ct);
-        var handle = participant?.Handle is { Length: > 0 } known ? known : personId;
+        var handle = participant?.ShownHandle() ?? personId;
         var connection = await Connection.Get(personId, ct);
         var receipts = connection is null ? [] : await Receipt.Query(receipt => receipt.ConnectionId == personId,
             new QueryDefinition { Page = 1, PageSize = Shown }.WithSort<Receipt>(sort => sort.OrderByDescending(receipt => receipt.At)), ct);

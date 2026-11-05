@@ -61,11 +61,11 @@
         if (!(Model.Kind == "absent" || Model.Word == Capabilities.Apply.Word || Model.Word == Capabilities.Declined.Word) || Http.HttpContext is not { } http
             || Posts.PostWrites.PersonId(http.User) is not { } personId) return;
         var participant = await Participants.Participant.Get(personId, http.RequestAborted);
-        var handle = participant?.Handle is { Length: > 0 } stored ? stored : personId;
+        var handle = participant?.ShownHandle() ?? personId;
         var back = HttpMethods.IsGet(http.Request.Method) || HttpMethods.IsHead(http.Request.Method)
             ? http.Request.PathBase + http.Request.Path + http.Request.QueryString
             : http.Request.PathBase + "/";
-        _account = new Account(participant?.Profile.DisplayName is { Length: > 0 } name ? name : handle, handle,
+        _account = new Account(participant?.ShownName() ?? personId, handle,
             BaseUrl.Resolve(http) + AuthConstants.Routes.Logout + "?return=" + Uri.EscapeDataString(back));
     }
 

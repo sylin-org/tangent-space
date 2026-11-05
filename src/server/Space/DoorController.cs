@@ -429,13 +429,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
     {
         var wanted = ids.OfType<string>().Distinct(StringComparer.Ordinal).ToList();
         if (wanted.Count == 0) return new Dictionary<string, TangentPage.Author>();
-        return (await Participant.Get(wanted, ct)).OfType<Participant>().ToDictionary(row => row.Id, row =>
-        {
-            var handle = row.Handle.Length > 0 ? row.Handle : row.Id;
-            var name = row.Profile.DisplayName is { Length: > 0 } displayName ? displayName : handle;
-            return new TangentPage.Author(row.Id, handle, name, row.Kind.ToString().ToLowerInvariant(), row.Profile.Avatar,
-                ProfilePage.AddressOf(baseAddress, handle));
-        }, StringComparer.Ordinal);
+        return (await Participant.Get(wanted, ct)).OfType<Participant>().ToDictionary(row => row.Id, row => TangentPage.Author.Of(row, baseAddress), StringComparer.Ordinal);
     }
 
     private static TangentPage.Author Person(IReadOnlyDictionary<string, TangentPage.Author> people, string id)

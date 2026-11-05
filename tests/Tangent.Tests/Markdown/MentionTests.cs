@@ -10,8 +10,8 @@ using static Tangent.Posts.Writing;
 
 namespace Tangent.Posts;
 
-/// <summary>A mention is a link to <c>at://</c> and a DID: at render a link to the participant's address reading their
-/// current handle, or its own words where the DID is no participant's; written with the Post, one <c>mention</c> event per
+/// <summary>A mention is a link to <c>at://</c> and a DID: at render a link to the participant's address reading the name
+/// the place shows them by now, titled with their handle, or its own words where the DID is no participant's; written with the Post, one <c>mention</c> event per
 /// participant newly mentioned who may view the Tangent, in the Post's transaction; and on the door of the participant
 /// mentioned.</summary>
 public sealed class MentionTests
@@ -23,7 +23,7 @@ public sealed class MentionTests
     private static string Mention(string did, string words) => $"[@{words}](at://{did})";
 
     [Fact]
-    public async Task A_mention_renders_as_a_link_to_the_participants_address_with_their_current_handle_and_an_unknown_identity_as_text()
+    public async Task A_mention_renders_as_a_link_to_the_participants_address_with_their_name_now_and_an_unknown_identity_as_text()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
@@ -38,20 +38,42 @@ public sealed class MentionTests
         var mention = Assert.Single(shown.GetProperty("mentions").EnumerateArray());
         var handle = Bea + ".example";
         var address = BaseUrl + "/p/" + Uri.EscapeDataString(handle);
-        Assert.Equal((Bea, handle, address),
-            (mention.GetProperty("id").GetString(), mention.GetProperty("handle").GetString(), mention.GetProperty("address").GetString()));
+        Assert.Equal((Bea, handle, handle, address),
+            (mention.GetProperty("id").GetString(), mention.GetProperty("handle").GetString(), mention.GetProperty("name").GetString(),
+                mention.GetProperty("address").GetString()));
 
+        // With no display name, the name shown is the handle.
         var html = (await Send(visitor, HttpMethod.Get, TopicPath(root))).Body;
-        Assert.Contains($"<p>Hello <a href=\"{address}\">@{handle}</a> and @ghost, and <code>{WebUtility.HtmlEncode(Mention(Mo, "code"))}</code> stays code.</p>", html);
+        Assert.Contains($"<p>Hello <a href=\"{address}\" title=\"@{handle}\">@{handle}</a> and @ghost, and <code>{WebUtility.HtmlEncode(Mention(Mo, "code"))}</code> stays code.</p>", html);
         Assert.DoesNotContain("href=\"at:", html);
         Assert.DoesNotContain("href=\"#\"", html);
 
-        // Bea's handle changes; the body says nothing of it, and every render reads the new one.
+        // Bea's profile names her; every render reads it at once, and hovering tells her apart by her handle.
+        Assert.IsType<Outcome<Participant>.Done>(await new CaptureProfile(new ProfileAnswer(Bea, "Bea <Lantern>", null, null), DateTimeOffset.UtcNow).Send(Cancellation));
+        html = (await Send(visitor, HttpMethod.Get, TopicPath(root))).Body;
+        Assert.Contains($"<a href=\"{address}\" title=\"@{handle}\">@Bea &lt;Lantern&gt;</a>", html);
+        Assert.Equal("Bea <Lantern>", (await Send(visitor, HttpMethod.Get, TopicPath(root), json: true)).Json.GetProperty("root")
+            .GetProperty("mentions")[0].GetProperty("name").GetString());
+
+        // Her handle changes; the body says nothing of it, and every render reads the new one.
         Assert.IsType<Outcome<Participant>.Done>(await new RecordHandle(Bea, "bea.renamed.example").Send(Cancellation));
         html = (await Send(visitor, HttpMethod.Get, TopicPath(root))).Body;
-        Assert.Contains($"<a href=\"{BaseUrl}/p/bea.renamed.example\">@bea.renamed.example</a>", html);
+        Assert.Contains($"<a href=\"{BaseUrl}/p/bea.renamed.example\" title=\"@bea.renamed.example\">@Bea &lt;Lantern&gt;</a>", html);
         Assert.DoesNotContain(handle, html);
         Assert.Equal(body, (await Post.Get(root.Id, Cancellation))?.Body);
+    }
+
+    [Fact]
+    public void The_name_shown_is_the_display_name_else_the_handle_else_the_id()
+    {
+        var participant = new Participant { Id = Bea };
+        Assert.Equal((Bea, Bea), (participant.ShownName(), participant.ShownHandle()));
+        participant.Handle = "bea.example";
+        Assert.Equal(("bea.example", "bea.example"), (participant.ShownName(), participant.ShownHandle()));
+        participant.Profile.DisplayName = "Bea";
+        Assert.Equal(("Bea", "bea.example"), (participant.ShownName(), participant.ShownHandle()));
+        participant.Profile.DisplayName = "";
+        Assert.Equal("bea.example", participant.ShownName());
     }
 
     [Fact]
@@ -144,7 +166,7 @@ public sealed class MentionTests
     }
 
     [Fact]
-    public async Task The_door_and_the_tangent_page_show_a_mention_as_the_participants_current_handle()
+    public async Task The_door_and_the_tangent_page_show_a_mention_as_the_participants_name_now()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
@@ -164,6 +186,9 @@ public sealed class MentionTests
 
         Assert.IsType<Outcome<Participant>.Done>(await new RecordHandle(Bea, "bea.renamed.example").Send(Cancellation));
         Assert.Equal(("@bea.renamed.example has a question about @ghost.", "@bea.renamed.example has a question about @ghost."), await Lines());
+
+        Assert.IsType<Outcome<Participant>.Done>(await new CaptureProfile(new ProfileAnswer(Bea, "Bea", null, null), DateTimeOffset.UtcNow).Send(Cancellation));
+        Assert.Equal(("@Bea has a question about @ghost.", "@Bea has a question about @ghost."), await Lines());
     }
 
     [Fact]

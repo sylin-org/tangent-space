@@ -3,6 +3,7 @@ import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view'
 import { draftKey, readDraft, writeDraft } from '../composer'
 import { composerChanged } from '../islands/composer'
+import { addComposer, markdownOf, type Named } from '../named'
 import { attachSuggestions, textareaSurface } from '../suggest'
 import { bring, refusedHere, type Brought } from './bringing'
 import { articleExtensions } from './extensions'
@@ -92,6 +93,9 @@ function placeImage(view: EditorView, at: number, src: string, id: number) {
   }
   view.dispatch(tr)
 }
+
+// A name as the editor holds it, one chip, and the space after it.
+const chipAndSpace = (named: Named) => [{ type: 'named', attrs: { ...named } }, { type: 'text', text: ' ' }]
 
 function button(label: string, title: string, run: () => void): HTMLButtonElement {
   const element = document.createElement('button')
@@ -621,9 +625,9 @@ export function writeArticle(props: ArticleProps): () => void {
         const point = editor.view.coordsAtPos(Math.max(0, editor.state.selection.from - characters))
         return { left: point.left, bottom: point.bottom }
       },
-      replaceBack: (characters, words) => {
+      replaceBack: (characters, named) => {
         const to = editor.state.selection.from
-        editor.view.dispatch(editor.state.tr.insertText(words, to - characters, to))
+        editor.chain().insertContentAt({ from: to - characters, to }, chipAndSpace(named)).run()
       },
       writable: () => rich && editor.isEditable,
       onChange: (listener) => {
@@ -636,6 +640,27 @@ export function writeArticle(props: ArticleProps): () => void {
       },
     }, props.suggest))
   }
+
+  // A person's card puts their name where the writer is, in either view, with a space on each side where none is.
+  cleanups.push(addComposer({
+    element: host,
+    put(named) {
+      const spaced = (before: string, after: string) => [/^$|\s$/u.test(before) ? '' : ' ', /^\s/u.test(after) ? '' : ' ']
+      if (rich) {
+        const { $from, $to } = editor.state.selection
+        const [ahead, behind] = spaced($from.parent.textBetween(0, $from.parentOffset, undefined, '￼'), $to.parent.textBetween($to.parentOffset, $to.parent.content.size, undefined, '￼'))
+        const chip = { type: 'named', attrs: { ...named } }
+        editor.chain().focus().insertContent([...(ahead ? [{ type: 'text', text: ahead }] : []), chip, ...(behind ? [{ type: 'text', text: behind }] : [])]).run()
+        return
+      }
+      const at = source.selectionStart ?? source.value.length
+      const end = source.selectionEnd ?? at
+      const [ahead, behind] = spaced(source.value.slice(0, at), source.value.slice(end))
+      source.focus()
+      source.setRangeText(ahead + markdownOf(named) + behind, at, end, 'end')
+      source.dispatchEvent(new Event('input', { bubbles: true }))
+    },
+  }))
 
   renderCover()
   countWords()

@@ -45,8 +45,8 @@ public sealed record TakeRoleInput(
 /// object, and send one command: <c>time-out</c> sends <see cref="TimeOut"/> for the duration in <c>for</c>;
 /// <c>ban</c>, <see cref="Ban"/>; <c>lift</c>, <see cref="Lift"/>, after which the participant joins the member role
 /// where they lack it (<see cref="MemberRole"/>); <c>give</c> and <c>take</c>, <see cref="ChangeRole"/> for the role in
-/// <c>role</c>. A form is sent back to the page in <c>back</c> — this one, or the participant's profile, where the same
-/// forms are — and a JSON request reads the participant as this page now lists them; a refusal reads the page again with
+/// <c>role</c>. A form is sent back to the page in <c>back</c> — this one, the participant's profile, where the same
+/// forms are, or the page their card was opened on — and a JSON request reads the participant as this page now lists them; a refusal reads the page again with
 /// the reason above the list, or a problem. A reader for whom the place does not exist receives what an address with
 /// nothing there receives.</summary>
 [Managing]
@@ -256,15 +256,15 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
         => words.Count < 2 ? string.Concat(words) : string.Join(", ", words.Take(words.Count - 1)) + " or " + words[^1];
 
     /// <summary>The page a form returns to: the path it sent in <c>back</c> where that is under the base URL's, of visible
-    /// characters, without scheme or authority, and the people's or a profile's; the people otherwise.</summary>
+    /// characters, without scheme or authority — the people, a profile, or the page a person's card was opened on; the
+    /// people otherwise.</summary>
     private string Back(string? sent)
     {
         var people = baseUrl.PathBase + Path;
         if (sent is not { Length: > 0 } || sent[0] != '/' || sent.Length > 1 && sent[1] is '/' or '\\'
             || !sent.All(c => c is > ' ' and <= '~' and not '\\'))
             return people;
-        var path = new PathString(sent.Split('?', '#')[0]);
-        return path.StartsWithSegments(new PathString(people)) || path.StartsWithSegments(new PathString(baseUrl.PathBase + "/p")) ? sent : people;
+        return baseUrl.PathBase.HasValue && !new PathString(sent.Split('?', '#')[0]).StartsWithSegments(baseUrl.PathBase) ? people : sent;
     }
 
     /// <summary>A query string of the parts given, empty when none is.</summary>
@@ -326,10 +326,10 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
 
             var offer = People.Offered(_reader, _readerId, participant, bag, Space, _given, _now);
             var standing = participant.StandingAt(_now);
-            var handle = participant.Handle.Length > 0 ? participant.Handle : participant.Id;
+            var handle = participant.ShownHandle();
             return new PeoplePage.Listed(
                 participant.Id,
-                participant.Profile.DisplayName is { Length: > 0 } displayName ? displayName : handle,
+                participant.ShownName(),
                 handle,
                 ProfilePage.AddressOf(_baseAddress, handle),
                 participant.Kind.ToString().ToLowerInvariant(),

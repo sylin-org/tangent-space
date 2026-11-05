@@ -1,12 +1,17 @@
 // What a writer can name as they type: after an @ that begins a word, the people and roles of the place, and after a #,
 // the Tangents they may view, read from the Tangent's suggestions (/t/{tangent}/suggest) and shown as a short list under
 // the caret. Arrows move through it, Enter or Tab picks, Escape closes it, and so does leaving the field; picking writes
-// the handle, the role or the Tangent's slug after its sign, and a space. Never a dialog: the list sits in the page beside
-// the field, a listbox the field controls. A field is a surface: a textarea (textareaSurface) or the article editor.
+// who or what it means in place of what was typed — the sign and its name, linked to its target (named.ts) — and a
+// space, so the Post reaches the one picked whatever their handle is by the time it is sent. Never a dialog: the list
+// sits in the page beside the field, a listbox the field controls. A field is a surface: a textarea (textareaSurface),
+// where a pick is its Markdown, or the article editor, where it is a chip.
+import { markdownOf, type Named } from './named'
 
 export interface Suggestion {
   kind: 'person' | 'role' | 'tangent'
+  // What typing it after its sign names: a handle, a role's word, a Tangent's slug.
   insert: string
+  target: string
   name: string
   note: string | null
 }
@@ -27,13 +32,14 @@ export function typedAt(before: string): Typed | null {
 
 // A field suggestions serve: the element that holds the focus and the words, where its keys are heard first, the words
 // before the caret in its line, the point on the screen under the character so many characters back from the caret, how
-// it replaces those characters with words, whether it takes words now, and how it says that its words or caret moved.
+// it replaces those characters with a name and a space after it, whether it takes words now, and how it says that its
+// words or caret moved.
 export interface Surface {
   element: HTMLElement
   keys: HTMLElement
   before(): string
   pointBack(characters: number): { left: number; bottom: number }
-  replaceBack(characters: number, words: string): void
+  replaceBack(characters: number, named: Named): void
   writable(): boolean
   onChange(listener: () => void): () => void
 }
@@ -77,7 +83,8 @@ export function textareaSurface(field: HTMLTextAreaElement): Surface {
       mirror.remove()
       return point
     },
-    replaceBack(characters, words) {
+    replaceBack(characters, named) {
+      const words = markdownOf(named) + ' '
       const caret = field.selectionStart ?? field.value.length
       const start = caret - characters
       const rest = field.value.slice(caret).replace(/^[\w.-]*/u, '').replace(/^ /u, '')
@@ -181,7 +188,7 @@ export function attachSuggestions(surface: Surface, address: string): () => void
     const at = typed
     close()
     if (!entry || !at) return
-    surface.replaceBack(at.prefix.length + 1, at.sign + entry.insert + ' ')
+    surface.replaceBack(at.prefix.length + 1, { words: at.sign + entry.name, target: entry.target })
     field.focus()
   }
 

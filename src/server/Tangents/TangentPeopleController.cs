@@ -232,8 +232,8 @@ public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollecti
 
     private static TangentPeoplePage.Person Person(Participant participant, string baseAddress, string state, IReadOnlyList<string> choices)
     {
-        var handle = participant.Handle.Length > 0 ? participant.Handle : participant.Id;
-        var name = participant.Profile.DisplayName is { Length: > 0 } shown ? shown : handle;
+        var handle = participant.ShownHandle();
+        var name = participant.ShownName();
         return new TangentPeoplePage.Person(participant.Id, name, handle, participant.Kind.ToString().ToLowerInvariant(),
             ProfilePage.AddressOf(baseAddress, handle), state, choices);
     }

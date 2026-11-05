@@ -1,0 +1,102 @@
+/* A participant's card, beside the name, mark or mention it opened from (islands/person.ts): their mark and name over
+   their handle, roles and since when, their description, what the reader may change of them, and the card's actions.
+   It sits over the page and never covers it whole. A name in a body, as a pick writes it, is one chip in the visual
+   editor. */
+.person-card {
+  position: absolute;
+  z-index: 6;
+  width: min(22rem, calc(100vw - 16px));
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--ts-line);
+  border-radius: var(--ts-radius-panel);
+  background: var(--ts-page);
+  box-shadow: var(--ts-shadow-popover);
+  color: var(--ts-text);
+  font: var(--ts-type-ui);
+}
+
+.person-card:focus {
+  outline: none;
+}
+
+.person-card[aria-busy="true"] {
+  min-height: 64px;
+}
+
+.person-card-who {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.person-card-who .mark {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  font-size: 17px;
+}
+
+.person-card-text {
+  min-width: 0;
+}
+
+.person-card-name {
+  margin: 0;
+  font: var(--ts-type-ui-large);
+  overflow-wrap: anywhere;
+}
+
+.person-card-meta {
+  margin: 2px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  color: var(--ts-text-2);
+  font: var(--ts-type-ui-small);
+  font-weight: 400;
+}
+
+.person-card-description {
+  margin: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  color: var(--ts-text-2);
+}
+
+.person-card-standing {
+  margin: 0;
+}
+
+.person-card-said {
+  margin: 0;
+  color: var(--ts-text-2);
+}
+
+.person-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.person-card-action {
+  text-decoration: none;
+}
+
+[data-person] {
+  cursor: pointer;
+}
+
+.article-surface .named {
+  padding: 0 2px;
+  border-radius: var(--ts-radius-row);
+  background: var(--ts-accent-soft);
+  color: var(--ts-accent);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.article-surface .named.ProseMirror-selectednode {
+  outline: 2px solid var(--ts-accent-line);
+}

@@ -121,7 +121,7 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Read
         var shownThrough = window.Replies.Count == 0 ? 0 : window.High;
         var continues = window.Low <= Math.Max(seenSeq, 0) + 1;
         if (reader is not null) Response.Headers.CacheControl = "no-cache, no-store";
-        var (publishing, document) = await Connections.Publishing.For(root, reader?.Id, reader is null ? null : Named(reader).Handle,
+        var (publishing, document) = await Connections.Publishing.For(root, reader?.Id, reader is null ? null : reader.ShownHandle(),
             await Connections.Publishing.Open(space, tangentRow.Id, ct), address, baseAddress, ct);
         var elsewhere = document is null ? null : await Connections.Elsewhere.For(root, readers, ct);
         return Ok(new TopicPage(
@@ -148,7 +148,7 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Read
             baseAddress + "/",
             reader is null ? baseAddress + SignInController.Path + "?return=" + back : null,
             reader is null ? null : new TopicPage.Reader(
-                reader.Id, Named(reader).Name, Named(reader).Handle, Roles.Word(place.RoleIds), reader.Profile.Avatar,
+                reader.Id, reader.ShownName(), reader.ShownHandle(), Roles.Word(place.RoleIds), reader.Profile.Avatar,
                 baseAddress + AuthConstants.Routes.Logout + "?return=" + back,
                 await PostWrites.SettingsFor(reader.Id, baseAddress, ct),
                 await unread!.BadgeNow(baseAddress + "/", ct)),
@@ -226,21 +226,9 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Read
             .Concat(posts.Select(post => post.EditedBy).OfType<string>())
             .Distinct(StringComparer.Ordinal).Take(limit).ToList();
         var found = await Participant.Get(ids, ct);
-        return found.OfType<Participant>().ToDictionary(row => row.Id, row =>
-        {
-            var (name, handle) = Named(row);
-            return new TangentPage.Author(row.Id, handle, name, row.Kind.ToString().ToLowerInvariant(), row.Profile.Avatar,
-                ProfilePage.AddressOf(baseAddress, handle));
-        }, StringComparer.Ordinal);
+        return found.OfType<Participant>().ToDictionary(row => row.Id, row => TangentPage.Author.Of(row, baseAddress), StringComparer.Ordinal);
     }
 
-    /// <summary>The name a participant is shown by, and their handle: the profile's display name, else the handle,
-    /// else their Id.</summary>
-    private static (string Name, string Handle) Named(Participant participant)
-    {
-        var handle = participant.Handle.Length > 0 ? participant.Handle : participant.Id;
-        return (participant.Profile.DisplayName is { Length: > 0 } name ? name : handle, handle);
-    }
 
     private string BaseAddress() => baseUrl.Resolve(HttpContext);
 }

@@ -216,8 +216,13 @@ else
         builder.CloseElement();
     };
 
+    /// <summary>The attribute a mark carries with the profile its card reads, where the page knows it: a click on it opens
+    /// the participant's card (<c>src/client/islands/person.ts</c>), as a click on their name does.</summary>
+    public const string PersonCard = "data-person";
+
     /// <summary>A participant's mark: their avatar, or two letters of their handle on their own tint; round for a
-    /// person, square with a ring for an agent; and marked as the reader's own where it is <paramref name="reader"/>.</summary>
+    /// person, square with a ring for an agent; and marked as the reader's own where it is <paramref name="reader"/>;
+    /// where the page knows their profile, a click on it opens their card.</summary>
     public static RenderFragment Mark(TangentPage.Author author, string size, string? reader = null) => builder =>
     {
         var shape = (author.Kind == "agent" ? " is-agent" : "") + (reader is not null && author.Id == reader ? " is-you" : "");
@@ -227,6 +232,7 @@ else
             builder.AddAttribute(1, "class", "mark chip participant " + size + shape);
             builder.AddAttribute(2, "src", avatar);
             builder.AddAttribute(3, "alt", "");
+            if (author.Profile is { } profile) builder.AddAttribute(8, PersonCard, profile);
             builder.CloseElement();
         }
         else
@@ -234,6 +240,7 @@ else
             builder.OpenElement(4, "span");
             builder.AddAttribute(5, "class", "mark chip participant " + size + shape + " tone-" + Monogram.Tone(author.Id));
             builder.AddAttribute(6, "aria-hidden", "true");
+            if (author.Profile is { } profile) builder.AddAttribute(9, PersonCard, profile);
             // One letter where the mark is too small for two to read.
             var letters = Monogram.Letters(author.Handle);
             builder.AddContent(7, size == "reply-mark" ? letters[..1] : letters);

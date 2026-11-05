@@ -87,7 +87,7 @@ public sealed class FeedTests
     {
         Assert.Contains("<em>words</em>", html);
         Assert.DoesNotContain("<script", html);
-        Assert.Contains($"href=\"{BaseUrl}/p/did%3Aplc%3Aines.example\">@did:plc:ines.example</a>", html);
+        Assert.Contains($"href=\"{BaseUrl}/p/did%3Aplc%3Aines.example\" title=\"@did:plc:ines.example\">@did:plc:ines.example</a>", html);
         Assert.Contains("href=\"https://tangent.test/about\"", html);
         Assert.Contains($"href=\"{topic}#there\"", html);
         Assert.Contains("src=\"https://tangent.test/media/sketch.png\"", html);

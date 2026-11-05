@@ -110,7 +110,7 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
         }
 
         var place = await Capabilities.Load(personId, null, null, ct);
-        var (name, handle) = Named(applicant);
+        var (name, handle) = (applicant.ShownName(), applicant.ShownHandle());
         return new ObjectResult(new DecidedApplication(applicant.Id, name, handle, People.Word(applicant.StandingAt(DateTimeOffset.UtcNow)),
             applications, place.Can))
         {
@@ -143,7 +143,7 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
             TangentSpaceSettingsController.Sections(place, baseAddress, TangentSpaceSettingsController.ApplicationsSection),
             read.Applicants.Select(applicant =>
             {
-                var (name, handle) = Named(applicant);
+                var (name, handle) = (applicant.ShownName(), applicant.ShownHandle());
                 return new ApplicationsPage.Applicant(applicant.Id, name, handle, baseAddress + "/p/" + Uri.EscapeDataString(handle),
                     applicant.Standing == Standing.Declined ? ApplicationsPage.Declined : ApplicationsPage.Waiting,
                     applicant.AppliedAt ?? DateTimeOffset.MinValue);
@@ -162,12 +162,6 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
             DateOnly.FromDateTime(DateTime.UtcNow));
     }
 
-    /// <summary>The name a participant shows and their handle, their id where they have none.</summary>
-    private static (string Name, string Handle) Named(Participant participant)
-    {
-        var handle = participant.Handle.Length > 0 ? participant.Handle : participant.Id;
-        return (participant.Profile.DisplayName is { Length: > 0 } displayName ? displayName : handle, handle);
-    }
 
     private string BaseAddress() => baseUrl.Resolve(HttpContext);
 }

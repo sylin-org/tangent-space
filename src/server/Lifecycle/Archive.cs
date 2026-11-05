@@ -130,7 +130,7 @@ public sealed class Archive
     /// on Windows, so an archive rendered there leaves those addresses out.</summary>
     private async Task Profile(Participant row, CancellationToken ct)
     {
-        var address = row.Handle.Length > 0 ? row.Handle : row.Id;
+        var address = row.ShownHandle();
         if (!Nameable(address)) return;
         var folder = "p/" + address;
         string? before = null;
