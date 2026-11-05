@@ -18,7 +18,7 @@ public sealed record Joined(Tangent Tangent, string State)
 
 /// <summary>A participant joins the Tangent <see cref="Slug"/>, or asks to, as its joining says. They take part in the
 /// place (<see cref="Bit.Post"/> there), or are refused with its gate; a Tangent they read already leaves them as they are;
-/// one whose joining is closed, or that no row has, is absent to them. Joining lets them in at once
+/// one whose joining is closed, one that keeps them out (<see cref="Inside.Out"/>), or one that no row has, is absent to them. Joining lets them in at once
 /// (<see cref="Inside.LetIn"/>); asking writes their <see cref="Ask"/>, once, and a declined ask is not made
 /// again.</summary>
 public sealed record JoinTangent(string Slug, string ActorId, DateTimeOffset? At = null) : ICommand<Joined>
@@ -31,7 +31,8 @@ public sealed record JoinTangent(string Slug, string ActorId, DateTimeOffset? At
         var here = await Capabilities.Load(ActorId, Slug, null, ct);
         if (here.Exists) return new Outcome<Joined>.Done(new Joined(tangent, Joined.InState));
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct);
-        if (!Inside.Joinable(tangent, space?.ModeratorsTangentId)) return new Outcome<Joined>.Refused(ChangeTangent.NoTangent);
+        if (!Inside.Joinable(tangent, space?.ModeratorsTangentId) || Inside.Out(await Inside.Own(Slug, ActorId, ct)))
+            return new Outcome<Joined>.Refused(ChangeTangent.NoTangent);
 
         if (tangent.Joining == Joining.Join)
         {
@@ -57,7 +58,7 @@ public sealed record LeaveTangent(string Slug, string ActorId) : ICommand<Tangen
         if (await Tangent.Get(Slug, ct) is not { } tangent) return new Outcome<Tangent>.Refused(ChangeTangent.NoTangent);
         if (Inside.In(await Inside.Own(Slug, ActorId, ct)))
         {
-            await Inside.TakeOut(RoleSettings.Collection(), Slug, ActorId, ct);
+            await Inside.Remove(RoleSettings.Collection(), Slug, ActorId, ct);
             return new Outcome<Tangent>.Done(tangent);
         }
 
@@ -74,7 +75,8 @@ public sealed record LeaveTangent(string Slug, string ActorId) : ICommand<Tangen
 /// <summary>Whoever manages the Tangent <see cref="Slug"/> lets the participant <see cref="PersonId"/> in, or keeps them
 /// out. The actor holds <see cref="Bit.ManageTangent"/> there, or is refused with its gate; the moderators' Tangent keeps
 /// its access (<see cref="ChangeTangent.Fixed"/>); the participant has arrived. Letting in writes their own overwrite and
-/// ends their ask; keeping out declines a waiting ask, or else removes their own overwrite. Deciding an ask appends one
+/// ends their ask, replacing any overwrite that kept them out; keeping out declines a waiting ask, or else writes their own
+/// overwrite denying <see cref="Bit.View"/> (<see cref="Inside.KeepOut"/>), which wins over their roles. Deciding an ask appends one
 /// <see cref="EventKind.TangentLet"/> with the participant as its target, so their door tells them.</summary>
 public sealed record LetIn(string Slug, string ActorId, string PersonId, bool In, DateTimeOffset? At = null) : ICommand<Tangent>
 {
@@ -106,7 +108,7 @@ public sealed record LetIn(string Slug, string ActorId, string PersonId, bool In
         }
         else
         {
-            await Inside.TakeOut(roles, Slug, PersonId, ct);
+            await Inside.KeepOut(roles, Slug, PersonId, ct);
         }
 
         return new Outcome<Tangent>.Done(tangent);

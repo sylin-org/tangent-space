@@ -51,6 +51,14 @@ public sealed class MembersOnlyTests
         var left = await Json(ada, "/t/" + Studio, new Uri(studio.Json.GetProperty("leave").GetProperty("action").GetString()!).AbsolutePath, new { });
         Assert.Equal((HttpStatusCode.OK, "out"), (left.Status, left.Json.GetProperty("state").GetString()));
         Assert.Equal(HttpStatusCode.NotFound, (await Send(ada.Client, HttpMethod.Get, "/t/" + Studio)).Status);
+
+        // Opened to anyone, then Leo keeps her out: she cannot join again, and the studio is no longer listed to her.
+        Assert.Equal(HttpStatusCode.OK, (await Json(leo, people, "/t/" + Studio + "/settings/joining", new { joining = "join" })).Status);
+        var keptOut = await Json(leo, people, people, new { person = Ada, choice = "out" });
+        Assert.Equal("kept-out", keptOut.Json.GetProperty("people").EnumerateArray().Single().GetProperty("state").GetString());
+        Assert.Equal(HttpStatusCode.NotFound, (await Json(ada, "/t", "/t/" + Studio + "/join", new { })).Status);
+        Assert.DoesNotContain(Studio, (await Send(ada.Client, HttpMethod.Get, "/t", json: true)).Json.GetProperty("tangents").EnumerateArray()
+            .Select(tangent => tangent.GetProperty("slug").GetString()));
     }
 
     private static JsonElement Listed(JsonElement page, string slug)

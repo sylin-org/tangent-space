@@ -40,6 +40,12 @@ public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollecti
     public const string ChoiceField = "choice";
     public const string JoiningField = "joining";
 
+    /// <summary>Where a person stands whose own overwrite keeps them out.</summary>
+    public const string KeptOutState = "kept-out";
+
+    /// <summary>Where a person stands who reads the Tangent through a role, with no overwrite of their own.</summary>
+    public const string RoleState = "by-role";
+
     /// <summary>The most people one page lists, and the most a search finds.</summary>
     public const int PageSize = 25;
 
@@ -137,7 +143,8 @@ public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollecti
         foreach (var overwrite in read.Items.Where(o => o.SubjectKind == OverwriteSubjectKind.Role && o.SubjectId != Roles.Everyone))
             if (Overwrites.AccessOf(overwrite) is not RoleAccess.Default and var access && await roles.Get(overwrite.SubjectId, ct) is { } role)
                 roleRows.Add(new TangentPeoplePage.RoleHere(Roles.Word(role.Key), role.Name, TangentAccessController.Word(access)));
-        var inIds = read.Items.Where(o => o.SubjectKind == OverwriteSubjectKind.Person && Inside.In(o)).Select(o => o.SubjectId).ToList();
+        var personal = read.Items.Where(o => o.SubjectKind == OverwriteSubjectKind.Person && (Inside.In(o) || Inside.Out(o))).ToList();
+        var inIds = personal.Select(o => o.SubjectId).ToList();
 
         var asks = await Ask.Waiting(row.Id, Ask.ReadSize, ct);
         var start = Participants.People.Start(find);
@@ -151,10 +158,16 @@ public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollecti
             var own = await PermissionOverwrite.Get(matched.Select(p =>
                 PermissionOverwrite.KeyFor(Overwrites.Resource(row.Id), OverwriteSubjectKind.Person, p.Id)).ToList(), ct);
             var asked = await Ask.Get(matched.Select(p => Ask.Key(row.Id, p.Id)).ToList(), ct);
-            foundPeople = matched.Select((participant, index) => Person(participant, baseAddress,
-                Inside.In(own[index]) ? Joined.InState
-                : asked[index] is { } ask ? ask.Declined ? Joined.DeclinedState : Joined.AskedState
-                : "out")).ToList();
+            // Each found participant by what they can do here: kept out, in by their own place, reading through a role, or
+            // asked, declined or out.
+            var states = new List<string>(matched.Count);
+            for (var index = 0; index < matched.Count; index++)
+                states.Add(Inside.Out(own[index]) ? KeptOutState
+                    : Inside.In(own[index]) ? Joined.InState
+                    : (await Capabilities.Load(matched[index].Id, row.Id, null, ct)).Exists ? RoleState
+                    : asked[index] is { } ask ? ask.Declined ? Joined.DeclinedState : Joined.AskedState
+                    : "out");
+            foundPeople = matched.Select((participant, index) => Person(participant, baseAddress, states[index])).ToList();
         }
 
         return new TangentPeoplePage(
@@ -170,7 +183,8 @@ public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollecti
             isFixed ? null : Form.Posting(settings + "/" + JoiningSegment, new Form.Field(JoiningField, Holds.Joining, Word(row.Joining))),
             asks.Where(ask => named.ContainsKey(ask.PersonId)).Select(ask => Person(named[ask.PersonId], baseAddress, Joined.AskedState)).ToList(),
             roleRows,
-            inIds.Where(named.ContainsKey).Select(id => Person(named[id], baseAddress, Joined.InState)).ToList(),
+            personal.Where(o => named.ContainsKey(o.SubjectId))
+                .Select(o => Person(named[o.SubjectId], baseAddress, Inside.Out(o) ? KeptOutState : Joined.InState)).ToList(),
             read.Next is { } next ? people + "?" + AfterQuery + "=" + Uri.EscapeDataString(next) : null,
             start,
             foundPeople,

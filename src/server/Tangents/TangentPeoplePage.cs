@@ -7,8 +7,9 @@ namespace Tangent.Tangents;
 /// <see cref="ChangeJoining"/> sets; the participants <see cref="Asking"/> to join; who reads and posts there by role
 /// (<see cref="Roles"/>, set at <see cref="Access"/>) and by person (<see cref="People"/>), a page at a time, with
 /// <see cref="Next"/> the page after, null on the last; and, for a search by the start of a handle
-/// (<see cref="Find"/>), the participants <see cref="Found"/>. Each person says where they stand —
-/// <c>in</c>, <c>asked</c>, <c>declined</c> or <c>out</c> — and <see cref="Change"/> lets them in or out.
+/// (<see cref="Find"/>), the participants <see cref="Found"/>. Each person says what they can do there — <c>in</c> by
+/// their own place, <c>by-role</c>, <c>kept-out</c>, <c>asked</c>, <c>declined</c> or <c>out</c> — and
+/// <see cref="Change"/> lets them in or keeps them out.
 /// <see cref="Fixed"/> says this is the moderators' Tangent, whose access stays as it is.</summary>
 public sealed record TangentPeoplePage(
     string Slug,

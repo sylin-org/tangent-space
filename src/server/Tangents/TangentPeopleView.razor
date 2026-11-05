@@ -57,14 +57,14 @@
                 @foreach (var person in Model.People)
                 {
                     <li class="door-offer" @key="person.Id">
-                        <p class="door-offer-line"><a href="@person.Profile">@person.Name</a> <span class="topic-row-none">· @@@person.Handle@Agent(person) · reads and posts here</span></p>
-                        @Choices(person, ("out", "Take out"))
+                        <p class="door-offer-line"><a href="@person.Profile">@person.Name</a> <span class="topic-row-none">· @@@person.Handle@Agent(person) · @StateLine(person.State)</span></p>
+                        @Actions(person)
                     </li>
                 }
             </ul>
             @if (Model.People.Count == 0)
             {
-                <p class="post-form-note">No one is in by joining or being let in yet.</p>
+                <p class="post-form-note">No one is in or kept out by name yet.</p>
             }
             @if (Model.Next is { } next)
             {
@@ -91,18 +91,7 @@
                         {
                             <li class="door-offer" @key="person.Id">
                                 <p class="door-offer-line"><a href="@person.Profile">@person.Name</a> <span class="topic-row-none">· @@@person.Handle@Agent(person) · @StateLine(person.State)</span></p>
-                                @if (person.State == "in")
-                                {
-                                    @Choices(person, ("out", "Take out"))
-                                }
-                                else if (person.State == "asked")
-                                {
-                                    @Choices(person, ("in", "Let in"), ("out", "Decline"))
-                                }
-                                else
-                                {
-                                    @Choices(person, ("in", "Let in"))
-                                }
+                                @Actions(person)
                             </li>
                         }
                     </ul>
@@ -132,6 +121,14 @@
         }
     </div>;
 
+    /// <summary>What may be done about one person, by where they stand.</summary>
+    private RenderFragment Actions(TangentPeoplePage.Person person) => person.State switch
+    {
+        "in" or TangentPeopleController.RoleState => Choices(person, ("out", "Take out")),
+        "asked" => Choices(person, ("in", "Let in"), ("out", "Decline")),
+        _ => Choices(person, ("in", "Let in"))
+    };
+
     private static string Agent(TangentPeoplePage.Person person) => person.Kind == "agent" ? " · agent" : "";
 
     private string AudienceLine() => Model.Audience == "public"
@@ -153,6 +150,8 @@
     private static string StateLine(string state) => state switch
     {
         "in" => "reads and posts here",
+        TangentPeopleController.RoleState => "reads here through a role",
+        TangentPeopleController.KeptOutState => "kept out",
         "asked" => "asked to join",
         "declined" => "ask declined",
         _ => "not in"

@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Koan.Identity.Roles;
 using Koan.Web.Attributes;
 using Koan.Web.Controllers;
 using Koan.Web.Hosting;
@@ -48,6 +49,12 @@ public sealed class TangentsController(KoanWebBaseUrl baseUrl, IDataProtectionPr
         var page = await ViewableTangents.Read(personId,
             (row, on) => ViewableTangents.Views(on) || (joins && Inside.Joinable(row, space.ModeratorsTangentId)), cursor, PageSize, ct);
         var outside = page.Tangents.Where(row => !ViewableTangents.Views(page.Each[row.Id])).ToList();
+        // A Tangent that keeps the reader out is absent to them, as a closed one is.
+        var keptOut = outside.Count == 0
+            ? new HashSet<string>(StringComparer.Ordinal)
+            : (await PermissionOverwrite.Get(outside.Select(row =>
+                    PermissionOverwrite.KeyFor(Overwrites.Resource(row.Id), OverwriteSubjectKind.Person, personId!)).ToList(), ct))
+                .Where(Inside.Out).Select(own => own!.ResourceId[Overwrites.ResourcePrefix.Length..]).ToHashSet(StringComparer.Ordinal);
         var asks = outside.Count == 0
             ? new Dictionary<string, Ask>()
             : (await Ask.Get(outside.Select(row => Ask.Key(row.Id, personId!)).ToList(), ct)).OfType<Ask>().ToDictionary(ask => ask.TangentId, StringComparer.Ordinal);
@@ -56,7 +63,7 @@ public sealed class TangentsController(KoanWebBaseUrl baseUrl, IDataProtectionPr
         var back = baseUrl.PathBase + Route;
         if (personId is not null) Response.Headers.CacheControl = "private";
         return Ok(new TangentsPage(
-            page.Tangents.Select(tangent => ViewableTangents.Views(page.Each[tangent.Id])
+            page.Tangents.Where(tangent => !keptOut.Contains(tangent.Id)).Select(tangent => ViewableTangents.Views(page.Each[tangent.Id])
                 ? Listed(tangent, baseAddress)
                 : Outside(tangent, baseAddress, asks.GetValueOrDefault(tangent.Id))).ToList(),
             page.Next is { } next ? address + "?" + After + "=" + Uri.EscapeDataString(next.Seal(protection)) : null,

@@ -23,7 +23,7 @@
                                 {
                                     <p class="door-offer-line">
                                         @tangent.Name
-                                        <span class="topic-row-none">· Members only · @Detail(tangent.Kind, tangent.TopicCount)</span>
+                                        <span class="topic-row-none">· Members only · @(tangent.Kind == "article" ? "Articles" : "Discussions")</span>
                                     </p>
                                     @if (tangent.Description is { Length: > 0 } about)
                                     {

@@ -55,7 +55,8 @@ public sealed class Ask : Entity<Ask>
 
 /// <summary>Who is in a private Tangent by their own place: a participant's own overwrite on it that allows
 /// <see cref="Bit.View"/>, written allowing reading, posting and starting Topics when they join or are let in, and removed
-/// when they leave or are taken out. No other store says who is in.</summary>
+/// when they leave. Taking them out writes it denying <see cref="Bit.View"/>, which wins over what their roles allow there
+/// and keeps them from joining or asking until they are let in again. No other store says who is in.</summary>
 public static class Inside
 {
     public static readonly Reason Closed = Reason.Gated("closed", "This Tangent takes in only the people its managers let in.");
@@ -70,12 +71,19 @@ public static class Inside
     /// <summary>Whether an overwrite lets its participant in: it allows <see cref="Bit.View"/>.</summary>
     public static bool In(PermissionOverwrite? own) => own is not null && Bits.InTokens(own.Allow).HasFlag(Bit.View);
 
+    /// <summary>Whether an overwrite keeps its participant out: it denies <see cref="Bit.View"/>.</summary>
+    public static bool Out(PermissionOverwrite? own) => own is not null && Bits.InTokens(own.Deny).HasFlag(Bit.View);
+
+    /// <summary>Keeps the participant out: their own overwrite denies <see cref="Bit.View"/>, whatever their roles allow.</summary>
+    public static Task KeepOut(RoleCollection roles, string tangentId, string personId, CancellationToken ct)
+        => roles.Overwrite(Overwrites.Resource(tangentId), OverwriteSubjectKind.Person, personId, [], Bits.Tokens(Bit.View), ct: ct);
+
     /// <summary>Lets the participant in: their own overwrite allows reading, posting and starting Topics.</summary>
     public static Task LetIn(RoleCollection roles, string tangentId, string personId, CancellationToken ct)
         => roles.Overwrite(Overwrites.Resource(tangentId), OverwriteSubjectKind.Person, personId, Bits.Tokens(Bit.View | Bit.Post | Bit.Topic), [], ct: ct);
 
-    /// <summary>Takes the participant out: their own overwrite is removed.</summary>
-    public static Task TakeOut(RoleCollection roles, string tangentId, string personId, CancellationToken ct)
+    /// <summary>Removes the participant's own overwrite, as leaving does.</summary>
+    public static Task Remove(RoleCollection roles, string tangentId, string personId, CancellationToken ct)
         => roles.RemoveOverwrite(Overwrites.Resource(tangentId), OverwriteSubjectKind.Person, personId, ct);
 
     /// <summary>Whether a private Tangent is open to joining or asking: its joining is not closed, and it is not the
