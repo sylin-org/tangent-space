@@ -28,6 +28,7 @@ public static class PostWrites
     public const string ParentField = "parent";
     public const string VersionField = "version";
     public const string CoverField = "cover";
+    public const string OriginField = "origin";
 
 
     /// <summary>The refusal of an edit that names no version.</summary>
@@ -83,16 +84,19 @@ public static class PostWrites
         new Form.Field(ParentField, Holds.Parent, parent ?? ""));
 
     /// <summary>The form that starts a Topic at <paramref name="action"/>, a Tangent's, whose default kind
-    /// <paramref name="kind"/> the Topic takes: a TID minted for it, the title and the body, and an article's cover.</summary>
-    public static Form StartForm(string action, PostKind kind)
+    /// <paramref name="kind"/> the Topic takes: a TID minted for it, the title and the body, the Post it takes on a tangent,
+    /// <paramref name="origin"/> where the page names one, and an article's cover.</summary>
+    public static Form StartForm(string action, PostKind kind, string? origin = null)
     {
         Form.Field[] fields =
         [
             Form.Minted(IdField, Tid.Mint(DateTimeOffset.UtcNow)),
             new Form.Field(TitleField, Holds.TopicTitle),
-            new Form.Field(BodyField, Holds.TopicBody)
+            new Form.Field(BodyField, Holds.TopicBody),
+            .. origin is null ? Array.Empty<Form.Field>() : [new Form.Field(OriginField, Holds.TakenFrom, origin)],
+            .. kind == PostKind.Article ? [new Form.Field(CoverField, Holds.Cover)] : Array.Empty<Form.Field>()
         ];
-        return Form.Posting(action, kind == PostKind.Article ? [.. fields, new Form.Field(CoverField, Holds.Cover)] : fields);
+        return Form.Posting(action, fields);
     }
 
     /// <summary>The form that brings an image in for someone writing at <paramref name="tangentAddress"/>.</summary>

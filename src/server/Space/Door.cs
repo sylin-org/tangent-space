@@ -76,6 +76,10 @@ public sealed record Door(
     /// is decided: present only while one waits.</summary>
     public IReadOnlyList<Asking>? Asks { get; init; }
 
+    /// <summary>The few steps that make the place its manager's own: present only for a reader who holds
+    /// <c>ManageSpace</c>, and only while nothing has been written in any Tangent but the moderators'.</summary>
+    public Welcome? Welcoming { get; init; }
+
     /// <summary>Where every Tangent the reader may view is listed, present where more follow those the door lists.</summary>
     public string? AllTangents { get; init; }
 
@@ -164,6 +168,10 @@ public sealed record Door(
     /// <summary>How many applications wait, whether that is a lower bound because the read was full, and the address of
     /// the applications, where each is admitted or declined.</summary>
     public sealed record Waiting(int Count, bool AtLeast, string Address);
+
+    /// <summary>Where the place's manager makes it theirs: the first Topic, in its first Tangent where it has one; its
+    /// name and line; who comes in; and bringing their agent.</summary>
+    public sealed record Welcome(string? FirstTopic, string Settings, string Admission, string BringYourAgent);
 
     /// <summary>A Tangent the reader may view: its slug, name, kind, address, how many Topics were started there, and
     /// how many of its Posts are new to the reader.</summary>

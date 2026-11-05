@@ -47,9 +47,9 @@ public sealed class Post : Entity<Post>
     public static readonly Reason PostRemoved = Access.Capabilities.Removed;
     public static readonly Reason NeedsRemover = Reason.Invalid("A removal names who removes.");
 
-    /// <summary>The one answer for an Id a Post outside the place a command names already holds: it says nothing of
-    /// where, whose or what that Post is.</summary>
-    public static readonly Reason IdTaken = Reason.Conflict("This id is not available; mint another.");
+    /// <summary>The one answer for an Id a Post already holds that is not this request's, word <c>id-taken</c>: a retry
+    /// learns its Post was written, and nothing says where, whose or what that Post is.</summary>
+    public static readonly Reason IdTaken = Reason.Conflict("id-taken", "A Post already has this id; if it is yours, it was written. Mint another id to post anything new.");
 
     /// <summary>The Tangent the Topic is in; on every row.</summary>
     [Index(Name = "ix_post_topics", Order = 0)]

@@ -10,7 +10,6 @@ import { chromium, type Browser } from 'playwright'
 import { storageKey } from '../appearance.ts'
 import { interrupted, onInterrupt } from './interrupt.ts'
 import { referencePackage, renderReference } from './reference.ts'
-import { managerOrigin } from '../lobby.ts'
 import { captureOperator, capturePersona, captureThemes, nearestReadings, referenceVariants, references, screens, widths, type Screen, type State, type Width } from './screens.ts'
 import { captureOfferedUrl, doorOf, establish, forward, resolveServer, seed, signIn, startTangentSpace, statedBaseUrl } from './server.ts'
 
@@ -153,11 +152,6 @@ async function captureState(browser: Browser, pageBase: URL, baseUrl: URL, path:
         await context.route('**/*', async (route) => {
           const request = route.request()
           const url = new URL(request.url())
-          if (state.lobby && url.origin === managerOrigin)
-            return route.fulfill({
-              json: { product: 'companion-lobby', discoveryVersion: 1, managerOrigin },
-              headers: { 'access-control-allow-origin': '*' },
-            })
           if (!tangentSpace.has(url.origin)) return route.abort('blockedbyclient')
           if (state.cancel && url.pathname === pageBase.pathname.replace(/\/$/, '') + state.cancel) return route.abort('aborted')
           // The live updater's stream never ends, and a capture is the page as it stands: it is refused, and the

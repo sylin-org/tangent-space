@@ -13,9 +13,8 @@ namespace Tangent.Posts;
 /// The Tangent exists for the author, who holds <see cref="Bit.View"/> in it, or the command answers that no Tangent
 /// has the slug; the author holds <see cref="Bit.Topic"/> there, or is refused with the gate word. A Topic takes the
 /// Tangent's <see cref="Tangents.Tangent.DefaultKind"/>, so a Topic started in an articles Tangent is an article. Idempotent by Id: the same Id with the same request answers with the existing Post,
-/// before any gate, so a replay is safe, whoever the handles it typed name by then; a Post of this Tangent holding the
-/// Id with a different title, kind, body or author is a conflict, and a Post anywhere else holding it is refused with
-/// <see cref="Post.IdTaken"/>, which says nothing of that Post. The body is judged where the command is built (<see cref="PostBody"/>), never in its
+/// before any gate, so a replay is safe, whoever the handles it typed name by then; any other Post holding the Id is
+/// refused with <see cref="Post.IdTaken"/>, which says nothing of that Post. The body is judged where the command is built (<see cref="PostBody"/>), never in its
 /// hold. A Topic taken on a tangent names its <see cref="OriginId"/>: the origin exists for the author, who holds
 /// <see cref="Bit.View"/> in its Tangent, or the command answers that no Post has the Id before anything else; a removed
 /// origin is refused with <see cref="Capabilities.Removed"/>; the root carries the origin, may start without a body of
@@ -55,12 +54,7 @@ public sealed record StartTopic(
         if (existing is not null && Same(existing, kind)) return new Outcome<Post>.Done(existing);
         if (origin is { Removed: true }) return new Outcome<Post>.Refused(Capabilities.Removed);
         if (capabilities.Gate(Bit.Topic) is { } gate) return new Outcome<Post>.Refused(gate);
-        if (existing is not null)
-        {
-            return existing.TangentId == TangentId
-                ? new Outcome<Post>.Refused(Reason.Conflict($"Post '{Id}' already exists with a different body."))
-                : new Outcome<Post>.Refused(Post.IdTaken);
-        }
+        if (existing is not null) return new Outcome<Post>.Refused(Post.IdTaken);
 
         var at = At ?? DateTimeOffset.UtcNow;
         Post.CheckTitle(Title);

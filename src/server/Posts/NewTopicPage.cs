@@ -10,7 +10,9 @@ namespace Tangent.Posts;
 /// <see cref="SignIn"/> is where a visitor signs in, coming back here. After a refusal the
 /// form keeps what was sent and says why: under the title, under the body, or above the form. In an articles Tangent,
 /// <see cref="Bring"/> is the form that brings an image in, and <see cref="CoverId"/> the cover the form holds;
-/// <see cref="Day"/> is the UTC day the article would carry.</summary>
+/// <see cref="Day"/> is the UTC day the article would carry. A Topic that takes a Post on a tangent quotes it as
+/// <see cref="Origin"/>, offers a title from its first words, and lists as <see cref="Choices"/> the Tangents the reader
+/// may start it in, each a link to this form there, the next page and the first a link away.</summary>
 public sealed record NewTopicPage(
     string Tangent,
     string TangentName,
@@ -30,4 +32,17 @@ public sealed record NewTopicPage(
     string? BodyFailure = null,
     Form? Bring = null,
     string? CoverId = null,
-    DateOnly Day = default);
+    DateOnly Day = default,
+    QuotedPost? Origin = null,
+    IReadOnlyList<NewTopicPage.Choice>? Choices = null)
+{
+    /// <summary>The address of the form with the next page of Tangents to choose from; null on the last.</summary>
+    public string? More { get; init; }
+
+    /// <summary>The address of the form with the first page of Tangents, on a later page.</summary>
+    public string? First { get; init; }
+
+    /// <summary>A Tangent the reader may start the Topic in: its slug, its name, the kind a Topic started there takes,
+    /// the address of this form there, and whether it is this one.</summary>
+    public sealed record Choice(string Slug, string Name, string Kind, string Address, bool Current);
+}

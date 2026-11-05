@@ -160,10 +160,13 @@
   border: 1.5px solid var(--ts-connector);
   border-radius: var(--ts-radius-row);
   background: transparent;
+  color: inherit;
+  text-decoration: none;
   cursor: pointer;
 }
 
-.post-form-option:has(input:checked) {
+.post-form-option:has(input:checked),
+.post-form-option[aria-current="page"] {
   border-color: var(--ts-accent);
   background: var(--ts-accent-soft);
 }

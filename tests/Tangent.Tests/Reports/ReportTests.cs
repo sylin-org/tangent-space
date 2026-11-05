@@ -230,9 +230,14 @@ public sealed partial class ReportTests
         Assert.True(otherWords.Json.GetProperty("received").GetBoolean());
         Assert.Equal(afterFirst, afterOtherWords);
 
-        var empty = await Form(ada, action, action, new Dictionary<string, string> { ["id"] = Tids.Mint(), ["body"] = "   " });
-        Assert.Equal(HttpStatusCode.BadRequest, empty.Status);
-        Assert.Contains("id=\"report-body-failure\">" + ReportPost.NeedsReason + "</p>", empty.Body);
+        // A report needs no words: one of the Topic's opening Post with none starts its own report, titled by the Topic.
+        var rootAction = PostPath(topic, topic) + "/report";
+        var wordless = Tids.Mint();
+        var empty = await Form(ada, rootAction, rootAction, new Dictionary<string, string> { ["id"] = wordless, ["body"] = "   " });
+        Assert.Equal(HttpStatusCode.SeeOther, empty.Status);
+        var unsaid = await Post.Get(wordless, Cancellation);
+        Assert.Equal((Moderators, topic.Id, "", "Report: Lanterns at dusk"), (unsaid!.TangentId, unsaid.OriginId, unsaid.Body, unsaid.Title));
+        afterFirst = await Counted();
         var tooLong = await Form(ada, action, action, new Dictionary<string, string> { ["id"] = Tids.Mint(), ["body"] = new string('a', Post.BodyLimit + 1) });
         Assert.Equal(HttpStatusCode.BadRequest, tooLong.Status);
         Assert.Contains("id=\"report-body-failure\">" + Post.BodyTooLong + "</p>", WebUtility.HtmlDecode(tooLong.Body));

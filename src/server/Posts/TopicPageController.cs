@@ -106,7 +106,13 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
         var topicCan = rows.For(root);
         var back = Uri.EscapeDataString(baseUrl.PathBase + "/t/" + tangentRow.Id + "/" + (root.Slug ?? root.Id) + (anchor is null ? "" : "/" + anchor.Id));
         var space = rows.Space;
-        var takeOn = reader is not null && (place.Holds(Bit.Topic) || (await Origins.Destinations(personId, null, 1, ct)).Tangents.Count > 0);
+        // Where "take this on a tangent" opens the new-topic form: this Tangent where the reader may start a Topic here,
+        // else the first where they may.
+        var takeInto = reader is null ? null
+            : place.Holds(Bit.Topic) ? tangentRow.Id
+            : (await Origins.Destinations(personId, null, 1, ct)).Tangents.FirstOrDefault()?.Id;
+        var takeOn = takeInto is null ? null
+            : PostWrites.TangentAddress(baseAddress, takeInto) + "/" + TangentPageController.NewTopicSegment + "?" + PostWrites.OriginField + "=";
         // A signed-in reader's page is never stored, so a browser's Back after sign-out redisplays nothing of it. The page shows the root and the window's replies through its last, the root alone when it holds
         // none. The seen form is offered only for a window that continues from what the reader has seen — its first
         // reply at most one past their checkpoint, or past the root it shows — so the page never offers to skip a reply
@@ -158,13 +164,13 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
     }
 
     /// <summary>One Post as the page shows it, with what the reader holds on it from the page's rows, where it is
-    /// edited where they may edit or remove it, where it is taken on a tangent where <paramref name="takeOn"/> says they
-    /// may start a Topic somewhere and it is not removed, the Topics taken from it that they may view, and, for a
+    /// edited where they may edit or remove it, where it is taken on a tangent — the new-topic form <paramref name="takeOn"/>
+    /// names, where the reader may start a Topic somewhere — where it is not removed, the Topics taken from it that they may view, and, for a
     /// signed-in reader, the form that reports it: on someone else's Post that is
     /// not removed, outside the moderators' Tangent.</summary>
     private static TopicPage.Post Shown(Post post, Post root, string topicAddress, Capabilities.Rows rows,
         IReadOnlyDictionary<string, TangentPage.Author> people, IReadOnlyDictionary<string, TopicPage.Mention> mentioned, Unread? unread,
-        long? mark, Participant? reader, IReadOnlyDictionary<string, TopicPage.Taken> taken, bool takeOn)
+        long? mark, Participant? reader, IReadOnlyDictionary<string, TopicPage.Taken> taken, string? takeOn)
     {
         var address = topicAddress + "/" + Uri.EscapeDataString(post.Id);
         var can = rows.For(post, root);
@@ -185,7 +191,7 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
             unread is not null && unread.New(post, mark),
             can.Can,
             editable ? address + "/" + EditSegment : null,
-            takeOn && !post.Removed ? address + "/" + TakeOnATangentController.Segment : null,
+            takeOn is not null && !post.Removed ? takeOn + Uri.EscapeDataString(post.Id) : null,
             taken.GetValueOrDefault(post.Id),
             reader is not null && !post.Removed && post.AuthorId != reader?.Id && post.TangentId != rows.Space.ModeratorsTangentId
                 ? PostWrites.ReportForm(address + "/" + ReportController.Segment, Tid.Mint(DateTimeOffset.UtcNow)) : null,

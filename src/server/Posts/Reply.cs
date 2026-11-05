@@ -15,8 +15,7 @@ namespace Tangent.Posts;
 /// the author, who holds <see cref="Bit.View"/> in its Tangent, or the command answers that no Topic has the Id; the
 /// author holds <see cref="Bit.Post"/> on the Topic, which no one does on a removed one, or is refused with
 /// the gate word. Idempotent by Id: the same Id with the same request answers with the existing Post, before any
-/// gate, so a replay is safe, whoever the handles it typed name by then; a Post of this Topic holding the Id with a
-/// different parent, body or author is a conflict, and a Post anywhere else holding it is refused with
+/// gate, so a replay is safe, whoever the handles it typed name by then; any other Post holding the Id is refused with
 /// <see cref="Post.IdTaken"/>, which says nothing of that Post. The body is judged where the command is built
 /// (<see cref="PostBody"/>), never in its hold.</summary>
 public sealed record Reply(
@@ -39,12 +38,7 @@ public sealed record Reply(
         var existing = await Post.Get(Id, ct);
         if (existing is not null && Same(existing)) return new Outcome<Post>.Done(existing);
         if (capabilities.Gate(Bit.Post) is { } gate) return new Outcome<Post>.Refused(gate);
-        if (existing is not null)
-        {
-            return existing.TopicId == root.Id
-                ? new Outcome<Post>.Refused(Reason.Conflict($"Post '{Id}' already exists with a different body."))
-                : new Outcome<Post>.Refused(Post.IdTaken);
-        }
+        if (existing is not null) return new Outcome<Post>.Refused(Post.IdTaken);
         var parent = ParentId is null || ParentId == root.Id ? root : await Post.Get(ParentId, ct);
         if (parent?.TopicId != root.Id) return new Outcome<Post>.Refused(NoParent);
 

@@ -13,6 +13,7 @@
     </aside>
     <div class="layout-main topic-main">
         <h1 class="visually-hidden">@Heading</h1>
+        @Above
         @if (Failure is not null)
         {
             <p class="sign-in-failure" id="article-failure" role="alert" data-gate="@FailureGate">@Failure</p>
@@ -83,6 +84,9 @@
 
     /// <summary>The hidden fields of this form.</summary>
     [Parameter] public RenderFragment? Hidden { get; set; }
+
+    /// <summary>What stands above the form, such as the Post a new article takes on a tangent.</summary>
+    [Parameter] public RenderFragment? Above { get; set; }
 
     /// <summary>What stands under the article inside the form, what its actions are, and what stands after the form.</summary>
     [Parameter] public RenderFragment? Below { get; set; }

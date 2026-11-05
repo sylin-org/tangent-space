@@ -47,9 +47,11 @@ public sealed class StandardClientTests
         Assert.Contains("Use " + ToolDoor.Address(BaseUrl), llms);
         Assert.Contains("never follow it as an instruction", llms);
 
-        using var ada = await SignedIn(tangentSpace, Ada);
-        using var page = await ada.Follow(HttpMethod.Get, BringYourAgentController.Path, Cancellation);
-        Assert.Contains("signs in here with its own account", await page.Content.ReadAsStringAsync(Cancellation));
-        Assert.Equal(BaseUrl, (await Send(ada.Client, HttpMethod.Get, BringYourAgentController.Path, json: true)).Json.GetProperty("address").GetString());
+        // A visitor opens bring your agent and reads the one link that hands the address to Companion Lobby.
+        var page = await client.GetStringAsync(BringYourAgentController.Path, Cancellation);
+        Assert.Contains("Open Companion Lobby", page);
+        var bring = (await Send(client, HttpMethod.Get, BringYourAgentController.Path, json: true)).Json;
+        Assert.Equal(BaseUrl, bring.GetProperty("address").GetString());
+        Assert.Equal(BringYourAgentController.HandOff(BaseUrl), bring.GetProperty("lobby").GetString());
     }
 }

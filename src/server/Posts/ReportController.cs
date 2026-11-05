@@ -52,7 +52,7 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl) : ControllerBase
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "report", Destructive = false, Idempotent = false, OpenWorld = false)]
     [Needs(Bit.View, Participant = true)]
-    [Description("Tell the moderators about someone else's Post, in a sentence or two, when it needs them rather than a reply; its author is never told. Send an id, a TID you mint, and the same call again returns the same report, so a retry is safe; without one, each call is another word to them.")]
+    [Description("Tell the moderators about someone else's Post when it needs them rather than a reply, with a sentence if you have one; its author is never told. Send an id, a TID you mint, and the same call again returns the same report, so a retry is safe; without one, each call is another word to them.")]
     public async Task<IActionResult> Report([FromRoute, Description(Holds.Tangent)] string tangent, [FromRoute, Description(Holds.Topic)] string topic,
         [FromRoute, Description(Holds.Post)] string post, ReportInput input, CancellationToken ct)
     {
@@ -84,7 +84,7 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl) : ControllerBase
             return unsent ? new Problem(StatusCodes.Status503ServiceUnavailable, reason.Text) { Title = "Not sent" }.ToResult() : Answers.Refused(HttpContext, reason);
 
         return await Again(found, personId, input, unsent ? StatusCodes.Status503ServiceUnavailable : Answers.Status(HttpContext, reason), keepId: reason.Kind != ReasonKind.Conflict,
-            page => reason == ReportPost.NeedsReason || PostWrites.Concerning(reason) == PostWrites.About.Body ? page with { BodyFailure = reason.Text }
+            page => PostWrites.Concerning(reason) == PostWrites.About.Body ? page with { BodyFailure = reason.Text }
                 : reason.Kind == ReasonKind.Gated ? page with { Gate = reason.Word, Report = null }
                 : page with { Failure = reason.Text }, ct);
     }
@@ -111,21 +111,13 @@ public sealed class ReportController(KoanWebBaseUrl baseUrl) : ControllerBase
         var root = found.Root!;
         var baseAddress = BaseAddress();
         var tangent = found.Tangent!;
-        var tangentAddress = PostWrites.TangentAddress(baseAddress, tangent.Id);
-        var topicAddress = PostWrites.TopicAddress(baseAddress, tangent.Id, root.Slug ?? root.Id);
         var address = Address(found);
         var back = baseUrl.PathBase + "/t/" + tangent.Id + "/" + (root.Slug ?? root.Id) + "/" + reported.Id + "/" + Segment;
         var gate = received ? null : reported.Removed ? Capabilities.Removed.Word : null;
         var inModerators = !received && reported.TangentId == found.Rows.Space.ModeratorsTangentId;
 
-        var people = await TakeOnATangentController.People(reported, ct);
-        var author = people.TryGetValue(reported.AuthorId, out var person)
-            ? person
-            : new TangentPage.Author(reported.AuthorId, reported.AuthorId, reported.AuthorId, "person", null);
         return new ReportPage(
-            new TakeOnATangentPage.Quoted(reported.Id, address, author, reported.CreatedAt,
-                reported.Removed ? null : TangentPage.Opening(reported, people), reported.Removed, root.Title ?? "", topicAddress,
-                tangent.Name, tangentAddress, TangentPage.EditedOf(reported, people)),
+            await QuotedPost.Of(reported, root, tangent, baseAddress, ct),
             received,
             received || inModerators || gate is not null ? null : PostWrites.ReportForm(address + "/" + Segment, Tid.Mint(DateTimeOffset.UtcNow)),
             gate,
