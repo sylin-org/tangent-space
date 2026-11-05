@@ -94,6 +94,10 @@ public sealed class AtprotoAdapter(IAtprotoRepository repository, KoanWebBaseUrl
         return repository.Put(space.ProprietorId!, Publications, key, record, ct);
     }
 
+    /// <summary>Deletes the place's publication record from the account it is under.</summary>
+    public Task Withdraw(Publication publication, CancellationToken ct)
+        => repository.Delete(publication.Proprietor, Publications, publication.Key, ct);
+
     /// <summary>What the place's publication record says, to tell when it has changed.</summary>
     public string Fingerprint(TangentSpace space) => Base() + "\n" + space.Name + "\n" + space.Description;
 

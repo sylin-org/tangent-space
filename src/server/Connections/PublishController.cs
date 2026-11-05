@@ -133,7 +133,7 @@ public sealed class PublishController(KoanWebBaseUrl baseUrl, AtprotoAdapter atp
 
     private async Task<IActionResult> Chosen(string personId, Post? root, string address, CancellationToken ct)
     {
-        var outcome = await new ChooseToPublish(personId, root?.Id, root?.TangentId, await stream.Head(ct), DateTimeOffset.UtcNow).Send(ct);
+        var outcome = await new ChooseToPublish(personId, root?.Id, root?.TangentId, root?.Version ?? 0, await stream.Head(ct), DateTimeOffset.UtcNow).Send(ct);
         if (outcome is not Outcome<Connection>.Done) return Answers.NotDone(HttpContext, outcome);
         nudge.Changed();
         await nudge.Wake(personId);

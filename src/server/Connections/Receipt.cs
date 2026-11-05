@@ -24,6 +24,10 @@ public sealed class Receipt : Entity<Receipt>
     /// <summary>The Post's version this delivered; zero while it waits to be published.</summary>
     public long Version { get; set; }
 
+    /// <summary>The Post's version its author chose to publish as theirs: words someone else edited go out only once they
+    /// choose them.</summary>
+    public long Chosen { get; set; }
+
     /// <summary>The document record's address and content id, once published.</summary>
     public string? Document { get; set; }
 
@@ -45,11 +49,16 @@ public sealed class Receipt : Entity<Receipt>
     /// <summary>Whether the network holds a copy this receipt names.</summary>
     public bool IsLive() => Document is not null && !Retracted;
 
+    /// <summary>Whether the copy may carry <paramref name="post"/> as it stands: its words are its author's own, or they
+    /// chose this version as theirs.</summary>
+    public static bool Theirs(Post post, Receipt? receipt) => post.EditedBy is null || receipt?.Chosen >= post.Version;
+
     /// <summary>The state of an article against what its Connection delivered, as its author reads it.</summary>
     public static ArticleState StateOf(Receipt receipt, Post? post, Connection connection)
     {
         if (receipt.Retracted) return ArticleState.Retracted;
         var behind = post is not null && receipt.Version < post.Version;
+        if (behind && !Theirs(post!, receipt)) return ArticleState.EditedByOthers;
         if (behind && connection.NeedsGrant) return ArticleState.NeedsGrant;
         if (behind && connection.Trouble is not null) return ArticleState.Trying;
         if (receipt.Version == 0) return ArticleState.Publishing;
@@ -67,5 +76,8 @@ public enum ArticleState
     Updated,
     Trying,
     NeedsGrant,
+
+    /// <summary>Someone else edited it since: the copy stays at its author's words until they choose the new version.</summary>
+    EditedByOthers,
     Retracted
 }

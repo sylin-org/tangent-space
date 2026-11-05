@@ -93,6 +93,7 @@ public sealed class ConnectionsController(KoanWebBaseUrl baseUrl, Nudge nudge) :
     public static string Word(ArticleState state) => state switch
     {
         ArticleState.NeedsGrant => "grant",
+        ArticleState.EditedByOthers => "edited",
         _ => state.ToString().ToLowerInvariant()
     };
 
@@ -104,6 +105,7 @@ public sealed class ConnectionsController(KoanWebBaseUrl baseUrl, Nudge nudge) :
         ArticleState.Updated => "Updated",
         ArticleState.Trying => connection.Trouble ?? Syndication.Unreachable,
         ArticleState.NeedsGrant => "Waiting for permission",
+        ArticleState.EditedByOthers => "Edited by someone else; your copy stays as you wrote it",
         _ => "Retracted"
     };
 }

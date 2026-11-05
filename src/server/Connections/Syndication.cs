@@ -13,8 +13,10 @@ namespace Tangent.Connections;
 /// <summary>A Connection's work, as its job runs it: the log past its cursor, a bounded page; the articles those rows
 /// name and every article its receipts name; and for each of its participant's articles, the version its receipt
 /// delivered against the Post's own. A public article that is ahead of its receipt is published or updated — one that
-/// arrived after the Connection began, or one they chose — and one that is removed or no longer public is retracted.
-/// The proprietor's Connection first puts the place as their publication where it is missing or has changed. Every
+/// arrived after the Connection began, or one they chose — and one that is removed or private is retracted. Only the
+/// author's own words go out as theirs: a version someone else edited waits until they choose it (<see cref="Receipt.Theirs"/>).
+/// The proprietor's Connection first puts the place as their publication where it is missing or has changed, and a
+/// Connection withdraws the publication it put once the place is private or someone else is its proprietor. Every
 /// write is a put at a fixed key, so a run repeated after a failure lands once. The network is read and written outside
 /// any hold, and each receipt is sent as a command. A failure stops the run, leaves the cursor where it was, says what
 /// it could not do on the Connection and tries again later, sooner at first; a refusal that needs the grant again waits
@@ -63,6 +65,14 @@ public static class Syndication
         {
             var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
             var publication = await Publication.Get(Publication.SingleRow, ct);
+            if (publication is not null && publication.Proprietor == connection.Id
+                                        && (space.Audience != Audience.Public || space.ProprietorId != connection.Id))
+            {
+                await adapter.Withdraw(publication, ct);
+                await Sent(new ForgetPublication(), ct);
+                publication = null;
+            }
+
             if (space.ProprietorId == connection.Id && space.Audience == Audience.Public)
                 publication = await Placed(space, publication, adapter, ct);
 
@@ -107,7 +117,7 @@ public static class Syndication
         if (open)
         {
             var wanted = receipt is null ? article.LogSeq > connection.From : receipt.Retracted || receipt.Version < article.Version;
-            if (!wanted) return;
+            if (!wanted || !Receipt.Theirs(article, receipt)) return;
             var written = await adapter.Deliver(article, receipt, publication, ct);
             await Sent(new KeepReceipt(connection.Id, article.Id, article.TangentId, article.Version, written, DateTimeOffset.UtcNow), ct);
             return;

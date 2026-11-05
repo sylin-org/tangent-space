@@ -40,6 +40,8 @@ public sealed record Publishing(string State, string Sentence, string? Detail, F
         var elsewhere = receipt.Note is { } note ? Bluesky(note) : null;
         return (state switch
         {
+            ArticleState.EditedByOthers => new Publishing(Offer, "Someone else edited this since it went out. Publish this version as yours?",
+                "Until you do, your copy on Bluesky stays as you wrote it.", publish, null, elsewhere, connections),
             ArticleState.Publishing => new Publishing("publishing", "Publishing on Bluesky as you…", null, null, null, null, connections),
             ArticleState.Updating => new Publishing("updating", "Updating it on Bluesky…", null, null, null, elsewhere, connections),
             ArticleState.Trying => new Publishing("trying", connection.Trouble ?? Syndication.Unreachable, null, null, null, elsewhere, connections),
