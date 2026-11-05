@@ -164,7 +164,7 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl) : ControllerBase
     {
         var address = topicAddress + "/" + Uri.EscapeDataString(post.Id);
         var can = rows.For(post, root);
-        var editable = can.Holds(Bit.EditOwn) || can.Holds(Bit.RemoveOwn);
+        var editable = can.Holds(Bit.EditOwn);
         var parent = post.ParentId is { } parentId && parentId != root.Id ? parentId : null;
         return new TopicPage.Post(
             post.Id,

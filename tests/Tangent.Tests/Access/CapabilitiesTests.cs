@@ -142,8 +142,9 @@ public sealed class CapabilitiesTests
         Assert.Equal((Bit.View, true, Capabilities.SignIn), (visitorPublic.Held, visitorPublic.Exists, visitorPublic.Gate(Bit.Post)));
         Assert.Equal((Bit.None, false, Capabilities.SignInToRead), (visitorPrivate.Held, visitorPrivate.Exists, visitorPrivate.Gate(Bit.View)));
         Assert.Equal(Capabilities.SignInToRead, visitorPrivate.Gate(Bit.Post));
-        Assert.DoesNotContain("write", Capabilities.SignIn.Text);
-        Assert.DoesNotContain("write", Capabilities.SignInToRead.Text);
+        Assert.All(new[] { Capabilities.SignIn, Capabilities.SignInToRead, Capabilities.Apply, Capabilities.ApplyToRead, Capabilities.Declined,
+            Capabilities.DeclinedToRead, Capabilities.TimedOut, Capabilities.TimedOutUntil(Now), Capabilities.Removed, Capabilities.NotYours },
+            reason => Assert.DoesNotContain("write", reason.Text));
         Assert.Equal(Bit.View, visitorWidened.Held);
         Assert.Equal(["View"], visitorPublic.Can);
     }
@@ -158,7 +159,8 @@ public sealed class CapabilitiesTests
 
         Assert.Equal(Roles.MemberBits, ended.Held);
         Assert.Equal(Roles.MemberBits, endsNow.Held);
-        Assert.Equal((Bit.View, Capabilities.TimedOut), (running.Held, running.Gate(Bit.Post)));
+        Assert.Equal((Bit.View, Capabilities.TimedOutUntil(Now.AddDays(1))), (running.Held, running.Gate(Bit.Post)));
+        Assert.Contains("until Oct 30, 10:00 AM UTC", running.Gate(Bit.Post)!.Text);
         Assert.Equal((Bit.View, Capabilities.TimedOut), (open.Held, open.Gate(Bit.Post)));
     }
 
@@ -208,7 +210,8 @@ public sealed class CapabilitiesTests
         Assert.Equal(OnAnothers, another.Held);
         Assert.True(noPost.Holds(Bit.EditOwn | Bit.RemoveOwn), "of a Tangent, a bit of authorship says what the reader may do to their own");
         // A removed Post is a tombstone the reader finds, with nothing to do on it.
-        Assert.Equal((Bit.None, true, Capabilities.Removed), (removed.Held, removed.Exists, removed.Gate(Bit.Moderate)));
+        Assert.Equal((Bit.RemoveOwn, true, Capabilities.Removed), (removed.Held, removed.Exists, removed.Gate(Bit.Moderate)));
+        Assert.Equal(Capabilities.Removed, removed.Gate(Bit.EditOwn));
     }
 
     [Fact]

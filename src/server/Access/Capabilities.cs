@@ -28,17 +28,21 @@ public sealed class Capabilities
     /// <summary>Why a visitor may not read a private place.</summary>
     public static readonly Reason SignInToRead = Reason.Gated(SignIn.Word, "Sign in to read here.");
 
-    public static readonly Reason Apply = Reason.Gated("apply", "Your application is waiting: you can write here once someone admits you.");
+    public static readonly Reason Apply = Reason.Gated("apply", "Your application is waiting: you can take part here once someone admits you.");
 
     /// <summary>Why an applicant may not read a private place.</summary>
     public static readonly Reason ApplyToRead = Reason.Gated(Apply.Word, "Your application is waiting: you can read here once someone admits you.");
 
     /// <summary>The participant's application was declined: they read what a visitor reads, and nothing more.</summary>
-    public static readonly Reason Declined = Reason.Gated("declined", "Your application was declined, so you read here and don’t write.");
+    public static readonly Reason Declined = Reason.Gated("declined", "Your application was declined, so you read here and don’t take part.");
 
     /// <summary>Why a declined applicant may not read a private place.</summary>
     public static readonly Reason DeclinedToRead = Reason.Gated(Declined.Word, "Your application was declined, so this place isn’t open to you.");
     public static readonly Reason TimedOut = Reason.Gated("timed-out", "You’re timed out: you can read and report here, and post again once it ends.");
+
+    /// <summary>Why a timed-out participant reads and reports and posts nothing, saying until when, as their door does.</summary>
+    public static Reason TimedOutUntil(DateTimeOffset until)
+        => Reason.Gated(TimedOut.Word, $"You’re timed out until {Participants.PeopleView.Until(until)}: you can read and report here, and post again then.");
 
     /// <summary>The resource does not exist for this reader: banned, or without <see cref="Bit.View"/> where they
     /// stand. Every verb carries this one reason, and a command answers what it answers for a missing resource, which
@@ -177,7 +181,7 @@ public sealed class Capabilities
                 Drop(Bits.All & ~Bit.View, Declined);
                 break;
             case Standing.TimedOut:
-                Drop(Bits.All & ~Bit.View, TimedOut);
+                Drop(Bits.All & ~Bit.View, participant.StandingUntil is { } until ? TimedOutUntil(until) : TimedOut);
                 break;
         }
 
@@ -191,17 +195,21 @@ public sealed class Capabilities
         }
 
         // Replying is judged by the Topic, whose state lives on its root; everything else by the Post itself.
+        // Nothing applies to a tombstone but removing it again, which changes nothing and is judged as the Post stood.
         var topic = root ?? post;
+        var tombstone = post is { Removed: true };
         if (topic is { Removed: true }) Drop(Bit.Post, Removed);
-        if (post is { Removed: true }) Drop(Bits.All, Removed);
+        if (tombstone) Drop(Bits.All & ~(Bit.RemoveOwn | Bit.Moderate), Removed);
 
-        foreach (var (bit, reason) in resolved.Withheld) Drop(bit, reason);
+        // Whoever may not remove a tombstone again is told it is removed.
+        foreach (var (bit, reason) in resolved.Withheld) Drop(bit, tombstone && bit == Bit.RemoveOwn ? Removed : reason);
 
         // Authorship is asked of a Post; of a Tangent or the place, a bit of it says what the reader may do to their own.
-        if (post is not null && post.AuthorId != participant?.Id) Drop(Bit.EditOwn | Bit.RemoveOwn, NotYours);
+        if (post is not null && post.AuthorId != participant?.Id) Drop(Bit.EditOwn | Bit.RemoveOwn, tombstone ? Removed : NotYours);
 
         if (held.HasFlag(Bit.ManageSpace)) Imply(Bit.ManageTangent);
-        if (held.HasFlag(Bit.Moderate)) Imply(Bit.EditOwn | Bit.RemoveOwn);
+        if (held.HasFlag(Bit.Moderate)) Imply(tombstone ? Bit.RemoveOwn : Bit.EditOwn | Bit.RemoveOwn);
+        if (tombstone) Drop(Bit.Moderate, Removed);
 
         return new Capabilities(held, true, missing, resolved.RoleIds, resolved.Bag);
 

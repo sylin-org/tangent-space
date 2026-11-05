@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
+using Koan.Data.Core.Commands;
 using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
@@ -29,7 +30,11 @@ public sealed class DoorwayTests
 
         var page = await Send(visitor, HttpMethod.Get, "/t/" + Workshop);
         var json = await Send(visitor, HttpMethod.Get, "/t/" + Workshop, json: true);
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/t/" + Workshop);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
+        using var signIn = await visitor.SendAsync(request, Cancellation);
 
+        Assert.Equal([Challenge], signIn.Headers.WwwAuthenticate.Select(challenge => challenge.ToString()));
         Assert.Equal(HttpStatusCode.Unauthorized, page.Status);
         Assert.Contains("Sign in to read", page.Body);
         Assert.Contains("/sign-in", page.Body);
@@ -64,6 +69,48 @@ public sealed class DoorwayTests
         Assert.Contains(Capabilities.SignIn.Text, form.Body);
         Assert.DoesNotContain(Post.NeedsBody.Text, form.Body);
         Assert.Equal(before, await Counted());
+    }
+
+    [Fact]
+    public async Task A_timed_out_participant_who_replies_is_told_until_when()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        var root = await Started(Ada, "Lanterns", "How do you hang yours?");
+        var until = DateTimeOffset.UtcNow.AddDays(1);
+        var row = (await Participant.Get(Bea, Cancellation))!;
+        row.Standing = Standing.TimedOut;
+        row.StandingUntil = until;
+        Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(row).Send(Cancellation));
+        using var bea = await SignedIn(tangentSpace, Bea);
+
+        var refused = await Json(bea, TopicPath(root), TopicPath(root), new { id = Tids.Mint(), body = "Still here?" });
+        var page = await Form(bea, TopicPath(root), TopicPath(root), new Dictionary<string, string> { ["id"] = Tids.Mint(), ["body"] = "Still here?" });
+
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.TimedOut.Word, Capabilities.TimedOutUntil(until).Text),
+            (refused.Status, refused.Word, refused.Json.GetProperty("detail").GetString()));
+        Assert.Contains("until " + PeopleView.Until(until), System.Net.WebUtility.HtmlDecode(page.Body));
+    }
+
+    [Fact]
+    public async Task Removing_ones_own_post_again_answers_the_post_and_changes_nothing()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        var root = await Started(Ada, "Lanterns", "How do you hang yours?");
+        using var ada = await SignedIn(tangentSpace, Ada);
+        using var bea = await SignedIn(tangentSpace, Bea);
+        var remove = PostPath(root, root) + "/remove";
+
+        var first = await Json(ada, TopicPath(root), remove, new { });
+        var counted = await Counted();
+        var again = await Json(ada, TopicPath(root), remove, new { });
+        var anothers = await Json(bea, TopicPath(root), remove, new { });
+
+        Assert.Equal(HttpStatusCode.OK, first.Status);
+        Assert.Equal((HttpStatusCode.OK, first.Body), (again.Status, again.Body));
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.Removed.Word), (anothers.Status, anothers.Word));
+        Assert.Equal(counted, await Counted());
     }
 
     [Fact]

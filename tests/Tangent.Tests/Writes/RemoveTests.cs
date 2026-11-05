@@ -41,8 +41,8 @@ public sealed class RemoveTests
         var byJson = await Json(mo, PostPath(root, bea) + "/edit", PostPath(root, bea) + "/remove", new { });
 
         Assert.Equal((HttpStatusCode.OK, AddressOf(root, bea)), (byJson.Status, byJson.Location));
-        Assert.Equal((true, Mo, "", 0), (byJson.Json.GetProperty("removed").GetBoolean(), byJson.Json.GetProperty("removedBy").GetString(),
-            byJson.Json.GetProperty("body").GetString(), byJson.Json.GetProperty("can").GetArrayLength()));
+        Assert.Equal((true, Mo, "", "RemoveOwn"), (byJson.Json.GetProperty("removed").GetBoolean(), byJson.Json.GetProperty("removedBy").GetString(),
+            byJson.Json.GetProperty("body").GetString(), string.Join(",", byJson.Json.GetProperty("can").EnumerateArray().Select(bit => bit.GetString()))));
         Assert.Equal("From a hook by the door.", (await AuditPartition.At<Post>(bea.Id, 1, Cancellation))?.Body);
         Assert.Equal(2, (await Event.Query(e => e.Kind == EventKind.PostRemoved, Cancellation)).Count);
     }

@@ -13,8 +13,8 @@ namespace Tangent.Posts;
 /// characters, and text with no letter or digit finds nothing; a page holds between one and <see cref="PageLimit"/> Posts,
 /// its number from one to <see cref="PageNumberLimit"/>, and a page past the last holds none. A snippet holds
 /// <see cref="SnippetWords"/> words around the matched words, each between <see cref="Open"/> and <see cref="Close"/>.
-/// Reads only: the first page reads one Post past itself, which says whether a next page holds anything, and a later page,
-/// where it is full, reads the one Post after it; nothing is counted, and it takes no lock.</summary>
+/// Reads only: one search, asking for one Post past the page, says whether a next page holds anything; nothing is counted,
+/// and it takes no lock.</summary>
 public static class PostSearch
 {
     public const int TextLimit = 200;
@@ -65,14 +65,9 @@ public static class PostSearch
         size = Math.Clamp(size, 1, PageLimit);
         if (Words(text) is not { } words || !words.Any(char.IsLetterOrDigit) || viewable.Count == 0) return Answer.None;
 
-        // The first page reads one Post past itself, so that one read says whether there is more.
-        var first = page == 1;
-        var matches = await Post.Lexical.Search(words, query => Readable(query.Page(page, first ? size + 1 : size).Snippet(SnippetWords, Open, Close).AsTyped(),
+        var matches = await Post.Lexical.Search(words, query => Readable(query.Page(page, size).OneMore().Snippet(SnippetWords, Open, Close).AsTyped(),
             viewable, others), ct);
-        var more = first
-            ? matches.Count > size
-            : matches.Count == size && page < PageNumberLimit
-              && (await Post.Lexical.Search(words, query => Readable(query.Page(page * size + 1, 1).AsTyped(), viewable, others), ct)).Count > 0;
+        var more = matches.Count > size;
         if (matches.Count == 0) return Answer.None;
         var shown = matches.Take(size).ToList();
         var posts = await Post.Get(shown.Select(match => match.Id), ct);
