@@ -227,9 +227,9 @@ public sealed class PostTests
         };
 
         Assert.Equal((topic.Id, topic.Slug, topic.Body), Select(Assert.IsType<Outcome<Post>.Done>(topicAgain).Result));
-        Assert.All(topicDiffers, differs => Assert.Contains("already exists", Assert.IsType<Outcome<Post>.Refused>(differs).Reason.Text));
+        Assert.All(topicDiffers, differs => Assert.Equal(Post.IdTaken, Assert.IsType<Outcome<Post>.Refused>(differs).Reason));
         Assert.Equal((reply.Id, reply.Slug, reply.Body), Select(Assert.IsType<Outcome<Post>.Done>(replyAgain).Result));
-        Assert.All(replyDiffers, differs => Assert.Contains("already exists", Assert.IsType<Outcome<Post>.Refused>(differs).Reason.Text));
+        Assert.All(replyDiffers, differs => Assert.Equal(Post.IdTaken, Assert.IsType<Outcome<Post>.Refused>(differs).Reason));
         Assert.All(heldElsewhere, refused => Assert.Equal(Post.IdTaken, Assert.IsType<Outcome<Post>.Refused>(refused).Reason));
         Assert.Equal(before, (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation)));
         Assert.Equal("Said once.", (await Post.Get(topicId, Cancellation))?.Body);

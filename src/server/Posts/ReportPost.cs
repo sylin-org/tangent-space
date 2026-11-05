@@ -9,21 +9,21 @@ namespace Tangent.Posts;
 
 /// <summary>Reports a Post: takes it on a tangent into the moderators' Tangent (<see cref="ModeratorsTangent"/>) as a
 /// Topic whose root carries the reported Post as its origin, the reporter as its author, a title (<see cref="Title"/>)
-/// and the reason as its body. The title names the reported Topic only where the moderator role may view the reported
-/// Tangent (<see cref="ModeratorsTangent.MayView"/>); elsewhere it is the reason's first words as sent, so nothing of
-/// a Tangent the moderators may not view reaches theirs. Reporting is its own verb, held by every participant for
+/// and the reason, which may be none, as its body. The title names the reported Topic only where the moderator role may
+/// view the reported Tangent (<see cref="ModeratorsTangent.MayView"/>); elsewhere it is the reason's first words as
+/// sent, or <see cref="Unsaid"/>, so nothing of a Tangent the moderators may not view reaches theirs. Reporting is its own verb, held by every participant for
 /// whom the Post exists, whatever they hold in the moderators' Tangent: the Post exists for the reporter, who holds
 /// <see cref="Bit.View"/> where it is, or the command answers that no Post has the Id before anything else; a visitor is
 /// refused with <see cref="Capabilities.SignIn"/>; a Post of the moderators' Tangent with <see cref="InModerators"/>; a
-/// removed Post with <see cref="Capabilities.Removed"/>; a reason of
-/// nothing but white space with <see cref="NeedsReason"/>. The <see cref="EventKind.PostCreated"/> it appends targets
+/// removed Post with <see cref="Capabilities.Removed"/>. The <see cref="EventKind.PostCreated"/> it appends targets
 /// nobody, so the reported author hears nothing of it, and is marked a report (<see cref="Event.Report"/>), which is how it
 /// reaches everyone who may view the moderators' Tangent among what is for them on their door, without one row written
 /// for each of them (<see cref="Unread"/>); and one <see cref="EventKind.Mention"/> goes to each participant
 /// the reason mentions who may view the moderators' Tangent (<see cref="Mentions.Notify"/>). A participant who reports
 /// the same Post again while their earlier report stands — its root not removed — replies in that
 /// report's Topic with the new reason, so the moderators keep one Topic per reporter and Post with every reason in
-/// order; once the moderators remove it, the next report starts a Topic of its own. Idempotent by Id: the same
+/// order, and with no reason answers with that report and writes nothing; once the moderators remove it, the next
+/// report starts a Topic of its own. Idempotent by Id: the same
 /// Id from the same reporter about the same Post answers with the Post it wrote, whatever reason is sent and whatever
 /// the moderators have done with it since, so a resend says nothing of the report's state; any other Post holding it is
 /// refused with <see cref="Post.IdTaken"/>, which says nothing of that Post. The reason is judged where the command is built
@@ -37,7 +37,8 @@ public sealed record ReportPost(
 {
     public static readonly Reason NoPost = Koan.Data.Core.Commands.Reason.Absent("No Post has this Id.");
 
-    public static readonly Reason NeedsReason = Koan.Data.Core.Commands.Reason.Invalid("Say in a sentence or two why you are reporting this post.");
+    /// <summary>What a report's title names where it names no Topic and its reporter said nothing.</summary>
+    public const string Unsaid = "a post";
 
     /// <summary>The answer where the place records no moderators' Tangent, which a start creates.</summary>
     public static readonly Reason NoModerators = Koan.Data.Core.Commands.Reason.Invalid("This Tangent Space has no moderators' Tangent yet, so the report was not sent.");
@@ -72,10 +73,10 @@ public sealed record ReportPost(
         if (reported.TangentId == moderators) return new Outcome<Post>.Refused(InModerators);
 
         if (reported.Removed) return new Outcome<Post>.Refused(Capabilities.Removed);
-        if (string.IsNullOrWhiteSpace(Reason.Text)) return new Outcome<Post>.Refused(NeedsReason);
-
         var at = At ?? DateTimeOffset.UtcNow;
         var earlier = await Standing(moderators, ct);
+        var said = !string.IsNullOrWhiteSpace(Reason.Text);
+        if (earlier is not null && !said) return new Outcome<Post>.Done(earlier);
         Post written;
         if (earlier is not null)
         {
@@ -83,7 +84,7 @@ public sealed record ReportPost(
         }
         else
         {
-            var title = Title(await ModeratorsTangent.MayView(reported.TangentId, rows.Space, ct) ? topic.Title ?? "" : FirstWords(Reason.Sent));
+            var title = Title(await ModeratorsTangent.MayView(reported.TangentId, rows.Space, ct) ? topic.Title ?? "" : said ? FirstWords(Reason.Sent) : Unsaid);
             written = Post.Root(Id, into.Id, title, await StartTopic.UniqueSlug(into.Id, title, Id, ct), into.DefaultKind, Reason, ReporterId, at,
                 reported.Id);
             into.TopicStarted();

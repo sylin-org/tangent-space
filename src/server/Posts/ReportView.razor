@@ -1,7 +1,6 @@
-@using System.Globalization
 @using global::Tangent.Render
 @* The report of one Post: one panel in the page, quoting the Post — who wrote it, when, and its words cut short, or
-   that it is removed — then the form: the reason, and the report's Id in a hidden field, minted when the page was
+   that it is removed — then the form: a sentence for the moderators, which the reader may leave out, and the report's Id in a hidden field, minted when the page was
    rendered, so a form sent twice is one report. A reader who may not report it reads why above the form, whose field is
    read-only and which has no button, and a visitor the way to sign in; a refusal of the reason shows under it, and any
    other above the form; a Post of the moderators' Tangent is not reported, which the page says instead of the form. Once
@@ -12,17 +11,7 @@
         <div class="sign-in-body">
             <p class="post-form-where">From <a href="@Model.Reported.TopicAddress">@Model.Reported.Topic</a> in <a href="@Model.Reported.TangentAddress">@Model.Reported.Tangent</a></p>
             <h1 id="report-heading" class="sign-in-title">@(Model.Received ? "Report received" : "Report this post")</h1>
-            <blockquote cite="@Model.Reported.Address">
-                <p>
-                    <a href="@Model.Reported.Address"><strong>@Model.Reported.Author.Name</strong> <span class="post-handle">@("@" + Model.Reported.Author.Handle)</span>
-                        · <time datetime="@Model.Reported.CreatedAt.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture)">@Model.Reported.CreatedAt.ToUniversalTime().ToString("MMM d, yyyy", CultureInfo.InvariantCulture)</time></a>
-                </p>
-                <p>@(Model.Reported.Removed ? "This post is removed." : Model.Reported.Text)</p>
-                @if (Model.Reported.Edited is { } edited)
-                {
-                    <p class="post-edited">Edited by @edited.By.Name</p>
-                }
-            </blockquote>
+            <PostQuote Model="@Model.Reported" />
             @if (Model.Received)
             {
                 <p class="report-received" role="status">The moderators have your report. Only they can read it.</p>
@@ -55,8 +44,8 @@
                         <input type="hidden" name="@PostWrites.IdField" value="@report.Value(PostWrites.IdField)">
                     }
                     <div class="field">
-                        <label class="field-label" for="report-body">Why are you reporting this post?</label>
-                        <textarea class="post-form-body post-report-body" id="report-body" name="@PostWrites.BodyField" rows="4" required
+                        <label class="field-label" for="report-body">Anything the moderators should know? (optional)</label>
+                        <textarea class="post-form-body post-report-body" id="report-body" name="@PostWrites.BodyField" rows="3"
                                   autofocus="@(Model.Gate is null)" readonly="@(Model.Gate is not null)"
                                   aria-invalid="@(Model.BodyFailure is null ? "false" : "true")"
                                   aria-describedby="@(Model.BodyFailure is null ? "report-note" : "report-body-failure report-note")">@Model.Body</textarea>
@@ -64,7 +53,7 @@
                         {
                             <p class="field-failure" id="report-body-failure">@bodyFailure</p>
                         }
-                        <p class="post-report-note" id="report-note">Only the moderators can read it.</p>
+                        <p class="post-report-note" id="report-note">Only the moderators read it, and its author is never told. It removes nothing by itself.</p>
                     </div>
                     @if (Model.Gate is null)
                     {

@@ -196,7 +196,7 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl) : ControllerBase
             baseAddress + "/",
             await PostWrites.Reader(personId, capabilities, baseAddress, here, ct),
             BodyOptional: bodyOptional,
-            Edited: row.EditedBy is null ? null : Tangents.TangentPage.EditedOf(row, await TakeOnATangentController.People(row, ct)),
+            Edited: row.EditedBy is null ? null : Tangents.TangentPage.EditedOf(row, await QuotedPost.People(row, ct)),
             Kind: PostWrites.Word(row.ParentId is null ? row.Kind : PostKind.Topic),
             CoverId: row.CoverId,
             Bring: article && editable ? PostWrites.MediaForm(PostWrites.TangentAddress(baseAddress, root.TangentId)) : null,

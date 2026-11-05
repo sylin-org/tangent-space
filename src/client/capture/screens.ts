@@ -44,8 +44,6 @@ export interface State {
   reseed?: string
   /** Signed in as the capture persona through Koan's test connector before the page opens. */
   signedIn?: boolean
-  /** Companion Lobby answers on the browser's machine, as the capture states it; it is not the real one. */
-  lobby?: boolean
   /** A path under the base URL whose requests are cancelled: a click that would leave the page shows the moment
    *  before the answer, such as a form on its way, and a post an island sends by itself changes nothing. */
   cancel?: string
@@ -243,13 +241,13 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'refused', signedIn: true },
     ],
   },
-  // The page with no Companion Lobby on the machine, which says how to get one, and with one answering, which offers
-  // the button.
+  // The page as a visitor reads it and as the persona does: the link that opens Companion Lobby with the address, and
+  // the one that gets it.
   'bring-your-agent': {
     path: '/bring-your-agent',
     states: [
-      { name: 'no-lobby', signedIn: true },
-      { name: 'lobby', signedIn: true, lobby: true },
+      { name: 'visitor' },
+      { name: 'signed-in', signedIn: true },
     ],
   },
   // The form that starts a Topic in the discussions Tangent, the composer on it: empty for the persona, a member; her
@@ -562,15 +560,15 @@ export const screens: Readonly<Record<string, Screen>> = {
       },
     ],
   },
-  // The form that takes Leo's reply on a tangent, read by the persona, a member: as it opens, the reply quoted and the
-  // Tangents she may start a Topic in listed; sent with a title of nothing but spaces, refused under the title; and as a
-  // visitor reads it, who is told to sign in.
+  // The new-topic form taking Leo's reply on a tangent, read by the persona, a member: as it opens, the reply quoted,
+  // the Tangents she may start a Topic in as links, and a title offered from its first words; sent with a title of
+  // nothing but spaces, refused under the title; and as a visitor reads it, who is told to sign in.
   'take-this-on-a-tangent': {
-    path: '/t/discussions/where-should-the-glue-notes-live/3mwfyixhb2224/tangent',
+    path: '/t/discussions/new',
     states: [
-      { name: 'form', seed: 'tangent-taken', signedIn: true },
-      { name: 'refused', seed: 'tangent-taken', signedIn: true, fill: { '#take-title': '   ' }, click: '.post-form-submit' },
-      { name: 'visitor', seed: 'tangent-taken' },
+      { name: 'form', seed: 'tangent-taken', signedIn: true, query: { origin: '3mwfyixhb2224' } },
+      { name: 'refused', seed: 'tangent-taken', signedIn: true, query: { origin: '3mwfyixhb2224' }, fill: { '#new-topic-title': '   ' }, click: '.post-form-submit' },
+      { name: 'visitor', seed: 'tangent-taken', query: { origin: '3mwfyixhb2224' } },
     ],
   },
 }

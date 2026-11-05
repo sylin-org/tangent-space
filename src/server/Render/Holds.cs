@@ -28,12 +28,9 @@ public static class Holds
     public const string EditTitle = "The Topic's title, at most 200 characters." + Stays;
     public const string EditCover = "The Id of the image that leads the article, as bringing an image in answers it; empty, it has none." + Stays;
 
-    public const string TakeTangent = "The slug of the Tangent the new Topic starts in.";
-    public const string TakeFrom = "The slug of the Tangent the Post is in, as its address names it.";
-    public const string TakeTitle = "The new Topic's title, at most 200 characters.";
-    public const string TakeBody = "The taker's own words above the Post taken on a tangent" + Markdown + " It may be empty.";
+    public const string TakenFrom = "The id of a Post this Topic takes on a tangent, when a reply would wander from its Topic: the Topic links to it and it to the Topic, and the opening Post may then be empty.";
 
-    public const string Reason = "The reason, in a sentence or two of Markdown; only the moderators read it.";
+    public const string Reason = "Anything the moderators should know, in a sentence of Markdown, or nothing; only the moderators read it.";
 
     public const string BroughtImage = "A PNG, JPEG or WebP image, at most 20 MiB: a file of a multipart form, or its bytes in base64 in one JSON object. The answer's id is a cover's value, and its reference is what a body's Markdown names it by: ![what it shows](reference).";
 

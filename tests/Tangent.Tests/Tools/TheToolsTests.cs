@@ -43,7 +43,6 @@ public sealed class TheToolsTests
         ["edit"] = Action<EditPostController>(nameof(EditPostController.Edit)),
         ["remove"] = Action<EditPostController>(nameof(EditPostController.Remove)),
         ["report"] = Action<ReportController>(nameof(ReportController.Report)),
-        ["take_on_a_tangent"] = Action<TakeOnATangentController>(nameof(TakeOnATangentController.Take)),
         ["bring_in"] = Action<NewMediaController>(nameof(NewMediaController.Bring)),
         ["read_settings"] = Action<TangentSpaceSettingsController>(nameof(TangentSpaceSettingsController.Get)),
         ["change_settings"] = Action<TangentSpaceSettingsController>(nameof(TangentSpaceSettingsController.Change)),
@@ -78,7 +77,6 @@ public sealed class TheToolsTests
     {
         [Action<NewTopicController>(nameof(NewTopicController.Get))] = "only shows a form",
         [Action<EditPostController>(nameof(EditPostController.Get))] = "only shows a form",
-        [Action<TakeOnATangentController>(nameof(TakeOnATangentController.Get))] = "only shows a form",
         [Action<ReportController>(nameof(ReportController.Get))] = "only shows a form",
         [Action<NewTangentController>(nameof(NewTangentController.Get))] = "only shows a form",
         [Action<TangentSpaceSettingsController>(nameof(TangentSpaceSettingsController.Preview))] = "only shows the door in an appearance, saving nothing",
@@ -109,7 +107,6 @@ public sealed class TheToolsTests
         ["seen"] = (false, true),
         ["reply"] = (false, false),
         ["start_topic"] = (false, false),
-        ["take_on_a_tangent"] = (false, false),
         ["report"] = (false, false),
         ["bring_in"] = (false, true),
         ["edit"] = (true, true),
@@ -191,7 +188,6 @@ public sealed class TheToolsTests
         void Says(string holds, int limit) => Assert.Contains(" " + limit + " characters", holds);
         Says(Holds.TopicTitle, Post.TitleLimit);
         Says(Holds.EditTitle, Post.TitleLimit);
-        Says(Holds.TakeTitle, Post.TitleLimit);
         Says(Holds.TangentName, Tangents.Tangent.NameLimit);
         Says(Holds.ChangedTangentName, Tangents.Tangent.NameLimit);
         Says(Holds.TangentDescription, Tangents.Tangent.DescriptionLimit);
@@ -242,10 +238,9 @@ public sealed class TheToolsTests
         Assert.Contains("in place of tangent, topic", fields.GetProperty("address").GetProperty("description").GetString());
         Assert.False(reply.GetProperty("inputSchema").TryGetProperty("required", out _));
 
-        // Neither the slug of where a Post is taken from nor where it is taken to stands in for the other.
-        var taking = listed["take_on_a_tangent"].GetProperty("inputSchema").GetProperty("properties");
-        Assert.Equal(Holds.TakeFrom, taking.GetProperty("from").GetProperty("description").GetString());
-        Assert.Equal(Holds.TakeTangent, taking.GetProperty("tangent").GetProperty("description").GetString());
+        // Taking a Post on a tangent is starting a Topic with its origin.
+        var starting = listed["start_topic"].GetProperty("inputSchema").GetProperty("properties");
+        Assert.Equal(Holds.TakenFrom, starting.GetProperty("origin").GetProperty("description").GetString());
 
         // Tools are all it serves there: nothing runs code, and nothing is written beside the place's folder.
         Assert.Equal(System.Net.HttpStatusCode.NotFound, (await Send(ada.Client, HttpMethod.Get, ToolClient.Path + "/sdk/definitions")).Status);

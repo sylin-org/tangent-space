@@ -178,22 +178,32 @@ public sealed class TwoDoorsTests
     }
 
     [Fact]
-    public async Task A_field_of_a_form_or_a_call_never_names_the_address_and_a_tangent_field_names_where_a_topic_starts_on_every_door()
+    public async Task A_field_of_a_form_or_a_call_never_names_the_address_and_a_post_is_taken_on_a_tangent_by_its_origin_on_every_door()
     {
         await using var tangentSpace = await Starting();
         using var doors = await Open(tangentSpace);
         var root = doors.Root;
         var page = TopicPath(root);
-        var taking = PostPath(root, root) + "/tangent";
         await Given.ATangent(doors.TangentSpace, "elsewhere", ct: Cancellation);
 
         var form = await Form(doors.AdaBrowser, page, page, new Dictionary<string, string> { ["body"] = "Stays here.", ["tangent"] = "elsewhere", ["topic"] = "nothing" });
         Assert.Equal(HttpStatusCode.SeeOther, form.Status);
         Assert.Equal(root.Id, Assert.Single(await Post.Query(post => post.Body == "Stays here.", Cancellation)).TopicId);
 
-        var byForm = await Form(doors.AdaBrowser, page, taking, new Dictionary<string, string> { ["tangent"] = "elsewhere", ["title"] = "By form" });
-        var byJson = await doors.Posted(taking, new { tangent = "elsewhere", title = "By JSON" });
-        var byTool = await doors.AdaTools.Call("take_on_a_tangent", new { from = root.TangentId, topic = root.Slug, post = root.Id, tangent = "elsewhere", title = "By the tool" });
+        // The Topic page's "take this on a tangent" opens the new-topic form with the Post quoted, the Tangents to start
+        // it in as links, and a title offered from its first words.
+        var taking = "/t/" + root.TangentId + "/new?origin=" + root.Id;
+        Assert.Contains(TangentSpaceFixture.DefaultBaseUrl + taking, (await Send(doors.AdaBrowser.Client, HttpMethod.Get, page)).Body);
+        var opened = await Send(doors.AdaBrowser.Client, HttpMethod.Get, taking);
+        Assert.Equal(HttpStatusCode.OK, opened.Status);
+        Assert.Contains("Take this on a tangent", opened.Body);
+        Assert.Contains("href=\"" + TangentSpaceFixture.DefaultBaseUrl + "/t/elsewhere/new?origin=" + root.Id + "\"", opened.Body);
+        Assert.Contains("value=\"How do you hang yours?\"", opened.Body);
+
+        var elsewhere = "/t/elsewhere/new";
+        var byForm = await Form(doors.AdaBrowser, page, elsewhere, new Dictionary<string, string> { ["origin"] = root.Id, ["title"] = "By form" });
+        var byJson = await doors.Posted(elsewhere, new { origin = root.Id, title = "By JSON" });
+        var byTool = await doors.AdaTools.Call("start_topic", new { tangent = "elsewhere", origin = root.Id, title = "By the tool" });
 
         Assert.Equal(HttpStatusCode.SeeOther, byForm.Status);
         Assert.Equal(HttpStatusCode.Created, byJson.Status);
@@ -337,7 +347,7 @@ public sealed class TwoDoorsTests
     }
 
     [Fact]
-    public async Task An_id_reused_with_other_words_is_a_conflict_on_both_doors_and_an_id_of_another_shape_is_refused_alike()
+    public async Task An_id_reused_with_other_words_answers_id_taken_on_both_doors_and_an_id_of_another_shape_is_refused_alike()
     {
         await using var tangentSpace = await Starting();
         using var doors = await Open(tangentSpace);
@@ -349,7 +359,7 @@ public sealed class TwoDoorsTests
         var tool = await doors.AdaTools.Call("reply", new { tangent = root.TangentId, topic = root.Slug, id, body = "Other words." });
         Assert.Equal(HttpStatusCode.Conflict, http.Status);
         SameRefusal(http, tool);
-        Assert.Equal("conflict", tool.ErrorCode);
+        Assert.Equal(("conflict", "id-taken"), (tool.ErrorCode, http.Word));
 
         var unshaped = await doors.Posted(TopicPath(root), new { id = "not-a-tid", body = "These words." });
         var unshapedTool = await doors.AdaTools.Call("reply", new { tangent = root.TangentId, topic = root.Slug, id = "not-a-tid", body = "These words." });

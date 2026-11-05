@@ -10,7 +10,7 @@ namespace Tangent.Posts;
 /// is where a visitor signs in, coming back here. After a refusal the form keeps the reason that was sent and says why,
 /// under the reason or above the form. Nothing here names the moderators' Topic a report starts.</summary>
 public sealed record ReportPage(
-    TakeOnATangentPage.Quoted Reported,
+    QuotedPost Reported,
     bool Received,
     Form? Report,
     string? Gate,

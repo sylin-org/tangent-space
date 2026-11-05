@@ -47,7 +47,7 @@ public sealed class ModeratingTests
         Assert.All(profile.EnumerateArray(), post => Assert.Equal(Mo, post.GetProperty("edited").GetProperty("by").GetProperty("id").GetString()));
         Assert.Contains("Replied " + inline + ": From a hook, says the moderator.", (await Send(visitor, HttpMethod.Get, "/p/ada4writes.example")).Body);
         Assert.Contains("<p class=\"post-edited\">" + mark + "</p>", (await Send(mo.Client, HttpMethod.Get, PostPath(root, reply) + "/report")).Body);
-        Assert.Contains("<p class=\"post-edited\">" + mark + "</p>", (await Send(ada.Client, HttpMethod.Get, PostPath(root, reply) + "/tangent")).Body);
+        Assert.Contains("<p class=\"post-edited\">" + mark + "</p>", (await Send(ada.Client, HttpMethod.Get, "/t/" + root.TangentId + "/new?origin=" + reply.Id)).Body);
         Assert.Contains("Last edited by", (await Send(ada.Client, HttpMethod.Get, PostPath(root, reply) + "/edit")).Body);
 
         // The author is told, as any event that targets them is, with who did it; the moderator is not.

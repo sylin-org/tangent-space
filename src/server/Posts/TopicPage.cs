@@ -70,8 +70,8 @@ public sealed record TopicPage(
     /// said to be the author's.
     /// <see cref="New"/> marks a Post that is new to a signed-in reader (<see cref="Events.Unread.New"/>): someone else's,
     /// past where they were last here and past their mark on the Topic. <see cref="Can"/> is what the reader holds on this Post, and <see cref="Edit"/> where
-    /// it is edited or removed, present only where they may do either. <see cref="TakeOnATangent"/> is where the reader
-    /// takes it on a tangent, present only on a Post that is not removed, for a reader who may start a Topic somewhere;
+    /// it is edited or removed, present only where they may do either. <see cref="TakeOnATangent"/> is the new-topic form that takes
+    /// it on a tangent, present only on a Post that is not removed, for a reader who may start a Topic somewhere;
     /// <see cref="Taken"/> holds the Topics taken on a tangent from it that the reader may view, where there are any.
     /// <see cref="Report"/> is the form that reports it to the moderators, with a TID minted for it, for a signed-in
     /// reader, on someone else's Post that is not removed, outside the moderators' Tangent.</summary>
