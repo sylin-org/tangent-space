@@ -8,7 +8,7 @@
    Zeros are said in words. *@
 @if (As is Shape.Card or Shape.Lead)
 {
-    <article class="@ArticleClass" data-month="@Model.CreatedAt.ToUniversalTime().ToString("yyyy-MM", CultureInfo.InvariantCulture)" data-author="@Model.Author.Id">
+    <article class="@ArticleClass">
         @if (Lead)
         {
             if (Model.Cover is { } lead)

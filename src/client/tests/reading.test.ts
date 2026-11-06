@@ -5,7 +5,7 @@ import { quoted } from '../islands/quote'
 import { keepPlace, readPlace } from '../reading'
 
 // What a reader meets beyond a Topic's Posts: a Post's link copied, its earlier versions read when their disclosure
-// opens, a passage quoted with its heading, the door's way back to a Topic left mid-way, and the articles filter.
+// opens, a passage quoted with its heading, and the door's way back to a Topic left mid-way.
 
 const attribute = (value: object) => JSON.stringify(value).replaceAll('"', '&quot;')
 
@@ -66,23 +66,4 @@ test('the door offers the way back to where the reader stopped, while it still a
   expect(line.textContent).toBe('Continue reading Notes from the workshop →')
   expect(fetched).toHaveBeenCalledWith(address, expect.objectContaining({ method: 'HEAD' }))
   expect(readPlace(participant)?.address).toBe(address)
-})
-
-test('the articles filter narrows the page’s articles to a month and lets them back', () => {
-  document.body.innerHTML =
-    '<div class="article-filter" hidden data-island="filter"><button class="article-filter-choice" data-month="2026-09">September 2026</button>' +
-    '<button class="article-filter-choice" data-author="did:plc:mara">Mara</button><p class="article-filter-note"></p></div>' +
-    '<div class="article-list"><article data-month="2026-09" data-author="did:plc:ada"></article>' +
-    '<article data-month="2026-10" data-author="did:plc:mara"></article></div>'
-  mountIslands(document)
-  const [september] = document.querySelectorAll<HTMLButtonElement>('.article-filter-choice')
-  const [first, second] = document.querySelectorAll<HTMLElement>('.article-list > article')
-
-  expect(document.querySelector<HTMLElement>('.article-filter')!.hidden).toBe(false)
-  september.click()
-  expect([first.hidden, second.hidden]).toEqual([false, true])
-  expect(september.getAttribute('aria-pressed')).toBe('true')
-  expect(document.querySelector('.article-filter-note')!.textContent).toBe('1 of 2 on this page.')
-  september.click()
-  expect([first.hidden, second.hidden]).toEqual([false, false])
 })

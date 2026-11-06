@@ -4,7 +4,6 @@ import { article } from './article'
 import { composer } from './composer'
 import { continueReading } from './continue'
 import { copy } from './copy'
-import { filter } from './filter'
 import { fragment } from './fragment'
 import { history } from './history'
 import { live } from './live'
@@ -18,7 +17,7 @@ import { submitting } from './submitting'
 import { unseen } from './unseen'
 
 // Every island a page can name in data-island, by that name.
-export const islands: Record<string, Component> = { appearance, article, composer, continue: continueReading, copy, filter, fragment, history, live, person, preview, quote, reading, search, seen, submitting, unseen }
+export const islands: Record<string, Component> = { appearance, article, composer, continue: continueReading, copy, fragment, history, live, person, preview, quote, reading, search, seen, submitting, unseen }
 
 export interface MountedIsland {
   name: string

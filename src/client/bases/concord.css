@@ -172,11 +172,6 @@
     margin: 0;
   }
 
-  & .rail .article-filter-choice {
-    width: 100%;
-    margin: 0;
-  }
-
   & .rail li > a,
   & .rail a.row,
   & .rail .rail-new {

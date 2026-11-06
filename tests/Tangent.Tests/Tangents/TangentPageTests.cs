@@ -2,20 +2,24 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Koan.Data.Core;
 using Koan.Data.Core.Commands;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Tangent.Access;
 using Tangent.Events;
 using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
+using Tangent.Tools;
 using Xunit;
 
 namespace Tangent.Tangents;
 
 /// <summary>The Tangent page both ways: the Tangent, its <c>can</c> and one bounded page of its Topics by last activity,
 /// with what is new to a signed-in reader marked; the gate for a reader who may not read;
-/// the empty state and the start affordance; a Topic whose root is removed, marked; and the page's <c>ETag</c>.</summary>
+/// the empty state and the start affordance; a Topic whose root is removed, marked; an articles Tangent narrowed by month
+/// and by author across all its articles; and the page's <c>ETag</c>.</summary>
 public sealed class TangentPageTests
 {
     private const string BaseUrl = TangentSpaceFixture.DefaultBaseUrl;
@@ -367,6 +371,103 @@ public sealed class TangentPageTests
     }
 
     [Fact]
+    public async Task An_articles_tangent_narrows_by_month_and_by_author_across_all_its_articles_as_html_json_and_the_tool_its_rail_offering_each_with_how_many()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        await Place(tangentSpace);
+        Assert.IsType<Outcome<Tangent>.Done>(await new CreateTangent("essays", "Essays", "", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
+        // Leo's two September essays lie past the first page, behind more October essays of Ada's than a page holds.
+        var september = new List<string>();
+        foreach (var day in new[] { 10, 12 })
+            september.Add(Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "essays", "September " + day, "Words of September.", "leo",
+                At: new DateTimeOffset(2026, 9, day, 9, 0, 0, TimeSpan.Zero)).Send(Cancellation)).Result.Id);
+        var october = new List<string>();
+        for (var index = 0; index < TopicList.PageSize + 1; index++)
+            october.Add(Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "essays", "October " + index, "Words of October.", "ada",
+                At: new DateTimeOffset(2026, 10, 1, 9, index, 0, TimeSpan.Zero)).Send(Cancellation)).Result.Id);
+
+        using (var whole = await Json(tangentSpace.Client, "/t/essays"))
+        {
+            var root = whole.RootElement;
+            Assert.DoesNotContain(Ids(root), september.Contains);
+            Assert.Equal([("2026-10", "October 2026", 31, $"{BaseUrl}/t/essays?month=2026-10"), ("2026-09", "September 2026", 2, $"{BaseUrl}/t/essays?month=2026-09")],
+                Choices(root.GetProperty("months")));
+            Assert.Equal([("ada", "ada.example", 31, $"{BaseUrl}/t/essays?author=ada"), ("leo", "leo.example", 2, $"{BaseUrl}/t/essays?author=leo")],
+                Choices(root.GetProperty("authors")));
+            Assert.False(root.TryGetProperty("month", out _));
+        }
+
+        using (var narrowed = await Json(tangentSpace.Client, "/t/essays?month=2026-09"))
+        {
+            Assert.Equal(september.AsEnumerable().Reverse(), Ids(narrowed.RootElement));
+            Assert.Equal("2026-09", narrowed.RootElement.GetProperty("month").GetString());
+            Assert.False(narrowed.RootElement.TryGetProperty("next", out _));
+        }
+
+        using (var byLeo = await Json(tangentSpace.Client, "/t/essays?author=leo"))
+        {
+            Assert.Equal(september.AsEnumerable().Reverse(), Ids(byLeo.RootElement));
+            Assert.Equal("leo", byLeo.RootElement.GetProperty("author").GetProperty("id").GetString());
+        }
+
+        using (var both = await Json(tangentSpace.Client, "/t/essays?month=2026-10&author=leo"))
+            Assert.Empty(Ids(both.RootElement));
+
+        // October holds more than a page: the next page stays narrowed and continues by the same cursor.
+        var read = new List<string>();
+        string? address = "/t/essays?month=2026-10";
+        while (address is not null)
+        {
+            using var json = await Json(tangentSpace.Client, address);
+            read.AddRange(Ids(json.RootElement));
+            address = json.RootElement.TryGetProperty("next", out var next) ? new Uri(next.GetString()!).PathAndQuery : null;
+            Assert.True(address is null || address.StartsWith("/t/essays?month=2026-10&after=", StringComparison.Ordinal), address);
+        }
+
+        Assert.Equal(october.AsEnumerable().Reverse(), read);
+
+        var html = await Html(tangentSpace.Client, "/t/essays?month=2026-09");
+        Assert.Contains("<a class=\"topic-view\" href=\"" + BaseUrl + "/t/essays?month=2026-09\" aria-current=\"page\">September 2026<span class=\"topic-view-count\">2</span></a>", html);
+        Assert.Contains("<a class=\"topic-view\" href=\"" + BaseUrl + "/t/essays?author=ada\">ada.example<span class=\"topic-view-count\">31</span></a>", html);
+        Assert.Contains("<a href=\"" + BaseUrl + "/t/essays\">All articles</a>", html);
+        Assert.Contains("<h2 class=\"topic-list-title\">2 articles from September 2026</h2>", html);
+        Assert.Contains("<h2 class=\"topic-list-title\">Articles by leo.example from September 2026</h2>", await Html(tangentSpace.Client, "/t/essays?month=2026-09&author=leo"));
+        Assert.Contains("No articles by leo.example from October 2026.", await Html(tangentSpace.Client, "/t/essays?month=2026-10&author=leo"));
+
+        using var refused = await tangentSpace.Client.GetAsync("/t/essays?month=2026-13", Cancellation);
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+
+        using var tools = await ToolClient.Connect(tangentSpace);
+        var called = await tools.Call("read_tangent", new { tangent = "essays", author = "leo" });
+        Assert.False(called.Failed, called.Text);
+        Assert.Equal(september.AsEnumerable().Reverse(), Ids(called.Structured!.Value));
+    }
+
+    [Fact]
+    public async Task A_tangent_whose_months_and_authors_do_not_add_up_to_its_topics_is_counted_again_at_start()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        await Place(tangentSpace);
+        await Started("One", new DateTimeOffset(2026, 9, 30, 23, 59, 0, TimeSpan.Zero));
+        await Started("Two", new DateTimeOffset(2026, 10, 1, 0, 0, 0, TimeSpan.Zero));
+        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, "Three", "Words.", "leo", At: Start).Send(Cancellation));
+        var counted = (await Tangent.Get(Workshop, Cancellation))!;
+        Assert.True(counted.Tallied());
+        var months = counted.Months.OrderBy(month => month.Key).ToList();
+        var authors = counted.Authors.OrderBy(author => author.Key).ToList();
+        Assert.Equal(new KeyValuePair<string, int>[] { new("2026-09", 2), new("2026-10", 1) }, months);
+        Assert.Equal(new KeyValuePair<string, int>[] { new("ada", 2), new("leo", 1) }, authors);
+
+        (counted.Months, counted.Authors) = ([], []);
+        await counted.Save(Cancellation);
+        await TallyTopics.AtStart(NullLogger.Instance, Cancellation);
+
+        var tallied = (await Tangent.Get(Workshop, Cancellation))!;
+        Assert.Equal(months, tallied.Months.OrderBy(month => month.Key));
+        Assert.Equal(authors, tallied.Authors.OrderBy(author => author.Key));
+    }
+
+    [Fact]
     public void The_version_differs_across_midnight_utc_for_the_same_page_since_the_day_changes_how_its_times_read()
     {
         var at = new DateTimeOffset(2026, 10, 29, 15, 0, 0, TimeSpan.Zero);
@@ -401,6 +502,12 @@ public sealed class TangentPageTests
         => page.GetProperty("topics").EnumerateArray().Select(topic => topic.GetProperty("id").GetString()!).ToList();
 
     private static List<string> Strings(JsonElement array) => array.EnumerateArray().Select(item => item.GetString()!).ToList();
+
+    /// <summary>Each way a list narrows, as its JSON says it: its key, name, count and address.</summary>
+    private static List<(string, string, int, string)> Choices(JsonElement array) => array.EnumerateArray()
+        .Select(choice => (choice.GetProperty("key").GetString()!, choice.GetProperty("name").GetString()!, choice.GetProperty("count").GetInt32(),
+            choice.GetProperty("address").GetString()!))
+        .ToList();
 
     /// <summary>What the page says is new in each Topic: whether it is, and how many of its Posts, null where it is new
     /// with no count.</summary>

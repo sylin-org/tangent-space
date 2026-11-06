@@ -9,8 +9,9 @@ namespace Tangent.Posts;
 
 /// <summary>Starts a Topic: a root Post in the named Tangent, with a slug derived from the title and made unique in that
 /// Tangent by a suffix that never changes — a slug a Tangent's own pages hold (<see cref="Slug.Reserved"/>) takes the
-/// suffix too — the Tangent's Topic count raised and <see cref="EventKind.PostCreated"/> appended in the same commit, with
-/// one <see cref="EventKind.Mention"/> per participant the body mentions (<see cref="Mentions.Notify"/>).
+/// suffix too — the Tangent's Topic count raised, in all, in its month and by its author, and
+/// <see cref="EventKind.PostCreated"/> appended in the same commit, with one <see cref="EventKind.Mention"/> per
+/// participant the body mentions (<see cref="Mentions.Notify"/>).
 /// The Tangent exists for the author, who holds <see cref="Bit.View"/> in it, or the command answers that no Tangent
 /// has the slug; the author holds <see cref="Bit.Topic"/> there, or is refused with the gate word. A Topic takes the
 /// Tangent's <see cref="Tangents.Tangent.DefaultKind"/>, so a Topic started in an articles Tangent is an article. Idempotent by Id: the same Id with the same request answers with the existing Post,
@@ -73,7 +74,7 @@ public sealed record StartTopic(
         root.Logged(created.Seq, root);
         await root.Save(ct);
         await MediaUse.Record(root, AuthorId, [], ct);
-        tangent.TopicStarted();
+        tangent.TopicStarted(root);
         await tangent.Save(ct);
         await Seen.Wrote(root.AuthorId, root, root.Sequence, ct);
         await Mentions.Notify(root, root.AuthorId, [], at, ct);

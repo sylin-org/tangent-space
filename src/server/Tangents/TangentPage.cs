@@ -15,7 +15,10 @@ namespace Tangent.Tangents;
 /// its times are written for. <see cref="Settings"/> is where the Tangent's settings are changed, present only for a
 /// reader who may change them; <see cref="NewTangent"/> is where a Tangent is created, present only for a reader who
 /// may create one. <see cref="Feeds"/> are the Tangent's feeds, present only where a visitor may read it. <see cref="Leave"/> is where a
-/// participant who joined a private Tangent leaves it, present only for them.</summary>
+/// participant who joined a private Tangent leaves it, present only for them. <see cref="Month"/> and <see cref="Author"/>
+/// say what the page is narrowed to, a month's key and the participant, absent where it is not; in an articles Tangent,
+/// <see cref="Months"/> and <see cref="Authors"/> are every month its Topics started in and everyone who started one, with
+/// how many each, as the Tangent keeps them, and where the list narrowed to each is.</summary>
 [Render.Page(Render.Layout.Home)]
 public sealed partial record TangentPage(
     string Slug,
@@ -38,22 +41,30 @@ public sealed partial record TangentPage(
     string? Settings = null,
     string? NewTangent = null,
     IReadOnlyList<Render.FeedLink>? Feeds = null,
-    Render.Form? Leave = null)
+    Render.Form? Leave = null,
+    string? Month = null,
+    Render.Person? Author = null,
+    IReadOnlyList<Render.TopicViews.Choice>? Months = null,
+    IReadOnlyList<Render.TopicViews.Choice>? Authors = null)
 {
     /// <summary>This Tangent as the page lists it: its own row among <see cref="Tangents"/>, with the Topics started there.</summary>
     [Newtonsoft.Json.JsonIgnore]
     public Render.TangentEntry Self => (Tangents.FirstOrDefault(tangent => tangent.Slug == Slug) ?? new Render.TangentEntry(Slug, Name, Kind, Address, Topics.Count))
         with { Description = Description, Address = Address };
 
-    /// <summary>Whether the page holds every Topic of the Tangent: the first page, with no page after it.</summary>
+    /// <summary>Whether the page holds every Topic of the Tangent: the first page of the whole list, with no page after it.</summary>
     [Newtonsoft.Json.JsonIgnore]
-    public bool Whole => !Continued && Next is null;
+    public bool Whole => !Continued && Next is null && !Narrowed;
+
+    /// <summary>Whether the list is narrowed to a month or an author.</summary>
+    [Newtonsoft.Json.JsonIgnore]
+    public bool Narrowed => Month is not null || Author is not null;
 
     [Render.Slot(Render.Slot.Head), Newtonsoft.Json.JsonIgnore]
     public Render.TangentHead Head => new(Self, Audience != "public", Whole ? Topics.Sum(topic => topic.ReplyCount) : null, Settings);
 
     [Render.Slot(Render.Slot.Rail), Newtonsoft.Json.JsonIgnore]
-    public Render.TopicViews Views => new(Self, Continued, Topics);
+    public Render.TopicViews Views => new(Self, !Continued && !Narrowed, Month, Author?.Id, Months ?? [], Authors ?? []);
 
     [Render.Slot(Render.Slot.Rail), Newtonsoft.Json.JsonIgnore]
     public Render.AudienceNote Reach => new(Audience != "public");
@@ -62,7 +73,37 @@ public sealed partial record TangentPage(
     public Render.LeaveTangent? Leaving => Leave is { } leave ? new(leave) : null;
 
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Render.TangentTopics List => new(Self, Topics, Continued, NewTopic, SignIn, Next);
+    public Render.TangentTopics List => new(Self, Topics, Continued, NewTopic, SignIn, Next, To);
+
+    /// <summary>What the list is narrowed to, in words, with how many Topics it holds where one narrowing alone names them;
+    /// null for the whole list.</summary>
+    [Newtonsoft.Json.JsonIgnore]
+    public Render.TangentTopics.Narrowed? To
+    {
+        get
+        {
+            if (!Narrowed) return null;
+            var month = TopicList.Month.Parse(Month)?.Name;
+            var words = string.Join(" ", new[] { Author is { } author ? "by " + author.Name : null, month is null ? null : "from " + month }.OfType<string>());
+            var count = Month is null ? Authors?.FirstOrDefault(choice => choice.Key == Author!.Id)?.Count
+                : Author is null ? Months?.FirstOrDefault(choice => choice.Key == Month)?.Count
+                : null;
+            return new Render.TangentTopics.Narrowed(words, count, ListAddress(Address, Month, Author?.Id));
+        }
+    }
+
+    /// <summary>The address of the list of the Tangent at <paramref name="address"/>, narrowed to a month or an author
+    /// where one is named, past <paramref name="after"/> where a cursor is.</summary>
+    public static string ListAddress(string address, string? month, string? author, string? after = null)
+    {
+        var query = string.Join("&", new[]
+        {
+            month is null ? null : TangentPageController.Month + "=" + Uri.EscapeDataString(month),
+            author is null ? null : TangentPageController.Author + "=" + Uri.EscapeDataString(author),
+            after is null ? null : TangentPageController.After + "=" + Uri.EscapeDataString(after)
+        }.OfType<string>());
+        return query.Length == 0 ? address : address + "?" + query;
+    }
 
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
     public Render.LiveUpdates Live => new(Render.LiveUpdates.TangentPage, Slug);

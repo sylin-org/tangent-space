@@ -2893,51 +2893,15 @@
 
 /* TopicViews: the ways a Tangent's page lists its Topics. */
 @layer tangent {
-  /* The articles filter: a month and an author among the rail's views, pressed to narrow the page's articles. */
-  .article-filter[hidden] {
-    display: none;
-  }
-
-  .article-filter-choice {
-    width: calc(100% + 20px);
-    min-height: 36px;
-    margin: 0 -10px;
-    padding: 0 10px;
-    display: flex;
-    align-items: center;
+  /* A month or an author among the rail's views: its name, then how many Topics started under it. */
+  .topic-view {
     justify-content: space-between;
     gap: 8px;
-    border: 0;
-    border-radius: var(--ts-radius-button);
-    background: none;
-    color: var(--ts-text-2);
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
   }
 
-  .article-filter-choice:hover {
-    background: var(--ts-hover);
-  }
-
-  .article-filter-choice[aria-pressed="true"] {
-    background: var(--ts-hover);
-    color: var(--ts-text);
-    font-weight: 600;
-  }
-
-  .article-filter-count {
+  .topic-view-count {
     color: var(--ts-text-3);
     font-variant-numeric: tabular-nums;
-  }
-
-  .article-filter-note:empty {
-    display: none;
-  }
-
-  .article-filter-note {
-    margin: 10px 0 0;
-    color: var(--ts-text-3);
   }
 }
 

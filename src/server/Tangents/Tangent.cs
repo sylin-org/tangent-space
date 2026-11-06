@@ -65,6 +65,13 @@ public sealed class Tangent : Entity<Tangent>
     /// <summary>How many Topics were started here, raised in the commit that starts one.</summary>
     public int TopicCount { get; set; }
 
+    /// <summary>How many Topics were started here in each month, by its key (<see cref="TopicList.Month.Key"/>), raised
+    /// with <see cref="TopicCount"/>.</summary>
+    public Dictionary<string, int> Months { get; set; } = [];
+
+    /// <summary>How many Topics each participant started here, by their id, raised with <see cref="TopicCount"/>.</summary>
+    public Dictionary<string, int> Authors { get; set; } = [];
+
     /// <summary>The log's sequence of the <see cref="Events.EventKind.TangentChanged"/> that created it, written by the
     /// command that creates it; zero where none was written. Its own rows of the log begin there: a row of its slug before it
     /// belongs to a Tangent deleted before this one took the slug (<see cref="DeleteTangent"/>).</summary>
@@ -146,8 +153,30 @@ public sealed class Tangent : Entity<Tangent>
         if (description.Length > DescriptionLimit) throw new Refusal(DescriptionTooLong);
     }
 
-    /// <summary>Counts a Topic started here.</summary>
-    public void TopicStarted() => TopicCount = checked(TopicCount + 1);
+    /// <summary>Counts <paramref name="root"/>, a Topic started here: in all, in the month it started and by its author.</summary>
+    public void TopicStarted(Post root)
+    {
+        TopicCount = checked(TopicCount + 1);
+        Tally(root);
+    }
+
+    /// <summary>Whether its months and its authors each add up to the Topics started here.</summary>
+    public bool Tallied() => Months.Values.Sum() == TopicCount && Authors.Values.Sum() == TopicCount;
+
+    /// <summary>Counts again, in their months and by their authors, the Topics <paramref name="roots"/> names, every Topic
+    /// started here (<see cref="TallyTopics"/>).</summary>
+    public void Retally(IEnumerable<Post> roots)
+    {
+        (Months, Authors) = ([], []);
+        foreach (var root in roots) Tally(root);
+    }
+
+    private void Tally(Post root)
+    {
+        var month = TopicList.Month.Of(root.CreatedAt).Key;
+        Months[month] = checked(Months.GetValueOrDefault(month) + 1);
+        Authors[root.AuthorId] = checked(Authors.GetValueOrDefault(root.AuthorId) + 1);
+    }
 
     /// <summary>Whether this row says what the command says.</summary>
     public bool Same(string name, string description, PostKind defaultKind, int order) =>

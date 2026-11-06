@@ -56,6 +56,7 @@ public sealed class Post : Entity<Post>
     [Index(Name = "ix_post_topics", Order = 0)]
     [Index(Name = "ix_post_slugs", Order = 0)]
     [Index(Name = "ix_post_started", Order = 0)]
+    [Index(Name = "ix_post_topics_by", Order = 0)]
     public string TangentId { get; set; } = "";
 
     /// <summary>The root of the Topic; the root's own Id on a root.</summary>
@@ -68,6 +69,7 @@ public sealed class Post : Entity<Post>
     /// <summary>The Post this one replies to; null on a root.</summary>
     [Index(Name = "ix_post_topics", Order = 1)]
     [Index(Name = "ix_post_started", Order = 1)]
+    [Index(Name = "ix_post_topics_by", Order = 1)]
     [Index(Name = "ix_post_articles", Order = 1)]
     public string? ParentId { get; set; }
 
@@ -120,8 +122,10 @@ public sealed class Post : Entity<Post>
     public long Sequence { get; set; }
 
     /// <summary>Who wrote it. In <c>ix_post_authors</c> before the time it was written, so a participant's Posts,
-    /// newest first, are one range of it.</summary>
+    /// newest first, are one range of it, and in <c>ix_post_topics_by</c> before a Topic's last activity, so the Topics
+    /// one author started in a Tangent, newest activity first, are one range.</summary>
     [Index(Name = "ix_post_authors", Order = 0)]
+    [Index(Name = "ix_post_topics_by", Order = 2)]
     public string AuthorId { get; set; } = "";
 
     /// <summary>The DID of the Bluesky account its author was bound to when they wrote it, which an edit never changes:
@@ -149,6 +153,7 @@ public sealed class Post : Entity<Post>
 
     /// <summary>When the Topic last gained a Post. Root only.</summary>
     [Index(Name = "ix_post_topics", Order = 2)]
+    [Index(Name = "ix_post_topics_by", Order = 3)]
     public DateTimeOffset LastActivityAt { get; set; }
 
     /// <summary>The Topic's latest reply and its author; null until the first reply. Root only.</summary>

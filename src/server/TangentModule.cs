@@ -126,6 +126,7 @@ public sealed class TangentModule : KoanModule
         await TablesExist(services.GetRequiredService<IDataService>(), ct);
         await Roles.Seed(services.GetRequiredService<RoleCollection>(), ct);
         await FirstRunStart.Run(services, ct);
+        await Tangents.TallyTopics.AtStart(services.GetRequiredService<ILogger<Tangents.TallyTopics>>(), ct);
         services.GetRequiredService<IHostApplicationLifetime>().ApplicationStarted.Register(() => ReportStarted(services));
     }
 

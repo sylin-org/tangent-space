@@ -40,6 +40,8 @@ public static class Holds
     public const string Words = "The words to look for, at most 200 characters; left out, nothing is searched.";
     public const string Number = "The number of the page, from one; left out, the first.";
     public const string After = "The cursor a page of this list names as its next; left out, the first.";
+    public const string Month = "A month in UTC as its year and number, such as 2026-10, to narrow the Topics to those started in it; left out, every month.";
+    public const string Author = "A participant's id, as a Topic's author names it, to narrow the Topics to those they started; left out, everyone's.";
     public const string WindowBefore = "The sequence a window of this Topic names as its older.";
     public const string WindowAfter = "The sequence a window of this Topic names as its newer.";
     public const string PostsBefore = "The cursor a page of this profile names as its older; left out, the newest.";
