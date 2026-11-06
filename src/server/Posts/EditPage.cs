@@ -112,14 +112,7 @@ public sealed record EditPage(
 
     /// <summary>Removing the Post, confirmed in the page.</summary>
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Render.Form? Removing => Removed || Remove is not { } remove ? null : remove with
-    {
-        Tool = "remove", Submit = "Remove",
-        Opens = Layout == Render.Layout.Reading ? "Remove this article" : Root ? "Remove this topic’s opening post" : "Remove this post",
-        Confirm = Layout == Render.Layout.Reading ? "Its words leave the page and a tombstone stays in their place; its replies stay as they are."
-            : Root ? "Its words leave the page and a tombstone stays in their place; the topic’s replies stay as they are."
-            : "Its words leave the page and a tombstone stays in their place."
-    };
+    public Render.Form? Removing => Removed ? null : Remove;
 
     /// <summary>The frame the shell draws around the page: the edit as its own crumb past the Post's Tangent and Topic, and who
     /// reads, or where a visitor signs in.</summary>

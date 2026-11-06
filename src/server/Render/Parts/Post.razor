@@ -4,10 +4,11 @@
    where the reader has not seen it, and when it was written, linked to the Post's own address; for a reply to a Post other
    than the root, the way to that Post; the body's Markdown as safe HTML, each mention a link reading the participant's name
    now; who other than its author last edited it, and when, and for a Post edited at all a closed disclosure of its earlier
-   versions; "Copy link", "Edit" where the reader may, "Take this on a tangent" and the Topics taken from it, and Report,
-   opening its form in the page. A removed Post is a tombstone in the same place. The root reads larger; an article's root is
-   its body alone, in the article's type. In the markup contract it is an article, its meta line its header and its actions
-   its footer, classed by what the record holds. As a row, in a Topic's rail: its author's mark and name, when, and "New". *@
+   versions; "Copy link", "Edit" where the reader may, "Take this on a tangent" and the Topics taken from it, Report,
+   opening its form in the page, and Remove where the reader may, confirming in the page what removing it does. A removed
+   Post is a tombstone in the same place. The root reads larger; an article's root is its body alone, in the article's type.
+   In the markup contract it is an article, its meta line its header and its actions its footer, classed by what the record
+   holds. As a row, in a Topic's rail: its author's mark and name, when, and "New". *@
 @if (As == Shape.Row)
 {
     <a class="@("row post" + (Model.Anchor ? " is-current" : "") + (Model.New ? " is-new" : ""))" href="@("#" + Model.Id)" aria-current="@(Model.Anchor ? "true" : null)">
@@ -96,6 +97,7 @@ else
                     <Draw Part="@report" />
                 </details>
             }
+            <Draw Part="@Model.Remove" />
         </footer>
     </article>
 }

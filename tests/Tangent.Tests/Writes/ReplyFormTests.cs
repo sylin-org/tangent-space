@@ -163,8 +163,8 @@ public sealed partial class ReplyFormTests
         Assert.Contains($"<p class=\"topic-closed\" data-gate=\"{Capabilities.SignIn.Word}\">", visiting);
         Assert.Matches(Regex.Escape(Capabilities.SignIn.Text) + " <a href=\"[^\"]*/sign-in\\?return=[^\"]+\">Sign in</a>", visiting);
         Assert.DoesNotContain("class=\"reply-form reply\"", removed);
-        Assert.Contains($"<p class=\"topic-closed\" data-gate=\"{Capabilities.Removed.Word}\">", removed);
-        Assert.Contains(Capabilities.Removed.Text, System.Net.WebUtility.HtmlDecode(removed));
+        Assert.Contains($"<p class=\"topic-closed\" data-gate=\"{Capabilities.Closed.Word}\">", removed);
+        Assert.Contains(Capabilities.Closed.Text, System.Net.WebUtility.HtmlDecode(removed));
     }
 
     /// <summary>A page as a browser reads it: its HTML and its <c>Cache-Control</c>.</summary>

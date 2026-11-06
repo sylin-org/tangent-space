@@ -80,7 +80,7 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl) : ControllerBase
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "remove", Destructive = true, Idempotent = true, OpenWorld = false)]
     [Needs(Bit.RemoveOwn)]
-    [Description("Remove a Post: its words go, and it stays in its place as a tombstone saying who removed it. A Post already removed answers removed, and nothing changes.")]
+    [Description("Remove a Post: its words go, and it stays in its place as a tombstone saying who removed it. Removing a Topic's root closes the Topic: its replies stay, and it takes no more. A Post already removed answers removed, and nothing changes.")]
     public async Task<IActionResult> Remove([FromRoute, Description(Holds.Tangent)] string tangent, [FromRoute, Description(Holds.Topic)] string topic,
         [FromRoute, Description(Holds.Post)] string post, CancellationToken ct)
     {
@@ -187,7 +187,8 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl) : ControllerBase
             row.Version,
             row.Removed,
             editable ? PostWrites.EditForm(address + "/" + EditSegment, row.Version, row.ParentId is null, bodyOptional, row.CoverId, article) : null,
-            removable ? PostWrites.RemoveForm(address + "/" + RemoveSegment) : null,
+            removable ? PostWrites.RemoveForm(address + "/" + RemoveSegment, row,
+                article ? "Remove this article" : row.ParentId is null ? "Remove this topic’s opening post" : "Remove this post") : null,
             capabilities.Can,
             editable ? null : capabilities.Gate(Bit.EditOwn)?.Word,
             removable ? null : capabilities.Gate(Bit.RemoveOwn)?.Word,

@@ -43,7 +43,7 @@ public sealed class Post : Entity<Post>
     public static readonly Reason NeedsTangent = Reason.Invalid("A Topic starts in a Tangent.");
     public static readonly Reason NeedsAuthor = Reason.Invalid("A Post has an author.");
     public static readonly Reason NotARoot = Reason.Invalid("A reply goes to a Topic.");
-    public static readonly Reason TopicRemoved = Access.Capabilities.Removed;
+    public static readonly Reason TopicRemoved = Access.Capabilities.Closed;
     public static readonly Reason NoTitleOnReply = Reason.Invalid("A reply has no title; a Topic's title is on its root.");
     public static readonly Reason PostRemoved = Access.Capabilities.Removed;
     public static readonly Reason NeedsRemover = Reason.Invalid("A removal names who removes.");

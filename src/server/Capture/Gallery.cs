@@ -69,7 +69,8 @@ public sealed class GalleryController : ControllerBase
             Topic("new-count", "A Topic with replies new to the reader", mara, 7, true, 2, reply),
             Topic("never-read", "A Topic the reader never opened", lumen, 1, true, null),
             Topic("yours", "A Topic the reader started", you, 0),
-            Topic("edited", "A Topic someone else edited", mara, 2, by: edited)
+            Topic("edited", "A Topic someone else edited", mara, 2, by: edited),
+            Topic("removed", "A Topic whose opening post was removed", mara, 3) with { Opening = "", Removed = new Posts.TopicPage.Removal(leo, Now.AddHours(-4)) }
         };
         var article = Topic("an-article", "Why Your Best Ideas Come in the Shower", leo, 3, kind: "article") with { In = articles };
         var group = new Door.Group(2, false, [
@@ -111,6 +112,7 @@ public sealed class GalleryController : ControllerBase
             new Specimen("Topics in a table", new TopicShelf("gallery-topics", "Alive now", rows)),
             new Specimen("An article leading its list", article, Shape.Lead),
             new Specimen("An article in a list", article, Shape.Card),
+            new Specimen("A removed article in a list", article with { Id = "gone", Opening = "", Removed = new Posts.TopicPage.Removal(leo, Now.AddHours(-4)) }, Shape.Card),
             new Specimen("A shelf of discussions", new Door.Shelf("discussions", "Discussions", "topic", "Open questions and half-ideas.", door + "t/discussions",
                 Tile.For("discussions", "Discussions"), 12, rows.Take(2).ToList())),
             new Specimen("A shelf of articles", new Door.Shelf("articles", "Articles About Everything", "article", "Make room for the next thought.",

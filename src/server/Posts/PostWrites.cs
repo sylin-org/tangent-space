@@ -130,8 +130,15 @@ public static class PostWrites
             : Form.Posting(action, from, body);
     }
 
-    /// <summary>The form that removes a Post at <paramref name="action"/>, which carries no field.</summary>
-    public static Form RemoveForm(string action) => Form.Posting(action);
+    /// <summary>The form that removes <paramref name="post"/> at <paramref name="action"/>, which carries no field, confirmed
+    /// in the page with what removing it does: its words go and a tombstone stays, and removing a Topic's root closes the
+    /// Topic, whose replies stay. It opens behind <paramref name="opens"/>.</summary>
+    public static Form RemoveForm(string action, Post post, string opens) => Form.Posting(action) with
+    {
+        Tool = "remove", Submit = "Remove", Opens = opens,
+        Confirm = "Its words leave the page and a tombstone stays in their place" + (post.ParentId is not null ? "."
+            : "; the " + Word(post.Kind) + " keeps its replies and takes no more.")
+    };
 
     /// <summary>The form that reports a Post at <paramref name="action"/>, with the TID <paramref name="minted"/> for it, and
     /// the reason.</summary>

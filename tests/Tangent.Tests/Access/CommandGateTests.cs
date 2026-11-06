@@ -34,7 +34,7 @@ public sealed class CommandGateTests
     }
 
     [Fact]
-    public async Task A_moderator_replying_on_a_removed_topic_is_refused_with_removed()
+    public async Task A_moderator_replying_on_a_topic_whose_root_is_removed_is_refused_as_closed()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Given.ATangent(tangentSpace, Workshop, ct: Cancellation);
@@ -45,7 +45,7 @@ public sealed class CommandGateTests
 
         var onRemoved = await new Reply(Tids.Mint(), removed.Id, "Still?", "mo").Send(Cancellation);
 
-        Assert.Equal(Capabilities.Removed, Assert.IsType<Outcome<Post>.Refused>(onRemoved).Reason);
+        Assert.Equal(Capabilities.Closed, Assert.IsType<Outcome<Post>.Refused>(onRemoved).Reason);
         Assert.Equal(1, await Post.Count.Exact(Cancellation));
         Assert.Equal(0, await Event.Count.Exact(Cancellation));
     }

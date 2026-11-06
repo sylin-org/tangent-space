@@ -143,7 +143,7 @@ public sealed class CapabilitiesTests
         Assert.Equal((Bit.None, false, Capabilities.SignInToRead), (visitorPrivate.Held, visitorPrivate.Exists, visitorPrivate.Gate(Bit.View)));
         Assert.Equal(Capabilities.SignInToRead, visitorPrivate.Gate(Bit.Post));
         Assert.All(new[] { Capabilities.SignIn, Capabilities.SignInToRead, Capabilities.Apply, Capabilities.ApplyToRead, Capabilities.Declined,
-            Capabilities.DeclinedToRead, Capabilities.TimedOut, Capabilities.TimedOutUntil(Now), Capabilities.Removed, Capabilities.NotYours },
+            Capabilities.DeclinedToRead, Capabilities.TimedOut, Capabilities.TimedOutUntil(Now), Capabilities.Closed, Capabilities.Removed, Capabilities.NotYours },
             reason => Assert.DoesNotContain("write", reason.Text));
         Assert.Equal(Bit.View, visitorWidened.Held);
         Assert.Equal(["View"], visitorPublic.Can);
@@ -254,7 +254,7 @@ public sealed class CapabilitiesTests
     }
 
     [Fact]
-    public void The_gate_word_is_the_first_reason_in_precedence_sign_in_apply_timed_out_absent_removed()
+    public void The_gate_word_is_the_first_reason_in_precedence_sign_in_apply_timed_out_absent_closed_removed()
     {
         var removedRoot = Root(Leo, removed: true);
         IReadOnlyList<PermissionOverwrite> closed = [ForAudience(Audience.Private)];
@@ -271,8 +271,8 @@ public sealed class CapabilitiesTests
         Assert.Equal(Capabilities.SignIn, visitorOnRemoved.Gate(Bit.Post));
         Assert.Equal(Capabilities.ApplyToRead, appliedOnRemoved.Gate(Bit.Post));
         Assert.Equal(Capabilities.Absent, unseenRemoved.Gate(Bit.View));
-        Assert.Equal(Capabilities.Removed, memberOnRemoved.Gate(Bit.Post));
-        Assert.Equal(Capabilities.Removed, deniedOnRemoved.Gate(Bit.Post));
+        Assert.Equal(Capabilities.Closed, memberOnRemoved.Gate(Bit.Post));
+        Assert.Equal(Capabilities.Closed, deniedOnRemoved.Gate(Bit.Post));
         Assert.Equal(Capabilities.Removed, visitorOnRemoved.Gate(Bit.View));
         Assert.Equal(Capabilities.Removed, memberOnRemoved.Gate(Bit.EditOwn));
         Assert.Equal(Capabilities.Removed, moderatorOnRemoved.Gate(Bit.Moderate));

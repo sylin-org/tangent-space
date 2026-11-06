@@ -713,6 +713,32 @@
     max-width: 560px;
   }
 
+  /* Remove: the same disclosure among a Post's actions, its confirm opening under it. */
+  .post-footer > .post-remove {
+    margin: 2px 0 0 -8px;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .post-footer > .post-remove > .post-remove-toggle {
+    width: fit-content;
+    height: 32px;
+    padding: 0 8px;
+    display: flex;
+    align-items: center;
+    font: 600 13px/1 var(--ts-font-ui);
+    list-style: none;
+  }
+
+  .post-footer > .post-remove > .post-remove-toggle::-webkit-details-marker {
+    display: none;
+  }
+
+  .post-footer > .post-remove > .post-remove-confirm {
+    margin: 4px 0 0 8px;
+    max-width: 560px;
+  }
+
   @media (max-width: 719px) {
     .post-body-root {
       font-size: 19px;
@@ -1737,6 +1763,18 @@
 
 /* TopicEntry: one Topic in a list. */
 @layer tangent {
+  /* A Topic whose root is removed says so where its opening stood, as its tombstone does. */
+  .topic-row-removed {
+    font-style: italic;
+  }
+
+  .article-card-removed {
+    margin: 10px 0 0;
+    color: var(--ts-text-3);
+    font: var(--ts-type-ui-small);
+    font-style: italic;
+  }
+
   .topic-row-count {
     font: 600 15px/1.3 var(--ts-font-ui);
   }

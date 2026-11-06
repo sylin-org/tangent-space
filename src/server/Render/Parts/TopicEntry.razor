@@ -4,6 +4,7 @@
    its recent authors, its replies with how many are new, and when it last gained a Post and from whom. As an article: a
    card with its cover where it has one, its date and read time, opening, author and replies; leading a list, drawn large
    with its cover, or the Tangent's own tile and name on the image band where it has none, and its latest-reply strip.
+   A Topic whose root is removed says who removed it and when in place of its opening, and an article its read time.
    Zeros are said in words. *@
 @if (As is Shape.Card or Shape.Lead)
 {
@@ -30,11 +31,18 @@
         <div class="article-card-text">
             <p class="article-card-date">
                 <time datetime="@Wording.Iso(Model.CreatedAt)">@Wording.When(Model.CreatedAt, Today)</time>
-                <span aria-hidden="true">·</span>
-                <span>@Model.ReadMinutes.ToString(CultureInfo.InvariantCulture) min read</span>
+                @if (Model.Removed is null)
+                {
+                    <span aria-hidden="true">·</span>
+                    <span>@Model.ReadMinutes.ToString(CultureInfo.InvariantCulture) min read</span>
+                }
             </p>
             <h3 class="article-card-title"><a href="@Model.Address">@Model.Title</a></h3>
-            @if (Model.Opening.Length > 0)
+            @if (Model.Removed is { } removed)
+            {
+                <p class="article-card-removed">@RemovedBy(removed)</p>
+            }
+            else if (Model.Opening.Length > 0)
             {
                 <p class="article-card-opening">@Model.Opening</p>
             }
@@ -71,7 +79,14 @@ else
         </span>
         <span class="topic-row-body">
             <span class="topic-row-title">@Model.Title</span>
-            <span class="topic-row-opening"><Draw Part="@(Model.Author with { Profile = null })" As="Shape.Name" /><Draw Part="@Model.Edited" />@(Model.Opening.Length > 0 ? ": " + Model.Opening : "")</span>
+            <span class="topic-row-opening"><Draw Part="@(Model.Author with { Profile = null })" As="Shape.Name" />@if (Model.Removed is { } removed)
+                {
+                    <span aria-hidden="true"> · </span><span class="topic-row-removed">@RemovedBy(removed)</span>
+                }
+                else
+                {
+                    <Draw Part="@Model.Edited" />@(Model.Opening.Length > 0 ? ": " + Model.Opening : "")
+                }</span>
             @if (Model.Latest is { } latest)
             {
                 <span class="topic-row-latest-reply">
@@ -135,13 +150,16 @@ else
 
     private string Shown(string cover) => Standalone ? cover : cover + "/" + Posts.MediaRecipes.CardName;
 
+    /// <summary>Who removed the Topic's root and when, in the words its tombstone says.</summary>
+    private RenderFragment RemovedBy(Posts.TopicPage.Removal removed) => @<text>Removed by @(removed.By.Id == Model.Author.Id ? "its author" : removed.By.Name) <time datetime="@Wording.Iso(removed.At)" title="@Wording.Full(removed.At)">@Wording.When(removed.At, Today)</time></text>;
+
     private string Replies => Wording.Count(Model.ReplyCount, "reply", "replies", "No replies yet");
 
     private string ArticleClass => (Lead ? "article-card article-lead" : Model.Cover is null ? "article-card" : "article-card article-card-covered") + " card topic" + States;
 
-    /// <summary>What the Topic's record holds of it, as the contract's states: new to the reader, and started by the reader
-    /// or by an agent.</summary>
-    private string States => (Model.New ? " is-new" : "")
+    /// <summary>What the Topic's record holds of it, as the contract's states: removed, new to the reader, and started by the
+    /// reader or by an agent.</summary>
+    private string States => (Model.Removed is not null ? " is-removed" : "") + (Model.New ? " is-new" : "")
         + (Reader is not null && Model.Author.Id == Reader ? " by-you" : "") + (Model.Author.Agent ? " by-agent" : "");
 
     /// <summary>How many of the Topic's replies are new to the reader; absent where they never read the Topic, which is new

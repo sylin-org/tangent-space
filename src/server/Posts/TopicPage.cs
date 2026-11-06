@@ -135,8 +135,9 @@ public sealed record TopicPage(
     /// <see cref="Edited"/> says who other than its author last edited it and when, where someone did: the words are not
     /// said to be the author's.
     /// <see cref="New"/> marks a Post that is new to a signed-in reader (<see cref="Events.Unread.New"/>): someone else's,
-    /// past where they were last here and past their mark on the Topic. <see cref="Can"/> is what the reader holds on this Post, and <see cref="Edit"/> where
-    /// it is edited or removed, present only where they may do either. <see cref="TakeOnATangent"/> is the new-topic form that takes
+    /// past where they were last here and past their mark on the Topic. <see cref="Can"/> is what the reader holds on this Post, <see cref="Edit"/> where
+    /// it is edited, present only where they may edit it, and <see cref="Remove"/> the form that removes it, confirmed in the
+    /// page, present only where they may remove it and it is not removed. <see cref="TakeOnATangent"/> is the new-topic form that takes
     /// it on a tangent, present only on a Post that is not removed, for a reader who may start a Topic somewhere;
     /// <see cref="Taken"/> holds the Topics taken on a tangent from it that the reader may view, where there are any.
     /// <see cref="Report"/> is the form that reports it to the moderators, with a TID minted for it, for a signed-in
@@ -161,7 +162,8 @@ public sealed record TopicPage(
         TopicPage.Taken? Taken = null,
         Form? Report = null,
         TangentPage.Edited? Edited = null,
-        string? WrittenAs = null) : Render.IPart
+        string? WrittenAs = null,
+        Form? Remove = null) : Render.IPart
     {
         /// <summary>Whether this is the Topic's root.</summary>
         [Newtonsoft.Json.JsonIgnore]

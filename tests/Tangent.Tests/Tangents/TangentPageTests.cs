@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Koan.Data.Core.Commands;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
@@ -14,7 +15,7 @@ namespace Tangent.Tangents;
 
 /// <summary>The Tangent page both ways: the Tangent, its <c>can</c> and one bounded page of its Topics by last activity,
 /// with what is new to a signed-in reader marked; the gate for a reader who may not read;
-/// the empty state and the start affordance; and the page's <c>ETag</c>.</summary>
+/// the empty state and the start affordance; a Topic whose root is removed, marked; and the page's <c>ETag</c>.</summary>
 public sealed class TangentPageTests
 {
     private const string BaseUrl = TangentSpaceFixture.DefaultBaseUrl;
@@ -323,6 +324,46 @@ public sealed class TangentPageTests
         Assert.Contains("data-theme-choice=\"dark\"", readerHtml[..readerHtml.IndexOf("account-items", StringComparison.Ordinal)]);
         Assert.DoesNotContain("The studio", readerHtml);
         Assert.Contains("<span class=\"badge is-new new-beside\">New</span>", readerHtml);
+    }
+
+    [Fact]
+    public async Task A_topic_whose_root_is_removed_is_listed_saying_who_removed_it_as_html_and_json_and_a_removed_article_never_leads()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        await Place(tangentSpace);
+        var open = await Started("Still open", Start);
+        var gone = await Started("Taken down", Start.AddMinutes(1));
+        Assert.IsType<Outcome<Post>.Done>(await new RemovePost(gone.Id, "leo", Start.AddMinutes(2)).Send(Cancellation));
+
+        using (var json = await Json(tangentSpace.Client, "/t/" + Workshop))
+        {
+            var topics = json.RootElement.GetProperty("topics").EnumerateArray().ToDictionary(topic => topic.GetProperty("id").GetString()!);
+            var removed = topics[gone.Id].GetProperty("removed");
+            Assert.Equal(("leo", Start.AddMinutes(2)), (removed.GetProperty("by").GetProperty("id").GetString(), removed.GetProperty("at").GetDateTimeOffset()));
+            Assert.Equal(("Taken down", ""), (topics[gone.Id].GetProperty("title").GetString(), topics[gone.Id].GetProperty("opening").GetString()));
+            Assert.False(topics[open.Id].TryGetProperty("removed", out _));
+        }
+
+        var html = await Html(tangentSpace.Client, "/t/" + Workshop);
+        Assert.Contains("<a class=\"row topic is-removed\"", html);
+        Assert.Matches("<span class=\"topic-row-removed\">Removed by leo\\.example <time ", html);
+        Assert.Single(Regex.Matches(html, "is-removed"));
+
+        // In a Tangent of articles the newest is removed: the next leads, and the removed one follows as a card.
+        Assert.IsType<Outcome<Tangent>.Done>(await new CreateTangent("essays", "Essays", "", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "essays", "An older essay", "Words that stay.", "ada", At: Start.AddMinutes(3)).Send(Cancellation));
+        var newer = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "essays", "A newer essay", "Words that go.", "ada", At: Start.AddMinutes(4)).Send(Cancellation)).Result;
+        Assert.IsType<Outcome<Post>.Done>(await new RemovePost(newer.Id, "ada", Start.AddMinutes(5)).Send(Cancellation));
+
+        var essays = await Html(tangentSpace.Client, "/t/essays");
+        var lead = Regex.Match(essays, "<article class=\"article-card article-lead card topic\"[^>]*>.*?</article>", RegexOptions.Singleline);
+        var card = Regex.Match(essays, "<article class=\"article-card card topic is-removed\"[^>]*>.*?</article>", RegexOptions.Singleline);
+        Assert.True(lead.Success && card.Success, "the older essay leads and the removed one is a card");
+        Assert.Contains("An older essay", lead.Value);
+        Assert.Contains("A newer essay", card.Value);
+        Assert.Matches("<p class=\"article-card-removed\">Removed by its author <time ", card.Value);
+        Assert.DoesNotContain("min read", card.Value);
+        Assert.True(lead.Index < card.Index);
     }
 
     [Fact]

@@ -170,7 +170,7 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Read
     }
 
     /// <summary>One Post as the page shows it, with what the reader holds on it from the page's rows, where it is
-    /// edited where they may edit or remove it, where it is taken on a tangent — the new-topic form <paramref name="takeOn"/>
+    /// edited where they may edit it, the form that removes it where they may remove it and it stands, where it is taken on a tangent — the new-topic form <paramref name="takeOn"/>
     /// names, where the reader may start a Topic somewhere — where it is not removed, the Topics taken from it that they may view, and, for a
     /// signed-in reader, the form that reports it: on someone else's Post that is
     /// not removed, outside the moderators' Tangent.</summary>
@@ -202,7 +202,8 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Read
             reader is not null && !post.Removed && post.AuthorId != reader?.Id && post.TangentId != rows.Space.ModeratorsTangentId
                 ? PostWrites.ReportForm(address + "/" + ReportController.Segment, Tid.Mint(DateTimeOffset.UtcNow)) : null,
             TangentPage.EditedOf(post, people),
-            post.AuthorDid.Length > 0 ? post.AuthorDid : null);
+            post.AuthorDid.Length > 0 ? post.AuthorDid : null,
+            can.Holds(Bit.RemoveOwn) && !post.Removed ? PostWrites.RemoveForm(address + "/" + EditPostController.RemoveSegment, post, "Remove") : null);
     }
 
     /// <summary>The Post a reply from this page answers: the reply the page's address named, where it named one by

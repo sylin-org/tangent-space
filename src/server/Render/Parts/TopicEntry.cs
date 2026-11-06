@@ -6,7 +6,8 @@ namespace Tangent.Render;
 /// (<see cref="Events.Unread.InTopic"/>) with <see cref="NewPosts"/>, how many of its Posts are, absent where they never read
 /// it and so it is new with no count. <see cref="Edited"/> says who other than its author last edited its root, where someone
 /// did. <see cref="Cover"/> is the address of an article's cover, while its root stands and has one. <see cref="In"/> is the
-/// Tangent it is in, which an article that leads a list without a cover wears in its place.</summary>
+/// Tangent it is in, which an article that leads a list without a cover wears in its place. <see cref="Removed"/> says who
+/// removed its root and when, where someone did: the Topic keeps its title, author and replies, and takes no more.</summary>
 public sealed record TopicEntry(
     string Id,
     string Slug,
@@ -24,7 +25,8 @@ public sealed record TopicEntry(
     bool New,
     long? NewPosts,
     Tangents.TangentPage.Edited? Edited = null,
-    string? Cover = null) : IPart
+    string? Cover = null,
+    Posts.TopicPage.Removal? Removed = null) : IPart
 {
     /// <summary>The Tangent the Topic is in, its name and tile, where a list draws it as an article.</summary>
     [Newtonsoft.Json.JsonIgnore]

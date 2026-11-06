@@ -18,7 +18,7 @@ namespace Tangent.Access;
 /// <see cref="Bit.EditOwn"/> and <see cref="Bit.RemoveOwn"/> on any Post, so every action asks one bit. Koan resolves the
 /// bag and the overwrites (<see cref="RoleBag.On"/>) and names the fact that decided each missing bit; the first step
 /// that drops a verb names its gate, which puts the words in their precedence: <see cref="SignIn"/>, <see cref="Apply"/>,
-/// <see cref="Declined"/>, <see cref="TimedOut"/>, <see cref="Absent"/>, <see cref="Removed"/>. Standing words
+/// <see cref="Declined"/>, <see cref="TimedOut"/>, <see cref="Absent"/>, <see cref="Closed"/>, <see cref="Removed"/>. Standing words
 /// <see cref="Bit.View"/> for reading (<see cref="SignInToRead"/>, <see cref="ApplyToRead"/>, <see cref="DeclinedToRead"/>).
 /// Computed per request from a few small rows; nothing stores it.</summary>
 public sealed class Capabilities
@@ -50,6 +50,9 @@ public sealed class Capabilities
     public static readonly Reason Absent = Reason.Absent("absent");
     public static readonly Reason Removed = Reason.Gated("removed", "This post is removed, so nothing changes it now.");
 
+    /// <summary>Why a Topic whose root is removed takes no reply: its replies stay, and it takes no more.</summary>
+    public static readonly Reason Closed = Reason.Gated("closed", "This topic is closed: its opening post was removed, so it takes no more replies.");
+
     /// <summary>The reason <see cref="Bit.EditOwn"/> and <see cref="Bit.RemoveOwn"/> are missing on a Post that is
     /// not the participant's own, for anyone who does not hold <see cref="Bit.Moderate"/> there.</summary>
     public static readonly Reason NotYours = Reason.Gated("not yours", "Only its author, or a moderator, can change this post.");
@@ -69,6 +72,7 @@ public sealed class Capabilities
         (Declined, "Not admitted"),
         (TimedOut, "Timed out"),
         (Removed, "Removed"),
+        (Closed, "Closed"),
         (NotYours, "Not yours")
     }.ToDictionary(worded => worded.Gate.Word, worded => (worded.Gate.Text, worded.Heading), StringComparer.Ordinal);
 
@@ -118,8 +122,8 @@ public sealed class Capabilities
     public bool Holds(Bit verb) => (Held & verb) == verb;
 
     /// <summary>Null when the verb is held; otherwise the one reason it is not: <see cref="SignIn"/>,
-    /// <see cref="Apply"/>, <see cref="Declined"/>, <see cref="TimedOut"/>, <see cref="Absent"/> or <see cref="Removed"/>
-    /// where standing, audience or state decided, or the deciding overwrite or the absence of a role where the bag and
+    /// <see cref="Apply"/>, <see cref="Declined"/>, <see cref="TimedOut"/>, <see cref="Absent"/>, <see cref="Closed"/> or
+    /// <see cref="Removed"/> where standing, audience or state decided, or the deciding overwrite or the absence of a role where the bag and
     /// the overwrites decided.</summary>
     public Reason? Gate(Bit verb)
     {
@@ -204,11 +208,12 @@ public sealed class Capabilities
             return new Capabilities(Bit.None, false, missing, resolved.RoleIds, resolved.Bag);
         }
 
-        // Replying is judged by the Topic, whose state lives on its root; everything else by the Post itself.
+        // Replying is judged by the Topic, whose state lives on its root, and a Topic whose root is removed is closed;
+        // everything else by the Post itself.
         // Nothing applies to a tombstone but removing it again, which changes nothing and is judged as the Post stood.
         var topic = root ?? post;
         var tombstone = post is { Removed: true };
-        if (topic is { Removed: true }) Drop(Bit.Post, Removed);
+        if (topic is { Removed: true }) Drop(Bit.Post, Closed);
         if (tombstone) Drop(Bits.All & ~(Bit.RemoveOwn | Bit.Moderate), Removed);
 
         // Whoever may not remove a tombstone again is told it is removed.

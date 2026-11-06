@@ -1,6 +1,6 @@
-@* A page of a Tangent's Topics, latest activity first: discussions as rows of a table, articles as cards, the first leading
-   on the first page with the Tangent's own tile where it has no cover; where none are, one sentence and one next step; and
-   the way to older ones and back to the latest. *@
+@* A page of a Tangent's Topics, latest activity first: discussions as rows of a table, articles as cards, the first that
+   stands leading on the first page with the Tangent's own tile where it has no cover, and a removed one never; where none
+   are, one sentence and one next step; and the way to older ones and back to the latest. *@
 @if (Model.Topics.Count == 0)
 {
     <div class="topic-empty">
@@ -28,9 +28,13 @@ else
     @if (Articles)
     {
         <div class="article-list">
-            @for (var index = 0; index < Model.Topics.Count; index++)
+            @if (Lead is { } lead)
             {
-                <Draw Part="@(Model.Topics[index] with { In = Model.Tangent })" As="@(index == 0 && !Model.Continued ? Shape.Lead : Shape.Card)" />
+                <Draw Part="@(lead with { In = Model.Tangent })" As="Shape.Lead" />
+            }
+            @foreach (var article in Model.Topics.Where(topic => topic.Id != Lead?.Id))
+            {
+                <Draw Part="@(article with { In = Model.Tangent })" As="Shape.Card" />
             }
         </div>
     }
@@ -70,6 +74,9 @@ else
     [Parameter, EditorRequired] public Render.TangentTopics Model { get; set; } = default!;
 
     private bool Articles => Model.Tangent.Kind == "article";
+
+    /// <summary>The article that leads the first page: the first whose root stands.</summary>
+    private Render.TopicEntry? Lead => Model.Continued ? null : Model.Topics.FirstOrDefault(topic => topic.Removed is null);
 
     private string Title => Model.Continued
         ? "Older " + (Articles ? "articles" : "topics")

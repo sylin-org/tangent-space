@@ -38,7 +38,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
     [HttpHead("/t/{tangent}")]
     [Tool(Name = "read_tangent")]
     [Needs(Bit.View)]
-    [Description("Read a Tangent: its Topics a page at a time, what is new to you marked. Follow with read_topic on a Topic's slug, or start_topic to begin one.")]
+    [Description("Read a Tangent: its Topics a page at a time, what is new to you marked, and a Topic whose root was removed saying who removed it. Follow with read_topic on a Topic's slug, or start_topic to begin one.")]
     public async Task<IActionResult> Get([Description(Holds.Tangent)] string tangent, [FromQuery(Name = After), Description(Holds.After)] string? after, CancellationToken ct)
     {
         var here = Here.Of(HttpContext);
@@ -99,7 +99,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
     }
 
     /// <summary>One Topic as a list shows it, what is new in it marked for a signed-in reader by the one rule
-    /// (<see cref="Unread.InTopic"/>), and none for a visitor.</summary>
+    /// (<see cref="Unread.InTopic"/>), and none for a visitor, and who removed its root, where someone did.</summary>
     public static Render.TopicEntry Topic(Post root, string tangentAddress, IReadOnlyDictionary<string, Render.Person> people,
         IReadOnlyDictionary<string, Post> latest, Unread? unread, IReadOnlyDictionary<string, long> marks)
     {
@@ -127,7 +127,8 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
             isNew,
             newPosts,
             TangentPage.EditedOf(root, people),
-            root.CoverId is { } cover ? tangentAddress[..tangentAddress.LastIndexOf("/t/", StringComparison.Ordinal)] + Media.Reference(cover) : null);
+            root.CoverId is { } cover ? tangentAddress[..tangentAddress.LastIndexOf("/t/", StringComparison.Ordinal)] + Media.Reference(cover) : null,
+            root.Removed ? new TopicPage.Removal(Person(people, root.RemovedBy ?? root.AuthorId), root.RemovedAt ?? root.CreatedAt) : null);
     }
 
     private static Render.Person Person(IReadOnlyDictionary<string, Render.Person> people, string id)
@@ -142,14 +143,16 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
     }
 
     /// <summary>Everyone the page shows (the Topics' authors, their recent authors, the authors of their latest
-    /// replies, whom those openings and replies mention, and who else edited them) in one keyed read, by participant Id.</summary>
+    /// replies, whom those openings and replies mention, who else edited them, and who removed a root) in one keyed read,
+    /// by participant Id.</summary>
     public static async Task<IReadOnlyDictionary<string, Render.Person>> People(IReadOnlyList<Post> topics, IEnumerable<Post> latest,
         CancellationToken ct)
     {
         var ids = topics.SelectMany(topic => topic.RecentAuthorIds.Take(Post.RecentAuthorLimit).Append(topic.AuthorId))
             .Concat(latest.Select(post => post.AuthorId))
             .Concat(topics.Concat(latest).SelectMany(post => post.MentionedIds))
-            .Concat(topics.Concat(latest).Select(post => post.EditedBy).OfType<string>()).Distinct(StringComparer.Ordinal).ToList();
+            .Concat(topics.Concat(latest).Select(post => post.EditedBy).OfType<string>())
+            .Concat(topics.Where(topic => topic.Removed).Select(topic => topic.RemovedBy).OfType<string>()).Distinct(StringComparer.Ordinal).ToList();
         if (ids.Count == 0) return new Dictionary<string, Render.Person>();
         var rows = await Participant.Get(ids, ct);
         return rows.OfType<Participant>().ToDictionary(row => row.Id, row => Render.Person.Of(row), StringComparer.Ordinal);
