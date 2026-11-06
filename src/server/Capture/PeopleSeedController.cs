@@ -19,7 +19,7 @@ namespace Tangent.Capture;
 public sealed class PeopleSeedController(RoleCollection roles) : ControllerBase
 {
     /// <summary>The capture persona of <c>src/client/capture/screens.ts</c>.</summary>
-    private const string Persona = "did:plc:capture4persona";
+    private const string Persona = Seeded.Persona;
 
     [HttpPost("/capture/seed/people")]
     public async Task<IActionResult> Seed(CancellationToken ct)
@@ -28,13 +28,13 @@ public sealed class PeopleSeedController(RoleCollection roles) : ControllerBase
         space.Name = "Kintsugi Architecture";
         await Write(new Keep<TangentSpace>(space), ct);
 
-        await Person("did:plc:capture4leo", "leo.sylin.org", "Leo Botinelly", ParticipantKind.Person, Standing.Admitted, null, [Roles.Member, Roles.Administrator], ct);
-        await Person("did:plc:capture4noor", "noor.bsky.social", "Noor Haddad", ParticipantKind.Person, Standing.Admitted, null, [Roles.Member, Roles.Moderator], ct);
-        await Person("did:plc:capture4lumen", "lumen.sylin.org", "Lumen", ParticipantKind.Agent, Standing.Admitted, null, [Roles.Member], ct);
-        await Person("did:plc:capture4mara", "mara.bsky.social", "Mara Lind", ParticipantKind.Person, Standing.TimedOut,
+        await Person(Seeded.Leo, "leo.sylin.org", "Leo Botinelly", ParticipantKind.Person, Standing.Admitted, null, [Roles.Member, Roles.Administrator], ct);
+        await Person(Seeded.Noor, "noor.bsky.social", "Noor Haddad", ParticipantKind.Person, Standing.Admitted, null, [Roles.Member, Roles.Moderator], ct);
+        await Person(Seeded.Lumen, "lumen.sylin.org", "Lumen", ParticipantKind.Agent, Standing.Admitted, null, [Roles.Member], ct);
+        await Person(Seeded.Mara, "mara.bsky.social", "Mara Lind", ParticipantKind.Person, Standing.TimedOut,
             new DateTimeOffset(2030, 11, 2, 9, 0, 0, TimeSpan.Zero), [Roles.Member], ct);
-        await Person("did:plc:capture4kai", "kai.example.com", "Kai", ParticipantKind.Person, Standing.Banned, null, [Roles.Member], ct);
-        await Write(new Keep<Participant>(Participant.Arrive("did:plc:capture4wren", "wren.bsky.social", Admission.Apply,
+        await Person(Seeded.Kai, "kai.example.com", "Kai", ParticipantKind.Person, Standing.Banned, null, [Roles.Member], ct);
+        await Write(new Keep<Participant>(Participant.Arrive(Seeded.Wren, Seeded.Did(Seeded.Wren), "wren.bsky.social", Admission.Apply,
             new DateTimeOffset(2026, 9, 29, 14, 5, 0, TimeSpan.Zero))), ct);
         return NoContent();
     }
@@ -75,8 +75,8 @@ public sealed class PeopleSeedController(RoleCollection roles) : ControllerBase
         IReadOnlyList<string> held, CancellationToken ct)
     {
         // Captured now, so a sign-in finds the profile fresh and no profile job reaches the network.
-        await Write(new Keep<Participant>(new Participant { Id = id, Handle = handle, Standing = standing, StandingUntil = until }), ct);
-        await Write(new CaptureProfile(new ProfileAnswer(id, displayName, null, null, AgentLabel: kind == ParticipantKind.Agent), DateTimeOffset.UtcNow), ct);
+        await Write(new Keep<Participant>(new Participant { Id = id, Did = Seeded.Did(id), Handle = handle, Standing = standing, StandingUntil = until }), ct);
+        await Write(new CaptureProfile(id, new ProfileAnswer(Seeded.Did(id), displayName, null, null, AgentLabel: kind == ParticipantKind.Agent), DateTimeOffset.UtcNow), ct);
         foreach (var role in held) await roles.Add(role, id, ct);
     }
 

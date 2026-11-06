@@ -19,7 +19,8 @@ namespace Tangent.Participants;
 /// kind, the roles they hold here, when they arrived, and their recent Posts in the Tangents the reader may view, left to
 /// the formatter as HTML, a fragment or JSON. A reader without <see cref="Bit.View"/> on the place receives its gate, the
 /// same for every handle, held or not; a handle no participant holds now answers as a missing resource. The address
-/// takes a handle, matched as the participant's row keeps it, or a participant's DID. Every read is bounded and keyed:
+/// takes a handle, matched as the participant's row keeps it, a participant's id, as a mention links to them, or the DID of
+/// the account they are bound to. Every read is bounded and keyed:
 /// capability's rows for the place; the participant by handle or Id; Koan's roles of theirs and their person's row; the
 /// Tangents the reader may view (<see cref="ViewableTangents.All"/>), every Tangent judged from Koan's compiled state, so
 /// as many as the place holds; one page of their Posts in those (<see cref="RecentPosts"/>); the roots of the replies
@@ -79,6 +80,7 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
         var back = Uri.EscapeDataString(baseUrl.PathBase + ProfilePage.Segment + shownHandle);
         return Ok(new ProfilePage(
             subject.Id,
+            subject.Did,
             shownHandle,
             name,
             subject.Profile.DisplayName is { Length: > 0 } displayName ? displayName : null,
@@ -102,16 +104,18 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
             forms));
     }
 
-    /// <summary>The participant the address names: by Id where it is a DID; otherwise the one participant whose row keeps
-    /// the handle, as written or in lower case, as atproto writes handles. A handle has one holder: the command records a
+    /// <summary>The participant the address names: by Id where it is a participant's id, as a mention links to them; by the
+    /// account they are bound to now where it is a DID; otherwise the one participant whose row keeps the handle, as written
+    /// or in lower case, as atproto writes handles. A handle has one holder: the command records a
     /// verified handle and takes it from any other row in one command (<see cref="Handles.Release"/>), so one keyed read of
     /// one row answers.</summary>
     private static async Task<Participant?> Holder(string handle, CancellationToken ct)
     {
         if (handle.Length is 0 or > Mentions.IdentityLimit) return null;
-        if (handle.StartsWith("did:", StringComparison.Ordinal)) return await Participant.Get(handle, ct);
-        if (handle.Length > Participants.SignIn.HandleLimit) return null;
+        if (Participant.IsId(handle)) return await Participant.Get(handle, ct);
         var query = new QueryDefinition { Page = 1, PageSize = 1 };
+        if (Participant.IsDid(handle)) return (await Participant.Query(participant => participant.Did == handle, query, ct)).FirstOrDefault();
+        if (handle.Length > Participants.SignIn.HandleLimit) return null;
         var rows = await Participant.Query(participant => participant.Handle == handle, query, ct);
         var lower = handle.ToLowerInvariant();
         if (rows.Count == 0 && lower != handle) rows = await Participant.Query(participant => participant.Handle == lower, query, ct);

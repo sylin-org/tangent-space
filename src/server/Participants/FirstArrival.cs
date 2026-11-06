@@ -5,7 +5,7 @@ using Tangent.Space;
 
 namespace Tangent.Participants;
 
-/// <summary>A person's first sign-in: creates their participant, a person until their profile says otherwise, with the
+/// <summary>A person's first sign-in: creates their participant, bound to the account <see cref="Did"/>, a person until their profile says otherwise, with the
 /// standing the place's admission gives (before first run, the admission the place will be established with), and appends
 /// <see cref="EventKind.StandingChanged"/> for it, carrying that standing; an applicant's application waits at that
 /// event's sequence (<see cref="Participant.WaitingSeq"/>), and that is all it writes, however many may decide it; anyone
@@ -13,7 +13,7 @@ namespace Tangent.Participants;
 /// (<see cref="Participant.ArrivedSeq"/>), so what the place held before is not news to them. Idempotent by the person's id: a person who already arrived
 /// gets their participant back and nothing is written. The handle is taken from any other participant who still keeps it
 /// (<see cref="Handles.Release"/>).</summary>
-public sealed record FirstArrival(string PersonId, string Handle, DateTimeOffset? At = null) : ICommand<Participant>
+public sealed record FirstArrival(string PersonId, string Did, string Handle, DateTimeOffset? At = null) : ICommand<Participant>
 {
     public async Task<Outcome<Participant>> Run(CancellationToken ct)
     {
@@ -21,7 +21,7 @@ public sealed record FirstArrival(string PersonId, string Handle, DateTimeOffset
 
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
         var at = At ?? DateTimeOffset.UtcNow;
-        var participant = Participant.Arrive(PersonId, Handle, space.Admission, at);
+        var participant = Participant.Arrive(PersonId, Did, Handle, space.Admission, at);
         var arrival = await Event.Append(EventKind.StandingChanged, at, ct, actorId: participant.Id, targetId: participant.Id,
             standing: participant.Standing);
         participant.Arrived(arrival.Seq);

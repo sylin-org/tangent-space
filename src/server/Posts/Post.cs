@@ -92,7 +92,7 @@ public sealed class Post : Entity<Post>
     public string? CoverId { get; set; }
 
     /// <summary>Markdown, rendered to safe HTML where it is shown (<see cref="MarkdownHtml"/>); a mention is a link to
-    /// <c>at://</c> and a DID (<see cref="Mentions"/>). Found by its words.</summary>
+    /// <c>/p/</c> and a participant's id (<see cref="Mentions"/>). Found by its words.</summary>
     [Lexical]
     public string Body { get; set; } = "";
 
@@ -100,7 +100,7 @@ public sealed class Post : Entity<Post>
     /// <see cref="MediaLimit"/>; empty on a tombstone.</summary>
     public List<string> MediaIds { get; set; } = [];
 
-    /// <summary>The DIDs the body mentions, each once, in the order of their first mention, at most
+    /// <summary>The ids of the participants the body mentions, each once, in the order of their first mention, at most
     /// <see cref="Mentions.Limit"/>; empty on a tombstone.</summary>
     public List<string> MentionedIds { get; set; } = [];
 
@@ -123,6 +123,10 @@ public sealed class Post : Entity<Post>
     /// newest first, are one range of it.</summary>
     [Index(Name = "ix_post_authors", Order = 0)]
     public string AuthorId { get; set; } = "";
+
+    /// <summary>The DID of the Bluesky account its author was bound to when they wrote it, which an edit never changes:
+    /// the account the Post links out to and goes out under.</summary>
+    public string AuthorDid { get; set; } = "";
 
     [Index(Name = "ix_post_origins", Order = 1)]
     [Index(Name = "ix_post_authors", Order = 1)]

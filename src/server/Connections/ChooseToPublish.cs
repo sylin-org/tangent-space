@@ -57,7 +57,8 @@ public sealed record OfferAgain(string PersonId) : ICommand<Connection?>
 }
 
 /// <summary>What a Connection delivered of an article, or that it retracted it, as its receipt.</summary>
-public sealed record KeepReceipt(string ConnectionId, string PostId, string TangentId, long Version, Written? Written, DateTimeOffset At)
+public sealed record KeepReceipt(string ConnectionId, string PostId, string TangentId, long Version, Written? Written, DateTimeOffset At,
+    bool Stays = false)
     : ICommand<Receipt>
 {
     public async Task<Outcome<Receipt>> Run(CancellationToken ct)
@@ -75,6 +76,10 @@ public sealed record KeepReceipt(string ConnectionId, string PostId, string Tang
             receipt.Note = written.Note.Uri;
             receipt.NoteCid = written.Note.Cid;
             receipt.Retracted = false;
+        }
+        else if (Stays)
+        {
+            receipt.Stays = true;
         }
         else
         {

@@ -14,9 +14,9 @@ namespace Tangent.Posts;
 /// whoever its handles name by then, and the limit a writer meets is on what they sent.</summary>
 public sealed class TypedMentionTests
 {
-    private const string Newcomer = "did:plc:newcomer4writes";
+    private static readonly string Newcomer = Persona.Id("newcomer4writes");
 
-    private static string Mention(string did, string words) => $"[{words}](at://{did})";
+    private static string Mention(string did, string words) => $"[{words}](/p/{did})";
 
     [Fact]
     public async Task A_handle_begins_where_a_word_does_in_any_cell_or_line_ending_and_never_inside_an_address_or_a_path()
@@ -74,7 +74,7 @@ public sealed class TypedMentionTests
         var edit = PostPath(root, root) + "/edit";
         var edited = new Dictionary<string, string> { ["body"] = "How do you hang yours, @bea4writes.example?", ["version"] = "1" };
         Assert.Equal(HttpStatusCode.SeeOther, (await Form(ada, edit, edit, new Dictionary<string, string>(edited))).Status);
-        Assert.IsType<Outcome<Participant>.Done>(await new RecordHandle(Mo, "bea4writes.example").Send(Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new RecordSignIn(Mo, Persona.Did(Mo), "bea4writes.example").Send(Cancellation));
         var before = await Counted();
 
         var replyAgain = await Json(ada, page, page, asJson);
@@ -207,7 +207,7 @@ public sealed class TypedMentionTests
         Assert.Equal(HttpStatusCode.SeeOther, (await Form(ada, TopicPath(root), TopicPath(root),
             new Dictionary<string, string> { ["id"] = replyId, ["body"] = "What do you think, @bea4writes.example?" })).Status);
 
-        Assert.IsType<Outcome<Participant>.Done>(await new RecordHandle(Bea, "bea.renamed.example").Send(Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new RecordSignIn(Bea, Persona.Did(Bea), "bea.renamed.example").Send(Cancellation));
 
         using var visitor = Agent(tangentSpace);
         var html = (await Send(visitor, HttpMethod.Get, TopicPath(root))).Body;

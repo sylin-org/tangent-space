@@ -18,7 +18,7 @@ namespace Tangent.Tangents;
 /// settings answer JSON with <c>can</c> and <c>gate</c>.</summary>
 public sealed class TangentSettingsTests
 {
-    private const string Leo = "did:plc:leo4settings";
+    private static readonly string Leo = Persona.Id("leo4settings");
 
     /// <summary>The fields the settings form sends for the workshop as Writing's place holds it, with the changes given.</summary>
     private static Dictionary<string, string> Workshop(string? name = null, string? audience = null) => new()

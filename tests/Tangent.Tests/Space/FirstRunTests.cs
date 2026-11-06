@@ -22,8 +22,8 @@ namespace Tangent.Space;
 public sealed class FirstRunTests
 {
     private const string BaseUrl = TangentSpaceFixture.DefaultBaseUrl;
-    private const string Leo = "did:plc:leo4example";
-    private const string Ada = "did:plc:ada4example";
+    private static readonly string Leo = Persona.Id("leo4example");
+    private static readonly string Ada = Persona.Id("ada4example");
 
     private static CancellationToken Cancellation => TestContext.Current.CancellationToken;
 
@@ -185,21 +185,21 @@ public sealed class FirstRunTests
     [Fact]
     public async Task A_configured_did_names_its_account_by_the_handle_it_arrived_with_and_lets_only_that_account_set_up()
     {
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector((FirstRun.OperatorSetting, Leo)), ct: Cancellation);
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector((FirstRun.OperatorSetting, Persona.Did(Leo))), ct: Cancellation);
         using var ada = new Browser(tangentSpace);
         using var adaIn = await ada.SignIn("ada", Ada, Cancellation, handle: "ada.example", comeBack: FirstRunController.Path);
         var beforeLeo = await adaIn.Content.ReadAsStringAsync(Cancellation);
         // Leo has arrived without setting the place up, as when his sign-in's setup did not complete.
-        Assert.IsType<Outcome<Participant>.Done>(await new FirstArrival(Leo, "leo.example").Send(Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new FirstArrival(Leo, Persona.Did(Leo), "leo.example").Send(Cancellation));
 
         using var known = await ada.Follow(HttpMethod.Get, "/", Cancellation);
         var afterLeo = await known.Content.ReadAsStringAsync(Cancellation);
         var (_, body) = await Read(ada, "/first-run");
         using var json = JsonDocument.Parse(body);
 
-        Assert.Matches($@"Only\s+{Regex.Escape(Code(Leo))}\s+can set it up\.", beforeLeo);
-        Assert.Matches($@"Only\s+<strong>@leo\.example</strong>\s+<span class=""first-run-did"">\({Regex.Escape(Code(Leo))}\)</span>\s+can set it up\.", afterLeo);
-        Assert.Equal((Leo, "leo.example"),
+        Assert.Matches($@"Only\s+{Regex.Escape(Code(Persona.Did(Leo)))}\s+can set it up\.", beforeLeo);
+        Assert.Matches($@"Only\s+<strong>@leo\.example</strong>\s+<span class=""first-run-did"">\({Regex.Escape(Code(Persona.Did(Leo)))}\)</span>\s+can set it up\.", afterLeo);
+        Assert.Equal((Persona.Did(Leo), "leo.example"),
             (json.RootElement.GetProperty("operator").GetString(), json.RootElement.GetProperty("waiting").GetProperty("operatorHandle").GetString()));
         Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
 
@@ -263,13 +263,13 @@ public sealed class FirstRunTests
     }
 
     [Fact]
-    public async Task Once_established_a_start_under_another_configured_operator_starts_and_warns_once_and_one_naming_the_operator_does_not()
+    public async Task Once_established_a_start_under_another_configured_operator_starts_and_warns_once_and_one_naming_the_operator_by_handle_or_did_does_not()
     {
         var dataFolder = Path.Combine(Path.GetTempPath(), "tangent-data-" + Guid.CreateVersion7().ToString("n"));
         try
         {
             await using (var first = await TangentSpaceFixture.StartAsync(Settings(dataFolder, BaseUrl, (FirstRun.OperatorSetting, Leo)), ct: Cancellation))
-                Assert.IsType<Outcome<TangentSpace>.Done>(await new Establish(Leo, "leo.example", "Field notes").Send(Cancellation));
+                Assert.IsType<Outcome<TangentSpace>.Done>(await new Establish(Leo, Persona.Did(Leo), "leo.example", "Field notes").Send(Cancellation));
 
             var other = new ConcurrentQueue<string>();
             await using (var second = await TangentSpaceFixture.StartAsync(Settings(dataFolder, BaseUrl, (FirstRun.OperatorSetting, "ada.example")),
@@ -279,10 +279,15 @@ public sealed class FirstRunTests
             await using (var third = await TangentSpaceFixture.StartAsync(Settings(dataFolder, BaseUrl, (FirstRun.OperatorSetting, "@Leo.Example")),
                 services => services.AddSingleton<ILoggerProvider>(new Lines(same)), Cancellation))
                 Assert.Equal(Leo, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.OperatorId);
+            var byDid = new ConcurrentQueue<string>();
+            await using (var fourth = await TangentSpaceFixture.StartAsync(Settings(dataFolder, BaseUrl, (FirstRun.OperatorSetting, Persona.Did(Leo))),
+                services => services.AddSingleton<ILoggerProvider>(new Lines(byDid)), Cancellation))
+                Assert.Equal(Leo, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))?.OperatorId);
 
             var warning = Assert.Single(other, line => line.StartsWith(FirstRun.OperatorSetting + " names ", StringComparison.Ordinal));
             Assert.Equal($"{FirstRun.OperatorSetting} names ada.example, but this Tangent Space's operator is {Leo}; the setting matters only before setup, so this start ignores it", warning);
             Assert.DoesNotContain(same, line => line.StartsWith(FirstRun.OperatorSetting + " names ", StringComparison.Ordinal));
+            Assert.DoesNotContain(byDid, line => line.StartsWith(FirstRun.OperatorSetting + " names ", StringComparison.Ordinal));
         }
         finally
         {
@@ -297,7 +302,7 @@ public sealed class FirstRunTests
         try
         {
             await using (var first = await TangentSpaceFixture.StartAsync(Settings(dataFolder, "https://first.example"), ct: Cancellation))
-                Assert.IsType<Outcome<TangentSpace>.Done>(await new Establish(Leo, "leo.example", "Field notes").Send(Cancellation));
+                Assert.IsType<Outcome<TangentSpace>.Done>(await new Establish(Leo, Persona.Did(Leo), "leo.example", "Field notes").Send(Cancellation));
 
             var moved = Settings(dataFolder, "https://second.example/notes", (FirstRun.OperatorSetting, Leo));
             foreach (var (key, value) in TestConnector()) moved[key] = value;
@@ -323,10 +328,10 @@ public sealed class FirstRunTests
     public async Task A_second_first_run_is_refused_as_already_established_and_writes_nothing()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        Assert.IsType<Outcome<TangentSpace>.Done>(await new Establish(Leo, "leo.example", "Field notes").Send(Cancellation));
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new Establish(Leo, Persona.Did(Leo), "leo.example", "Field notes").Send(Cancellation));
         var events = await Event.Count.Exact(Cancellation);
 
-        var again = await new Establish(Ada, "ada.example", "Ada's place").Send(Cancellation);
+        var again = await new Establish(Ada, Persona.Did(Ada), "ada.example", "Ada's place").Send(Cancellation);
 
         Assert.Equal(Establish.AlreadyEstablished, Assert.IsType<Outcome<TangentSpace>.Refused>(again).Reason);
         var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
@@ -339,10 +344,10 @@ public sealed class FirstRunTests
     public async Task An_account_its_profile_labels_an_agent_sets_the_place_up_and_keeps_its_kind()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        var agent = new Participant { Id = Ada, Handle = "ada.example", Kind = ParticipantKind.Agent, KindSource = KindSource.ProfileLabel };
+        var agent = new Participant { Id = Ada, Did = Persona.Did(Ada), Handle = "ada.example", Kind = ParticipantKind.Agent, KindSource = KindSource.ProfileLabel };
         Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(agent).Send(Cancellation));
 
-        var outcome = await new Establish(Ada, "ada.example", TangentSpace.NameFor("ada.example")).Send(Cancellation);
+        var outcome = await new Establish(Ada, Persona.Did(Ada), "ada.example", TangentSpace.NameFor("ada.example")).Send(Cancellation);
 
         var space = Assert.IsType<Outcome<TangentSpace>.Done>(outcome).Result;
         Assert.Equal(("Ada's Tangent Space", Ada, Ada), (space.Name, space.ProprietorId, space.OperatorId));
@@ -420,7 +425,7 @@ public sealed class FirstRunTests
         Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
         Assert.Contains(lines, line => line.StartsWith("Tangent Space at https://fresh.example/notes;", StringComparison.Ordinal));
 
-        var outcome = await new Establish(Leo, "leo.example", "Field notes").Send(Cancellation);
+        var outcome = await new Establish(Leo, Persona.Did(Leo), "leo.example", "Field notes").Send(Cancellation);
 
         Assert.IsType<Outcome<TangentSpace>.Done>(outcome);
         Assert.Equal(1, await TangentSpace.Count.Exact(Cancellation));

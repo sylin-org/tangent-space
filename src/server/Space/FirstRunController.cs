@@ -54,8 +54,10 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
         var place = Place(address, options) with { Reader = await ReaderOf(http.User, address, baseUrl.PathBase, ct) };
         if (PersonId(http.User) is { } personId)
         {
-            var handle = await HandleOf(http.User, personId, ct);
-            if (!options.MaySetUp(personId, handle))
+            var participant = await Participant.Get(personId, ct);
+            var handle = Claimed(http.User, AtprotoClaimTypes.Handle) is { Length: > 0 } claimed ? claimed : participant?.Handle ?? "";
+            var did = Claimed(http.User, AtprotoClaimTypes.Did) is { Length: > 0 } bound ? bound : participant?.Did ?? "";
+            if (!options.MaySetUp(did, handle))
                 return new ObjectResult(place with { Waiting = new FirstRunWaiting(handle, await OperatorHandle(options, ct)) });
         }
         return new ObjectResult(place with
@@ -80,7 +82,8 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
     {
         if (PersonId(user) is not { } personId) return null;
         var participant = await Participant.Get(personId, ct);
-        var handle = participant?.Handle is { Length: > 0 } stored ? stored : Claimed(user) is { Length: > 0 } claimed ? claimed : personId;
+        var handle = participant?.ShownHandle() is { Length: > 0 } stored ? stored
+            : Claimed(user, AtprotoClaimTypes.Handle) is { Length: > 0 } claimed ? claimed : Claimed(user, AtprotoClaimTypes.Did);
         var name = participant?.ShownName() ?? handle;
         var place = participant is null ? null : await Capabilities.Load(personId, null, null, ct);
         var role = place is null ? null : Roles.Word(place.RoleIds);
@@ -96,20 +99,19 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
         => new(TangentSpace.Unnamed, address + "/", options.NamedOperator());
 
     /// <summary>The configured operator's handle: the one the setting names, or, for a DID, the handle of the participant
-    /// with that DID where one has arrived here.</summary>
+    /// bound to that DID where one has arrived here.</summary>
     private static async Task<string?> OperatorHandle(TangentSpaceOptions options, CancellationToken ct)
-        => !options.NamedByDid() ? options.NamedOperator()
-            : (await Participant.Get(options.NamedOperator()!, ct))?.Handle is { Length: > 0 } arrived ? arrived : null;
+    {
+        if (!options.NamedByDid()) return options.NamedOperator();
+        var did = options.NamedOperator()!;
+        var bound = await Participant.Query(participant => participant.Did == did, new Koan.Data.Abstractions.QueryDefinition { Page = 1, PageSize = 1 }, ct);
+        return bound.FirstOrDefault()?.Handle is { Length: > 0 } arrived ? arrived : null;
+    }
 
     private static string? PersonId(ClaimsPrincipal user)
         => user.Identity?.IsAuthenticated == true ? user.FindFirst(ClaimTypes.NameIdentifier)?.Value : null;
 
-    /// <summary>The handle the atproto connector verified for the signed-in account: at this sign-in, or, for a request
-    /// that carries no sign-in's claims, at the sign-in that last recorded it on their
-    /// participant; empty where none was verified.</summary>
-    private static async Task<string> HandleOf(ClaimsPrincipal user, string personId, CancellationToken ct)
-        => Claimed(user) is { Length: > 0 } claimed ? claimed : (await Participant.Get(personId, ct))?.Handle ?? "";
-
-    /// <summary>The handle the connector verified at this sign-in, or empty when it verified none.</summary>
-    private static string Claimed(ClaimsPrincipal user) => user.FindFirst(AtprotoClaimTypes.Handle)?.Value ?? "";
+    /// <summary>What the connector verified at this sign-in of the account, its DID or its handle, or empty when it verified
+    /// none; a request that carries no sign-in's claims reads it from the participant the sign-in last recorded.</summary>
+    private static string Claimed(ClaimsPrincipal user, string type) => user.FindFirst(type)?.Value ?? "";
 }

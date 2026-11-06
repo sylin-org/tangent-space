@@ -18,9 +18,9 @@ namespace Tangent.Capture;
 /// <c>src/client/capture/screens.ts</c> name these Posts.</summary>
 public sealed class ArticleSeedController(RoleCollection roles) : ControllerBase
 {
-    private const string Persona = "did:plc:capture4persona";
-    private const string Leo = "did:plc:capture4leo";
-    private const string Mara = "did:plc:capture4mara";
+    private const string Persona = Seeded.Persona;
+    private const string Leo = Seeded.Leo;
+    private const string Mara = Seeded.Mara;
 
     [HttpPost("/capture/seed/article")]
     public async Task<IActionResult> Seed(CancellationToken ct)
@@ -129,8 +129,8 @@ public sealed class ArticleSeedController(RoleCollection roles) : ControllerBase
 
     private async Task Person(string id, string handle, string displayName, string role, CancellationToken ct)
     {
-        await Write(new Keep<Participant>(new Participant { Id = id, Handle = handle }), ct);
-        await Write(new CaptureProfile(new ProfileAnswer(id, displayName, null, null, AgentLabel: false), DateTimeOffset.UtcNow), ct);
+        await Write(new Keep<Participant>(new Participant { Id = id, Did = Seeded.Did(id), Handle = handle }), ct);
+        await Write(new CaptureProfile(id, new ProfileAnswer(Seeded.Did(id), displayName, null, null, AgentLabel: false), DateTimeOffset.UtcNow), ct);
         await roles.Add(role, id, ct);
     }
 

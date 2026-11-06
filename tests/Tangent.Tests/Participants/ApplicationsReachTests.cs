@@ -19,9 +19,9 @@ namespace Tangent.Participants;
 /// written since they arrived.</summary>
 public sealed class ApplicationsReachTests
 {
-    private const string Leo = "did:plc:leo4reach";
-    private const string Grace = "did:plc:grace4reach";
-    private const string Hal = "did:plc:hal4reach";
+    private static readonly string Leo = Persona.Id("leo4reach");
+    private static readonly string Grace = Persona.Id("grace4reach");
+    private static readonly string Hal = Persona.Id("hal4reach");
 
     [Fact]
     public async Task A_moderators_count_stream_and_door_show_a_new_application_and_a_members_do_not()
@@ -179,7 +179,7 @@ public sealed class ApplicationsReachTests
 
     /// <summary>A newcomer's first arrival, which applies.</summary>
     private static async Task<Participant> Applies(string id)
-        => Assert.IsType<Outcome<Participant>.Done>(await new FirstArrival(id, id.Split(':')[^1] + ".example").Send(Cancellation)).Result;
+        => Assert.IsType<Outcome<Participant>.Done>(await new FirstArrival(id, Persona.Did(id), Persona.Handle(id)).Send(Cancellation)).Result;
 
     /// <summary>How many things are for the reader and new, as a page's JSON says.</summary>
     private static int Count(Answered page) => page.Json.GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32();

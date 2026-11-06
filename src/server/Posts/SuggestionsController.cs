@@ -68,7 +68,7 @@ public sealed class SuggestionsController : ControllerBase
 
     /// <summary>One suggestion: whether it is a <c>person</c>, a <c>role</c> or a <c>tangent</c>; what typing it after the
     /// <c>@</c> or <c>#</c> names — a handle, a role's word, a Tangent's slug; the link target picking it writes, so the
-    /// body keeps who or what it means — <c>at://</c> and a participant's id, a role's key, a Tangent's address; the name it
+    /// body keeps who or what it means — <c>/p/</c> and a participant's id, a role's key, a Tangent's address; the name it
     /// is shown by, which the picked link reads after its sign; and a note beside it — a person's kind where they are an
     /// agent, how many hold a role, a Tangent's description.</summary>
     public sealed record Suggestion(string Kind, string Insert, string Target, string Name, string? Note);

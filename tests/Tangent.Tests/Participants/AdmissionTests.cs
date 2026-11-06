@@ -21,9 +21,9 @@ namespace Tangent.Participants;
 public sealed class AdmissionTests
 {
     private const string General = "general";
-    private const string Grace = "did:plc:grace4admission";
-    private const string Hal = "did:plc:hal4admission";
-    private const string Ivy = "did:plc:ivy4admission";
+    private static readonly string Grace = Persona.Id("grace4admission");
+    private static readonly string Hal = Persona.Id("hal4admission");
+    private static readonly string Ivy = Persona.Id("ivy4admission");
 
     private static async Task<bool> IsMember(TangentSpaceFixture tangentSpace, string id)
         => (await tangentSpace.Services.GetRequiredService<RoleCollection>().Bag(id, authenticated: true, Cancellation)).InRole(Roles.Member);
@@ -42,7 +42,7 @@ public sealed class AdmissionTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         // First run, as whoever signs in first sets the place up: General is there from its first minute.
         using var leo = new Browser(tangentSpace);
-        (await leo.SignIn("leo", "did:plc:leo4admission", Cancellation, handle: "leo.example")).Dispose();
+        (await leo.SignIn("leo", Persona.Id("leo4admission"), Cancellation, handle: "leo.example")).Dispose();
         Assert.Equal(Admission.Join, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Admission);
 
         using var grace = await SignedIn(tangentSpace, Grace);
@@ -90,7 +90,7 @@ public sealed class AdmissionTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
-        const string leoId = "did:plc:leo4admission";
+        var leoId = Persona.Id("leo4admission");
         await Given.AParticipant(tangentSpace, leoId, [Roles.Administrator], ct: Cancellation);
         using var leo = await SignedIn(tangentSpace, leoId);
         using var ada = await SignedIn(tangentSpace, Ada);
@@ -229,7 +229,7 @@ public sealed class AdmissionTests
         var settings = "/t/" + General;
         Assert.Equal(HttpStatusCode.OK, (await Json(mo, settings, ApplicationsController.AdmitPath, new { participant = Hal })).Status);
         Assert.Equal(HttpStatusCode.Conflict, (await Json(mo, settings, ApplicationsController.DeclinePath, new { participant = Grace })).Status);
-        Assert.Equal(HttpStatusCode.NotFound, (await Json(mo, settings, ApplicationsController.AdmitPath, new { participant = "did:plc:nobody" })).Status);
+        Assert.Equal(HttpStatusCode.NotFound, (await Json(mo, settings, ApplicationsController.AdmitPath, new { participant = Persona.Id("nobody") })).Status);
         Assert.Equal(events, await Event.Count.Exact(Cancellation));
 
         // A member sees no applications, in the rail or the page, and is refused.
@@ -258,7 +258,7 @@ public sealed class AdmissionTests
         var count = Applications.PageSize + 2;
         for (var i = 0; i < count; i++)
         {
-            var applicant = Participant.Arrive($"did:plc:applicant{i:D2}", $"applicant{i:D2}.example", Admission.Apply, start.AddMinutes(i));
+            var applicant = Participant.Arrive(Persona.Id($"applicant{i:D2}"), Persona.Did(Persona.Id($"applicant{i:D2}")), $"applicant{i:D2}.example", Admission.Apply, start.AddMinutes(i));
             Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(applicant).Send(Cancellation));
         }
 
@@ -266,12 +266,12 @@ public sealed class AdmissionTests
         var first = await Send(mo.Client, HttpMethod.Get, ApplicationsController.Path, json: true);
         var firstIds = first.Json.GetProperty("applications").EnumerateArray().Select(applicant => applicant.GetProperty("id").GetString()).ToList();
         Assert.Equal(Applications.PageSize, firstIds.Count);
-        Assert.Equal($"did:plc:applicant{count - 1:D2}", firstIds[0]);
+        Assert.Equal(Persona.Id($"applicant{count - 1:D2}"), firstIds[0]);
         var next = first.Json.GetProperty("next").GetString()!;
         Assert.False(first.Json.GetProperty("continued").GetBoolean());
 
         var second = await Send(mo.Client, HttpMethod.Get, new Uri(next).PathAndQuery, json: true);
-        Assert.Equal(["did:plc:applicant01", "did:plc:applicant00"],
+        Assert.Equal([Persona.Id("applicant01"), Persona.Id("applicant00")],
             second.Json.GetProperty("applications").EnumerateArray().Select(applicant => applicant.GetProperty("id").GetString()));
         Assert.True(second.Json.GetProperty("continued").GetBoolean());
         Assert.False(second.Json.TryGetProperty("next", out var none) && none.ValueKind != System.Text.Json.JsonValueKind.Null);

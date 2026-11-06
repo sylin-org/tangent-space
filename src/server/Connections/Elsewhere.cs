@@ -87,7 +87,7 @@ public sealed class Elsewhere : Entity<Elsewhere>, IKoanJob<Elsewhere>
         var elsewhere = await Get(root.Id, ct);
         return elsewhere is null || elsewhere.Likes + elsewhere.Reposts + elsewhere.Quotes + elsewhere.Replies + elsewhere.References.Count == 0
             ? null
-            : new Line(elsewhere.Likes, elsewhere.Reposts, elsewhere.Quotes, elsewhere.Replies, Publishing.Bluesky($"at://{root.AuthorId}/{AtprotoAdapter.Notes}/{root.Id}") ?? "", elsewhere.References);
+            : new Line(elsewhere.Likes, elsewhere.Reposts, elsewhere.Quotes, elsewhere.Replies, Publishing.Bluesky($"at://{root.AuthorDid}/{AtprotoAdapter.Notes}/{root.Id}") ?? "", elsewhere.References);
     }
 
     /// <summary>What an article's page shows from elsewhere: the counts of its Bluesky post, where it is read, and the

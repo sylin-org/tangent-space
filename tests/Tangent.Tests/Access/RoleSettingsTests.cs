@@ -17,8 +17,8 @@ namespace Tangent.Access;
 /// takes away only what they hold.</summary>
 public sealed class RoleSettingsTests
 {
-    private const string Leo = "did:plc:leo4roles";
-    private const string Otto = "did:plc:otto4roles";
+    private static readonly string Leo = Persona.Id("leo4roles");
+    private static readonly string Otto = Persona.Id("otto4roles");
 
     /// <summary>The writes' place, with Leo an administrator and Otto its operator.</summary>
     private static async Task Shaped(TangentSpaceFixture tangentSpace)

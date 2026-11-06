@@ -16,7 +16,7 @@ namespace Tangent.Access;
 /// the challenge that names the proof door.</summary>
 public sealed class DoorwayTests
 {
-    private const string Ivy = "did:plc:ivy4doorway";
+    private static readonly string Ivy = Persona.Id("ivy4doorway");
 
     private static string Challenge => ProofChallenge.Scheme + " proof=\"" + BaseUrl + ProofDoor.StatementPath + "\"";
 

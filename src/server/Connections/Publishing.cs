@@ -12,13 +12,16 @@ public sealed record Publishing(string State, string Sentence, string? Detail, F
 {
     public const string Offer = "offer";
 
-    /// <summary>The article's line for <paramref name="readerId"/> and its document, from two keyed reads: the receipt of
+    /// <summary>The article's line for <paramref name="reader"/> and its document, from two keyed reads: the receipt of
     /// its author's Connection and, for its author, that Connection. A reader other than the author and an author who said
     /// not now read no line; an article that is not public or is removed reads none either, unless its copy is still out,
-    /// which its author is told, with what takes it down.</summary>
-    public static async Task<(Publishing? Line, string? Document)> For(Post root, string? readerId, string? handle, bool open,
+    /// which its author is told, with what takes it down; and one written as an account they are no longer bound to stays
+    /// with that account (<see cref="EarlierSentence"/>).</summary>
+    public static async Task<(Publishing? Line, string? Document)> For(Post root, Participants.Participant? reader, bool open,
         string articleAddress, string baseAddress, CancellationToken ct)
     {
+        var readerId = reader?.Id;
+        var handle = reader?.ShownHandle();
         if (root.Kind != PostKind.Article || root.ParentId is not null) return (null, null);
         var receipt = await Receipt.Get(Receipt.Key(root.AuthorId, root.Id), ct);
         var shown = open && !root.Removed;
@@ -28,9 +31,15 @@ public sealed record Publishing(string State, string Sentence, string? Detail, F
         var connection = await Connection.Get(readerId, ct);
         var connections = baseAddress + ConnectionsController.Path;
         var elsewhere = receipt?.Note is { } note ? Bluesky(note) : null;
+        if (!shown && receipt!.Repository() != reader!.Did)
+            return (new Publishing(ConnectionsController.Word(ArticleState.Earlier), receipt.Stays ? StaysSentence : LeavingSentence, null, null, null,
+                elsewhere, connections), document);
         if (!shown)
             return (connection is null ? null : new Publishing(ConnectionsController.Word(ArticleState.Remains), RemainsSentence, Undoing(connection),
                 connection.NeedsGrant ? Form.Posting(baseAddress + PublishController.GrantPath) : null, null, elsewhere, connections), document);
+
+        if (root.AuthorDid != reader!.Did)
+            return (new Publishing(ConnectionsController.Word(ArticleState.Earlier), EarlierSentence, null, null, null, elsewhere, connections), document);
 
         var publish = Form.Posting(articleAddress + "/" + PublishController.Segment);
         if (connection is null)
@@ -44,7 +53,7 @@ public sealed record Publishing(string State, string Sentence, string? Detail, F
                 ? new Publishing(ConnectionsController.Word(ArticleState.NeedsGrant), Syndication.Ungranted, null, publish, null, null, connections)
                 : new Publishing(Offer, "Publish this on Bluesky too?", null, publish, null, null, connections), document);
 
-        var state = Receipt.StateOf(receipt, root, connection, open: true);
+        var state = Receipt.StateOf(receipt, root, connection, open: true, reader.Did);
         var word = ConnectionsController.Word(state);
         return (state switch
         {
@@ -58,6 +67,17 @@ public sealed record Publishing(string State, string Sentence, string? Detail, F
             _ => new Publishing(word, "Published on Bluesky as you.", null, null, null, elsewhere, connections)
         }, document);
     }
+
+    /// <summary>What the author of an article written as a Bluesky account they are no longer bound to reads: it, and any
+    /// copy of it, stays with that account, and their Connection publishes only what they write as the one they hold.</summary>
+    public const string EarlierSentence = "Written as your earlier Bluesky account, so it stays with that account.";
+
+    /// <summary>What the author reads of a copy out under an earlier account of theirs that should no longer be out, while
+    /// their Connection takes it down through that account's grant.</summary>
+    public const string LeavingSentence = "This is still public on Bluesky under your earlier account, though it no longer is here. It is being taken down.";
+
+    /// <summary>What the author reads of such a copy once that account's grant no longer lets the place take it down.</summary>
+    public const string StaysSentence = "This stays public on Bluesky under your earlier account, which no longer lets this place take it down.";
 
     /// <summary>What the author of an article that is no longer public here, or is removed, reads while its copy is still
     /// out.</summary>

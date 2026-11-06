@@ -24,7 +24,7 @@ namespace Tangent.Lifecycle;
 /// is nowhere in it, nothing in it needs a server, and a server named to it serves its pages and takes no write.</summary>
 public sealed partial class ArchiveTests
 {
-    private const string Ida = "did:plc:ida4archive";
+    private static readonly string Ida = Persona.Id("ida4archive");
     private const string IdaHandle = "ida.example";
     private const string RetiredLine = "This place is retired.";
 
@@ -42,7 +42,7 @@ public sealed partial class ArchiveTests
             await Given.ATangent(tangentSpace, "more-" + number, ct: Cancellation);
         foreach (var number in Enumerable.Range(1, Math.Max(TopicList.PageSize, RecentPosts.PageSize)))
             await Started(Ida, "Topic number " + number, "Words of topic " + number);
-        var long_ = await Started(Ida, "A long one", $"It goes on, says [@ida](at://{Ida}).");
+        var long_ = await Started(Ida, "A long one", $"It goes on, says [@ida](/p/{Ida}).");
         var replies = new List<Post>();
         foreach (var number in Enumerable.Range(1, Export.WindowSize + 1))
             replies.Add(await Replied(long_, Ida, "Reply number " + number));
@@ -112,12 +112,12 @@ public sealed partial class ArchiveTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
         await Someone(tangentSpace, Ida, IdaHandle);
-        await Someone(tangentSpace, "did:plc:asking4archive", "asking.example", Standing.Applied);
+        await Someone(tangentSpace, Persona.Id("asking4archive"), "asking.example", Standing.Applied);
         await Given.ATangent(tangentSpace, members, Audience.Private, ct: Cancellation);
         await Overwrites.SetAccess(tangentSpace.Services.GetRequiredService<RoleCollection>(), members, Roles.Member, RoleAccess.Post, Cancellation);
         await Started(Ida, "For the members", "Words the members read", members);
-        await Given.AParticipant(tangentSpace, "did:plc:leo4archive", [Roles.Administrator], ct: Cancellation);
-        await Started("did:plc:leo4archive", "In the studio", "Words only the studio reads", Studio);
+        await Given.AParticipant(tangentSpace, Persona.Id("leo4archive"), [Roles.Administrator], ct: Cancellation);
+        await Started(Persona.Id("leo4archive"), "In the studio", "Words only the studio reads", Studio);
         var open = await Started(Ida, "In the open", "Words anyone reads");
         Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), members, "Taken in", "", Ida, OriginId: open.Id).Send(Cancellation));
         await Started(Ida, "A piece", "An article's words.", Articles);
@@ -218,7 +218,7 @@ public sealed partial class ArchiveTests
     [Fact]
     public async Task A_retired_places_public_articles_keep_their_pictures_at_their_addresses_and_nothing_a_visitor_may_not_read_comes_along()
     {
-        const string Leo = "did:plc:leo4archive";
+        var Leo = Persona.Id("leo4archive");
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
         await Someone(tangentSpace, Ida, IdaHandle);
@@ -267,7 +267,7 @@ public sealed partial class ArchiveTests
     [Fact]
     public async Task An_image_a_part_of_the_place_names_is_in_the_archive_at_its_address_and_one_named_no_more_is_not()
     {
-        const string Leo = "did:plc:leo4archive";
+        var Leo = Persona.Id("leo4archive");
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
@@ -314,7 +314,7 @@ public sealed partial class ArchiveTests
     /// <summary>A participant whose handle names a folder on any machine, which an id's colons do not.</summary>
     private static async Task Someone(TangentSpaceFixture tangentSpace, string id, string handle, Standing standing = Standing.Admitted)
     {
-        var participant = new Participant { Id = id, Handle = handle, Standing = standing };
+        var participant = new Participant { Id = id, Did = Persona.Did(id), Handle = handle, Standing = standing };
         Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(participant).Send(Cancellation));
         if (standing == Standing.Admitted) await tangentSpace.Services.GetRequiredService<RoleCollection>().Add(Roles.Member, id, Cancellation);
     }

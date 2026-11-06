@@ -46,7 +46,7 @@ public sealed class ProfileJobTests
         Assert.Equal(HttpStatusCode.OK, signedInAgain.StatusCode);
 
         Assert.Equal([did], stub.Requests);
-        Assert.Equal(participant.Profile.CapturedAt, (await Participant.Get(did, Cancellation))!.Profile.CapturedAt);
+        Assert.Equal(participant.Profile.CapturedAt, (await Persona.Arrived(did, Cancellation))!.Profile.CapturedAt);
     }
 
     [Fact]
@@ -60,12 +60,12 @@ public sealed class ProfileJobTests
         }, ct: Cancellation);
         const string did = "did:plc:stale4example";
         var stale = DateTimeOffset.UtcNow - Profile.Lifetime - TimeSpan.FromMinutes(1);
-        var stored = new Participant { Id = did, Handle = "old.example", Profile = new Profile { CapturedAt = stale } };
+        var stored = new Participant { Id = Persona.Id(did.Split(':')[^1]), Did = did, Handle = "old.example", Profile = new Profile { CapturedAt = stale } };
         Assert.IsType<Outcome<Participant>.Done>(
             await new Store<Participant>(stored).Send(Cancellation));
         using var browser = new Browser(tangentSpace);
 
-        using var signedIn = await browser.SignIn("stale", did, Cancellation, handle: "new.example");
+        using var signedIn = await browser.SignIn("stale", stored.Id, Cancellation, handle: "new.example");
         var participant = await Captured(did, after: stale);
 
         Assert.Equal("/", signedIn.RequestMessage!.RequestUri!.AbsolutePath);
@@ -83,12 +83,12 @@ public sealed class ProfileJobTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(
             new Dictionary<string, string?> { ["Tangent:Profile:BaseAddress"] = stub.AgentLabelled.AbsoluteUri }, ct: Cancellation);
         const string did = "did:plc:lumen4example";
-        var stored = new Participant { Id = did, Handle = "lumen.example", Kind = ParticipantKind.Person, KindSource = source };
+        var stored = new Participant { Id = Persona.Id(did.Split(':')[^1]), Did = did, Handle = "lumen.example", Kind = ParticipantKind.Person, KindSource = source };
         Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(stored).Send(Cancellation));
 
         var job = await stored.Job.Submit(ct: Cancellation);
         Assert.True((await job.Completion(Bound, Cancellation)).Succeeded);
-        var after = await Participant.Get(did, Cancellation);
+        var after = await Persona.Arrived(did, Cancellation);
 
         Assert.NotNull(after);
         Assert.NotNull(after.Profile.CapturedAt);
@@ -109,7 +109,7 @@ public sealed class ProfileJobTests
             ["Tangent:Profile:MaximumResponseBytes"] = "4096"
         }, ct: Cancellation);
         const string did = "did:plc:bounded4example";
-        var stored = new Participant { Id = did, Handle = "before.example", Profile = new Profile { DisplayName = "Before" } };
+        var stored = new Participant { Id = Persona.Id(did.Split(':')[^1]), Did = did, Handle = "before.example", Profile = new Profile { DisplayName = "Before" } };
         Assert.IsType<Outcome<Participant>.Done>(
             await new Store<Participant>(stored).Send(Cancellation));
 
@@ -124,7 +124,7 @@ public sealed class ProfileJobTests
         Assert.True(reading.Elapsed < TimeSpan.FromSeconds(5), $"The read took {reading.Elapsed}.");
         Assert.True(outcome.Succeeded);
         Assert.Equal([did, did], stub.Requests);
-        var after = await Participant.Get(did, Cancellation);
+        var after = await Persona.Arrived(did, Cancellation);
         Assert.NotNull(after);
         Assert.Equal(("before.example", "Before", (DateTimeOffset?)null), (after.Handle, after.Profile.DisplayName, after.Profile.CapturedAt));
     }
@@ -151,7 +151,7 @@ public sealed class ProfileJobTests
         var waited = Stopwatch.StartNew();
         while (waited.Elapsed < Bound)
         {
-            if (await Participant.Get(did, Cancellation) is { Profile.CapturedAt: { } captured } participant
+            if (await Persona.Arrived(did, Cancellation) is { Profile.CapturedAt: { } captured } participant
                 && (after is null || captured > after)) return participant;
             await Task.Delay(100, Cancellation);
         }

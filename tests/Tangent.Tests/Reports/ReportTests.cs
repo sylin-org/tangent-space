@@ -18,8 +18,8 @@ namespace Tangent.Posts;
 /// else who may not view that Tangent learning of it.</summary>
 public sealed partial class ReportTests
 {
-    private const string Leo = "did:plc:leo4reports";
-    private const string Keeper = "did:plc:keeper4reports";
+    private static readonly string Leo = Persona.Id("leo4reports");
+    private static readonly string Keeper = Persona.Id("keeper4reports");
     private const string Moderators = ModeratorsTangent.Slug;
 
     [Fact]
@@ -27,7 +27,7 @@ public sealed partial class ReportTests
     {
         await using (var established = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation))
         {
-            Assert.IsType<Outcome<TangentSpace>.Done>(await new Establish(Leo, "leo.example", "Field notes").Send(Cancellation));
+            Assert.IsType<Outcome<TangentSpace>.Done>(await new Establish(Leo, Persona.Did(Leo), "leo.example", "Field notes").Send(Cancellation));
             await Given.AParticipant(established, Ada, [Roles.Member], ct: Cancellation);
             await Given.AParticipant(established, Mo, [Roles.Moderator], ct: Cancellation);
 
@@ -175,7 +175,7 @@ public sealed partial class ReportTests
         Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, "Slow lanterns", "", Ada, OriginId: reply.Id).Send(Cancellation));
         for (var reporter = 0; reporter < Origins.TakenRead; reporter++)
         {
-            var id = $"did:plc:reporter{reporter}4reports";
+            var id = Persona.Id($"reporter{reporter}4reports");
             await Given.AParticipant(tangentSpace, id, [Roles.Member], ct: Cancellation);
             await Reported(id, reply, "Unkind.");
         }

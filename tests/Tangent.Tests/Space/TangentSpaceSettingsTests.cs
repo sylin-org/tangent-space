@@ -15,7 +15,7 @@ namespace Tangent.Space;
 /// they may not use lands on the first they may; and the settings answer JSON with <c>can</c> and <c>gate</c>.</summary>
 public sealed class TangentSpaceSettingsTests
 {
-    private const string Leo = "did:plc:leo4place";
+    private static readonly string Leo = Persona.Id("leo4place");
 
     private static Dictionary<string, string> General(string name) => new()
     {
@@ -127,7 +127,7 @@ public sealed class TangentSpaceSettingsTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
-        const string mod = "did:plc:mo4place";
+        var mod = Persona.Id("mo4place");
         await Given.AParticipant(tangentSpace, mod, [Roles.Member, Roles.Moderator], ct: Cancellation);
         using var mo = await SignedIn(tangentSpace, mod);
         var applications = BaseUrl + ApplicationsController.Path;
@@ -203,7 +203,7 @@ public sealed class TangentSpaceSettingsTests
         Assert.Equal(EventKind.SpaceChanged, Assert.Single(await Event.All(Cancellation), e => e.Seq > before).Kind);
 
         // A visitor reads the sign-in at every address, which brings them back there, and is told no page is to be indexed.
-        foreach (var path in new[] { "/", "/t/" + Workshop, "/t/" + Workshop + "/what-should-we-build", "/t/nowhere", "/p/" + Ada.Split(':')[^1] + ".example" })
+        foreach (var path in new[] { "/", "/t/" + Workshop, "/t/" + Workshop + "/what-should-we-build", "/t/nowhere", "/p/" + Persona.Handle(Ada) })
         {
             var (status, body, robots) = await Page(visitor, path);
             Assert.Equal((HttpStatusCode.Unauthorized, "noindex"), (status, robots));

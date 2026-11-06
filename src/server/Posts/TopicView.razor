@@ -55,7 +55,7 @@
         @if (Article)
         {
             <article class="article">
-                <ArticleHead Title="@Model.Title" Cover="@Model.Cover" Author="@Model.Root.Author" At="@Model.Root.CreatedAt" Minutes="@Model.ReadMinutes" Header="@Model.ArticleHeader" />
+                <ArticleHead Title="@Model.Title" Cover="@Model.Cover" Author="@Model.Root.Author" WrittenAs="@Model.Root.WrittenAs" At="@Model.Root.CreatedAt" Minutes="@Model.ReadMinutes" Header="@Model.ArticleHeader" />
                 <TakenFrom Model="@Model.TakenFrom" />
                 @if (Contents.Count > 1)
                 {

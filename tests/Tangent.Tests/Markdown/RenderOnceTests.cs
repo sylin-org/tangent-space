@@ -22,7 +22,7 @@ public sealed class RenderOnceTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
         var paragraph = "A long note with *emphasis*, a [link](https://example.org/x) and a `code` span.\n\n";
-        var body = $"For [@bea](at://{Bea}).\n\n" + string.Concat(Enumerable.Repeat(paragraph, 300));
+        var body = $"For [@bea](/p/{Bea}).\n\n" + string.Concat(Enumerable.Repeat(paragraph, 300));
 
         // Building each command judges its body: one parse apiece. Sending them parses nothing more.
         var rootId = Tids.Mint();

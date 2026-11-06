@@ -33,8 +33,9 @@ public sealed class TangentSpaceOptions
 
     private static bool IsDid(string named) => named.StartsWith("did:", StringComparison.Ordinal);
 
-    /// <summary>Whether this account may set up the place: anyone when no operator is configured; otherwise the account
-    /// whose DID the setting names, or whose verified handle it names in any case.</summary>
+    /// <summary>Whether the account <paramref name="did"/>, verified with <paramref name="handle"/>, may set up the place:
+    /// anyone when no operator is configured; otherwise the account whose DID the setting names, or whose verified handle it
+    /// names in any case.</summary>
     public bool MaySetUp(string did, string handle)
         => NamedOperator() is not { } named
             || (NamedByDid() ? named == did : string.Equals(named, handle, StringComparison.OrdinalIgnoreCase));

@@ -121,7 +121,7 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Read
         var shownThrough = window.Replies.Count == 0 ? 0 : window.High;
         var continues = window.Low <= Math.Max(seenSeq, 0) + 1;
         if (reader is not null) Response.Headers.CacheControl = "no-cache, no-store";
-        var (publishing, document) = await Connections.Publishing.For(root, reader?.Id, reader is null ? null : reader.ShownHandle(),
+        var (publishing, document) = await Connections.Publishing.For(root, reader,
             await Connections.Publishing.Open(space, tangentRow.Id, ct), address, baseAddress, ct);
         var elsewhere = document is null ? null : await Connections.Elsewhere.For(root, readers, ct);
         return Ok(new TopicPage(
@@ -197,7 +197,8 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Read
             taken.GetValueOrDefault(post.Id),
             reader is not null && !post.Removed && post.AuthorId != reader?.Id && post.TangentId != rows.Space.ModeratorsTangentId
                 ? PostWrites.ReportForm(address + "/" + ReportController.Segment, Tid.Mint(DateTimeOffset.UtcNow)) : null,
-            TangentPage.EditedOf(post, people));
+            TangentPage.EditedOf(post, people),
+            post.AuthorDid.Length > 0 ? post.AuthorDid : null);
     }
 
     /// <summary>The Post a reply from this page answers: the reply the page's address named, where it named one by

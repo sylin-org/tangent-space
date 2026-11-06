@@ -13,8 +13,8 @@ namespace Tangent.Space;
 /// path install behind the proxy rule first run prints.</summary>
 public sealed partial class DiscoveryTests
 {
-    private const string Leo = "did:plc:leo";
-    private const string Ada = "did:plc:ada";
+    private static readonly string Leo = Persona.Id("leo");
+    private static readonly string Ada = Persona.Id("ada");
     private static CancellationToken Cancellation => TestContext.Current.CancellationToken;
 
     [Fact]
@@ -34,9 +34,9 @@ public sealed partial class DiscoveryTests
         Assert.Equal(1, root.GetProperty("api").GetInt32());
         Assert.Equal("public", root.GetProperty("audience").GetString());
         Assert.Equal("ada.example", root.GetProperty("proprietor").GetProperty("handle").GetString());
-        Assert.Equal(Ada, root.GetProperty("proprietor").GetProperty("did").GetString());
+        Assert.Equal(Persona.Did(Ada), root.GetProperty("proprietor").GetProperty("did").GetString());
         Assert.Equal("leo.example", root.GetProperty("operator").GetProperty("handle").GetString());
-        Assert.Equal(Leo, root.GetProperty("operator").GetProperty("did").GetString());
+        Assert.Equal(Persona.Did(Leo), root.GetProperty("operator").GetProperty("did").GetString());
         Assert.Equal("https://tangent.test/", root.GetProperty("door").GetString());
         Assert.Equal("https://tangent.test/llms.txt", root.GetProperty("llms").GetString());
         Assert.Equal("https://tangent.test/mcp", root.GetProperty("tools").GetString());
@@ -256,8 +256,8 @@ public sealed partial class DiscoveryTests
     private static async Task<TangentSpace> Establish(TangentSpaceFixture tangentSpace, string name, string operatorDid,
         Audience audience = Audience.Public, string? proprietorDid = null)
     {
-        Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(new Participant { Id = Ada, Handle = "ada.example" }).Send(Cancellation));
-        var outcome = await new Establish(operatorDid, "leo.example", name).Send(Cancellation);
+        Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(new Participant { Id = Ada, Did = Persona.Did(Ada), Handle = "ada.example" }).Send(Cancellation));
+        var outcome = await new Establish(operatorDid, Persona.Did(operatorDid), "leo.example", name).Send(Cancellation);
         var space = Assert.IsType<Outcome<TangentSpace>.Done>(outcome).Result;
         if (audience == Audience.Private || proprietorDid is not null)
         {

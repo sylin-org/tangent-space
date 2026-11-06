@@ -5,8 +5,9 @@ using Koan.Web.Auth.Flow;
 
 namespace Tangent.Participants;
 
-/// <summary>At every sign-in, after Koan has reconciled the person: a person's first sign-in is their first arrival,
-/// which creates their participant; a returning participant takes the handle the connector verified at this sign-in.
+/// <summary>At every sign-in and proof, after Koan has reconciled the person: a person's first sign-in is their first
+/// arrival, which creates their participant; a returning participant takes the account the connector verified at this
+/// sign-in, its DID and handle, which after a binding is the account they bound.
 /// Either command joins them to the member role where they stand admitted and lack it (<see cref="MemberRole"/>). The
 /// profile job is submitted when the profile is empty or older than its lifetime. This is where Tangent learns of a first
 /// arrival. Koan discovers it in the sign-in lifecycle. No step fails the sign-in: each is logged and the next sign-in
@@ -19,10 +20,11 @@ public sealed class ParticipantSignIn(ILogger<ParticipantSignIn> logger) : IKoan
     public async Task OnSignIn(AuthSignInContext ctx, CancellationToken ct)
     {
         if (string.IsNullOrEmpty(ctx.UserId)) return;
+        var did = ctx.Identity.FindFirst(AtprotoClaimTypes.Did)?.Value ?? "";
         var handle = ctx.Identity.FindFirst(AtprotoClaimTypes.Handle)?.Value ?? "";
         ICommand<Participant> command = await Participant.Get(ctx.UserId, ct) is null
-            ? new FirstArrival(ctx.UserId, handle)
-            : new RecordHandle(ctx.UserId, handle);
+            ? new FirstArrival(ctx.UserId, did, handle)
+            : new RecordSignIn(ctx.UserId, did, handle);
         var outcome = await command.Send();
         if (outcome is Outcome<Participant>.Done done) await ProfileCapture.SubmitWhenStale(done.Result, logger, ct);
         else logger.LogWarning("{Command} for {Person} did not complete at sign-in: {Outcome}", command.GetType().Name, ctx.UserId, outcome);

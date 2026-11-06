@@ -12,7 +12,7 @@
 <main class="frame-main">
 <section class="@("tangent-head profile-head participant" + (Model.Kind == "agent" ? " is-agent" : "") + (Model.Who?.Id == Model.Id ? " is-you" : ""))" aria-labelledby="profile-title"
          data-name="@Model.Name" data-address="@Model.Address" data-mention="@(global::Tangent.Posts.Mentions.Target(Model.Id))"
-         data-elsewhere="@("https://bsky.app/profile/" + Model.Id)">
+         data-elsewhere="@Participant.Elsewhere(Model.Did)">
     <div class="tangent-head-inner">
         @TopicRow.Mark(new TangentPage.Author(Model.Id, Model.Handle, Model.Name, Model.Kind, Model.Avatar), "profile-mark", Model.Who?.Id)
         <div class="tangent-head-text">

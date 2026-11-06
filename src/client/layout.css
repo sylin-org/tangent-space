@@ -279,6 +279,55 @@ body {
   background: var(--ts-hover);
 }
 
+/* Use another Bluesky account: a disclosure that opens its form in place, in the account menu and on the Connections
+ * page alike. */
+.another-account > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.another-account > summary::-webkit-details-marker {
+  display: none;
+}
+
+.another-account[open] > .account-item {
+  background: var(--ts-hover);
+}
+
+.another-account-body {
+  padding: 10px 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.another-account-form,
+.another-account-again {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.another-account-note,
+.another-account-refused {
+  margin: 0;
+  color: var(--ts-text-2);
+  font: var(--ts-type-ui-small);
+  text-wrap: pretty;
+}
+
+.another-account-refused {
+  padding: 10px 12px;
+  border-radius: var(--ts-radius-input);
+  background: var(--ts-danger-soft);
+  color: var(--ts-text);
+}
+
+.another-account-toggle:not(.account-item) {
+  color: var(--ts-accent);
+  font: 600 13.5px/1.3 var(--ts-font-ui);
+}
+
 /* An account item that posts: sign out. */
 .account-action {
   width: 100%;

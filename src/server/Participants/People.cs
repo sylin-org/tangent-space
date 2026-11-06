@@ -233,7 +233,7 @@ public static class People
             var at = plain.IndexOf('\n');
             if (at < 0) return null;
             var id = plain[(at + 1)..];
-            return id.StartsWith("did:", StringComparison.Ordinal) ? new Cursor(plain[..at], id) : null;
+            return Participant.IsId(id) ? new Cursor(plain[..at], id) : null;
         }
     }
 

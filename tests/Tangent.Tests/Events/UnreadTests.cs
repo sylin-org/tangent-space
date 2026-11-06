@@ -18,7 +18,7 @@ namespace Tangent.Events;
 /// they may view, and past its bound it reads "at least".</summary>
 public sealed class UnreadTests
 {
-    private const string Leo = "did:plc:leo4unread";
+    private static readonly string Leo = Persona.Id("leo4unread");
 
     [Fact]
     public async Task A_reply_reaches_its_authors_door_once_reading_the_topic_clears_it_and_seen_from_the_door_clears_everything()
@@ -122,10 +122,10 @@ public sealed class UnreadTests
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         var mine = await Started(Ada, "Lanterns", "Who lights theirs first?");
         await Replied(mine, Bea, "I do, at six.");
-        await Started(Bea, "A question for Ada", $"Over to [@ada](at://{Ada}).");
+        await Started(Bea, "A question for Ada", $"Over to [@ada](/p/{Ada}).");
         await Replied(mine, Ada, "And mine at seven.");
         Assert.IsType<Outcome<Event>.Done>(await new Logged(EventKind.StandingChanged, Ada, Ada).Send(Cancellation));
-        await Started(Ada, "Over to Bea", $"Your turn, [@bea](at://{Bea}).");
+        await Started(Ada, "Over to Bea", $"Your turn, [@bea](/p/{Bea}).");
         var newest = await Event.Log.Highest(Cancellation);
         var secret = await Started(Leo, "Studio notes", "Only for us.", Studio);
         Assert.IsType<Outcome<Event>.Done>(await new Logged(EventKind.Mention, Leo, Ada, secret).Send(Cancellation));
@@ -220,7 +220,7 @@ public sealed class UnreadTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Applying(tangentSpace);
-        Assert.IsType<Outcome<Participant>.Done>(await new FirstArrival(Grace, "grace4unread.example").Send(Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new FirstArrival(Grace, Persona.Did(Grace), "grace4unread.example").Send(Cancellation));
         Assert.IsType<Outcome<Participant>.Done>(await new Decline(Mo, Grace).Send(Cancellation));
         using var grace = await SignedIn(tangentSpace, Grace);
 
@@ -238,7 +238,7 @@ public sealed class UnreadTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Applying(tangentSpace);
-        Assert.IsType<Outcome<Participant>.Done>(await new FirstArrival(Grace, "grace4unread.example").Send(Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new FirstArrival(Grace, Persona.Did(Grace), "grace4unread.example").Send(Cancellation));
         using var mo = await SignedIn(tangentSpace, Mo);
 
         var door = await Door(mo);
@@ -262,7 +262,7 @@ public sealed class UnreadTests
         Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(Cancellation));
     }
 
-    private const string Grace = "did:plc:grace4unread";
+    private static readonly string Grace = Persona.Id("grace4unread");
 
     private static async Task<JsonElement> Door(Participants.Browser browser) => (await Send(browser.Client, HttpMethod.Get, "/", json: true)).Json;
 

@@ -13,7 +13,7 @@ namespace Tangent.Space;
 /// anyone else is refused; and every page, for every reader, carries it, the settings without the place's own CSS.</summary>
 public sealed class AppearanceTests
 {
-    private const string Leo = "did:plc:leo4appearance";
+    private static readonly string Leo = Persona.Id("leo4appearance");
     private const string Path = TangentSpaceSettingsController.AppearancePath;
 
     private static Dictionary<string, string> Colours(string word) => new() { [TangentSpaceSettingsController.PaletteField] = word };
@@ -83,7 +83,7 @@ public sealed class AppearanceTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
         using var ada = await SignedIn(tangentSpace, Ada);
-        const string mod = "did:plc:mo4appearance";
+        var mod = Persona.Id("mo4appearance");
         await Given.AParticipant(tangentSpace, mod, [Roles.Member, Roles.Moderator], ct: Cancellation);
         using var mo = await SignedIn(tangentSpace, mod);
         using var visitor = Agent(tangentSpace);

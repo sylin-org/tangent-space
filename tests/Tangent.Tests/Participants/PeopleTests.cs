@@ -21,9 +21,9 @@ namespace Tangent.Participants;
 /// participant, whose door says what happened; and a profile offers the same changes.</summary>
 public sealed class PeopleTests
 {
-    private const string Leo = "did:plc:leo4people";
-    private const string Mia = "did:plc:mia4people";
-    private const string Otto = "did:plc:otto4people";
+    private static readonly string Leo = Persona.Id("leo4people");
+    private static readonly string Mia = Persona.Id("mia4people");
+    private static readonly string Otto = Persona.Id("otto4people");
 
     /// <summary>The writes' place, with Leo an administrator, Mia a second moderator and Otto its operator, an
     /// administrator.</summary>
@@ -234,7 +234,7 @@ public sealed class PeopleTests
         // An administrator acts on moderators and members, never on another administrator or the operator.
         Assert.Equal([People.Verb.TimeOut, People.Verb.Ban], Strings(Row((await Send(leo.Client, HttpMethod.Get, path, json: true)).Json, Mia), "can"));
         Assert.Equal((HttpStatusCode.Forbidden, People.Operator.Word), Refusal(await Json(leo, path, PeopleController.BanPath, new { participant = Otto })));
-        Assert.Equal(HttpStatusCode.NotFound, (await Json(mo, path, PeopleController.BanPath, new { participant = "did:plc:nobody" })).Status);
+        Assert.Equal(HttpStatusCode.NotFound, (await Json(mo, path, PeopleController.BanPath, new { participant = Persona.Id("nobody") })).Status);
         Assert.Empty(await Since(before));
     }
 
@@ -246,8 +246,8 @@ public sealed class PeopleTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
         // Timed out without the member role, whose write never happened, until five minutes ago.
-        const string cy = "did:plc:cy4people";
-        var ended = new Participant { Id = cy, Handle = "cy4people.example", Standing = Standing.TimedOut, StandingUntil = DateTimeOffset.UtcNow.AddMinutes(-5) };
+        var cy = Persona.Id("cy4people");
+        var ended = new Participant { Id = cy, Did = Persona.Did(cy), Handle = "cy4people.example", Standing = Standing.TimedOut, StandingUntil = DateTimeOffset.UtcNow.AddMinutes(-5) };
         Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(ended).Send(Cancellation));
         Assert.False(await IsMember(tangentSpace, cy));
 
@@ -344,11 +344,11 @@ public sealed class PeopleTests
         await Place(tangentSpace);
         for (var i = 0; i < People.PageSize + 2; i++)
         {
-            var person = new Participant { Id = $"did:plc:person{i:D2}", Handle = $"person{i:D2}.example" };
+            var person = new Participant { Id = Persona.Id($"person{i:D2}"), Did = Persona.Did(Persona.Id($"person{i:D2}")), Handle = $"person{i:D2}.example" };
             Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(person).Send(Cancellation));
         }
 
-        var applicant = Participant.Arrive("did:plc:applicant", "applicant.example", Admission.Apply);
+        var applicant = Participant.Arrive(Persona.Id("applicant"), Persona.Did(Persona.Id("applicant")), "applicant.example", Admission.Apply);
         Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(applicant).Send(Cancellation));
         using var mo = await SignedIn(tangentSpace, Mo);
         var path = PeopleController.Path;
@@ -381,7 +381,7 @@ public sealed class PeopleTests
 
         // The start of a handle, typed as a person types it, finds those whose handles start with it.
         var found = await Send(mo.Client, HttpMethod.Get, path + "?handle=" + Uri.EscapeDataString(" @Person2"), json: true);
-        Assert.Equal(Enumerable.Range(20, People.PageSize + 2 - 20).Select(i => $"did:plc:person{i:D2}"),
+        Assert.Equal(Enumerable.Range(20, People.PageSize + 2 - 20).Select(i => Persona.Id($"person{i:D2}")),
             found.Json.GetProperty("people").EnumerateArray().Select(row => row.GetProperty("id").GetString()));
         Assert.Equal("person2", found.Json.GetProperty("handle").GetString());
         Assert.Empty((await Send(mo.Client, HttpMethod.Get, path + "?handle=nobody", json: true)).Json.GetProperty("people").EnumerateArray());

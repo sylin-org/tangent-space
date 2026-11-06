@@ -3,7 +3,7 @@ using Koan.Jobs;
 
 namespace Tangent.Participants;
 
-/// <summary>The profile job's work: skip a profile captured within its lifetime; otherwise read the public profile
+/// <summary>The profile job's work: skip a profile captured within its lifetime; otherwise read the bound account's public profile
 /// once and send it as a command. A read that fails leaves the cache as it was, and the next sign-in after its
 /// lifetime submits the job again.</summary>
 public static class ProfileCapture
@@ -37,7 +37,7 @@ public static class ProfileCapture
         ProfileAnswer answer;
         try
         {
-            answer = await context.Services.GetRequiredService<ProfileReader>().Read(participant.Id, ct);
+            answer = await context.Services.GetRequiredService<ProfileReader>().Read(participant.Did, ct);
         }
         catch (ProfileReadFailed failed)
         {
@@ -45,7 +45,7 @@ public static class ProfileCapture
             return;
         }
 
-        switch (await new CaptureProfile(answer, now).Send(ct))
+        switch (await new CaptureProfile(participant.Id, answer, now).Send(ct))
         {
             case Outcome<Participant>.Refused refused:
                 context.Logger.LogWarning("Profile of {Participant} not cached: {Reason}", participant.Id, refused.Reason);

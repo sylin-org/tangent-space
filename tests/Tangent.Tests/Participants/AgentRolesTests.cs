@@ -16,10 +16,10 @@ namespace Tangent.Participants;
 /// what those allow through the addresses and forms the pages' JSON give it, under the same rules as anyone.</summary>
 public sealed class AgentRolesTests
 {
-    private const string Scout = "did:plc:scout4agent";
+    private static readonly string Scout = Persona.Id("scout4agent");
     private const string ScoutHandle = "scout.agent.example";
-    private const string Rook = "did:plc:rook4agent";
-    private const string Leo = "did:plc:leo4agentroles";
+    private static readonly string Rook = Persona.Id("rook4agent");
+    private static readonly string Leo = Persona.Id("leo4agentroles");
 
     [Fact]
     public async Task An_agent_given_the_moderator_role_reads_a_report_moderates_the_post_and_times_out_a_member_by_the_forms_its_pages_give()
@@ -121,7 +121,7 @@ public sealed class AgentRolesTests
         Assert.Equal((BaseUrl, Scout), (ready.GetProperty("baseUrl").GetString(), ready.GetProperty("reader").GetProperty("id").GetString()));
         Assert.NotEmpty(ready.GetProperty("pointers").EnumerateArray());
         var descriptor = await Visitor(tangentSpace, "/tangent.json");
-        Assert.Equal((Scout, ScoutHandle, Scout), (descriptor.GetProperty("proprietor").GetProperty("did").GetString(),
+        Assert.Equal((Persona.Did(Scout), ScoutHandle, Persona.Did(Scout)), (descriptor.GetProperty("proprietor").GetProperty("did").GetString(),
             descriptor.GetProperty("proprietor").GetProperty("handle").GetString(), descriptor.GetProperty("operator").GetProperty("did").GetString()));
 
         // The place's settings are its to change.
@@ -173,7 +173,8 @@ public sealed class AgentRolesTests
         using var scout = new Browser(tangentSpace);
         (await scout.SignIn("scout", did, Cancellation, handle: ScoutHandle, comeBack: FirstRunController.Path)).Dispose();
         var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
-        Assert.Equal(("Scout's Tangent Space", did, did), (space?.Name, space?.ProprietorId, space?.OperatorId));
+        var id = Persona.Is(did) ? did : (await Persona.Arrived(did, Cancellation))!.Id;
+        Assert.Equal(("Scout's Tangent Space", id, id), (space?.Name, space?.ProprietorId, space?.OperatorId));
     }
 
     [Fact]
@@ -202,7 +203,7 @@ public sealed class AgentRolesTests
     }
 
     private static async Task LabelledAnAgent(string did)
-        => Assert.IsType<Outcome<Participant>.Done>(await new CaptureProfile(new ProfileAnswer(did, null, null, null, AgentLabel: true), DateTimeOffset.UtcNow).Send(Cancellation));
+        => Assert.IsType<Outcome<Participant>.Done>(await new CaptureProfile(did, new ProfileAnswer(Persona.Did(did), null, null, null, AgentLabel: true), DateTimeOffset.UtcNow).Send(Cancellation));
 
     /// <summary>A page's JSON as this session reads it, which must answer.</summary>
     private static async Task<JsonElement> Page(Browser session, string path)

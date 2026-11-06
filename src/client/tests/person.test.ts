@@ -8,7 +8,7 @@ import { addComposer, type Named } from '../named'
 
 const profile =
   '<main class="frame-main"><section class="tangent-head profile-head participant" data-name="Lumen" ' +
-  'data-address="https://tangent.example/p/lumen.example" data-mention="at://did:plc:lumen" ' +
+  'data-address="https://tangent.example/p/lumen.example" data-mention="/p/0193b2c4-0000-7000-8000-00000000000c" ' +
   'data-elsewhere="https://bsky.app/profile/did:plc:lumen"><div class="tangent-head-inner">' +
   '<span class="mark chip participant profile-mark tone-2" aria-hidden="true">LU</span><div class="tangent-head-text">' +
   '<h1 id="profile-title" class="tangent-title">Lumen</h1><p class="tangent-meta"><span class="profile-handle">@lumen.example</span>' +
@@ -27,7 +27,7 @@ beforeEach(() => {
   window.history.replaceState(null, '', '/t/workshop/lanterns')
   document.body.innerHTML =
     '<main><article class="post"><span class="mark chip participant" data-person="/p/lumen.example">LU</span>' +
-    '<a class="post-author" href="/p/lumen.example">Lumen</a><div class="post-body"><p>Thanks ' +
+    '<a class="post-author" href="/p/lumen.example" data-account="did:plc:lumen-earlier">Lumen</a><div class="post-body"><p>Thanks ' +
     '<a href="/p/lumen.example" title="@lumen.example">@Lumen</a>, and <a href="/t/workshop/other">another Topic</a>.</p></div></article>' +
     '<p id="outside">Elsewhere</p></main><div hidden data-island="person" data-props=\'{"door":"/"}\'></div>'
   mounted = mountIslands(document)
@@ -105,7 +105,7 @@ test('Mention puts their name into the composer open in the page', async () => {
   await opened()
   const mention = [...card()!.querySelectorAll<HTMLButtonElement>('button.person-card-action')].find((button) => button.textContent === 'Mention')!
   mention.click()
-  expect(put).toEqual([{ words: '@Lumen', target: 'at://did:plc:lumen' }])
+  expect(put).toEqual([{ words: '@Lumen', target: '/p/0193b2c4-0000-7000-8000-00000000000c' }])
   expect(card()).toBeNull()
   remove()
 })
@@ -148,4 +148,19 @@ test('a long press opens the card once, whatever context menu comes with it, and
   const tap = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 })
   profileLink.dispatchEvent(tap)
   expect(tap.defaultPrevented).toBe(false)
+})
+
+test("a card opened from a Post's name links out to the account the Post was written as, and from a mention to the account held now", async () => {
+  const author = document.querySelector<HTMLAnchorElement>('.post-author')!
+  author.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }))
+  await opened()
+  const fromPost = [...card()!.querySelectorAll<HTMLAnchorElement>('a.person-card-action')].find((action) => action.textContent === 'On Bluesky ↗')
+  expect(fromPost!.getAttribute('href')).toBe('https://bsky.app/profile/did:plc:lumen-earlier')
+
+  document.getElementById('outside')!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }))
+  const mention = document.querySelector<HTMLAnchorElement>('.post-body a')!
+  mention.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }))
+  await opened()
+  const fromMention = [...card()!.querySelectorAll<HTMLAnchorElement>('a.person-card-action')].find((action) => action.textContent === 'On Bluesky ↗')
+  expect(fromMention!.getAttribute('href')).toBe('https://bsky.app/profile/did:plc:lumen')
 })

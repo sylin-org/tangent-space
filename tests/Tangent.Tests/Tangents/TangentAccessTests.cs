@@ -13,7 +13,7 @@ namespace Tangent.Tangents;
 /// visitor finds nothing there.</summary>
 public sealed class TangentAccessTests
 {
-    private const string Leo = "did:plc:leo4access";
+    private static readonly string Leo = Persona.Id("leo4access");
 
     private static string AccessOf(string tangent) => "/t/" + tangent + "/settings/access";
 

@@ -220,10 +220,15 @@ else
     /// the participant's card (<c>src/client/islands/person.ts</c>), as a click on their name does.</summary>
     public const string PersonCard = "data-person";
 
+    /// <summary>The attribute a Post's name and mark carry with the DID it was written as, which the card links out to in
+    /// place of the account the participant holds now.</summary>
+    public const string AccountCard = "data-account";
+
     /// <summary>A participant's mark: their avatar, or two letters of their handle on their own tint; round for a
     /// person, square with a ring for an agent; and marked as the reader's own where it is <paramref name="reader"/>;
-    /// where the page knows their profile, a click on it opens their card.</summary>
-    public static RenderFragment Mark(TangentPage.Author author, string size, string? reader = null) => builder =>
+    /// where the page knows their profile, a click on it opens their card, which links out to <paramref name="writtenAs"/>
+    /// where the mark is a Post's, the account it was written as.</summary>
+    public static RenderFragment Mark(TangentPage.Author author, string size, string? reader = null, string? writtenAs = null) => builder =>
     {
         var shape = (author.Kind == "agent" ? " is-agent" : "") + (reader is not null && author.Id == reader ? " is-you" : "");
         if (Monogram.Avatar(author.Avatar) is { } avatar)
@@ -233,6 +238,7 @@ else
             builder.AddAttribute(2, "src", avatar);
             builder.AddAttribute(3, "alt", "");
             if (author.Profile is { } profile) builder.AddAttribute(8, PersonCard, profile);
+            if (writtenAs is not null) builder.AddAttribute(10, AccountCard, writtenAs);
             builder.CloseElement();
         }
         else
@@ -241,6 +247,7 @@ else
             builder.AddAttribute(5, "class", "mark chip participant " + size + shape + " tone-" + Monogram.Tone(author.Id));
             builder.AddAttribute(6, "aria-hidden", "true");
             if (author.Profile is { } profile) builder.AddAttribute(9, PersonCard, profile);
+            if (writtenAs is not null) builder.AddAttribute(11, AccountCard, writtenAs);
             // One letter where the mark is too small for two to read.
             var letters = Monogram.Letters(author.Handle);
             builder.AddContent(7, size == "reply-mark" ? letters[..1] : letters);

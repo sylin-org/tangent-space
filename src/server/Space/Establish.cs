@@ -10,13 +10,14 @@ namespace Tangent.Space;
 
 /// <summary>First run: writes the one <see cref="TangentSpace"/> row with its name, and whoever sends it as both its
 /// proprietor and its operator, in the administrator role, and appends <see cref="EventKind.SpaceChanged"/>. One whose
-/// first sign-in left no participant arrives here, with <see cref="EventKind.StandingChanged"/>, taking their handle from
+/// first sign-in left no participant arrives here, bound to the account <see cref="OperatorDid"/>, with <see cref="EventKind.StandingChanged"/>, taking their handle from
 /// any other participant who still keeps it, and what is new to them begins at that arrival. The moderators' Tangent is created with the row and recorded on it
 /// (<see cref="ModeratorsTangent"/>), and so is the first Tangent, public, where the place is talked in from its first
 /// minute (<see cref="FirstTangent"/>). A place that already has its row refuses with <see cref="AlreadyEstablished"/> and
 /// nothing is written. Who may send it is the sender's question.</summary>
 public sealed record Establish(
     string OperatorId,
+    string OperatorDid,
     string OperatorHandle,
     string Name,
     DateTimeOffset? At = null) : ICommand<TangentSpace>
@@ -34,7 +35,7 @@ public sealed record Establish(
         var space = TangentSpace.Establish(Name, OperatorId, OperatorId, moderators);
         if (await Participant.Get(OperatorId, ct) is null)
         {
-            var arrived = Participant.Arrive(OperatorId, OperatorHandle, space.Admission);
+            var arrived = Participant.Arrive(OperatorId, OperatorDid, OperatorHandle, space.Admission);
             var arrival = await Event.Append(EventKind.StandingChanged, at, ct, actorId: OperatorId, targetId: OperatorId,
                 standing: arrived.Standing);
             arrived.Arrived(arrival.Seq);

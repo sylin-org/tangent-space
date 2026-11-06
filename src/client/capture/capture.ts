@@ -99,7 +99,9 @@ async function captureScreen(screen: Screen): Promise<string[]> {
     const group = JSON.parse(key) as { settings: Record<string, string>; place: NonNullable<State['place']>; seed: string | null }
     const tangentSpace = server ? await startTangentSpace(server, group.settings) : undefined
     try {
-      // First run comes first: a seed writes into an established place.
+      // The persona's sign-in arrives as the participant the seeds write, so her login is bound to her before anyone
+      // signs in; then first run, since a seed writes into an established place.
+      if (tangentSpace) await seed(tangentSpace.listening, tangentSpace.baseUrl, 'persona')
       if (tangentSpace && group.place !== 'unestablished')
         await establish(tangentSpace.listening, group.place === 'persona' ? capturePersona : captureOperator)
       if (tangentSpace && group.seed) await seed(tangentSpace.listening, tangentSpace.baseUrl, group.seed)
@@ -217,7 +219,7 @@ async function captureState(browser: Browser, pageBase: URL, baseUrl: URL, path:
             target.dispatchEvent(new DragEvent('dragover', at))
             target.dispatchEvent(new DragEvent('drop', at))
           })
-        if (state.click) await page.click(state.click)
+        for (const selector of [state.click ?? []].flat()) await page.click(selector)
         if (state.click || state.waitFor) {
           if (state.waitFor) await page.waitForSelector(state.waitFor, { timeout: 15_000 })
           await page.waitForLoadState('networkidle')

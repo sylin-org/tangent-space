@@ -20,7 +20,7 @@ public sealed partial class SocialCardTests
     private const string Workshop = "the-workshop";
     private const string Back = "the-back-room";
     private const string Place = "Leo's place";
-    private const string Reader = "did:plc:reader";
+    private static readonly string Reader = Persona.Id("reader");
 
     private static readonly DateTimeOffset Start = new(2026, 9, 28, 12, 0, 0, TimeSpan.Zero);
 
@@ -78,9 +78,9 @@ public sealed partial class SocialCardTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Established(tangentSpace);
-        await Given.AParticipant(tangentSpace, "did:plc:ines", [Roles.Member], ct: Cancellation);
+        await Given.AParticipant(tangentSpace, Persona.Id("ines"), [Roles.Member], ct: Cancellation);
         var topic = await Started("A question",
-            "[@ines](at://did:plc:ines), thanks to [@ines](at://did:plc:ines).\n\n## Heading\n\nThe *words*, `code`, [a page](/about) and ![a sketch](/media/sketch.png) <b>here</b>.");
+            "[@ines](/p/" + Persona.Id("ines") + "), thanks to [@ines](/p/" + Persona.Id("ines") + ").\n\n## Heading\n\nThe *words*, `code`, [a page](/about) and ![a sketch](/media/sketch.png) <b>here</b>.");
 
         var html = await Page(tangentSpace.Client, $"/t/{Workshop}/{topic.Slug}");
         var description = Meta(html, "og:description")!;

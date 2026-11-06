@@ -1,0 +1,61 @@
+@* Use another Bluesky account, as a disclosure in the page that opens into its form, never a dialog: the handle field, the
+   one line that says earlier Posts stay linked to the account held now, and the button that goes to Bluesky; posted
+   same-site to Koan's binding, it comes back to the page it was sent from. Where a binding was refused, the form opens
+   with why under the field, and, for a sign-in that is not fresh enough, the one step that answers it above the field:
+   signing in again as the account held now, which comes back here with the handle kept. *@
+<details class="another-account" id="@Id" open="@Model.Open">
+    <summary class="@SummaryClass">@ChildContent<span>Use another Bluesky account</span></summary>
+    <div class="another-account-body">
+        @if (Model.SignInAgain is { } again)
+        {
+            <form class="another-account-again" method="get" action="@again.Action" data-island="submitting">
+                <p class="another-account-refused" id="@(Id + "-refused")" role="alert">@Model.Refused</p>
+                @foreach (var field in again.Fields)
+                {
+                    <input type="hidden" name="@field.Name" value="@field.Value">
+                }
+                <button class="sign-in-submit" data-busy-label="Opening Bluesky…">Sign in again</button>
+            </form>
+        }
+        <form class="another-account-form" method="post" action="@Model.Action" data-island="submitting">
+            <div class="field">
+                <label class="field-label" for="@(Id + "-handle")">Bluesky handle</label>
+                <span class="field-input">
+                    <span class="field-prefix" aria-hidden="true">@@</span>
+                    <input id="@(Id + "-handle")" name="identifier" type="text" required
+                           autocomplete="username" autocapitalize="none" spellcheck="false"
+                           placeholder="you.bsky.social" value="@Model.Handle"
+                           aria-invalid="@(Model.Refused is not null && Model.SignInAgain is null ? "true" : "false")"
+                           aria-describedby="@Described">
+                </span>
+                @if (Model.Refused is { } refused && Model.SignInAgain is null)
+                {
+                    <p class="field-failure" id="@(Id + "-failure")">@refused</p>
+                }
+            </div>
+            <p class="another-account-note" id="@(Id + "-note")">@Model.Note</p>
+            <input type="hidden" name="return" value="@Model.Return">
+            <input type="hidden" name="failure" value="@Model.Failure" data-carry="identifier" data-carry-as="@AnotherAccount.HandleQuery">
+            <button class="@(Model.SignInAgain is null ? "sign-in-submit" : "button")" data-busy-label="Opening Bluesky…">Continue on Bluesky</button>
+        </form>
+    </div>
+</details>
+
+@code {
+    [Parameter, EditorRequired] public AnotherAccount.Offer Model { get; set; } = default!;
+
+    /// <summary>The disclosure's id, which names its field and its lines.</summary>
+    [Parameter] public string Id { get; set; } = "another";
+
+    /// <summary>The class of the line that opens it: an account menu item there, a plain toggle on a page.</summary>
+    [Parameter] public string SummaryClass { get; set; } = "another-account-toggle";
+
+    /// <summary>What leads the line that opens it, such as the account menu's icon.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string Described => string.Join(' ', new[]
+    {
+        Id + "-note",
+        Model.Refused is not null && Model.SignInAgain is null ? Id + "-failure" : null
+    }.OfType<string>());
+}

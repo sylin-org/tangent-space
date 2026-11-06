@@ -12,11 +12,11 @@
 <article id="@Model.Id" class="@Classes()" aria-current="@(Anchor ? "true" : null)">
     @if (!Article)
     {
-        @TopicRow.Mark(Model.Author, Root ? "post-mark-root" : "post-mark", Reader)
+        @TopicRow.Mark(Model.Author, Root ? "post-mark-root" : "post-mark", Reader, Model.WrittenAs)
         <header class="post-head">
             @if (Model.Author.Profile is { } profile)
             {
-                <a class="post-author" href="@profile">@Model.Author.Name</a>
+                <a class="post-author" href="@profile" data-account="@Model.WrittenAs">@Model.Author.Name</a>
             }
             else
             {

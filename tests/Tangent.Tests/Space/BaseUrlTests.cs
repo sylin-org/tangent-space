@@ -15,7 +15,7 @@ namespace Tangent.Space;
 /// each request's own origin.</summary>
 public sealed class BaseUrlTests
 {
-    private const string Leo = "did:plc:leo4address";
+    private static readonly string Leo = Persona.Id("leo4address");
 
     private static CancellationToken Cancellation => TestContext.Current.CancellationToken;
 

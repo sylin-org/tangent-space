@@ -13,7 +13,7 @@ namespace Tangent.Capture;
 /// Bluesky for, trying again — and what Bluesky said about the updated one. Compiled only into the capture host; fixed names, words and times.</summary>
 public sealed class ConnectionsSeedController(RoleCollection roles) : ControllerBase
 {
-    private const string Persona = "did:plc:capture4persona";
+    private const string Persona = Seeded.Persona;
 
     [HttpPost("/capture/seed/connections")]
     public async Task<IActionResult> Seed(CancellationToken ct)
@@ -38,11 +38,11 @@ public sealed class ConnectionsSeedController(RoleCollection roles) : Controller
             Id = gold.Id, AuthorId = Persona, Likes = 128, Reposts = 17, Quotes = 3, Replies = 9,
             References =
             [
-                Heard(Reference.Reply, "did:plc:capture4mira", "mira.example", "Mira Okafor",
+                Heard(Reference.Reply, Seeded.Mira, "mira.example", "Mira Okafor",
                     "I've been putting off mending my grandmother's teapot for a year. This is the push I needed.", At(29, 18, 4)),
-                Heard(Reference.Quote, "did:plc:capture4tomas", "tomas.example", "Tomás",
+                Heard(Reference.Quote, Seeded.Tomas, "tomas.example", "Tomás",
                     "The best thing I read this week: a crack as the most honest part of an object.", At(29, 12, 41)),
-                Heard(Reference.Reply, "did:plc:capture4june", "june.example", null,
+                Heard(Reference.Reply, Seeded.June, "june.example", null,
                     "Do you use urushi or the epoxy kits? Curious what holds up for something that sees daily use.", At(29, 9, 15))
             ]
         }), ct);
@@ -60,8 +60,8 @@ public sealed class ConnectionsSeedController(RoleCollection roles) : Controller
     {
         Id = Receipt.Key(Persona, post.Id), ConnectionId = Persona, PostId = post.Id, TangentId = post.TangentId,
         Version = post.Version, Updated = updated, At = at,
-        Document = $"at://{Persona}/{AtprotoAdapter.Documents}/{post.Id}", DocumentCid = "bafyreidocument" + post.Id,
-        Note = $"at://{Persona}/{AtprotoAdapter.Notes}/{post.Id}", NoteCid = "bafyreinote" + post.Id
+        Document = $"at://{Seeded.PersonaDid}/{AtprotoAdapter.Documents}/{post.Id}", DocumentCid = "bafyreidocument" + post.Id,
+        Note = $"at://{Seeded.PersonaDid}/{AtprotoAdapter.Notes}/{post.Id}", NoteCid = "bafyreinote" + post.Id
     };
 
     private static async Task<T> Write<T>(ICommand<T> command, CancellationToken ct) => await command.Send(ct) switch

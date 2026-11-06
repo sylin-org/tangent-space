@@ -63,16 +63,42 @@ public sealed class ConnectionsController(KoanWebBaseUrl baseUrl, Nudge nudge) :
         var articles = receipts.Where(receipt => posts.ContainsKey(receipt.PostId)).Select(receipt =>
         {
             var post = posts[receipt.PostId];
-            var state = Receipt.StateOf(receipt, post, connection!, open[post.TangentId] && !post.Removed);
-            return new ConnectionsPage.Article(post.Title ?? "", address + AtprotoAdapter.Path(post), Word(state), Sentence(state, connection!),
+            var shown = open[post.TangentId] && !post.Removed;
+            var state = Receipt.StateOf(receipt, post, connection!, shown, participant?.Did ?? "");
+            var sentence = state != ArticleState.Earlier ? Sentence(state, connection!)
+                : !shown && receipt.IsLive() ? (receipt.Stays ? Publishing.StaysSentence : Publishing.LeavingSentence)
+                : Sentence(state, connection!);
+            return new ConnectionsPage.Article(post.Title ?? "", address + AtprotoAdapter.Path(post), Word(state), sentence,
                 receipt.IsLive() && receipt.Note is { } note ? Publishing.Bluesky(note) : null, receipt.At);
         }).ToList();
 
+        var another = Request.Query.ContainsKey(AnotherAccount.OpenQuery);
         return Ok(new ConnectionsPage(space.Name, address + "/", await PostWrites.Reader(personId, place, address, baseUrl.PathBase + Path, ct),
-            Account(connection, handle, address, articles.Any(article => article.State == Word(ArticleState.Remains))), articles)
+            Account(connection, handle, address, articles.Any(article => article.State == Word(ArticleState.Remains))), articles,
+            Another(participant, handle, address, another))
         {
-            Failure = await Failure(personId, address, ct)
+            Failure = another ? null : await Failure(personId, address, ct)
         });
+    }
+
+    /// <summary>Use another Bluesky account, as this page draws it: coming back here bound to the new account; open, with
+    /// the handle typed kept, where a refused binding or the sign-in that answers one came back, saying why it was refused,
+    /// and, where Koan wants a fresh sign-in first, the sign-in as the account held now, which comes back here.</summary>
+    private AnotherAccount.Offer Another(Participant? participant, string handle, string address, bool open)
+    {
+        var typed = AnotherAccount.Kept(Request.Query[AnotherAccount.HandleQuery].ToString());
+        var code = open ? Request.Query[SignInFailureReturn.CodeParameter].ToString() : null;
+        var landing = AnotherAccount.FailurePath + (typed is null ? "" : "&" + AnotherAccount.HandleQuery + "=" + Uri.EscapeDataString(typed));
+        var again = code == SignInFailureReturn.Code(SignInFailure.SignInFirst) && participant is { Did.Length: > 0 }
+            ? new Form(address + SignInController.ChallengePath, "get",
+            [
+                new Form.Field("identifier", "The account you hold now.", participant.Did),
+                new Form.Field(AuthConstants.Query.Return, "This page, with the form open.", baseUrl.PathBase + landing),
+                new Form.Field(AuthConstants.Query.Failure, "This page, saying why.", landing)
+            ])
+            : null;
+        return new AnotherAccount.Offer(address + AnotherAccount.Route, baseUrl.PathBase + Path, AnotherAccount.FailurePath, handle, typed,
+            AnotherAccount.Why(code), again, open);
     }
 
     /// <summary>What a permission Bluesky did not give says, from Koan's code in <c>error</c>, naming the reader's own
@@ -140,6 +166,7 @@ public sealed class ConnectionsController(KoanWebBaseUrl baseUrl, Nudge nudge) :
         ArticleState.EditedByOthers => "Edited by someone else; your copy stays as you wrote it",
         ArticleState.Remains => "Still public on Bluesky, though it no longer is here. " + Publishing.Undoing(connection),
         ArticleState.Held => "Not published, since it isn't public here",
+        ArticleState.Earlier => "Written as your earlier Bluesky account; it and any copy of it stay with that account",
         _ => "Retracted"
     };
 }

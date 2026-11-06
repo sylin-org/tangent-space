@@ -6,7 +6,7 @@ namespace Tangent.Space;
 
 /// <summary>What every start makes sure of about an established place. A configured operator matters only before
 /// setup, so the place starts whatever <c>Tangent:Operator</c> names; a value that names someone other than the
-/// operator draws one warning saying so. The place has its moderators' Tangent, which the start creates where the place
+/// operator, by the DID of the account they are bound to or by its handle, draws one warning saying so. The place has its moderators' Tangent, which the start creates where the place
 /// was established without one.</summary>
 public static class FirstRunStart
 {
@@ -16,7 +16,7 @@ public static class FirstRunStart
         var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(FirstRunStart));
         var options = services.GetRequiredService<IOptions<TangentSpaceOptions>>().Value;
         if (options.NamedOperator() is { } named && space.OperatorId is { } operatorId
-            && !options.MaySetUp(operatorId, (await Participant.Get(operatorId, ct))?.Handle ?? ""))
+            && await Participant.Get(operatorId, ct) is var operatorRow && !options.MaySetUp(operatorRow?.Did ?? "", operatorRow?.Handle ?? ""))
             logger.LogWarning(
                 "{Setting} names {Named}, but this Tangent Space's operator is {Operator}; the setting matters only before setup, so this start ignores it",
                 FirstRun.OperatorSetting, named, operatorId);

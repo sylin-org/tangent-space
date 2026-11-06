@@ -90,20 +90,20 @@ public sealed class MentionPickerTests
         await Place(tangentSpace);
         using var ada = await SignedIn(tangentSpace, Ada);
         using var bea = await SignedIn(tangentSpace, Bea);
-        Assert.IsType<Outcome<Participants.Participant>.Done>(await new Participants.CaptureProfile(
-            new Participants.ProfileAnswer(Bea, "Bea [the] *lamp*_", null, null), DateTimeOffset.UtcNow).Send(Cancellation));
+        Assert.IsType<Outcome<Participants.Participant>.Done>(await new Participants.CaptureProfile(Bea, 
+            new Participants.ProfileAnswer(Persona.Did(Bea), "Bea [the] *lamp*_", null, null), DateTimeOffset.UtcNow).Send(Cancellation));
         var root = await Started(Ada, "Lanterns", "Who lights theirs first?");
         await Replied(root, Bea, "I do.");
 
         // The pick names its target and its name: what the browser writes for it.
         var answer = await Send(ada.Client, HttpMethod.Get, $"/t/{Workshop}/{SuggestionsController.Segment}?q=%40bea&topic={root.Slug}", json: true);
         var picked = answer.Json.GetProperty("suggestions")[0];
-        Assert.Equal(("person", "at://" + Bea, "Bea [the] *lamp*_"),
+        Assert.Equal(("person", Mentions.Target(Bea), "Bea [the] *lamp*_"),
             (picked.GetProperty("kind").GetString(), picked.GetProperty("target").GetString(), picked.GetProperty("name").GetString()));
         var markdown = @"[@Bea \[the\] \*lamp\*\_](" + picked.GetProperty("target").GetString() + ")";
 
         // Bea's handle changes while Ada writes; the pick still means Bea.
-        Assert.IsType<Outcome<Participants.Participant>.Done>(await new Participants.RecordHandle(Bea, "bea.renamed.example").Send(Cancellation));
+        Assert.IsType<Outcome<Participants.Participant>.Done>(await new Participants.RecordSignIn(Bea, Persona.Did(Bea), "bea.renamed.example").Send(Cancellation));
         var page = TopicPath(root);
         var id = Tids.Mint();
         Assert.Equal(HttpStatusCode.Created, (await Json(ada, page, page, new { id, body = "Thanks " + markdown + "!" })).Status);

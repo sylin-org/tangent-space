@@ -146,7 +146,7 @@ public sealed class SignInTests
         using var visiting = JsonDocument.Parse(await visitor.Content.ReadAsStringAsync(Cancellation));
         using var participant = await browser.Client.SendAsync(Json("/sign-in?return=" + destination), Cancellation);
 
-        Assert.NotNull(await Participant.Get("did:plc:ret4example", Cancellation));
+        Assert.NotNull(await Persona.Arrived("did:plc:ret4example", Cancellation));
         Assert.Equal("/", visiting.RootElement.GetProperty("return").GetString());
         Assert.Equal(HttpStatusCode.Redirect, participant.StatusCode);
         Assert.Equal("/", participant.Headers.Location?.OriginalString);
@@ -163,7 +163,7 @@ public sealed class SignInTests
     }
 
     [Fact]
-    public async Task A_test_sign_in_with_a_did_subject_yields_a_koan_person_whose_external_identity_is_that_did()
+    public async Task A_first_sign_in_arrives_as_a_koan_person_of_its_own_id_bound_to_the_did_its_login_and_its_participant_name()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
         using var browser = new Browser(tangentSpace);
@@ -173,9 +173,12 @@ public sealed class SignInTests
 
         Assert.Equal(HttpStatusCode.OK, landed.StatusCode);
         Assert.Equal("/", landed.RequestMessage!.RequestUri!.AbsolutePath);
-        var person = await Person.Get(did, Cancellation);
-        Assert.NotNull(person);
-        var links = await ExternalIdentityLink.Query(link => link.IdentityId == did, Cancellation);
+        var participant = await Persona.Arrived(did, Cancellation);
+        Assert.NotNull(participant);
+        Assert.True(Guid.TryParseExact(participant.Id, "D", out var id) && id.Version == 7, participant.Id);
+        Assert.Null(await Participant.Get(did, Cancellation));
+        Assert.NotNull(await Person.Get(participant.Id, Cancellation));
+        var links = await ExternalIdentityLink.Query(link => link.IdentityId == participant.Id, Cancellation);
         var link = Assert.Single(links);
         Assert.Equal(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(did))), link.ProviderKeyHash);
         Assert.Equal("test", link.Provider);
@@ -196,12 +199,13 @@ public sealed class SignInTests
 
         Assert.Equal(HttpStatusCode.OK, signedIn.StatusCode);
         Assert.Equal("/", signedIn.RequestMessage!.RequestUri!.AbsolutePath);
-        var participant = await Participant.Get(did, Cancellation);
+        var participant = await Persona.Arrived(did, Cancellation);
         Assert.NotNull(participant);
-        Assert.Equal((ParticipantKind.Person, KindSource.ProfileLabel, standing, "grace.example"),
-            (participant.Kind, participant.KindSource, participant.Standing, participant.Handle));
+        Assert.NotEqual(did, participant.Id);
+        Assert.Equal((ParticipantKind.Person, KindSource.ProfileLabel, standing, "grace.example", did),
+            (participant.Kind, participant.KindSource, participant.Standing, participant.Handle, participant.Did));
         var logged = Assert.Single(await Event.All(Cancellation));
-        Assert.Equal((EventKind.StandingChanged, did, did), (logged.Kind, logged.ActorId, logged.TargetId));
+        Assert.Equal((EventKind.StandingChanged, participant.Id, participant.Id), (logged.Kind, logged.ActorId, logged.TargetId));
 
         // A second sign-in by the same person creates nothing and appends nothing.
         using var again = await browser.SignIn("grace", did, Cancellation, handle: "grace.example");

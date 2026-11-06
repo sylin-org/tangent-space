@@ -17,7 +17,7 @@ namespace Tangent.Tangents;
 /// and a private Tangent that exists for nobody its audience excludes at any instant of its creation.</summary>
 public sealed class TangentTests(ITestOutputHelper output)
 {
-    private const string Reader = "did:plc:reader";
+    private static readonly string Reader = Persona.Id("reader");
 
     private static CancellationToken Cancellation => TestContext.Current.CancellationToken;
 

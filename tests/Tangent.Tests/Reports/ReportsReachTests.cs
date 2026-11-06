@@ -18,7 +18,7 @@ namespace Tangent.Posts;
 /// it out of the count, which a new report raises again.</summary>
 public sealed class ReportsReachTests
 {
-    private const string Leo = "did:plc:leo4reportsreach";
+    private static readonly string Leo = Persona.Id("leo4reportsreach");
 
     [Fact]
     public async Task A_moderators_count_and_door_show_a_new_report_while_a_members_the_reporters_and_the_authors_do_not()
