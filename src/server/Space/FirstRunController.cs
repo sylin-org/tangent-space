@@ -4,7 +4,6 @@ using Koan.Web.Auth.Connector.Atproto;
 using Koan.Web.Auth.Infrastructure;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
-using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Tangent.Access;
@@ -33,14 +32,13 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
         Response.Headers.CacheControl = "no-store";
         if (await TangentSpace.Get(TangentSpace.SingleRow, ct) is not { } space) return await Answer(HttpContext, baseUrl, options.Value, ct);
         if (!Theirs(space)) return NotHere();
-        var listening = server.Features.Get<IServerAddressesFeature>()?.Addresses ?? [];
         var address = baseUrl.Resolve(HttpContext);
-        var local = TangentSpace.IsLocal(address);
+        var (pointers, later) = Pointers.At(address, baseUrl.IsConfigured, server);
         return new ObjectResult(new FirstRun(space.Name, address + "/")
         {
             BaseUrl = address,
-            Pointers = local ? [] : Pointers.For(address, Pointers.Upstream(listening)),
-            PointersLater = local ? Pointers.Later(baseUrl.IsConfigured) : null,
+            Pointers = pointers,
+            PointersLater = later,
             Reader = await ReaderOf(User, address, baseUrl.PathBase, ct)
         });
     }

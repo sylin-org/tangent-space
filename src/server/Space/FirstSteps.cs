@@ -17,7 +17,8 @@ namespace Tangent.Space;
 /// the write its settings send, which returns to the door. What the place is for, as the Tangents it holds
 /// (<see cref="Purposes"/>); the line under its name, offered from their Bluesky profile where it says one
 /// (<see cref="Line"/>); how it looks — its accent, its image, the banner and the picture their Bluesky account shows as its
-/// image and its mark; who reads it and how a newcomer arrives; where its site is pointed here (<see cref="Site"/>); their
+/// image and its mark; who reads it and how a newcomer arrives; where its site is pointed here, the pointers in the general
+/// settings (<see cref="Site"/>); their
 /// agent and the first Topic. <see cref="Close"/> ends them for good, and everything they offer stays in the
 /// settings.</summary>
 public sealed record FirstSteps(
@@ -111,10 +112,10 @@ public sealed record FirstSteps(
                 with { Tool = "change-appearance", Key = "first-steps-accent" }),
             Back(Form.Posting(settings, Switch(TangentSpaceSettingsController.ImageField, Holds.PlaceImage, appearance.Image, images))
                 with { Tool = "change-appearance", Key = "first-steps-image" }),
-            profile.Banner is null ? null : Back(AppearanceSettingsPage.FromBluesky(baseAddress + TangentSpaceSettingsController.ImagePath, "Use your Bluesky banner") with { Quiet = true }),
+            profile.Banner is null ? null : Back(AppearanceSettingsPage.FromBluesky(settings, TangentSpaceSettingsController.ImageField, "Use your Bluesky banner") with { Quiet = true }),
             appearance.Mark.Length > 0
                 ? Back(Form.Posting(settings, Given(TangentSpaceSettingsController.MarkField, Holds.PlaceMark, "")) with { Tool = "change-appearance", Submit = "Use its letter", Quiet = true })
-                : profile.Avatar is null ? null : Back(AppearanceSettingsPage.FromBluesky(baseAddress + TangentSpaceSettingsController.MarkPath, "Use your Bluesky picture as its mark") with { Quiet = true }),
+                : profile.Avatar is null ? null : Back(AppearanceSettingsPage.FromBluesky(settings, TangentSpaceSettingsController.MarkField, "Use your Bluesky picture as its mark") with { Quiet = true }),
             settings,
             Back(Form.Posting(baseAddress + TangentSpaceSettingsController.Path, Switch(TangentSpaceSettingsController.AudienceField, Holds.PlaceAudience,
                 TangentWrites.Word(space.Audience), [new(TangentWrites.Word(Audience.Public), "Anyone"), new(TangentWrites.Word(Audience.Private), "Only who is in")]))
@@ -123,7 +124,7 @@ public sealed record FirstSteps(
                 TangentSpaceSettingsController.Word(space.Admission),
                 [new(TangentSpaceSettingsController.Word(Admission.Join), "Join at once"), new(TangentSpaceSettingsController.Word(Admission.Apply), "Apply, and you admit them")]))
                 with { Tool = "change-admission", Key = "first-steps-arrival" }),
-            baseAddress + FirstRunController.Path,
+            baseAddress + TangentSpaceSettingsController.Path + "#" + Pointing.Anchor,
             baseAddress + BringYourAgentController.Path,
             open.FirstOrDefault() is { } first ? PostWrites.TangentAddress(baseAddress, first.Id) + "/" + TangentPageController.NewTopicSegment : null,
             Form.Posting(baseAddress + FirstStepsController.ClosePath) with { Tool = "close-first-steps", Submit = "Done", Busy = "Closing…", Quiet = true })

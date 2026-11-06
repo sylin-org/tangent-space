@@ -89,6 +89,43 @@ public sealed class TangentSpaceSettingsTests
     }
 
     [Fact]
+    public async Task An_administrator_who_did_not_set_the_place_up_finds_its_address_and_its_sites_pointers_in_general_where_first_steps_send_them()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
+        using var leo = await SignedIn(tangentSpace, Leo);
+        var general = BaseUrl + TangentSpaceSettingsController.Path;
+
+        // First steps say the pointers stay in the settings, and send there; first run is the setter's alone.
+        var steps = (await Send(leo.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("firstSteps");
+        Assert.Equal(general + "#" + Render.Pointing.Anchor, steps.GetProperty("site").GetString());
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(leo.Client, HttpMethod.Get, FirstRunController.Path)).Status);
+
+        // read_settings carries the address the place answers at and the pointers, as first run does.
+        var read = await Send(leo.Client, HttpMethod.Get, TangentSpaceSettingsController.Path, json: true);
+        Assert.Equal(BaseUrl, read.Json.GetProperty("baseUrl").GetString());
+        Assert.Equal([Pointers.Link, Pointers.WellKnown, Pointers.Txt],
+            read.Json.GetProperty("pointers").EnumerateArray().Select(pointer => pointer.GetProperty("kind").GetString()));
+        Assert.Equal($"<link rel=\"tangent\" href=\"{BaseUrl}\">", read.Json.GetProperty("pointers")[0].GetProperty("text").GetString());
+        Assert.False(read.Json.TryGetProperty("pointersLater", out _));
+
+        // The page shows them under the form, at the anchor first steps link to.
+        var page = WebUtility.HtmlDecode(PageContent((await Send(leo.Client, HttpMethod.Get, TangentSpaceSettingsController.Path)).Body));
+        Assert.Contains($"id=\"{Render.Pointing.Anchor}\">Your site</h2>", page);
+        Assert.Contains($"<link rel=\"tangent\" href=\"{BaseUrl}\">", page);
+        Assert.Contains("_tangent.tangent.test. IN TXT", page);
+        Assert.True(page.IndexOf("space-settings", StringComparison.Ordinal) < page.IndexOf("id=\"pointers\"", StringComparison.Ordinal));
+
+        // Whoever may not change the general settings reads neither.
+        using var ada = await SignedIn(tangentSpace, Ada);
+        var hers = await Send(ada.Client, HttpMethod.Get, TangentSpaceSettingsController.Path, json: true);
+        Assert.False(hers.Json.TryGetProperty("baseUrl", out _));
+        Assert.False(hers.Json.TryGetProperty("pointers", out _));
+        Assert.DoesNotContain("rel=\"tangent\"", WebUtility.HtmlDecode(PageContent((await Send(ada.Client, HttpMethod.Get, TangentSpaceSettingsController.Path)).Body)));
+    }
+
+    [Fact]
     public async Task A_participant_without_manage_space_has_no_settings_entry_and_is_refused_with_the_gate_and_a_visitor_is_told_to_sign_in()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);

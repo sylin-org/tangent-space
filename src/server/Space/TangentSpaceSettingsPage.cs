@@ -7,7 +7,9 @@ namespace Tangent.Space;
 /// <see cref="Audiences"/>: <c>public</c>, read by anyone, or <c>private</c>, read by its participants alone.
 /// <see cref="Change"/>, present only where the reader may change them, takes <c>name</c> and <c>audience</c>, each left as
 /// it is when not sent.
-/// <see cref="Can"/> is what the reader holds in
+/// For whoever holds <c>ManageSpace</c>, the <see cref="BaseUrl"/> the place answers at and the <see cref="Pointers"/> its site
+/// places to point at it, as first run shows them: none while the base URL is local, and <see cref="PointersLater"/> says
+/// instead when they appear. <see cref="Can"/> is what the reader holds in
 /// the place, and <see cref="Gate"/> why they may not change its settings, null when they may; <see cref="SignIn"/> is
 /// where a visitor signs in, coming back here. After a refusal the form keeps what was sent and says why: under the
 /// name, or above the form.</summary>
@@ -51,6 +53,23 @@ public sealed record TangentSpaceSettingsPage(
             };
         }
     }
+
+    public string? BaseUrl { get; init; }
+
+    public IReadOnlyList<Pointer>? Pointers { get; init; }
+
+    public string? PointersLater { get; init; }
+
+    /// <summary>Under the form, for whoever holds <c>ManageSpace</c>: the address the place answers at and the pointers its
+    /// site places, or when they appear, at the anchor first steps link to.</summary>
+    [Slot(Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Pointing? Site => BaseUrl is not { } address ? null : new(Pointers ?? [])
+    {
+        Heading = "Your site",
+        Lede = "It answers at " + Render.Sentence.CodeLink(address, Door) + (PointersLater is { } later
+            ? ", which only this machine reaches. " + later
+            : ". Any one of these on your site says where this place is, so people and their agents find it.")
+    };
 
     /// <summary>The frame the shell draws around the page: its settings as its one crumb, and who reads, or where a visitor
     /// signs in.</summary>

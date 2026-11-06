@@ -3,6 +3,7 @@ using Koan.Data.Core.Commands;
 using Koan.Web.Attributes;
 using Koan.Web.Controllers;
 using Koan.Web.Hosting;
+using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
 using Tangent.Participants;
@@ -33,14 +34,15 @@ public sealed record ChangeAppearanceInput(
     [Description(Holds.ArticleHeader)] string? ArticleHeader = null);
 
 /// <summary>The place's settings, in sections shown one at a time, each listed in the rail for whoever may use it
-/// (<see cref="Sections"/>). <c>/settings</c> is general, which names the place and says who reads it; <c>/settings/admission</c> sets how a newcomer
+/// (<see cref="Sections"/>). <c>/settings</c> is general, which names the place and says who reads it, and shows whoever may change
+/// them the address it answers at and its site's pointers (<see cref="Pointers.At"/>); <c>/settings/admission</c> sets how a newcomer
 /// arrives; <c>/settings/appearance</c> sets the place's appearance, its description among its words, and
-/// <c>/settings/appearance/image</c> and <c>/settings/appearance/mark</c> take an image of the proprietor's own, or the one their
-/// Bluesky account shows, as the place's image or its mark; <see cref="AppearancePreviewController"/> draws
+/// <c>/settings/appearance/image</c> and <c>/settings/appearance/mark</c> take a file of the reader's own as the place's image
+/// or its mark; <see cref="AppearancePreviewController"/> draws
 /// the door in an appearance sent to it, saving nothing; the applications are <see cref="ApplicationsController"/>'s, the people <see cref="PeopleController"/>'s,
 /// the roles <see cref="RolesController"/>'s and export <see cref="Lifecycle.ExportController"/>'s. Each <c>GET</c> is the section's form, one resource both ways. General's
 /// <c>POST</c> takes <c>name</c> and <c>audience</c> (<c>public</c> or <c>private</c>), admission's
-/// takes <c>admission</c> (<c>join</c> or <c>apply</c>), appearance's takes <c>base</c> (<c>tangent</c> or a bundled stylesheet), <c>palette</c> (<c>base</c>, <c>gold</c>, <c>jade</c>, <c>iris</c> or <c>copper</c>), <c>css</c>, <c>image</c>, <c>mark</c> and the words in Markdown, <c>description</c>, <c>intro</c>, <c>masthead</c>, <c>footer</c> and <c>articleHeader</c>, as a form or a JSON object, a field left as it is when not sent, and
+/// takes <c>admission</c> (<c>join</c> or <c>apply</c>), appearance's takes <c>base</c> (<c>tangent</c> or a bundled stylesheet), <c>palette</c> (<c>base</c>, <c>gold</c>, <c>jade</c>, <c>iris</c> or <c>copper</c>), <c>css</c>, <c>image</c> and <c>mark</c>, either <see cref="Bluesky"/> to bring in the picture the sender's Bluesky account shows, and the words in Markdown, <c>description</c>, <c>intro</c>, <c>masthead</c>, <c>footer</c> and <c>articleHeader</c>, as a form or a JSON object, a field left as it is when not sent, and
 /// sends <see cref="ChangeTangentSpace"/>: a form is sent on to the path its <c>return</c> names
 /// (<see cref="PostWrites.Onward"/>), or else from general to the door, where the name shows, and from admission and
 /// appearance back to themselves; a JSON request reads the place (<c>200</c>); a refusal reads the form
@@ -48,7 +50,7 @@ public sealed record ChangeAppearanceInput(
 /// section opens that one instead. A reader for whom the place does not exist receives what an
 /// address with nothing there receives.</summary>
 [Managing]
-public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : ControllerBase
+public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, IServer server) : ControllerBase
 {
     public const string Path = "/settings";
 
@@ -77,14 +79,17 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
     /// <summary>The field the place's own image comes in as, a file of a multipart form.</summary>
     public const string FileField = "file";
 
-    /// <summary>The field that brings in the picture the reader's Bluesky account shows in place of a file.</summary>
-    public const string FromField = "from";
+    /// <summary>What <see cref="ImageField"/> or <see cref="MarkField"/> holds to bring in the picture the sender's Bluesky
+    /// account shows: its banner as the place's image, its avatar as its mark.</summary>
+    public const string Bluesky = "bluesky";
 
-    /// <summary>What <see cref="FromField"/> holds to bring in the reader's Bluesky picture.</summary>
-    public const string FromBluesky = "bluesky";
-
-    /// <summary>The answer when the picture the reader's Bluesky account shows could not be brought in.</summary>
+    /// <summary>The answer when the picture the sender's Bluesky account shows could not be read.</summary>
     public static readonly Reason NoBlueskyPicture = Reason.Invalid("Your Bluesky picture could not be read just now. Try again, or bring your own.");
+
+    /// <summary>The answer when the sender's Bluesky account showed no banner, or no picture for a <paramref name="mark"/>, when
+    /// the place last read their profile.</summary>
+    public static Reason NoneOnBluesky(bool mark) => Reason.Invalid(
+        "Your Bluesky account showed no " + (mark ? "picture" : "banner") + " when this place last read it. Bring your own, or choose another.");
 
     /// <summary>The form that changes the place's name and audience, under <paramref name="baseAddress"/>.</summary>
     public static Form GeneralForm(string baseAddress) => Saving(Form.Posting(baseAddress + Path,
@@ -228,7 +233,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
 
     [HttpGet(Path)]
     [Tool(Name = "read_settings")]
-    [Description("Read the place's name and audience, with the sections of its settings you may use. Call this before change_settings.")]
+    [Description("Read the place's name and audience, with the sections of its settings you may use, and, where you hold ManageSpace, the address it answers at and the pointers its site places so people and agents find it, or when they appear while the address is local. Call this before change_settings.")]
     [Needs(Bit.View)]
     public async Task<IActionResult> Get(CancellationToken ct)
     {
@@ -357,7 +362,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
     [HttpPost(AppearancePath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "change_appearance", Destructive = true, Idempotent = true, OpenWorld = false)]
-    [Description("Set how the place looks to every reader on every page, for whoever holds ManageSpace: the base layer's stylesheet, the colours, the place's own CSS, which every page but the settings carries over the rest, its image, and its words in Markdown. Sending a part its default returns it there: base tangent, palette base, anything else empty. What you leave out stays.")]
+    [Description("Set how the place looks to every reader on every page, for whoever holds ManageSpace: the base layer's stylesheet, the colours, the place's own CSS, which every page but the settings carries over the rest, its image and its mark, either of them bluesky to bring in the banner or the picture your Bluesky account shows, and its words in Markdown. Sending a part its default returns it there: base tangent, palette base, anything else empty. What you leave out stays.")]
     [Needs(Bit.View)]
     public async Task<IActionResult> ChangeAppearance(ChangeAppearanceInput input, CancellationToken ct)
     {
@@ -365,8 +370,22 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
         var personId = PostWrites.PersonId(User);
         var place = Here.Of(HttpContext).Around;
 
+        var (image, mark) = (input.Image, input.Mark);
+        if (personId is not null && place.Gate(Bit.ManageSpace) is null)
+        {
+            try
+            {
+                image = await Brought(image, personId, mark: false, ct);
+                mark = await Brought(mark, personId, mark: true, ct);
+            }
+            catch (Refusal refusal)
+            {
+                return await AppearanceRefused(personId, input, refusal.Reason, ct);
+            }
+        }
+
         var outcome = await new ChangeTangentSpace(personId ?? "", Description: input.Description, Base: input.Base, Palette: input.Palette, Css: input.Css,
-            Image: input.Image, Mark: input.Mark, Masthead: input.Masthead, Footer: input.Footer, Intro: input.Intro, ArticleHeader: input.ArticleHeader).Send();
+            Image: image, Mark: mark, Masthead: input.Masthead, Footer: input.Footer, Intro: input.Intro, ArticleHeader: input.ArticleHeader).Send();
         switch (outcome)
         {
             case Outcome<TangentSpace>.Done { Result: var space }:
@@ -378,25 +397,21 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
         }
     }
 
-    /// <summary>An image of the proprietor's own, sent as the file of a multipart form, or the banner their Bluesky account
-    /// shows (<see cref="FromField"/>), worn at once as the place's image.</summary>
+    /// <summary>An image of the reader's own, sent as the file of a multipart form, worn at once as the place's image.</summary>
     [HttpPost(ImagePath)]
     [RequestSizeLimit(NewMediaController.RequestLimit)]
     [RequestFormLimits(MultipartBodyLengthLimit = NewMediaController.RequestLimit)]
-    public Task<IActionResult> TakeImage([FromServices] ProfileReader pictures, CancellationToken ct) => Bring(pictures, mark: false, ct);
+    public Task<IActionResult> TakeImage(CancellationToken ct) => Bring(mark: false, ct);
 
-    /// <summary>An image of the proprietor's own, or the avatar their Bluesky account shows, worn at once as the place's
-    /// mark.</summary>
+    /// <summary>An image of the reader's own, worn at once as the place's mark.</summary>
     [HttpPost(MarkPath)]
     [RequestSizeLimit(NewMediaController.RequestLimit)]
     [RequestFormLimits(MultipartBodyLengthLimit = NewMediaController.RequestLimit)]
-    public Task<IActionResult> TakeMark([FromServices] ProfileReader pictures, CancellationToken ct) => Bring(pictures, mark: true, ct);
+    public Task<IActionResult> TakeMark(CancellationToken ct) => Bring(mark: true, ct);
 
-    /// <summary>Brings an image in, kept as every image is (<see cref="Media.Keep"/>), and wears it as the place's image or
-    /// its mark: the file sent, or, where <see cref="FromField"/> says bluesky, the picture the reader's Bluesky account
-    /// showed when the place last read their profile, read once from where it named it. The form is sent on as its
-    /// <c>return</c> says, or back to the appearance.</summary>
-    private async Task<IActionResult> Bring(ProfileReader pictures, bool mark, CancellationToken ct)
+    /// <summary>Brings the file sent in, kept as every image is (<see cref="Media.KeepFile"/>), and wears it as the place's image or its
+    /// mark. The form is sent on as its <c>return</c> says, or back to the appearance.</summary>
+    private async Task<IActionResult> Bring(bool mark, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
@@ -405,34 +420,16 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
         if (personId is null || place.Gate(Bit.ManageSpace) is not null) return Answers.Refused(HttpContext, place.Gate(Bit.ManageSpace) ?? Capabilities.SignIn);
 
         var form = Request.HasFormContentType ? await Request.ReadFormAsync(ct) : null;
-        Media media;
+        string worn;
         try
         {
-            if (form?[FromField].ToString() != FromBluesky) media = await Media.KeepFile(form, FileField, ct);
-            else
-            {
-                var profile = (await Participant.Get(personId, ct))?.Profile;
-                if ((mark ? profile?.Avatar : profile?.Banner) is not { } address) throw new Refusal(NoBlueskyPicture);
-                byte[] bytes;
-                try
-                {
-                    bytes = await pictures.Picture(address, Media.SentLimit, ct);
-                }
-                catch (ProfileReadFailed)
-                {
-                    throw new Refusal(NoBlueskyPicture);
-                }
-
-                media = await Media.Keep(bytes, ct);
-            }
+            worn = await Worn(await Media.KeepFile(form, FileField, ct), personId);
         }
         catch (Refusal refusal)
         {
             return await AppearanceRefused(personId, new ChangeAppearanceInput(), refusal.Reason, ct);
         }
 
-        await new BringMedia(media.Id, personId).Send();
-        var worn = Media.Reference(media.Id);
         var outcome = await (mark ? new ChangeTangentSpace(personId, Mark: worn) : new ChangeTangentSpace(personId, Image: worn)).Send();
         return outcome switch
         {
@@ -440,6 +437,40 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
             Outcome<TangentSpace>.Refused { Reason: { Kind: not ReasonKind.Absent } reason } => await AppearanceRefused(personId, new ChangeAppearanceInput(), reason, ct),
             _ => Answers.NotDone(HttpContext, outcome)
         };
+    }
+
+    /// <summary>The image or the mark as <paramref name="sent"/> names it: where it is <see cref="Bluesky"/>, the picture
+    /// <paramref name="personId"/>'s Bluesky account showed when the place last read their profile, its banner for the image
+    /// and its avatar for a <paramref name="mark"/>, read once from where it named it and kept (<see cref="Kept"/>); anything
+    /// else as it was sent. Refused where the account showed none or it could not be read.</summary>
+    private async Task<string?> Brought(string? sent, string personId, bool mark, CancellationToken ct)
+    {
+        if (sent?.Trim() != Bluesky) return sent;
+        var profile = (await Participant.Get(personId, ct))?.Profile;
+        if ((mark ? profile?.Avatar : profile?.Banner) is not { } address) throw new Refusal(NoneOnBluesky(mark));
+        byte[] bytes;
+        try
+        {
+            bytes = await HttpContext.RequestServices.GetRequiredService<ProfileReader>().Picture(address, Media.SentLimit, ct);
+        }
+        catch (ProfileReadFailed)
+        {
+            throw new Refusal(NoBlueskyPicture);
+        }
+
+        return await Kept(bytes, personId, ct);
+    }
+
+    /// <summary>An image brought in by <paramref name="personId"/>, kept as every image is (<see cref="Media.Keep"/>), as the
+    /// place wears it: <c>/media/{id}</c>.</summary>
+    private static async Task<string> Kept(byte[] bytes, string personId, CancellationToken ct) => await Worn(await Media.Keep(bytes, ct), personId);
+
+    /// <summary>The <paramref name="media"/> <paramref name="personId"/> brought in, recorded as theirs, as the place wears it:
+    /// <c>/media/{id}</c>.</summary>
+    private static async Task<string> Worn(Media media, string personId)
+    {
+        await new BringMedia(media.Id, personId).Send();
+        return Media.Reference(media.Id);
     }
 
     /// <summary>A refused appearance: for a JSON request, the problem its reason answers as; for a form, the form again, read
@@ -552,18 +583,25 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
         var baseAddress = BaseAddress();
         var here = baseUrl.PathBase + Path;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
+        var managing = place.Gate(Bit.ManageSpace) is null;
+        var (pointers, later) = managing ? Pointers.At(baseAddress, baseUrl.IsConfigured, server) : ([], null);
         return new TangentSpaceSettingsPage(
             Sections(place, baseAddress, General),
             space.Name,
             Tangents.TangentWrites.Word(space.Audience),
             Audiences,
-            place.Gate(Bit.ManageSpace) is null ? GeneralForm(baseAddress) : null,
+            managing ? GeneralForm(baseAddress) : null,
             place.Can,
             place.Gate(Bit.ManageSpace)?.Word,
             personId is null ? baseAddress + SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,
             space.Name,
             baseAddress + "/",
-            await PostWrites.Reader(personId, place, baseAddress, here, ct));
+            await PostWrites.Reader(personId, place, baseAddress, here, ct))
+        {
+            BaseUrl = managing ? baseAddress : null,
+            Pointers = managing ? pointers : null,
+            PointersLater = later
+        };
     }
 
     private string BaseAddress() => baseUrl.Resolve(HttpContext);

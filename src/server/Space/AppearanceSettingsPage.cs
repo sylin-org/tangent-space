@@ -9,9 +9,10 @@ namespace Tangent.Space;
 /// <c>/media/{id}</c>, at <see cref="MarkAddress"/>; and its words in Markdown: its
 /// <see cref="Description"/>, its <see cref="Intro"/> under the door's head, the <see cref="Masthead"/> and <see cref="Footer"/>
 /// lines and the <see cref="ArticleHeader"/>. <see cref="Change"/>, present only where the reader may change them, takes each
-/// of them; <see cref="Preview"/>, beside it, takes the same and answers the door drawn in them, saving nothing; and
-/// <see cref="Upload"/> and <see cref="MarkUpload"/> take an image of the reader's own as the place's image or its mark, or
-/// the banner and the avatar their Bluesky account shows where <see cref="Bluesky"/> says it shows one. <see cref="Can"/> is what the reader holds in the
+/// of them, and, where <see cref="Bluesky"/> says their Bluesky account shows a banner or an avatar, the one press that brings
+/// it in as the place's image or its mark; <see cref="Preview"/>, beside it, takes the same and answers the door drawn in
+/// them, saving nothing; and <see cref="Upload"/> and <see cref="MarkUpload"/> take an image of the reader's own as the
+/// place's image or its mark. <see cref="Can"/> is what the reader holds in the
 /// place, and <see cref="Gate"/> why they may not change them, null when they may; <see cref="SignIn"/> is where a visitor
 /// signs in, coming back here. After a refusal the form says why above the choices.</summary>
 [Render.Page(Render.Layout.Settings)]
@@ -79,7 +80,7 @@ public sealed record AppearanceSettingsPage(
                     TangentSpaceSettingsController.ImageField => item with
                     {
                         Value = Image, Choices = images,
-                        Learned = Upload is { } bring && Bluesky.Banner ? FromBluesky(bring, "Use your Bluesky banner") : null
+                        Learned = Change is not null && Bluesky.Banner ? FromBluesky(form.Action, item.Name, "Use your Bluesky banner") : null
                     },
                     TangentSpaceSettingsController.MarkField => item with
                     {
@@ -87,7 +88,7 @@ public sealed record AppearanceSettingsPage(
                         Choices = Mark.Length > 0 && MarkAddress is { } mark
                             ? [Letter, new(Mark, "Your own") { Picture = mark }]
                             : [Letter],
-                        Learned = MarkUpload is { } bring && Bluesky.Avatar ? FromBluesky(bring, "Use your Bluesky picture") : null
+                        Learned = Change is not null && Bluesky.Avatar ? FromBluesky(form.Action, item.Name, "Use your Bluesky picture") : null
                     },
                     TangentSpaceSettingsController.DescriptionField => item with { Value = Description },
                     TangentSpaceSettingsController.IntroField => item with { Value = Intro },
@@ -145,9 +146,11 @@ public sealed record AppearanceSettingsPage(
             Sends = Render.Form.Posting(action) with { Tool = "change-appearance", Key = key, Submit = "Use this image", Busy = "Bringing it in…", Multipart = true }
         };
 
-    /// <summary>The one press that brings in the picture the reader's Bluesky account shows, sent to <paramref name="action"/>.</summary>
-    public static Render.Form FromBluesky(string action, string words)
-        => Render.Form.Posting(action, new Render.Form.Field(TangentSpaceSettingsController.FromField, Holds.From, TangentSpaceSettingsController.FromBluesky, Render.Form.Input.Hidden))
+    /// <summary>The one press that brings in the picture the reader's Bluesky account shows as the place's image or its mark,
+    /// as <paramref name="field"/> names it, sent to the appearance's own write at <paramref name="action"/>.</summary>
+    public static Render.Form FromBluesky(string action, string field, string words)
+        => Render.Form.Posting(action, new Render.Form.Field(field, field == TangentSpaceSettingsController.MarkField ? Holds.PlaceMark : Holds.PlaceImage,
+                TangentSpaceSettingsController.Bluesky, Render.Form.Input.Hidden))
             with { Tool = "change-appearance", Submit = words, Busy = "Bringing it in…" };
 
     private static string Named(string word) => char.ToUpperInvariant(word[0]) + word[1..];
