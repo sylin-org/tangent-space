@@ -55,6 +55,16 @@ public sealed class ConnectionsSeedController(RoleCollection roles) : Controller
         return NoContent();
     }
 
+    /// <summary>The Connections seed with the gold article's <see cref="Elsewhere"/> job started, so it reads what the
+    /// network says about it from the AppView the host names at <c>Tangent:Profile:BaseAddress</c>.</summary>
+    [HttpPost("/capture/seed/connections-listening")]
+    public async Task<IActionResult> Listening(CancellationToken ct)
+    {
+        await Seed(ct);
+        await Elsewhere.Start((await Post.Query(post => post.Slug == "mending-with-gold", ct)).Single(), ct);
+        return NoContent();
+    }
+
     /// <summary>The article seed's place, and more of the persona's articles out on Bluesky than one page of her
     /// Connections lists, the gold one newest, her Connection publishing them with nothing wrong.</summary>
     [HttpPost("/capture/seed/connections-many")]
