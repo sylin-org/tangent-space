@@ -17,7 +17,8 @@ namespace Tangent.Participants;
 /// the participants admitted to the place — standing admitted, timed out or banned; an applicant stays among the
 /// <see cref="Applications"/> — people and agents alike, in handle order through <c>ix_participant_handles</c>,
 /// continued from a sealed <see cref="Cursor"/>, and narrowed to the handles that start with what the reader typed, one
-/// range of the same index. <see cref="Refusal"/> is the one rule every change of standing or role answers to: the roles
+/// range of the same index, and to who stands timed out or banned; <see cref="Holding"/> is one page of them who hold a
+/// role, in Koan's order of its members. <see cref="Refusal"/> is the one rule every change of standing or role answers to: the roles
 /// stand in Koan's one order (<see cref="Role.Position"/>) and the operator above every role, and a participant changes
 /// the standing or roles only of someone whose highest role stands below theirs (<see cref="RoleBag.Highest"/>), never
 /// their own, never the operator's; they give and take only the roles they manage (<see cref="Manages"/>).
@@ -213,6 +214,67 @@ public static class People
     /// <summary>A page of participants and where the next one starts; <see cref="Next"/> is null on the last page.</summary>
     public sealed record Page(IReadOnlyList<Participant> Participants, Cursor? Next);
 
+    /// <summary>The standings the people are narrowed to, by the word a query sends, as <see cref="Word"/> writes them.</summary>
+    public static readonly IReadOnlyList<Standing> Narrowing = [Standing.TimedOut, Standing.Banned];
+
+    /// <summary>The standing a query's word narrows the people to: none for nothing sent; false for a word that is not
+    /// one of <see cref="Narrowing"/>.</summary>
+    public static bool TryStanding(string? word, out Standing? standing)
+    {
+        standing = null;
+        if (string.IsNullOrEmpty(word)) return true;
+        foreach (var each in Narrowing)
+        {
+            if (Word(each) != word) continue;
+            standing = each;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Whether <paramref name="participant"/> is among the people at <paramref name="now"/>, standing as
+    /// <paramref name="standing"/> where it is given: admitted, timed out or banned, never an applicant.</summary>
+    private static bool Stands(Participant participant, Standing? standing, DateTimeOffset now)
+        => participant.StandingAt(now) is var stands && (standing is { } only ? stands == only : stands is not (Standing.Applied or Standing.Declined));
+
+    /// <summary>The purpose a cursor of a role's members is sealed under, which no other protected value shares.</summary>
+    public const string MembersPurpose = "Participant.MembersCursor";
+
+    /// <summary>A page of a role's members and Koan's cursor of the next page of them, null on the last.</summary>
+    public sealed record Holders(IReadOnlyList<Participant> Participants, string? Next)
+    {
+        /// <summary>Koan's cursor as an address carries it: protected under <see cref="MembersPurpose"/>.</summary>
+        public static string Seal(string next, IDataProtectionProvider protection) => protection.CreateProtector(MembersPurpose).Protect(next);
+
+        /// <summary>The Koan cursor a sealed text holds, or null when the text is not one this server sealed.</summary>
+        public static string? Open(string? text, IDataProtectionProvider protection)
+        {
+            if (string.IsNullOrEmpty(text)) return null;
+            try { return protection.CreateProtector(MembersPurpose).Unprotect(text); }
+            catch (CryptographicException) { return null; }
+        }
+    }
+
+    /// <summary>The page of the members of the role keyed <paramref name="roleKey"/> after Koan's cursor
+    /// <paramref name="after"/>, or the first: one page of Koan's members (<see cref="RoleCollection.Members"/>), in its
+    /// order by person, and one keyed read of their rows; of them, those among the people whose handles start with
+    /// <paramref name="start"/> and who stand as <paramref name="standing"/>, where given, so a page narrowed so can hold
+    /// fewer than <see cref="PageSize"/> while a next one follows.</summary>
+    public static async Task<Holders> Holding(RoleCollection roles, string roleKey, string? start, Standing? standing, string? after,
+        CancellationToken ct)
+    {
+        var members = await roles.Members(roleKey, after, PageSize, ct);
+        var ids = members.Items.Select(member => member.PersonId).ToList();
+        var rows = ids.Count == 0
+            ? new Dictionary<string, Participant>()
+            : (await Participant.Get(ids, ct)).OfType<Participant>().ToDictionary(row => row.Id, StringComparer.Ordinal);
+        var now = DateTimeOffset.UtcNow;
+        return new Holders(ids.Select(id => rows.GetValueOrDefault(id)).OfType<Participant>()
+            .Where(row => Stands(row, standing, now) && (start is null || row.Handle.StartsWith(start, StringComparison.Ordinal)))
+            .ToList(), members.Next);
+    }
+
     /// <summary>The place of the last participant a page held: their handle, and their id, which orders participants
     /// who show no handle. It leaves the server only sealed.</summary>
     public sealed record Cursor(string Handle, string Id)
@@ -246,14 +308,16 @@ public static class People
     }
 
     /// <summary>The page of participants after <paramref name="after"/>, or the first page, whose handles start with
-    /// <paramref name="start"/> where it is given: one read through the handle index, limited to the page and one more,
-    /// which says whether a next page exists. A start holding a character no handle holds finds no one, and reads
-    /// nothing.</summary>
-    public static async Task<Page> Read(string? start, Cursor? after, CancellationToken ct)
+    /// <paramref name="start"/> and who stand as <paramref name="standing"/> where each is given, a timeout only while it
+    /// lasts: one read through the handle index, limited to the page and one more, which says whether a next page exists.
+    /// A start holding a character no handle holds finds no one, and reads nothing.</summary>
+    public static async Task<Page> Read(string? start, Cursor? after, CancellationToken ct, Standing? standing = null)
     {
         if (start is not null && !start.All(HandleCharacter)) return new Page([], null);
         var handle = FieldPath.Of(nameof(Participant.Handle));
         var filters = new List<Filter>();
+        if (standing == Standing.TimedOut)
+            filters.Add(Filter.On(FieldPath.Of(nameof(Participant.StandingUntil)), FilterOperator.Gt, FilterValue.Of(DateTimeOffset.UtcNow)));
         if (start is not null)
         {
             // Every handle that starts with the text sorts at or after it and before the text with its last character
@@ -272,8 +336,10 @@ public static class People
 
         var query = new QueryDefinition { Filter = filters.Count == 0 ? null : Filter.All([.. filters]), Page = 1, PageSize = PageSize + 1 }
             .WithSort<Participant>(sort => sort.OrderBy(participant => participant.Handle).ThenBy(participant => participant.Id));
-        var rows = (await Participant.Query(participant => participant.Standing == Standing.Admitted
-            || participant.Standing == Standing.TimedOut || participant.Standing == Standing.Banned, query, ct)).ToList();
+        var rows = (await (standing is { } only
+            ? Participant.Query(participant => participant.Standing == only, query, ct)
+            : Participant.Query(participant => participant.Standing == Standing.Admitted
+                || participant.Standing == Standing.TimedOut || participant.Standing == Standing.Banned, query, ct))).ToList();
         return rows.Count > PageSize
             ? new Page(rows.GetRange(0, PageSize), Cursor.After(rows[PageSize - 1]))
             : new Page(rows, null);

@@ -39,8 +39,10 @@ public sealed record TakeRoleInput(
 /// <summary>The place's people, a section of its settings at <c>/settings/people</c>, for whoever holds
 /// <see cref="Bit.ManageStanding"/> or <see cref="Bit.ManageRoles"/>. Its <c>GET</c> is one bounded page of them
 /// (<see cref="People.Read"/>), one resource both ways (<see cref="PeoplePage"/>), continued from the sealed cursor in
-/// <c>after</c> and narrowed to the handles that start with <c>handle</c>; a cursor this server did not seal is refused
-/// with <c>400</c>, and a reader who may not read them is refused with the gate, <c>401</c> to sign in and <c>403</c>
+/// <c>after</c>, narrowed to the handles that start with <c>handle</c> and to the standing in <c>standing</c>, and, given a
+/// role's word in <c>role</c>, read among those who hold it (<see cref="People.Holding"/>) under a cursor of its own; a
+/// cursor this server did not seal for the page's order, or a standing that is not one, is refused with <c>400</c>, and a
+/// reader who may not read them is refused with the gate, <c>401</c> to sign in and <c>403</c>
 /// otherwise: a page reads it with no one listed, and a JSON request as its problem. Its <c>POST</c>s take the participant's id in <c>participant</c>, as a form or a JSON
 /// object, and send one command: <c>time-out</c> sends <see cref="TimeOut"/> for the duration in <c>for</c>;
 /// <c>ban</c>, <see cref="Ban"/>; <c>lift</c>, <see cref="Lift"/>, after which the participant joins the member role
@@ -83,11 +85,21 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
     /// <summary>The query parameter that carries the start of a handle the page is narrowed to.</summary>
     public const string HandleQuery = "handle";
 
+    /// <summary>The query parameter that narrows the page to a standing: one of <see cref="People.Narrowing"/>.</summary>
+    public const string StandingQuery = "standing";
+
+    /// <summary>The query parameter that narrows the page to those who hold a role, by its word.</summary>
+    public const string RoleQuery = "role";
+
+    /// <summary>The address of the people who hold the role with <paramref name="word"/>, under <paramref name="baseAddress"/>.</summary>
+    public static string Holding(string baseAddress, string word) => baseAddress + Path + "?" + RoleQuery + "=" + Uri.EscapeDataString(word);
+
     [HttpGet(Path)]
     [Tool(Name = "read_people")]
-    [Description("Find the participants admitted here, a page at a time, with what you may change of each, for whoever holds ManageStanding or ManageRoles. Follow with time_out, ban, lift, give_role or take_role where one's entry allows it.")]
+    [Description("Find the participants admitted here, a page at a time, by the start of a handle, by standing or by a role they hold, with what you may change of each, for whoever holds ManageStanding or ManageRoles. Follow with time_out, ban, lift, give_role or take_role where one's entry allows it.")]
     [Needs(Bit.View)]
     public async Task<IActionResult> Get([FromQuery(Name = After), Description(Holds.After)] string? after, [FromQuery(Name = HandleQuery), Description(Holds.HandleStart)] string? handle,
+        [FromQuery(Name = StandingQuery), Description(Holds.PeopleStanding)] string? standing, [FromQuery(Name = RoleQuery), Description(Holds.PeopleRole)] string? role,
         CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
@@ -95,13 +107,31 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
         var place = Here.Of(HttpContext).Around;
         if (ReadGate(place) is { } refused && PostWrites.WantsJson(Request)) return this.Refused(refused);
 
+        if (!People.TryStanding(standing, out var stands))
+            return new Problem(StatusCodes.Status400BadRequest,
+                $"The {StandingQuery} parameter is {Wording.Joined(People.Narrowing.Select(People.Word).ToList(), "or")}, or left out for every standing.") { Title = "Not a standing" }.ToResult();
+        var narrowed = new Narrowed(People.Start(handle), stands, string.IsNullOrEmpty(role) ? null : role);
         People.Cursor? cursor = null;
-        if (after is not null && (cursor = People.Cursor.Open(after, protection)) is null)
+        string? members = null;
+        if (after is not null && (narrowed.Role is null ? (cursor = People.Cursor.Open(after, protection)) is null : (members = People.Holders.Open(after, protection)) is null))
             return new Problem(StatusCodes.Status400BadRequest,
                 $"The {After} parameter is the cursor a page of the people names as its next.") { Title = "Not a page of the people" }.ToResult();
 
-        var page = await Page(place, personId, People.Start(handle), cursor, ct);
+        var page = await Page(place, personId, narrowed, after, cursor, members, ct);
         return ReadGate(place) is { } gate ? new ObjectResult(page) { StatusCode = Answers.Status(HttpContext, gate) } : Ok(page);
+    }
+
+    /// <summary>What a page of the people is narrowed to: the start of a handle, a standing and a role's word, each null for
+    /// none.</summary>
+    private sealed record Narrowed(string? Start, Standing? Standing, string? Role)
+    {
+        public static readonly Narrowed None = new(null, null, null);
+
+        /// <summary>The narrowing as a query carries it.</summary>
+        public string Query() => PeopleController.Query(
+            Start is null ? "" : HandleQuery + "=" + Uri.EscapeDataString(Start),
+            Standing is { } standing ? StandingQuery + "=" + People.Word(standing) : "",
+            Role is null ? "" : RoleQuery + "=" + Uri.EscapeDataString(Role)).TrimStart('?');
     }
 
     [HttpPost(TimeOutPath)]
@@ -187,29 +217,49 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
 
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
-        var page = await Page(place, personId, null, null, ct);
+        var page = await Page(place, personId, Narrowed.None, null, null, null, ct);
         if (page.Gate is null) page = page with { Failure = reason.Text };
         return new ObjectResult(page) { StatusCode = Answers.Status(HttpContext, reason) };
     }
 
-    private async Task<PeoplePage> Page(Capabilities place, string? personId, string? start, People.Cursor? cursor, CancellationToken ct)
+    /// <summary>One page of the people as <paramref name="narrowed"/> says, continued from <paramref name="after"/> as it was
+    /// sent, which opened as <paramref name="cursor"/> in handle order or as Koan's <paramref name="members"/> among a role's
+    /// members: those who hold the role a word names, where it names one, and no one where it names none here.</summary>
+    private async Task<PeoplePage> Page(Capabilities place, string? personId, Narrowed narrowed, string? after, People.Cursor? cursor, string? members,
+        CancellationToken ct)
     {
         var baseAddress = BaseAddress();
-        var narrowed = start is null ? "" : HandleQuery + "=" + Uri.EscapeDataString(start);
-        var here = baseUrl.PathBase + Path + Query(narrowed, cursor is null ? "" : After + "=" + Uri.EscapeDataString(cursor.Seal(protection)));
+        var query = narrowed.Query();
+        var here = baseUrl.PathBase + Path + Query(query, after is null ? "" : After + "=" + Uri.EscapeDataString(after));
         var people = baseAddress + Path;
         var gate = ReadGate(place)?.Word;
-        var read = gate is null ? await People.Read(start, cursor, ct) : new People.Page([], null);
         var lister = await Lister.Load(roles, place, personId, baseAddress, ct);
-        var listed = new List<PeoplePage.Listed>(read.Participants.Count);
-        foreach (var participant in read.Participants) listed.Add(await lister.Row(participant, ct));
+        var held = narrowed.Role is { } word && Roles.KeyOf(word) is { } key ? await lister.RoleOf(key, ct) : null;
+        IReadOnlyList<Participant> read = [];
+        string? next = null;
+        if (gate is null && held is not null)
+        {
+            var holders = await People.Holding(roles, held.Key, narrowed.Start, narrowed.Standing, members, ct);
+            (read, next) = (holders.Participants, holders.Next is { } more ? People.Holders.Seal(more, protection) : null);
+        }
+        else if (gate is null && narrowed.Role is null)
+        {
+            var page = await People.Read(narrowed.Start, cursor, ct, narrowed.Standing);
+            (read, next) = (page.Participants, page.Next?.Seal(protection));
+        }
+
+        var listed = new List<PeoplePage.Listed>(read.Count);
+        foreach (var participant in read) listed.Add(await lister.Row(participant, ct));
         return new PeoplePage(
             TangentSpaceSettingsController.Sections(place, baseAddress, TangentSpaceSettingsController.PeopleSection),
             listed,
-            read.Next is { } next ? people + Query(narrowed, After + "=" + Uri.EscapeDataString(next.Seal(protection))) : null,
-            cursor is not null,
-            people + Query(narrowed, ""),
-            start ?? "",
+            next is null ? null : people + Query(query, After + "=" + Uri.EscapeDataString(next)),
+            after is not null,
+            people + Query(query, ""),
+            narrowed.Start ?? "",
+            narrowed.Standing is { } standing ? People.Word(standing) : "",
+            narrowed.Role ?? "",
+            held?.Name,
             people,
             Forms(place, baseAddress, here),
             place.Can,
@@ -243,17 +293,13 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
             new Form.Field(BackField, Holds.Back, back)
         ]);
         return new PeopleForms(
-            standing ? Changing(TimeOutPath, "time-out in their can", new Form.Field(ForField, "How long the timeout lasts: " + Words(durations) + ".")) : null,
+            standing ? Changing(TimeOutPath, "time-out in their can", new Form.Field(ForField, "How long the timeout lasts: " + Wording.Joined(durations, "or") + ".")) : null,
             standing ? Changing(BanPath, "ban in their can") : null,
             standing ? Changing(LiftPath, "lift in their can") : null,
             roles ? Changing(GivePath, "the role in their give", new Form.Field(RoleField, Holds.GivenRole)) : null,
             roles ? Changing(TakePath, "the role in their take", new Form.Field(RoleField, Holds.TakenRole)) : null,
             durations);
     }
-
-    /// <summary>Words joined as a sentence joins them: "hour, day or week".</summary>
-    private static string Words(IReadOnlyList<string> words)
-        => words.Count < 2 ? string.Concat(words) : string.Join(", ", words.Take(words.Count - 1)) + " or " + words[^1];
 
     /// <summary>The page a form returns to: the path it sent in <c>back</c> where that is under the base URL's, of visible
     /// characters, without scheme or authority — the people, a profile, or the page a person's card was opened on; the
@@ -320,7 +366,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
             var names = new List<(int Position, string Name)>(held.Count);
             foreach (var key in held)
             {
-                var role = await Read(key, ct);
+                var role = await RoleOf(key, ct);
                 names.Add((role?.Position ?? 0, role?.Name ?? key));
             }
 
@@ -339,7 +385,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
         }
 
         /// <summary>A role's row, read once per role; null where the role is gone.</summary>
-        private async Task<Role?> Read(string key, CancellationToken ct)
+        public async Task<Role?> RoleOf(string key, CancellationToken ct)
         {
             if (_read.TryGetValue(key, out var role)) return role;
             role = await _roles.Get(key, ct);

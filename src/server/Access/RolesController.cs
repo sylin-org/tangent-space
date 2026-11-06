@@ -157,7 +157,8 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
                 if (sent is DeleteRole) return NoContent();
                 var reader = await Capabilities.Load(personId, null, null, ct);
                 var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
-                var listed = Listed(await roles.Get(role.Key, ct) ?? role, reader, personId, space, (await roles.Page(pageSize: 1, ct: ct)).TotalCount);
+                var listed = Listed(await roles.Get(role.Key, ct) ?? role, reader, personId, space, (await roles.Page(pageSize: 1, ct: ct)).TotalCount,
+                    BaseAddress());
                 return new ObjectResult(listed)
                 {
                     StatusCode = created ? StatusCodes.Status201Created : StatusCodes.Status200OK,
@@ -202,7 +203,7 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
         var gate = place.Gate(Bit.ManageRoles)?.Word;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
         var read = gate is null ? await roles.Page(page: number, pageSize: PageSize, ct: ct) : null;
-        var listed = read is null ? [] : read.Items.Select(role => Listed(role, place, personId, space, read.TotalCount)).ToList();
+        var listed = read is null ? [] : read.Items.Select(role => Listed(role, place, personId, space, read.TotalCount, baseAddress)).ToList();
         return new RolesPage(
             TangentSpaceSettingsController.Sections(place, baseAddress, TangentSpaceSettingsController.RolesSection),
             listed,
@@ -220,8 +221,9 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
 
     /// <summary>One role as the reader of the roles finds it, the order holding <paramref name="count"/> roles: what they
     /// may do to it by <see cref="People.Manages"/>, nothing to everyone, never a move past either end, and never a
-    /// deletion of a seeded role or of one granting a permission they do not hold.</summary>
-    public static RolesPage.Listed Listed(Role role, Capabilities reader, string? readerId, TangentSpace space, long count)
+    /// deletion of a seeded role or of one granting a permission they do not hold; and where, under
+    /// <paramref name="baseAddress"/>, the people who hold it are listed.</summary>
+    public static RolesPage.Listed Listed(Role role, Capabilities reader, string? readerId, TangentSpace space, long count, string baseAddress)
     {
         var can = new List<string>();
         if (role.Key != Roles.Everyone && reader.Holds(Bit.ManageRoles) && People.Manages(reader, readerId, space, role))
@@ -233,7 +235,7 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
         }
 
         return new RolesPage.Listed(Roles.Word(role.Key), role.Name, Bits.Names(Bits.InTokens(role.Permissions)),
-            Roles.Seeded(role.Key), can);
+            Roles.Seeded(role.Key), can, role.Key.StartsWith(RoleTokens.RolePrefix, StringComparison.Ordinal) ? PeopleController.Holding(baseAddress, Roles.Word(role.Key)) : null);
     }
 
     /// <summary>The forms that shape the roles, under <paramref name="baseAddress"/>.</summary>

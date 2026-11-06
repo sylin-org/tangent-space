@@ -7,8 +7,10 @@ namespace Tangent.Participants;
 /// current, and one bounded page of <see cref="People"/>, in handle order, each with what the reader may do to them;
 /// <see cref="Next"/> is the address of the page after this one, null on the last, and <see cref="First"/> the first
 /// page's, for a page that <see cref="Continued"/> from a cursor. <see cref="Handle"/> is the start of a handle the page
-/// is narrowed to, empty for none, and <see cref="Search"/> where the search form asks, by the <c>handle</c> parameter.
-/// <see cref="Forms"/> are the forms of the verbs, present only where the reader may read the people.
+/// is narrowed to, <see cref="Standing"/> the standing (<c>timed-out</c> or <c>banned</c>) and <see cref="Role"/> the word
+/// of the role whose holders it lists, each empty for none, with <see cref="RoleName"/> the role's name, null where no
+/// role here has that word; <see cref="Search"/> is where the search form asks, by the <c>handle</c> parameter, and where
+/// everyone is listed. <see cref="Forms"/> are the forms of the verbs, present only where the reader may read the people.
 /// <see cref="Can"/> is what the reader holds in the place, and
 /// <see cref="Gate"/> why they may not read the people, null when they may, when the list is empty whoever is here;
 /// <see cref="SignIn"/> is where a visitor signs in, coming back here. <see cref="Day"/> is the UTC day the times are
@@ -21,6 +23,9 @@ public sealed record PeoplePage(
     bool Continued,
     string First,
     string Handle,
+    string Standing,
+    string Role,
+    string? RoleName,
     string Search,
     PeopleForms? Forms,
     IReadOnlyList<string> Can,
@@ -55,11 +60,38 @@ public sealed record PeoplePage(
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
     public Render.Notice? Line => Gate is { } gate ? Render.Notice.Of(gate, null, SignIn) : null;
 
-    /// <summary>The box that finds people by the start of their handle.</summary>
+    /// <summary>Whose holders the page lists, where it lists a role's, with the way back to everyone.</summary>
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Render.Form? Finding => Gate is not null ? null : Render.Form.Reading(Search,
-        new Render.Form.Field(PeopleController.HandleQuery, "", Handle, Render.Form.Input.Search) { Label = "Find by handle", Placeholder = "The start of a handle", Limit = 253 })
-        with { Tool = "people-search read-people", Submit = "Find" };
+    public Render.Sentence? Holding => Gate is not null || RoleName is not { } name ? null
+        : new("Those who hold the " + Render.Sentence.Strong(name) + " role. " + Render.Sentence.Link("Everyone here", Search));
+
+    /// <summary>The box that finds people by the start of their handle, within the standing and the role the page is
+    /// narrowed to.</summary>
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.Form? Finding => Gate is not null ? null : Narrowing(Render.Form.Reading(Search,
+            new Render.Form.Field(PeopleController.HandleQuery, "", Handle, Render.Form.Input.Search) { Label = "Find by handle", Placeholder = "The start of a handle", Limit = 253 })
+        with { Tool = "people-search read-people", Submit = "Find" }, PeopleController.HandleQuery);
+
+    /// <summary>The standings the page narrows to, one press each, the one it stands at pressed, keeping the handle and the
+    /// role it is narrowed to.</summary>
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.Form? Standings => Gate is not null ? null : Narrowing(Render.Form.Reading(Search,
+            new Render.Form.Field(PeopleController.StandingQuery, "", Standing, Render.Form.Input.Switch)
+            {
+                Choices = [new("", "Every standing"), new(Participants.People.Word(Participants.Standing.TimedOut), "Timed out"), new(Participants.People.Word(Participants.Standing.Banned), "Banned")]
+            })
+        with { Tool = "people-standing read-people", Key = "people-standing" }, PeopleController.StandingQuery);
+
+    /// <summary><paramref name="form"/> carrying what the page is narrowed to but its own field, <paramref name="own"/>.</summary>
+    private Render.Form Narrowing(Render.Form form, string own)
+    {
+        foreach (var (name, value) in new[] { (PeopleController.HandleQuery, Handle), (PeopleController.StandingQuery, Standing), (PeopleController.RoleQuery, Role) })
+        {
+            if (name != own && value.Length > 0) form = form.Given(name, value);
+        }
+
+        return form;
+    }
 
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
     public Render.Notice? Refused => Gate is not null ? null : Render.Notice.Of(null, Failure, null);
@@ -70,9 +102,20 @@ public sealed record PeoplePage(
     {
         Subject = person.Person,
         Detail = Render.Sentence.Plain("@" + person.Person.Handle + " · " + person.Person.Kind + " · " + person.Stands + (person.Roles.Count > 0 ? " · " + string.Join(", ", person.Roles) : ""))
-    }).ToList(), Empty: Handle.Length > 0
-        ? "No one here has a handle that starts with " + Render.Sentence.Plain(Handle) + "."
+    }).ToList(), Empty: Role.Length > 0 && RoleName is null
+        ? "No role here has the word " + Render.Sentence.Plain(Role) + "."
+        : Narrowed() is { Count: > 0 } narrowed ? "No one here " + Render.Wording.Joined(narrowed) + "."
         : Continued ? "No one further." : "No one is here yet.");
+
+    /// <summary>What the page is narrowed to, as what no one here does where it lists no one.</summary>
+    private List<string> Narrowed()
+    {
+        var said = new List<string>();
+        if (Standing.Length > 0) said.Add(Standing == Participants.People.Word(Participants.Standing.Banned) ? "is banned" : "is timed out");
+        if (RoleName is { } name) said.Add("holds the " + Render.Sentence.Plain(name) + " role");
+        if (Handle.Length > 0) said.Add("has a handle that starts with " + Render.Sentence.Plain(Handle));
+        return said;
+    }
 
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
     public Render.Pager? Pages => Gate is not null ? null : new("More people", Continued ? new Render.Onward("First page", First) : null,

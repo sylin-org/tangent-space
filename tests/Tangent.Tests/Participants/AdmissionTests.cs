@@ -277,4 +277,53 @@ public sealed class AdmissionTests
         Assert.False(second.Json.TryGetProperty("next", out var none) && none.ValueKind != System.Text.Json.JsonValueKind.Null);
         Assert.Equal(HttpStatusCode.BadRequest, (await Send(mo.Client, HttpMethod.Get, ApplicationsController.Path + "?after=nonsense", json: true)).Status);
     }
+
+    [Fact]
+    public async Task The_applications_that_wait_are_read_alone_newest_first_a_page_at_a_time_and_a_decision_there_comes_back_to_them()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        var start = new DateTimeOffset(2026, 10, 1, 9, 0, 0, TimeSpan.Zero);
+        var count = Applications.PageSize + 2;
+        // The waiting applications, then three newer ones that were declined.
+        for (var i = 0; i < count + 3; i++)
+        {
+            var applicant = Participant.Arrive(Persona.Id($"waiting{i:D2}"), Persona.Did(Persona.Id($"waiting{i:D2}")), $"waiting{i:D2}.example", Admission.Apply, start.AddMinutes(i));
+            applicant.Arrived(i + 1);
+            if (i >= count) applicant.Decline(DateTimeOffset.UtcNow);
+            Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(applicant).Send(Cancellation));
+        }
+
+        using var mo = await SignedIn(tangentSpace, Mo);
+        var path = ApplicationsController.Path;
+        // Every application leads with the declined ones; those that wait, alone, lead with the newest that waits.
+        Assert.Equal("declined", (await Send(mo.Client, HttpMethod.Get, path, json: true)).Json.GetProperty("applications")[0].GetProperty("state").GetString());
+        var first = await Send(mo.Client, HttpMethod.Get, path + "?state=waiting", json: true);
+        var firstRows = first.Json.GetProperty("applications").EnumerateArray().ToList();
+        Assert.Equal(Applications.PageSize, firstRows.Count);
+        Assert.Equal(Persona.Id($"waiting{count - 1:D2}"), firstRows[0].GetProperty("id").GetString());
+        Assert.All(firstRows, row => Assert.Equal("waiting", row.GetProperty("state").GetString()));
+        Assert.Equal("waiting", first.Json.GetProperty("state").GetString());
+        var next = first.Json.GetProperty("next").GetString()!;
+        Assert.StartsWith(ApplicationsController.WaitingAddress(BaseUrl) + "&after=", next);
+
+        var second = await Send(mo.Client, HttpMethod.Get, new Uri(next).PathAndQuery, json: true);
+        Assert.Equal([Persona.Id("waiting01"), Persona.Id("waiting00")],
+            second.Json.GetProperty("applications").EnumerateArray().Select(applicant => applicant.GetProperty("id").GetString()));
+        Assert.True(second.Json.GetProperty("continued").GetBoolean());
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(mo.Client, HttpMethod.Get, path + "?state=declined", json: true)).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(mo.Client, HttpMethod.Get, path + "?state=waiting&after=nonsense", json: true)).Status);
+        var html = WebUtility.HtmlDecode((await Send(mo.Client, HttpMethod.Get, path + "?state=waiting")).Body);
+        Assert.Contains("aria-pressed=\"true\" disabled>Waiting</button>", html);
+
+        // A decision sent from those that wait comes back to them, and the one decided no longer waits there.
+        var newest = Persona.Id($"waiting{count - 1:D2}");
+        var admitted = await Form(mo, path + "?state=waiting", ApplicationsController.AdmitPath, new Dictionary<string, string>
+        {
+            [ApplicationsController.ParticipantField] = newest, [ApplicationsController.StateQuery] = "waiting"
+        });
+        Assert.Equal((HttpStatusCode.SeeOther, ApplicationsController.WaitingAddress(BaseUrl)), (admitted.Status, admitted.Location));
+        Assert.Equal(Persona.Id($"waiting{count - 2:D2}"),
+            (await Send(mo.Client, HttpMethod.Get, path + "?state=waiting", json: true)).Json.GetProperty("applications")[0].GetProperty("id").GetString());
+    }
 }

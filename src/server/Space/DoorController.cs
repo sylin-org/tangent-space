@@ -176,7 +176,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             Shelves = shelves is { Count: > 0 } ? shelves : null,
             Applications = waiting.Count == 0
                 ? null
-                : new Door.Waiting(waiting.Count, waiting.Count > Unread.CountLimit, baseAddress + ApplicationsController.Path),
+                : new Door.Waiting(waiting.Count, waiting.Count > Unread.CountLimit, ApplicationsController.WaitingAddress(baseAddress)),
             Asks = asking.Count == 0 ? null : asking,
             AllTangents = page.Next is null ? null : baseAddress + TangentsController.Route,
             Gate = place.Gate(Bit.Post)?.Word,
@@ -325,7 +325,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             Group(groups.Reports, forYou.AtLeast),
             groups.TimedOut is { } timedOut ? new Door.Decision(Person(people, timedOut.ActorId!), timedOut.At, Until: unread.Reader.StandingUntil) : null,
             groups.Declined is { } declined ? new Door.Decision(Person(people, declined.ActorId!), declined.At) : null,
-            forYou.Waiting > 0 ? new Door.Waiting(forYou.Waiting, forYou.AtLeast, baseAddress + ApplicationsController.Path) : null);
+            forYou.Waiting > 0 ? new Door.Waiting(forYou.Waiting, forYou.AtLeast, ApplicationsController.WaitingAddress(baseAddress)) : null);
     }
 
     /// <summary>The name each role these changes name holds now, by key, in one keyed read; a role since deleted has

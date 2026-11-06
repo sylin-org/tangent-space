@@ -101,6 +101,15 @@ public sealed class RoleSettingsTests
         Assert.Contains("Night watch", Strings(given.Json, "roles"));
         Assert.True((await roles.Bag(Ada, authenticated: true, Cancellation)).InRole("role:night-shift"));
 
+        // Each role but everyone names where its people are listed, and the page links there before it is changed or deleted.
+        page = await Send(leo.Client, HttpMethod.Get, path, json: true);
+        var holders = Row(page.Json, "night-shift").GetProperty("people").GetString()!;
+        Assert.Equal(BaseUrl + PeopleController.Path + "?role=night-shift", holders);
+        Assert.False(Row(page.Json, "everyone").TryGetProperty("people", out var none) && none.ValueKind != JsonValueKind.Null);
+        Assert.Contains($"href=\"{holders}\">Who holds it</a>", WebUtility.HtmlDecode((await Send(leo.Client, HttpMethod.Get, path)).Body));
+        Assert.Equal([Ada], (await Send(leo.Client, HttpMethod.Get, new Uri(holders).PathAndQuery, json: true)).Json.GetProperty("people").EnumerateArray()
+            .Select(row => row.GetProperty("person").GetProperty("id").GetString()));
+
         // A seeded role stays.
         var seeded = await Json(leo, path, RolesController.DeletePath, new { role = "moderator" });
         Assert.Equal((HttpStatusCode.BadRequest, RoleSettings.SeededStays.Text), (seeded.Status, seeded.Json.GetProperty("detail").GetString()));

@@ -44,11 +44,11 @@ public sealed class ApplicationsReachTests
         Assert.Equal((1, false, arrival.Seq, true), (unseen.GetProperty("count").GetInt32(), unseen.GetProperty("atLeast").GetBoolean(),
             unseen.GetProperty("through").GetInt64(), unseen.GetProperty("applications").GetBoolean()));
         var waiting = door.GetProperty("applications");
-        Assert.Equal((1, false, BaseUrl + ApplicationsController.Path),
+        Assert.Equal((1, false, ApplicationsController.WaitingAddress(BaseUrl)),
             (waiting.GetProperty("count").GetInt32(), waiting.GetProperty("atLeast").GetBoolean(), waiting.GetProperty("address").GetString()));
         var doorPage = WebUtility.HtmlDecode((await Send(mo.Client, HttpMethod.Get, "/")).Body);
         Assert.Contains("<p class=\"door-offer-line\">1 application is waiting for a decision.</p>", doorPage);
-        Assert.Contains($"<a class=\"tangent-new\" href=\"{BaseUrl}{ApplicationsController.Path}\">Applications</a>", doorPage);
+        Assert.Contains($"<a class=\"tangent-new\" href=\"{ApplicationsController.WaitingAddress(BaseUrl)}\">Applications</a>", doorPage);
         Assert.Contains("<span class=\"masthead-unseen-count\">1</span>", doorPage);
 
         // The decider's poll, as their stream, carries the application with the standing the masthead's island reads.

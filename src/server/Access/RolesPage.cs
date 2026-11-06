@@ -52,8 +52,8 @@ public sealed record RolesPage(
         .Changing(RolesController.PermissionsField, item => item with { Choices = Grantable, Values = Chosen ?? [] })
         with { Opens = "New role", Open = Chosen is not null, Note = "It stands directly above the member role until you move it.", Key = "role-new" };
 
-    /// <summary>The roles in their order, each with what it grants and what the reader may do to it inline: move it one place,
-    /// change its name and what it grants, opening in place, and delete it, confirmed in the page.</summary>
+    /// <summary>The roles in their order, each with what it grants and what the reader may do to it inline: see who holds it,
+    /// move it one place, change its name and what it grants, opening in place, and delete it, confirmed in the page.</summary>
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
     public Render.EntryList? Listing => Gate is not null ? null : new(Roles.Select(role => new Render.Entry(Render.Sentence.Plain(role.Name), Answers(role))
     {
@@ -66,8 +66,9 @@ public sealed record RolesPage(
 
     private IReadOnlyList<Render.IPart>? Answers(Listed role)
     {
-        if (Forms is not { } forms || role.Can.Count == 0) return null;
         var answers = new List<Render.IPart>();
+        if (role.People is { } people) answers.Add(new Render.LinkButton("Who holds it", people));
+        if (Forms is not { } forms || role.Can.Count == 0) return answers.Count == 0 ? null : answers;
         var change = forms.Change.Given(RolesController.RoleField, role.Word);
         if (role.Can.Contains(Verb.Higher))
             answers.Add(change.Keeping(RolesController.RoleField).Given(RolesController.MoveField, RolesController.Word(RoleMove.Higher)) with { Submit = "Move higher", Quiet = true });
@@ -111,8 +112,9 @@ public sealed record RolesPage(
     }
 
     /// <summary>One role as the reader finds it: its word, which the forms send and never changes, its name, what it grants
-    /// by the bits' names, whether it is one every place has, and what the reader may do to it (<see cref="Verb"/>).</summary>
-    public sealed record Listed(string Word, string Name, IReadOnlyList<string> Permissions, bool Seeded, IReadOnlyList<string> Can);
+    /// by the bits' names, whether it is one every place has, what the reader may do to it (<see cref="Verb"/>), and the
+    /// address of the people who hold it, null for everyone, which no one holds as a member.</summary>
+    public sealed record Listed(string Word, string Name, IReadOnlyList<string> Permissions, bool Seeded, IReadOnlyList<string> Can, string? People);
 
     /// <summary>One permission a role may grant: the bit's name, what it lets the role's members do, and whether the
     /// reader holds it, so may give it to a role or take it away.</summary>

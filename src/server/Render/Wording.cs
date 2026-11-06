@@ -3,7 +3,7 @@ using System.Globalization;
 namespace Tangent.Render;
 
 /// <summary>How the parts say times and counts, the same wherever one stands: a time as a list shows it, an exact time for its
-/// attribute, a count with its noun, and text cut at a word.</summary>
+/// attribute, a count with its noun, words joined as a sentence joins them, and text cut at a word.</summary>
 public static class Wording
 {
     /// <summary>A time as a list shows it: the time of day on the page's day, the month and day in its year, the full date
@@ -33,6 +33,10 @@ public static class Wording
     /// <summary>A count with its noun, "at least" before it where it is a lower bound.</summary>
     public static string Count(int count, bool atLeast, string one, string many)
         => (atLeast ? "at least " : "") + count.ToString(CultureInfo.InvariantCulture) + " " + (count == 1 && !atLeast ? one : many);
+
+    /// <summary>Words joined as a sentence joins them, the last after <paramref name="last"/>: "hour, day or week".</summary>
+    public static string Joined(IReadOnlyList<string> words, string last = "and")
+        => words.Count < 2 ? string.Concat(words) : string.Join(", ", words.Take(words.Count - 1)) + " " + last + " " + words[^1];
 
     /// <summary>Text cut at the last word within <paramref name="limit"/> characters, with an ellipsis after it.</summary>
     public static string Clip(string text, int limit)

@@ -46,6 +46,9 @@ public static class Holds
     public const string WindowAfter = "The sequence a window of this Topic names as its newer.";
     public const string PostsBefore = "The cursor a page of this profile names as its older; left out, the newest.";
     public const string HandleStart = "The start of a handle, to narrow the people to those it begins; left out, everyone.";
+    public const string PeopleStanding = "timed-out or banned, to narrow the people to those who stand so now; left out, every standing.";
+    public const string PeopleRole = "A role's word, as read_roles lists it, to narrow the people to those who hold it; left out, everyone.";
+    public const string ApplicationsState = "waiting, to narrow the applications to those that wait for a decision; left out, the declined ones too.";
 
     public const string Origin = "The origin an open Offer offers as the place's address, as the Offer names it.";
 
@@ -85,6 +88,7 @@ public static class Holds
     public const string ArticleHeader = "Markdown above every article's title, written as a Post is, at most 8000 characters." + Stays;
 
     public const string Applicant = "The id of an applicant this page lists.";
+    public const string DecidedState = "Where a form sent from a page returns: waiting, to the applications that wait; left out, to all of them. A JSON request reads the decision instead.";
     public const string Participant = "The id of a participant the people list.";
     public const string TimeOutFor = "How long the timeout lasts: hour, day or week.";
     public const string Back = "The page a form sent from a page returns to; a JSON request reads the participant as the people list them instead.";

@@ -400,6 +400,81 @@ public sealed class PeopleTests
             .GetProperty("sections").EnumerateArray().Select(section => section.GetProperty("name").GetString()));
     }
 
+    /// <summary>The ids a page of the people lists, in order.</summary>
+    private static IReadOnlyList<string?> Ids(JsonElement page)
+        => page.GetProperty("people").EnumerateArray().Select(row => row.GetProperty("person").GetProperty("id").GetString()).ToList();
+
+    [Fact]
+    public async Task The_people_narrow_to_who_is_timed_out_or_banned_and_to_who_holds_a_role_each_kept_as_the_others_change()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Keepers(tangentSpace);
+        var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
+        using var leo = await SignedIn(tangentSpace, Leo);
+        var path = PeopleController.Path;
+        Assert.IsType<Outcome<Participant>.Done>(await new TimeOut(Mo, Ada, DateTimeOffset.UtcNow.AddHours(1)).Send(Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new Ban(Mo, Bea).Send(Cancellation));
+        // A timeout that has run its course counts as none.
+        var cy = Persona.Id("cy4people");
+        Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(new Participant
+        {
+            Id = cy, Did = Persona.Did(cy), Handle = "cy4people.example", Standing = Standing.TimedOut, StandingUntil = DateTimeOffset.UtcNow.AddMinutes(-5)
+        }).Send(Cancellation));
+
+        // By standing, in handle order: the page says which it stands at, and a word that is no standing is refused.
+        Assert.Equal([Ada], Ids((await Send(leo.Client, HttpMethod.Get, path + "?standing=timed-out", json: true)).Json));
+        var banned = await Send(leo.Client, HttpMethod.Get, path + "?standing=banned", json: true);
+        Assert.Equal([Bea], Ids(banned.Json));
+        Assert.Equal("banned", banned.Json.GetProperty("standing").GetString());
+        Assert.Empty(Ids((await Send(leo.Client, HttpMethod.Get, path + "?standing=banned&handle=ada", json: true)).Json));
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(leo.Client, HttpMethod.Get, path + "?standing=applied", json: true)).Status);
+        var html = WebUtility.HtmlDecode((await Send(leo.Client, HttpMethod.Get, path + "?standing=banned&handle=ada")).Body);
+        Assert.Contains("aria-pressed=\"true\" disabled>Banned</button>", html);
+        Assert.Contains("No one here is banned and has a handle that starts with ada.", html);
+        Assert.Contains("<input type=\"hidden\" name=\"standing\" value=\"banned\" />", html);
+
+        // By role: Koan's members of it, each once, the role named on the page, with its standing kept.
+        var moderators = await Send(leo.Client, HttpMethod.Get, path + "?role=moderator", json: true);
+        Assert.Equal(new[] { Mia, Mo }.Order(StringComparer.Ordinal), Ids(moderators.Json));
+        Assert.Equal(("moderator", "Moderator"), (moderators.Json.GetProperty("role").GetString(), moderators.Json.GetProperty("roleName").GetString()));
+        Assert.Equal([Mia], Ids((await Send(leo.Client, HttpMethod.Get, path + "?role=moderator&handle=mia", json: true)).Json));
+        Assert.Equal([Ada], Ids((await Send(leo.Client, HttpMethod.Get, path + "?role=member&standing=timed-out", json: true)).Json));
+        var named = WebUtility.HtmlDecode((await Send(leo.Client, HttpMethod.Get, path + "?role=moderator")).Body);
+        Assert.Contains("Those who hold the <strong>Moderator</strong> role.", named);
+        Assert.Contains("<input type=\"hidden\" name=\"role\" value=\"moderator\" />", named);
+        var nobody = await Send(leo.Client, HttpMethod.Get, path + "?role=night-shift");
+        Assert.Equal(HttpStatusCode.OK, nobody.Status);
+        Assert.Contains("No role here has the word night-shift.", nobody.Body);
+
+        // A role's members a page at a time, under a cursor of their own: every member once, and a cursor of the other order refused.
+        for (var i = 0; i < People.PageSize + 2; i++)
+        {
+            var id = Persona.Id($"member{i:D2}");
+            Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(new Participant { Id = id, Did = Persona.Did(id), Handle = $"member{i:D2}.example" }).Send(Cancellation));
+            await roles.Add(Roles.Member, id, Cancellation);
+        }
+
+        var first = await Send(leo.Client, HttpMethod.Get, path + "?role=member", json: true);
+        var next = first.Json.GetProperty("next").GetString()!;
+        Assert.Contains("role=member", next);
+        var second = await Send(leo.Client, HttpMethod.Get, new Uri(next).PathAndQuery, json: true);
+        Assert.True(second.Json.GetProperty("continued").GetBoolean());
+        var members = new List<string>();
+        string? after = null;
+        do
+        {
+            var page = await roles.Members(Roles.Member, after, 50, Cancellation);
+            members.AddRange(page.Items.Select(member => member.PersonId));
+            after = page.Next;
+        }
+        while (after is not null);
+
+        Assert.Equal(members, Ids(first.Json).Concat(Ids(second.Json)).ToList());
+        var handleOrder = (await Send(leo.Client, HttpMethod.Get, path, json: true)).Json.GetProperty("next").GetString()!;
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(leo.Client, HttpMethod.Get, path + "?role=member&" + new Uri(handleOrder).Query.TrimStart('?'), json: true)).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(leo.Client, HttpMethod.Get, path + "?" + new Uri(next).Query.Split('&').Single(part => part.StartsWith("after=", StringComparison.Ordinal)), json: true)).Status);
+    }
+
     [Fact]
     public async Task A_profile_offers_whoever_may_change_the_participant_the_same_changes_inline_and_comes_back_to_the_profile()
     {
