@@ -10,9 +10,9 @@ using static Tangent.Posts.Writing;
 
 namespace Tangent.Tangents;
 
-/// <summary>A members-only Tangent whose joining says ask: someone outside it finds it listed and asks to join; whoever
-/// manages it sees the ask on their door and on its people tab and lets them in; the asker's door tells them, they read
-/// it, and they leave it with one action.</summary>
+/// <summary>A members-only Tangent whose joining says ask: someone outside it finds it listed, and at its own address its
+/// card, and asks to join; whoever manages it sees the ask on their door and on its people tab and lets them in; the asker's
+/// door tells them, they read it, and they leave it with one action.</summary>
 public sealed class MembersOnlyTests
 {
     private static readonly string Leo = Persona.Id("leo4members");
@@ -38,11 +38,22 @@ public sealed class MembersOnlyTests
             Assert.False((await Send(visitor, HttpMethod.Get, "/", json: true)).Json.TryGetProperty("allTangents", out _));
         var listed = Listed((await Send(ada.Client, HttpMethod.Get, "/t", json: true)).Json, Studio);
         Assert.Equal("ask", listed.GetProperty("joining").GetString());
-        Assert.Equal(HttpStatusCode.NotFound, (await Send(ada.Client, HttpMethod.Get, "/t/" + Studio)).Status);
 
-        // She asks; Leo's door and the people tab show her asking.
-        var asked = await Json(ada, "/t", new Uri(listed.GetProperty("join").GetProperty("action").GetString()!).AbsolutePath, new { });
+        // A member's link to the studio opens its card for her, the same card, with nothing it holds; under it, nothing.
+        var card = await Send(ada.Client, HttpMethod.Get, "/t/" + Studio, json: true);
+        Assert.Equal(HttpStatusCode.OK, card.Status);
+        Assert.Equal(listed.GetRawText(), card.Json.GetProperty("tangent").GetRawText());
+        Assert.False(card.Json.TryGetProperty("topics", out _));
+        var drawn = await Send(ada.Client, HttpMethod.Get, "/t/" + Studio);
+        Assert.Contains("Ask to join", drawn.Body);
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(ada.Client, HttpMethod.Get, "/t/" + Studio + "/settings")).Status);
+
+        // She asks from it; it says her ask waits, with the way to withdraw it, and Leo's door and the people tab show her asking.
+        var asked = await Json(ada, "/t/" + Studio, new Uri(card.Json.GetProperty("tangent").GetProperty("join").GetProperty("action").GetString()!).AbsolutePath, new { });
         Assert.Equal((HttpStatusCode.OK, "asked"), (asked.Status, asked.Json.GetProperty("state").GetString()));
+        var waiting = (await Send(ada.Client, HttpMethod.Get, "/t/" + Studio, json: true)).Json.GetProperty("tangent");
+        Assert.Equal("asked", waiting.GetProperty("joining").GetString());
+        Assert.EndsWith("/t/" + Studio + "/" + JoinController.LeaveSegment, waiting.GetProperty("withdraw").GetProperty("action").GetString());
         Assert.Equal(1, (await Send(leo.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("asks")[0].GetProperty("count").GetInt32());
         var page = await Send(leo.Client, HttpMethod.Get, people, json: true);
         Assert.Equal([Ada], page.Json.GetProperty("asking").EnumerateArray().Select(row => row.GetProperty("person").GetProperty("id").GetString()));
@@ -60,6 +71,10 @@ public sealed class MembersOnlyTests
         // She leaves with the page's form, and the studio is closed to her again.
         var left = await Json(ada, "/t/" + Studio, new Uri(studio.Json.GetProperty("leave").GetProperty("action").GetString()!).AbsolutePath, new { });
         Assert.Equal((HttpStatusCode.OK, "out"), (left.Status, left.Json.GetProperty("state").GetString()));
+        Assert.Equal("ask", (await Send(ada.Client, HttpMethod.Get, "/t/" + Studio, json: true)).Json.GetProperty("tangent").GetProperty("joining").GetString());
+
+        // Closed, the studio is absent to her at its address.
+        Assert.Equal(HttpStatusCode.OK, (await Json(leo, people, "/t/" + Studio + "/settings/joining", new { joining = "closed" })).Status);
         Assert.Equal(HttpStatusCode.NotFound, (await Send(ada.Client, HttpMethod.Get, "/t/" + Studio)).Status);
 
         // Opened to anyone, then Leo keeps her out: she cannot join again, and the studio is no longer listed to her.
@@ -67,6 +82,7 @@ public sealed class MembersOnlyTests
         var keptOut = await Json(leo, people, people, new { person = Ada, choice = "out" });
         Assert.Equal("kept-out", keptOut.Json.GetProperty("people").EnumerateArray().Single().GetProperty("state").GetString());
         Assert.Equal(HttpStatusCode.NotFound, (await Json(ada, "/t", "/t/" + Studio + "/join", new { })).Status);
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(ada.Client, HttpMethod.Get, "/t/" + Studio)).Status);
         Assert.DoesNotContain(Studio, (await Send(ada.Client, HttpMethod.Get, "/t", json: true)).Json.GetProperty("tangents").EnumerateArray()
             .Select(tangent => tangent.GetProperty("slug").GetString()));
 

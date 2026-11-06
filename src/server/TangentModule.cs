@@ -79,6 +79,7 @@ public sealed class TangentModule : KoanModule
             .Add<Participants.SignIn>(signIn => "Sign in · " + signIn.Name, frame: Participants.SignIn.Frame)
             .Add<Tangents.TangentPage>(page => page.Name + " · " + page.Place, Tangents.TangentPage.Version, Tangents.TangentPage.Frame, Tangents.TangentPage.Card)
             .Add<Tangents.TangentsPage>(page => "Tangents · " + page.Place, frame: Tangents.TangentsPage.Frame)
+            .Add<Tangents.TangentOutside>(page => page.Tangent.Name + " · " + page.Place, frame: Tangents.TangentOutside.Frame)
             .Add<Tangents.NewTangentPage>(page => "New Tangent · " + page.Place, frame: Tangents.NewTangentPage.Frame)
             .Add<Tangents.TangentSettingsPage>(page => "Settings · " + page.Name, frame: Tangents.TangentSettingsPage.Frame)
             .Add<Tangents.TangentClosed>(page => "Saved · " + page.Name, frame: Tangents.TangentClosed.Frame)

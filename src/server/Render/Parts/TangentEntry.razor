@@ -3,12 +3,12 @@
    many of its Posts are new to the reader, and the mark of the Tangent the page is in. As a tile: its image, where it
    wears one, or its first letter in display type on its tone's tint, over an edge in the tone. As a card, a members-only
    Tangent the reader is outside of: what it is about, and the way in — join, ask, or where their ask stands — with the
-   way to withdraw a waiting ask. *@
+   way to withdraw a waiting ask; such a Tangent is drawn as its card where it is given no shape. *@
 @if (As == Shape.Tile)
 {
     @Tile
 }
-else if (As == Shape.Card)
+else if (As == Shape.Card || As == Shape.Default && Model.Joining is not null)
 {
     <div class="door-offer card tangent">
         <p class="door-offer-line">

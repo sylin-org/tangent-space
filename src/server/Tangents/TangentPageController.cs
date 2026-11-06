@@ -19,7 +19,9 @@ namespace Tangent.Tangents;
 /// and in an articles Tangent every month it narrows to and the <see cref="AuthorLimit"/> authors who started the most,
 /// from the counts its row keeps, left to the formatter as HTML, a fragment or JSON. It needs
 /// <see cref="Bit.View"/>, which the Doorway judges before anything else (<see cref="Access.Doorway"/>), so a reader without it
-/// receives its gate, and one for whom the Tangent is absent what an address with no Tangent receives. Every read is bounded
+/// receives its gate, and one for whom the Tangent is absent what an address with no Tangent receives; a participant outside a
+/// members-only Tangent they may join or ask to join reads its card instead, and nothing of what it holds
+/// (<see cref="TangentOutside"/>). Every read is bounded
 /// and keyed: the Tangent and capability's rows, which the Doorway read, one read of Topics, their latest replies by Id, the people on the page and those the rail names, the reader's place mark and their marks on
 /// those Topics, which say what is new to them (<see cref="Unread"/>), the first <see cref="SwitcherLimit"/>
 /// Tangents the reader may view for the switcher (<see cref="ViewableTangents"/>), and, for a signed-in reader, what they
@@ -49,8 +51,8 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
     [HttpGet("/t/{tangent}")]
     [HttpHead("/t/{tangent}")]
     [Tool(Name = "read_tangent")]
-    [Needs(Bit.View)]
-    [Description("Read a Tangent: its Topics a page at a time, narrowed to a month or an author where you name one, what is new to you marked, and a Topic whose root was removed saying who removed it; an articles Tangent lists every month it narrows to and the authors who started the most, with how many each, and narrows to any author by their id. Follow with read_topic on a Topic's slug, or start_topic to begin one.")]
+    [Needs(Bit.View, Outside = true)]
+    [Description("Read a Tangent: its Topics a page at a time, narrowed to a month or an author where you name one, what is new to you marked, and a Topic whose root was removed saying who removed it; an articles Tangent lists every month it narrows to and the authors who started the most, with how many each, and narrows to any author by their id. Follow with read_topic on a Topic's slug, or start_topic to begin one. A members-only Tangent you may join or ask to join answers its card instead, with joining; follow with join_tangent.")]
     public async Task<IActionResult> Get([Description(Holds.Tangent)] string tangent, [FromQuery(Name = After), Description(Holds.After)] string? after,
         [FromQuery(Name = Month), Description(Holds.Month)] string? month, [FromQuery(Name = Author), Description(Holds.Author)] string? author,
         CancellationToken ct)
@@ -59,6 +61,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
         var personId = here.PersonId;
         var row = here.Tangent!;
         var capabilities = here.Capabilities;
+        if (here.Outside is { } outside) return await Outside(here, row, outside, ct);
 
         TopicList.Cursor? cursor = null;
         if (after is not null && (cursor = TopicList.Cursor.Parse(after)) is null)
@@ -149,6 +152,17 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
             .Select(author => new Render.TopicViews.Choice(author.Key, Person(people, author.Key).Name, author.Value, TangentPage.ListAddress(address, null, author.Key)))
             .OrderByDescending(author => author.Count).ThenBy(author => author.Name, StringComparer.CurrentCulture).ThenBy(author => author.Key, StringComparer.Ordinal)
             .ToList();
+
+    /// <summary>The members-only Tangent as a participant outside it reads it: its card, with the way in, in the place's
+    /// frame. Never stored, since it names its reader.</summary>
+    private async Task<IActionResult> Outside(Here here, Tangent row, Outsider outside, CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-cache, no-store";
+        var baseAddress = BaseAddress();
+        var back = baseUrl.PathBase + "/t/" + row.Id;
+        return Ok(new TangentOutside(TangentsController.Outside(row, baseAddress, outside.Asked), here.Rows.Space.Name, baseAddress + "/",
+            await PostWrites.Reader(here.PersonId, here.Capabilities, baseAddress, back, ct)));
+    }
 
     /// <summary>One Topic as a list shows it, what is new in it marked for a signed-in reader by the one rule
     /// (<see cref="Unread.InTopic"/>), and none for a visitor, and who removed its root, where someone did.</summary>

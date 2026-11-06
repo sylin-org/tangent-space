@@ -11,11 +11,17 @@ namespace Tangent.Access;
 
 /// <summary>What a route needs of its reader: one bit, on what its address names. A route that declares it is judged by
 /// <see cref="Doorway.Judge"/> once, before anything is bound, and its action reads what the judgement found (<see cref="Here.Of"/>).
-/// <see cref="Participant"/> asks a signed-in participant besides, as a report does.</summary>
+/// <see cref="Participant"/> asks a signed-in participant besides, as a report does; <see cref="Outside"/> lets in someone outside a
+/// members-only Tangent they may join or ask to join, as the Tangent's own address does.</summary>
 public sealed class NeedsAttribute(Bit bit) : AccessAttribute<Bit>(bit)
 {
     /// <summary>Whether only a signed-in participant may: a visitor is told to sign in whatever the bit says.</summary>
     public bool Participant { get; init; }
+
+    /// <summary>Whether a participant who does not read the Tangent the address names, and may join or ask to join it
+    /// (<see cref="Tangents.Inside.Outside"/>), reaches the action, which answers them with its card (<see cref="Here.Outside"/>);
+    /// every other bit is still judged, and absent to them.</summary>
+    public bool Outside { get; init; }
 }
 
 /// <summary>An address as it stands for its reader: its Tangent, the rows what the reader holds there is computed from, and the Topic's root
@@ -23,6 +29,10 @@ public sealed class NeedsAttribute(Bit bit) : AccessAttribute<Bit>(bit)
 /// the page.</summary>
 public sealed record Here(Tangents.Tangent? Tangent, Capabilities.Rows Rows, Post? Root, Post? Post)
 {
+    /// <summary>Where the reader stands outside the Tangent, at a route that answers them (<see cref="NeedsAttribute.Outside"/>);
+    /// null for everyone who reads it, and at every other route.</summary>
+    public Tangents.Outsider? Outside { get; init; }
+
     /// <summary>What the reader holds on what the address names: the Post, a reply judged by its Topic's root; the Topic, by its root;
     /// otherwise the Tangent, or the place.</summary>
     public Capabilities Capabilities => Rows.For(Post ?? Root, Post is { ParentId: not null } ? Root : null);
@@ -100,11 +110,16 @@ public sealed class Doorway : IAuthorizationProvider
     }
 
     /// <summary>The address as it stands for <paramref name="personId"/> (<see cref="Here.Find"/>), and then each bit
-    /// <paramref name="needs"/> names, on what the address names; <see cref="Bit.View"/> is the address's own, which finding it asked.</summary>
+    /// <paramref name="needs"/> names, on what the address names; <see cref="Bit.View"/> is the address's own, which finding it asked.
+    /// A Tangent absent to a participant outside it who may join or ask to join is found where <paramref name="needs"/> lets them in
+    /// (<see cref="NeedsAttribute.Outside"/>).</summary>
     public static async Task<(Here Here, Reason? Refusal)> Judge(string? personId, IReadOnlyList<NeedsAttribute> needs, string? tangent, string? topic,
         string? post, CancellationToken ct)
     {
         var (here, refusal) = await Here.Find(personId, tangent, topic, post, ct);
+        if (refusal == Capabilities.Absent && personId is not null && topic is null && here.Tangent is { } row && needs.Any(need => need.Outside)
+            && await Tangents.Inside.Outside(row, personId, ct) is { } outside)
+            (here, refusal) = (here with { Outside = outside }, null);
         if (refusal is not null) return (here, refusal);
         if (personId is null && needs.Any(need => need.Participant)) return (here, Capabilities.SignIn);
         var on = here.Capabilities;
