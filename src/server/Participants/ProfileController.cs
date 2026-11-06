@@ -156,13 +156,13 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
             TangentPage.EditedOf(post, people));
     }
 
-    /// <summary>The signed-in reader as the account menu shows them, signing out back to this profile, with how many
-    /// things are for them and new.</summary>
+    /// <summary>The signed-in reader as the account menu shows them, signing out back to this profile, with the place's
+    /// settings where they may change them and how many things are for them and new.</summary>
     private Who Reader(Participant reader, Capabilities place, string back, Events.Unread.Badge? forYou)
     {
-        var (name, handle) = (reader.ShownName(), reader.ShownHandle());
-        return new Who(reader.Id, name, handle, Roles.Word(place.RoleIds), reader.Profile.Avatar,
-            BaseAddress() + AuthConstants.Routes.Logout + "?return=" + back, ForYou: forYou);
+        var baseAddress = BaseAddress();
+        return Who.Of(Render.Person.Of(reader, baseAddress), Roles.Word(place.RoleIds), baseAddress + AuthConstants.Routes.Logout + "?return=" + back,
+            TangentSpaceSettingsController.Entry(place, baseAddress), forYou);
     }
 
 

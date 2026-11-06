@@ -33,7 +33,7 @@ public sealed record Door(
     IReadOnlyList<Door.Shown> Featured,
     IReadOnlyList<Door.Shown> Alive,
     string? SignIn,
-    Door.Reader? Who,
+    Who? Who,
     DateOnly Day,
     Door.Position Poll,
     string? NewTangent = null)
@@ -42,11 +42,7 @@ public sealed record Door(
 
     /// <summary>The frame the shell draws around the door: the place, which the masthead names and nothing repeats, no path
     /// below it, and who reads, or where a visitor signs in.</summary>
-    public static Frame Frame(Door door)
-    {
-        var who = door.Who is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut, reader.Settings, reader.ForYou) : null;
-        return new(door.Name, door.Address, [], who, door.SignIn, door.Feeds);
-    }
+    public static Frame Frame(Door door) => new(door.Name, door.Address, [], door.Who, door.SignIn, door.Feeds);
 
     /// <summary>What a link to the door previews, where a visitor may read the place, which is where it has
     /// <see cref="Feeds"/>: the place's name, its description and its address, all read for the page.</summary>
@@ -71,7 +67,8 @@ public sealed record Door(
     /// <summary>The place's articles feeds: present only where a visitor may read the place.</summary>
     public IReadOnlyList<Render.FeedLink>? Feeds { get; init; }
 
-    /// <summary>Where every Tangent the reader may view is listed, present where more follow those the door lists.</summary>
+    /// <summary>Where every Tangent the reader may view is listed, with the members-only ones they may join or ask to join:
+    /// present where more follow those the door lists, and for every reader who may post in the place.</summary>
     public string? AllTangents { get; init; }
 
     /// <summary>Why the reader may not write in the place — <c>sign-in</c>, <c>apply</c>, <c>declined</c>,
@@ -206,8 +203,13 @@ public sealed record Door(
     public sealed record RoleChange(Person Who, DateTimeOffset At, string Role, bool Given, string Name);
 
     /// <summary>How many of a kind are new, whether that is a lower bound because a read the door made was full, and
-    /// the newest of them, a few at most.</summary>
-    public sealed record Group(int Count, bool AtLeast, IReadOnlyList<NewPost> Posts);
+    /// every one of them the door read, newest first, at most <see cref="Events.Unread.CountLimit"/>. The page draws the
+    /// first <see cref="Drawn"/> and the rest behind one line that says how many more.</summary>
+    public sealed record Group(int Count, bool AtLeast, IReadOnlyList<NewPost> Posts)
+    {
+        /// <summary>The most of a group the door draws before its line of the rest.</summary>
+        public const int Drawn = 5;
+    }
 
     /// <summary>One new Post: who wrote it, reported with it, or edited or removed it, the Topic and Tangent it is in, its
     /// address, its first words, when, and who other than its author last edited it, where someone did.</summary>
@@ -244,13 +246,6 @@ public sealed record Door(
     /// <summary>Who is around: how many wrote within the window the door read, whether that is a lower bound, and the
     /// most recent of them.</summary>
     public sealed record Crowd(int Count, bool AtLeast, IReadOnlyList<Person> People) : IPart;
-
-    /// <summary>The signed-in reader: their id, the name to show, their handle, the highest role they hold where they
-    /// hold one, their avatar, where they sign out, coming back to the door, and the place's settings, for one who holds
-    /// <c>ManageSpace</c>, <c>ManageStanding</c> or <c>ManageRoles</c>, and how many things are for them and new, which
-    /// this door lists.</summary>
-    public sealed record Reader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut, string? Settings = null,
-        Events.Unread.Badge? ForYou = null);
 
     /// <summary>Where the door stands in the log and where to ask again: the sequence it read through for this reader, and the
     /// poll's address past it.</summary>

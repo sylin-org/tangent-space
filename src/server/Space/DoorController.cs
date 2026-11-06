@@ -32,7 +32,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
 {
     /// <summary>The most Tangents the door lists: the first page of those the reader may view
     /// (<see cref="ViewableTangents"/>), with the moderators' Tangent after them for whoever may view it, and, where more
-    /// follow, a link to all of them (<see cref="TangentsController"/>).</summary>
+    /// follow or the reader may post and so join a members-only one, a link to all of them (<see cref="TangentsController"/>).</summary>
     public const int TangentLimit = TangentPageController.SwitcherLimit;
 
     public const int FeaturedLimit = 3;
@@ -45,9 +45,6 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
     public const int ShelfLimit = 6;
 
     public const int ShelfTopicLimit = 3;
-
-    /// <summary>The most new Posts a group shows; its count says how many there are.</summary>
-    public const int ItemLimit = 5;
 
     [HttpGet("/")]
     [HttpHead("/")]
@@ -100,7 +97,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
                 .Concat(fresh.Where(e => Article(e, posts)).Select(e => e.ActorId))
                 .Concat(writers.Take(AroundLimit))
                 .Concat(featured.Concat(alive).SelectMany(root => root.RecentAuthorIds.Take(Post.RecentAuthorLimit).Append(root.AuthorId)))
-                .Concat((forYouGroups?.Shown() ?? []).Concat(fresh.Where(e => Article(e, posts)).Take(ItemLimit)).Select(e => posts[e.PostId!])
+                .Concat((forYouGroups?.Shown() ?? []).Concat(fresh.Where(e => Article(e, posts)).Take(Unread.CountLimit)).Select(e => posts[e.PostId!])
                     .Concat(featured).Concat(alive).SelectMany(post => post.MentionedIds.Append(post.EditedBy))),
             ct);
 
@@ -156,8 +153,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             featured.Select(root => Shown(root, tangents, people, freshIn)).ToList(),
             alive.Select(root => Shown(root, tangents, people, freshIn)).ToList(),
             reader is null ? baseAddress + SignInController.Path + "?return=" + back : null,
-            reader is null ? null : new Door.Reader(reader.Id, Person(people, reader.Id).Name, Person(people, reader.Id).Handle,
-                Roles.Word(place.RoleIds), reader.Profile.Avatar, baseAddress + AuthConstants.Routes.Logout + "?return=" + back,
+            reader is null ? null : Who.Of(Person(people, reader.Id), Roles.Word(place.RoleIds), baseAddress + AuthConstants.Routes.Logout + "?return=" + back,
                 TangentSpaceSettingsController.Entry(place, baseAddress),
                 forYou is null ? null : new Unread.Badge(forYou.Count, forYou.AtLeast, door, forYou.Through, forYou.Applications)),
             DateOnly.FromDateTime(DateTime.UtcNow),
@@ -178,7 +174,8 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
                 ? null
                 : new Door.Waiting(waiting.Count, waiting.Count > Unread.CountLimit, ApplicationsController.WaitingAddress(baseAddress)),
             Asks = asking.Count == 0 ? null : asking,
-            AllTangents = page.Next is null ? null : baseAddress + TangentsController.Route,
+            // The list of every Tangent is also where whoever may post finds the members-only ones they may join or ask to join.
+            AllTangents = page.Next is not null || (reader is not null && place.Holds(Bit.Post)) ? baseAddress + TangentsController.Route : null,
             Gate = place.Gate(Bit.Post)?.Word,
             Until = reader is not null && reader.StandingAt(now) == Standing.TimedOut ? reader.StandingUntil : null
         });
@@ -261,9 +258,8 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
         public IEnumerable<string?> People() => Replies.Concat(Taken).Concat(Mentions).Concat(Reports).Concat(Edited).Concat(Removed).Concat(Roles).Concat(Let)
             .Concat(new[] { Admitted, Lifted, TimedOut, Declined }.OfType<Event>()).Select(e => e.ActorId);
 
-        /// <summary>The rows the door shows with a Post's first words.</summary>
-        public IEnumerable<Event> Shown() => Replies.Take(ItemLimit).Concat(Taken.Take(ItemLimit)).Concat(Mentions.Take(ItemLimit))
-            .Concat(Reports.Take(ItemLimit)).Concat(Edited.Take(ItemLimit));
+        /// <summary>The rows the door carries with a Post's first words.</summary>
+        public IEnumerable<Event> Shown() => new[] { Replies, Taken, Mentions, Reports, Edited }.SelectMany(rows => rows.Take(Unread.CountLimit));
     }
 
     /// <summary>What is for the reader, by what it is: a reply to them, a Topic taken on a tangent from their Post, a
@@ -348,10 +344,11 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
     private static Door.Position Resume(string baseAddress, long at)
         => new(at, baseAddress + EventsController.Path + "?" + EventsController.Since + "=" + at.ToString(CultureInfo.InvariantCulture));
 
-    /// <summary>One group of new Posts: how many, whether that is a lower bound, and the newest few.</summary>
+    /// <summary>One group of new Posts: how many, whether that is a lower bound, and each of them, newest first, at most
+    /// <see cref="Unread.CountLimit"/>.</summary>
     private Door.Group Group(IReadOnlyList<Event> events, bool atLeast, IReadOnlyDictionary<string, Post> posts,
         IReadOnlyDictionary<string, Tangents.Tangent> tangents, IReadOnlyDictionary<string, Render.Person> people)
-        => new(events.Count, atLeast, events.Take(ItemLimit).Select(e =>
+        => new(events.Count, atLeast, events.Take(Unread.CountLimit).Select(e =>
         {
             var post = posts[e.PostId!];
             var root = posts[e.TopicId!];

@@ -34,7 +34,9 @@ public sealed class TangentSpaceSettingsTests
         // The account menu offers the settings on every page, and the door names them for an agent.
         Assert.Contains($"<a class=\"account-item\" href=\"{settings}\">", (await Send(leo.Client, HttpMethod.Get, "/")).Body);
         Assert.Contains($"<a class=\"account-item\" href=\"{settings}\">", (await Send(leo.Client, HttpMethod.Get, "/t/workshop")).Body);
+        Assert.Contains($"<a class=\"account-item\" href=\"{settings}\">", (await Send(leo.Client, HttpMethod.Get, "/p/" + Persona.Handle(Leo))).Body);
         Assert.Equal(settings, (await Send(leo.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("who").GetProperty("settings").GetString());
+        Assert.Equal(settings, (await Send(leo.Client, HttpMethod.Get, "/p/" + Persona.Handle(Leo), json: true)).Json.GetProperty("who").GetProperty("settings").GetString());
 
         var page = await Send(leo.Client, HttpMethod.Get, TangentSpaceSettingsController.Path, json: true);
         Assert.Equal(HttpStatusCode.OK, page.Status);

@@ -74,22 +74,21 @@ public sealed class FirstRunController(KoanWebBaseUrl baseUrl, IOptions<TangentS
     /// <summary>What first run answers anyone else once the place is established: a missing resource's answer.</summary>
     private IActionResult NotHere() => this.Refused(Access.Capabilities.Absent);
 
-    /// <summary>Whoever is signed in, as the account menu shows them: their participant's display name, else their
-    /// handle; the highest seeded role they hold; Koan's sign-out under <paramref name="address"/>, coming back here; and,
-    /// once the place is established, the place's settings where they may change them and how many
-    /// things are for them and new. Null for a visitor.</summary>
-    private static async Task<FirstRunReader?> ReaderOf(ClaimsPrincipal user, string address, PathString pathBase, CancellationToken ct)
+    /// <summary>Whoever is signed in, as the account menu shows them: their participant, or, before they are one, the
+    /// handle their sign-in verified, else its DID; the highest seeded role they hold; Koan's sign-out under
+    /// <paramref name="address"/>, coming back here; and, once the place is established, their profile, the place's
+    /// settings where they may change them and how many things are for them and new. Null for a visitor.</summary>
+    private static async Task<Render.Who?> ReaderOf(ClaimsPrincipal user, string address, PathString pathBase, CancellationToken ct)
     {
         if (PersonId(user) is not { } personId) return null;
         var participant = await Participant.Get(personId, ct);
-        var handle = participant?.ShownHandle() is { Length: > 0 } stored ? stored
-            : Claimed(user, AtprotoClaimTypes.Handle) is { Length: > 0 } claimed ? claimed : Claimed(user, AtprotoClaimTypes.Did);
-        var name = participant?.ShownName() ?? handle;
+        var handle = Claimed(user, AtprotoClaimTypes.Handle) is { Length: > 0 } claimed ? claimed : Claimed(user, AtprotoClaimTypes.Did);
         var place = participant is null ? null : await Capabilities.Load(personId, null, null, ct);
         var role = place is null ? null : Roles.Word(place.RoleIds);
         var signOut = address + AuthConstants.Routes.Logout + "?return=" + Uri.EscapeDataString(pathBase + Path);
         var established = place is not null && await TangentSpace.Get(TangentSpace.SingleRow, ct) is not null;
-        return new FirstRunReader(personId, name, handle, role, participant?.Profile.Avatar, signOut,
+        var person = participant is null ? new Render.Person(personId, handle, handle, "person", null) : Render.Person.Of(participant, address);
+        return Render.Who.Of(established ? person : person with { Profile = null }, role, signOut,
             established ? TangentSpaceSettingsController.Entry(place!, address) : null,
             established ? await Events.Unread.BadgeFor(personId, address, ct) : null);
     }

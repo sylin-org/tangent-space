@@ -3,8 +3,9 @@
    ban, who timed them out and until when, who declined their application, who let them into a Tangent or declined their
    ask, and who gave them a role or took one, where someone did; their Posts someone else edited or removed, replies to
    them, mentions of them, the Topics taken on a tangent from their Posts, the reports for whoever may view the moderators'
-   Tangent, the new articles and what is new in each Tangent, with the form that says all of it seen. With nothing new, that
-   in one sentence. A count the door could not finish reads "at least". *@
+   Tangent, the new articles and what is new in each Tangent, with the form that says all of it seen. A group draws its first
+   five and opens the rest in place from one line. With nothing new, that in one sentence. A count the door could not
+   finish reads "at least". *@
 @if (Model.Quiet)
 {
     <div class="topic-empty">
@@ -77,19 +78,29 @@ else
     [Parameter, EditorRequired] public Space.Door.Since Model { get; set; } = default!;
 
     /// <summary>One group of new Posts under its heading, with how many, each a row, its verb said where someone did something
-    /// to the reader's own.</summary>
+    /// to the reader's own: the first few, then the rest behind one line that says how many more, which opens them in
+    /// place.</summary>
     private RenderFragment Group(string title, Space.Door.Group? group, string? did = null) => @<text>
         @if (group is { Count: > 0 })
         {
             <h3 class="rail-heading rail-heading-spaced">@title · @((group.AtLeast ? "at least " : "") + group.Count.ToString(CultureInfo.InvariantCulture))</h3>
-            <ul class="topic-rows list">
-                @foreach (var post in group.Posts)
-                {
-                    <li @key="post.PostId"><Draw Part="@(did is null ? post : post with { Did = did })" /></li>
-                }
-            </ul>
+            @Rows(group.Posts.Take(Space.Door.Group.Drawn), did)
+            @if (group.Posts.Count > Space.Door.Group.Drawn)
+            {
+                <details class="door-news-more">
+                    <summary>@("and " + (group.Posts.Count - Space.Door.Group.Drawn).ToString(CultureInfo.InvariantCulture) + " more")</summary>
+                    @Rows(group.Posts.Skip(Space.Door.Group.Drawn), did)
+                </details>
+            }
         }
     </text>;
+
+    private RenderFragment Rows(IEnumerable<Space.Door.NewPost> posts, string? did) => @<ul class="topic-rows list">
+        @foreach (var post in posts)
+        {
+            <li @key="post.PostId"><Draw Part="@(did is null ? post : post with { Did = did })" /></li>
+        }
+    </ul>;
 
     /// <summary>What is new in one Tangent: its Topics, or its articles in a Tangent of articles, and its replies.</summary>
     private static string InTangent(Space.Door.InTangent tangent)

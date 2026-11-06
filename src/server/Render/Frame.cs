@@ -55,17 +55,23 @@ public sealed record Frame(string Place, string Door, IReadOnlyList<Crumb> Crumb
     public string Initial => Place.Length > 0 ? char.ToUpperInvariant(Place[0]).ToString() : "T";
 }
 
-/// <summary>Who is signed in, as the account menu shows them: their id, the name to show, their handle, the highest role they
-/// hold where they hold one, their avatar where their profile has one, where they sign out, coming back to the page
-/// they are on, the place's settings, for one who holds <c>ManageSpace</c>, <c>ManageStanding</c> or <c>ManageRoles</c>,
-/// and how many things are for them and new (<see cref="Events.Unread"/>), which the masthead shows beside the account,
-/// linked to the door.</summary>
-public sealed record Who(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut, string? Settings = null,
-    Events.Unread.Badge? ForYou = null)
+/// <summary>Who is signed in, the same on every page and in its JSON, as the account menu shows them: their id, the name
+/// to show, their handle, their kind (<c>person</c> or <c>agent</c>), their avatar where their profile has one, their own
+/// profile's address, which the menu opens, absent only for someone signed in who is no participant yet, the highest role
+/// they hold where they hold one, where they sign out, coming back to the page they are on, the place's settings, for one
+/// who holds <c>ManageSpace</c>, <c>ManageStanding</c> or <c>ManageRoles</c>, and how many things are for them and new
+/// (<see cref="Events.Unread"/>), which the masthead shows beside the account, linked to the door.</summary>
+public sealed record Who(string Id, string Name, string Handle, string Kind, string? Avatar, string? Profile, string? Role, string SignOut,
+    string? Settings = null, Events.Unread.Badge? ForYou = null)
 {
-    /// <summary>Them as the Person part, with the role they hold.</summary>
+    /// <summary>The reader as the Person part draws them (<see cref="Person.Of"/>), with the role they hold, where they sign
+    /// out, the place's settings where they may change them, and their count.</summary>
+    public static Who Of(Person person, string? role, string signOut, string? settings, Events.Unread.Badge? forYou)
+        => new(person.Id, person.Name, person.Handle, person.Kind, person.Avatar, person.Profile, role, signOut, settings, forYou);
+
+    /// <summary>Them as the Person part, with the role they hold; their mark opens the account menu, never their card.</summary>
     [Newtonsoft.Json.JsonIgnore]
-    public Person Person => new(Id, Handle, Name, "person", Avatar) { Role = Role };
+    public Person Person => new(Id, Handle, Name, Kind, Avatar) { Role = Role };
 
     /// <summary>Signing out, coming back to the page they are on.</summary>
     [Newtonsoft.Json.JsonIgnore]

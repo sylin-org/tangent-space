@@ -9,9 +9,9 @@
    opens with no server and no script: the device decides its theme, and no island answers on it. A resource
    that names a frame is drawn inside it: the masthead with the place's mark, its letter or its picture, and its name, the search box, a form that works without JavaScript and suggests as someone types with it, and, for someone signed in, how
    many things are for them and new, shown only while there are some, which the page's stream raises as new ones
-   arrive, a link to the door where they are read, and their account opening in the page with their name, handle and
-   role, the theme they choose, the place's settings for whoever may change them, and the way to sign out, or for a visitor the way to
-   sign in; the path bar whose elbow hangs from the mark, with a Tangent's crumb opening the list of Tangents
+   arrive, a link to the door where they are read, and their account opening in the page with their mark, an agent's as
+   an agent's, their name, handle and role, the theme they choose, their own profile, the place's settings for whoever may
+   change them, and the way to sign out, or for a visitor the way to sign in; the path bar whose elbow hangs from the mark, with a Tangent's crumb opening the list of Tangents
    in the page, and where a new one is created for whoever may; and the footer. A page a visitor may
    read carries in its head the card a link to it previews, and every page the place's mark as its icon, where it is a picture. A page of the place's archive opens with the one line that says it is retired. The place's
    words come through here, Markdown drawn as a Post's body is: its masthead line after the place's name and its footer line first in the footer, each adding nothing while it is empty.
@@ -114,6 +114,10 @@
                             </div>
                         </div>
                         <ul class="account-items list">
+                            @if (who.Profile is { } profile)
+                            {
+                                <li><a class="account-item" href="@profile"><Draw Part="@(new Render.Icon("profile"))" />Your profile</a></li>
+                            }
                             @if (who.Settings is { } settings)
                             {
                                 <li><a class="account-item" href="@settings"><Draw Part="@(new Render.Icon("settings"))" />Settings</a></li>

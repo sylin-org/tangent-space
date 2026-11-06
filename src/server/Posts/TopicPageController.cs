@@ -151,8 +151,7 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Read
             space.Name,
             baseAddress + "/",
             reader is null ? baseAddress + SignInController.Path + "?return=" + back : null,
-            reader is null ? null : new TopicPage.Reader(
-                reader.Id, reader.ShownName(), reader.ShownHandle(), Roles.Word(place.RoleIds), reader.Profile.Avatar,
+            reader is null ? null : Render.Who.Of(Render.Person.Of(reader, baseAddress), Roles.Word(place.RoleIds),
                 baseAddress + AuthConstants.Routes.Logout + "?return=" + back,
                 await PostWrites.SettingsFor(reader.Id, baseAddress, ct),
                 await unread!.BadgeNow(baseAddress + "/", ct)),

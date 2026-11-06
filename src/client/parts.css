@@ -2241,6 +2241,42 @@
   }
 }
 
+/* News: what is new to a signed-in reader, on the door. */
+@layer tangent {
+  /* A group past its first rows: one quiet line under them that opens the rest in place, the rows it opens ruled off
+     from those above as the rows are from each other. */
+  .door-news-more > summary {
+    width: fit-content;
+    margin: 6px 0 0;
+    padding: 6px 18px;
+    color: var(--ts-text-2);
+    font: 600 13.5px/1.4 var(--ts-font-ui);
+    cursor: pointer;
+  }
+
+  .door-news-more > summary:hover {
+    color: var(--ts-text);
+  }
+
+  .door-news-more > .topic-rows {
+    margin-top: 6px;
+    border-top: 1px solid var(--ts-line);
+  }
+
+  @media (max-width: 719px) {
+    /* A tap target of 44, and the opened rows spaced as the rows above them are. */
+    .door-news-more > summary {
+      padding: 0 4px;
+      line-height: 44px;
+    }
+
+    .door-news-more > .topic-rows {
+      margin-top: 12px;
+      border-top: 0;
+    }
+  }
+}
+
 /* The seen island: the form at the end of the door’s news that marks it seen, which the island takes over. */
 @layer tangent {
   /* The door's seen control, at the end of its news's head. */

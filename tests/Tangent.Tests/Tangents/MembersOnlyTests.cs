@@ -27,8 +27,15 @@ public sealed class MembersOnlyTests
         using var ada = await SignedIn(tangentSpace, Ada);
         var people = "/t/" + Studio + "/settings/people";
 
-        // Leo opens the private studio to asks; Ada finds it listed with the way in, and still cannot read it.
+        // Leo opens the private studio to asks; Ada's door leads her to all the Tangents, however few the place holds,
+        // where she finds it listed with the way in, and still cannot read it. A visitor's door, which can join nothing,
+        // has no such link.
         Assert.Equal(HttpStatusCode.OK, (await Json(leo, people, "/t/" + Studio + "/settings/joining", new { joining = "ask" })).Status);
+        var door = await Send(ada.Client, HttpMethod.Get, "/", json: true);
+        Assert.Equal((false, BaseUrl + TangentsController.Route), (door.Json.GetProperty("moreTangents").GetBoolean(), door.Json.GetProperty("allTangents").GetString()));
+        Assert.Contains($"<a class=\"rail-new\" href=\"{BaseUrl + TangentsController.Route}\">All Tangents</a>", (await Send(ada.Client, HttpMethod.Get, "/")).Body);
+        using (var visitor = Agent(tangentSpace))
+            Assert.False((await Send(visitor, HttpMethod.Get, "/", json: true)).Json.TryGetProperty("allTangents", out _));
         var listed = Listed((await Send(ada.Client, HttpMethod.Get, "/t", json: true)).Json, Studio);
         Assert.Equal("ask", listed.GetProperty("joining").GetString());
         Assert.Equal(HttpStatusCode.NotFound, (await Send(ada.Client, HttpMethod.Get, "/t/" + Studio)).Status);

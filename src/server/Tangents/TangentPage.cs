@@ -37,7 +37,7 @@ public sealed partial record TangentPage(
     IReadOnlyList<Render.TangentEntry> Tangents,
     string Place,
     string Door,
-    TangentPage.Reader? Who,
+    Render.Who? Who,
     DateOnly Day,
     string? Settings = null,
     string? NewTangent = null,
@@ -116,8 +116,7 @@ public sealed partial record TangentPage(
     {
         var switcher = new Render.Switcher(page.Self, page.Tangents.Select(tangent => tangent with { Current = tangent.Slug == page.Slug }).ToList(),
             page.Door + TangentsController.Route.TrimStart('/'), page.NewTangent);
-        var who = page.Who is { } reader ? new Render.Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut, reader.Settings, reader.ForYou) : null;
-        return new(page.Place, page.Door, [], who, page.SignIn, page.Feeds) { Switcher = switcher };
+        return new(page.Place, page.Door, [], page.Who, page.SignIn, page.Feeds) { Switcher = switcher };
     }
 
     /// <summary>The most characters of a body the page carries as a Topic's <see cref="Topic.Opening"/> or a reply's
@@ -130,13 +129,6 @@ public sealed partial record TangentPage(
     /// <summary>Someone other than a Post's author last edited it, so its words are not said to be its author's: who, and
     /// when. It travels with the Post wherever its words are read.</summary>
     public sealed record Edited(Render.Person By, DateTimeOffset At) : Render.IPart;
-
-    /// <summary>The signed-in participant reading the page: their id, the name to show, their handle, the highest role
-    /// they hold where they hold one, their avatar, where they sign out, coming back to this page, and the place's
-    /// settings, for one who holds <c>ManageSpace</c>, <c>ManageStanding</c> or <c>ManageRoles</c>, and how many things
-    /// are for them and new.</summary>
-    public sealed record Reader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut, string? Settings = null,
-        Events.Unread.Badge? ForYou = null);
 
     /// <summary>The version the page's <c>ETag</c> carries: a hash of everything the page says, the day its times are
     /// written for among it, so the same page for a visitor on the same day answers the same tag, and a new Post, a

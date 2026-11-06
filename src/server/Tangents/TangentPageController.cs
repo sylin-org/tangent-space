@@ -108,8 +108,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
             await Viewable(personId, row, ct),
             space.Name,
             baseAddress + "/",
-            reader is null ? null : new TangentPage.Reader(
-                reader.Id, reader.ShownName(), reader.ShownHandle(), Role(capabilities), reader.Profile.Avatar,
+            reader is null ? null : Render.Who.Of(Render.Person.Of(reader, baseAddress), Role(capabilities),
                 baseAddress + AuthConstants.Routes.Logout + "?return=" + back, place is null ? null : TangentSpaceSettingsController.Entry(place, baseAddress),
                 await unread!.BadgeNow(baseAddress + "/", ct)),
             DateOnly.FromDateTime(DateTime.UtcNow),

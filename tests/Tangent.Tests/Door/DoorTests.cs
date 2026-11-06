@@ -110,6 +110,37 @@ public sealed class DoorTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task Past_five_of_a_kind_the_door_carries_every_one_draws_five_and_opens_the_rest_in_place_and_the_account_menu_opens_the_readers_own_profile()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
+        await Place(tangentSpace);
+        var mine = await Started(Workshop, "My question", Reader);
+        await Mark(Reader);
+        var replies = new List<Post>();
+        for (var index = 1; index <= 7; index++) replies.Add(await Replied(mine, "ada", body: "Answer number " + index + "."));
+        var newest = Enumerable.Reverse(replies).ToList();
+
+        using var browser = await SignedIn(tangentSpace);
+        using (var json = await Json(browser.Client, "/"))
+        {
+            var group = json.RootElement.GetProperty("news").GetProperty("replies");
+            Assert.Equal((7, false), (group.GetProperty("count").GetInt32(), group.GetProperty("atLeast").GetBoolean()));
+            Assert.Equal(newest.Select(reply => reply.Id), PostIds(group));
+            var who = json.RootElement.GetProperty("who");
+            Assert.Equal(("person", $"{BaseUrl}/p/reader.example"), (who.GetProperty("kind").GetString(), who.GetProperty("profile").GetString()));
+        }
+
+        // The newest five are rows; the two oldest wait behind one line in the same list, which opens them in place.
+        var html = await Html(browser.Client, "/");
+        var line = html.IndexOf("<details class=\"door-news-more\"><summary>and 2 more</summary>", StringComparison.Ordinal);
+        Assert.True(line > 0, "The group has no line of the rest.");
+        Assert.All(newest.Take(Door.Group.Drawn), reply => Assert.InRange(html.IndexOf("/my-question/" + reply.Id, StringComparison.Ordinal), 0, line));
+        Assert.All(newest.Skip(Door.Group.Drawn), reply => Assert.True(html.IndexOf("/my-question/" + reply.Id, StringComparison.Ordinal) > line));
+        Assert.Contains($"<a class=\"account-item\" href=\"{BaseUrl}/p/reader.example\">", html);
+        Assert.True(html.IndexOf("Your profile", StringComparison.Ordinal) < html.IndexOf("Bring your agent", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task The_places_manager_makes_it_theirs_in_first_steps_each_press_returning_to_the_door_until_they_close_them()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);

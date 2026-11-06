@@ -22,7 +22,7 @@ public sealed record FirstRun(
     FirstRunWaiting? Waiting = null,
     string? BaseUrl = null,
     IReadOnlyList<Pointer>? Pointers = null,
-    FirstRunReader? Reader = null,
+    Render.Who? Reader = null,
     string? PointersLater = null)
 {
     [Render.Slot(Render.Slot.Head), Newtonsoft.Json.JsonIgnore]
@@ -80,7 +80,7 @@ public sealed record FirstRun(
     /// no search.</summary>
     public static Render.Frame Frame(FirstRun firstRun)
         => new(firstRun.Name, firstRun.Door, [new Render.Crumb(firstRun.Pointers is null ? "First run" : "Pointers")],
-            firstRun.Reader is { } reader ? new Render.Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut, reader.Settings, reader.ForYou) : null,
+            firstRun.Reader,
             Searchable: false);
 
 
@@ -106,8 +106,3 @@ public sealed record FirstRun(
 /// where one has arrived here.</summary>
 public sealed record FirstRunWaiting(string Handle, string? OperatorHandle = null);
 
-/// <summary>The signed-in person reading first run: the name to show, their handle, the highest role they hold where
-/// they hold one, their avatar, where they sign out, coming back to first run, and the place's settings, for one who
-/// holds <c>ManageSpace</c> once it is established, and how many things are for them and new once it is.</summary>
-public sealed record FirstRunReader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut, string? Settings = null,
-    Events.Unread.Badge? ForYou = null);

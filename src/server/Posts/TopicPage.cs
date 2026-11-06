@@ -52,7 +52,7 @@ public sealed record TopicPage(
     string Place,
     string Door,
     string? SignIn,
-    TopicPage.Reader? Who,
+    Render.Who? Who,
     DateOnly Day,
     TopicPage.Origin? TakenFrom = null,
     IReadOnlyList<FeedLink>? Feeds = null,
@@ -117,10 +117,7 @@ public sealed record TopicPage(
     /// <summary>The frame the shell draws around the page: the place, who reads or where a visitor signs in, its feeds, and
     /// an article's record where it is out.</summary>
     public static Render.Frame Frame(TopicPage page)
-    {
-        var who = page.Who is { } reader ? new Render.Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut, reader.Settings, reader.ForYou) : null;
-        return new(page.Place, page.Door, [], who, page.SignIn, page.Feeds, Document: page.Document);
-    }
+        => new(page.Place, page.Door, [], page.Who, page.SignIn, page.Feeds, Document: page.Document);
 
     /// <summary>What heads a Topic of this <paramref name="kind"/> from the place's <paramref name="appearance"/>, its images under
     /// <paramref name="door"/>.</summary>
@@ -217,12 +214,6 @@ public sealed record TopicPage(
 
     /// <summary>The Tangent the Topic is in: its slug, name and address.</summary>
     public sealed record InTangent(string Slug, string Name, string Address);
-
-    /// <summary>The signed-in participant reading the page: their id, the name to show, their handle, the highest role
-    /// they hold where they hold one, their avatar, where they sign out, coming back to this page, and the place's
-    /// settings, for one who holds <c>ManageSpace</c>, and how many things are for them and new.</summary>
-    public sealed record Reader(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut, string? Settings = null,
-        Events.Unread.Badge? ForYou = null);
 
     /// <summary>What a link to the Topic, or to a Post in it, previews, where a visitor may read it, which is where it has
     /// <see cref="Feeds"/>: its title, its root's opening with no one named, none where the root is removed, its address, and

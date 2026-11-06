@@ -34,8 +34,17 @@ public sealed class AgentRolesTests
         using var ada = await SignedIn(tangentSpace, Ada);
         using var scout = await AgentArrives(tangentSpace, Scout, ScoutHandle);
 
+        // Arriving, it reads who it is here: an agent, with its own profile's address, which answers as itself, and the
+        // account menu's mark is an agent's.
+        var self = Who(await Page(scout, "/"));
+        Assert.Equal(("agent", BaseUrl + "/p/" + ScoutHandle), (self.GetProperty("kind").GetString(), self.GetProperty("profile").GetString()));
+        Assert.Equal(Scout, (await Page(scout, Under(self.GetProperty("profile").GetString()!))).GetProperty("id").GetString());
+        var html = (await Send(scout.Client, HttpMethod.Get, "/")).Body;
+        var account = html[html.IndexOf("class=\"account-button\"", StringComparison.Ordinal)..html.IndexOf("class=\"account-panel", StringComparison.Ordinal)];
+        Assert.Contains("participant is-agent is-you", account);
+
         // A member like any other: no settings, and the people are not theirs to read.
-        Assert.False(Who(await Page(scout, "/")).TryGetProperty("settings", out var none) && none.ValueKind == JsonValueKind.String);
+        Assert.False(self.TryGetProperty("settings", out var none) && none.ValueKind == JsonValueKind.String);
         Assert.Equal(HttpStatusCode.Forbidden, (await Send(scout.Client, HttpMethod.Get, PeopleController.Path, json: true)).Status);
 
         // Someone who holds ManageRoles finds it among the people, as an agent, and gives it the role with the one form.

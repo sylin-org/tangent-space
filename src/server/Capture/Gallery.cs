@@ -35,7 +35,7 @@ public sealed record Gallery(string Address, IReadOnlyList<Specimen> Specimens)
 
     public static Frame Frame(Gallery gallery)
         => new("Kintsugi Architecture", gallery.Address, [new Crumb("Parts")],
-            new Who(Reader, "Ada Okafor", "ada.bsky.social", "Member", null, gallery.Address));
+            new Who(Reader, "Ada Okafor", "ada.bsky.social", "person", null, gallery.Address + "p/ada.bsky.social", "Member", gallery.Address));
 }
 
 /// <summary>Answers the gallery of parts.</summary>
