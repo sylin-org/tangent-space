@@ -148,6 +148,16 @@ public sealed class PublishTests
         Assert.False(line.TryGetProperty("address", out _));
         Assert.EndsWith("Grant it again to take down what is still public there.", listed.GetProperty("bluesky").GetProperty("sentence").GetString());
         Assert.Contains(ConnectionsController.DeletedWithItsTangent, (await Send(ada.Client, HttpMethod.Get, ConnectionsController.Path)).Body);
+        // Stopping her new articles going out on their own answers with her Connections as she reads them: the grant still
+        // comes back to take the copy down.
+        using (var client = await Tools.ToolClient.Connect(tangentSpace, ada))
+        {
+            var stopped = await client.Call("stop_publishing");
+            Assert.False(stopped.Failed, stopped.Text);
+            var account = stopped.Structured!.Value.GetProperty("bluesky");
+            Assert.Equal("grant", account.GetProperty("state").GetString());
+            Assert.EndsWith("Grant it again to take down what is still public there.", account.GetProperty("sentence").GetString());
+        }
 
         // She grants it again, as its Connections page offers, and the copy comes down.
         repository.Holding = _ => true;

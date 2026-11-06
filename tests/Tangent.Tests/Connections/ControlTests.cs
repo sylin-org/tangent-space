@@ -161,6 +161,16 @@ public sealed class ControlTests
         var read = await client.Call("read_connections", new { after = next[(next.IndexOf('=') + 1)..] });
         Assert.Equal(5, read.Structured?.GetProperty("articles").GetArrayLength());
         Assert.Equal(HttpStatusCode.BadRequest, (await Send(ada.Client, HttpMethod.Get, ConnectionsController.Path + "?after=not-a-cursor", json: true)).Status);
+
+        // A take-down pressed on the next page comes back to the first, which the row it took down then heads.
+        var later = rest.GetProperty("articles")[0];
+        var retract = later.GetProperty("retract");
+        var taken = await Form(ada, next[BaseUrl.Length..], retract.GetProperty("action").GetString()![BaseUrl.Length..],
+            new() { [PublishController.BackField] = Valued(retract, PublishController.BackField)! });
+        Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + ConnectionsController.Path), (taken.Status, taken.Location));
+        var heading = (await Send(ada.Client, HttpMethod.Get, ConnectionsController.Path, json: true)).Json.GetProperty("articles")[0];
+        Assert.Equal(later.GetProperty("title").GetString(), heading.GetProperty("title").GetString());
+        Assert.Contains(heading.GetProperty("state").GetString(), new[] { "retracting", "retracted" });
     }
 
     private static string Address(string collection, Post article) => $"at://{Persona.Did(Ada)}/{collection}/{article.Id}";

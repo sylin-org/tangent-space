@@ -84,7 +84,7 @@ public sealed class PublishController(KoanWebBaseUrl baseUrl, AtprotoAdapter atp
     [HttpPost(Route)]
     [Tool(Name = "publish", Destructive = false, Idempotent = true, OpenWorld = true)]
     [Needs(Bit.View, Participant = true)]
-    [Description("Publish your own public article under your own atproto account: a site.standard.document in your repository and a Bluesky post that embeds it, kept in step with your edits and removed with it. The first time, the answer is atproto's request for permission to write to your repository, for you to open as its Location in a browser, or, where it cannot be asked, a refusal not-granted saying why; after that, your new public articles publish on their own.")]
+    [Description("Publish your own public article under your own atproto account: a site.standard.document in your repository and a Bluesky post that embeds it, kept in step with your edits and removed with it. The first time, the answer is atproto's request for permission to write to your repository, for you to open as its Location in a browser, or, where it cannot be asked, a refusal not-granted saying why; after that, your new public articles publish on their own, unless you stopped that with stop_publishing.")]
     public async Task<IActionResult> Publish([FromRoute, Description(Holds.Tangent)] string tangent, [FromRoute, Description(Holds.Topic)] string topic,
         CancellationToken ct)
     {
@@ -121,7 +121,7 @@ public sealed class PublishController(KoanWebBaseUrl baseUrl, AtprotoAdapter atp
         if (PostWrites.WantsJson(Request))
             return Accepted(new { state = ConnectionsController.Word(receipt.IsLive() ? ArticleState.Retracting : ArticleState.Retracted), article,
                 connections = address + ConnectionsController.Path });
-        Response.Headers.Location = back is { } path && ConnectionsController.IsPage(path) ? address + path : article;
+        Response.Headers.Location = back == ConnectionsController.Path ? address + back : article;
         return StatusCode(StatusCodes.Status303SeeOther);
     }
 

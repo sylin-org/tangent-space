@@ -18,10 +18,12 @@ namespace Tangent.Connections;
 /// reads their Connection, one page of its receipts, newest first, continued from the cursor in <c>after</c>
 /// (<see cref="Receipt.Of"/>), the articles those name, each by key, and whether each of their Tangents is public; a copy
 /// still out of an article gone with its Tangent is listed from its receipt alone (<see cref="DeletedWithItsTangent"/>),
-/// and a receipt of nothing out of one is not. A permission Bluesky did not give comes back here with Koan's code in
+/// and a receipt of nothing out of one is not. A row's take-down comes back to the first page, which the row then heads,
+/// its receipt changed last (<see cref="Withhold"/>). A permission Bluesky did not give comes back here with Koan's code in
 /// <c>error</c>, and the article it was for in <see cref="ArticleQuery"/>, which the page says in words above the rest.
 /// <see cref="OfferAgainPath"/> brings back the offer they said not now to; <see cref="StopPath"/> stops their new
-/// articles going out on their own, and <see cref="ResumePath"/> has them go out on their own again.</summary>
+/// articles going out on their own, and <see cref="ResumePath"/> has them go out on their own again, each answering a
+/// JSON or tool caller with the first page as it stands then.</summary>
 public sealed class ConnectionsController(KoanWebBaseUrl baseUrl, Nudge nudge, Events.EventStream stream) : ControllerBase
 {
     public const string Path = "/settings/connections";
@@ -88,7 +90,7 @@ public sealed class ConnectionsController(KoanWebBaseUrl baseUrl, Nudge nudge, E
                 Word(state), sentence, receipt.IsLive() && receipt.Note is { } note ? Publishing.Bluesky(note) : null, receipt.At)
             {
                 Retract = shown && post!.AuthorDid == did && receipt.IsLive() && !receipt.Withheld
-                    ? Form.Posting(at + "/" + PublishController.RetractSegment, new Form.Field(PublishController.BackField, Holds.RetractBack, back, Form.Input.Hidden))
+                    ? Form.Posting(at + "/" + PublishController.RetractSegment, new Form.Field(PublishController.BackField, Holds.RetractBack, Path, Form.Input.Hidden))
                     : null
             };
         }).ToList();
@@ -103,12 +105,6 @@ public sealed class ConnectionsController(KoanWebBaseUrl baseUrl, Nudge nudge, E
             First = cursor is null ? null : address + Path
         });
     }
-
-    /// <summary>Whether <paramref name="path"/>, under the base URL, is a page of the Connections: the first, or one a
-    /// cursor names.</summary>
-    public static bool IsPage(string path)
-        => path == Path || path.StartsWith(Path + "?" + After + "=", StringComparison.Ordinal)
-           && Receipt.Cursor.Parse(path[(Path.Length + After.Length + 2)..]) is not null;
 
     /// <summary>Use another Bluesky account, as this page draws it: coming back here bound to the new account; open, with
     /// the handle typed kept, where a refused binding or the sign-in that answers one came back, saying why it was refused,
@@ -174,22 +170,16 @@ public sealed class ConnectionsController(KoanWebBaseUrl baseUrl, Nudge nudge, E
         return await Changed(personId => new PublishOnTheirOwn(personId, head), ct);
     }
 
-    /// <summary>A change of the reader's Connection: a form comes back here; a JSON or tool caller reads where their account
-    /// stands now.</summary>
+    /// <summary>A change of the reader's Connection: a form comes back here; a JSON or tool caller reads their Connections
+    /// as they stand now, the first page, as <c>read_connections</c> does.</summary>
     private async Task<IActionResult> Changed(Func<string, ICommand<Connection?>> change, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         if (PostWrites.PersonId(User) is not { } personId) return Answers.Refused(HttpContext, Capabilities.SignIn);
         var outcome = await change(personId).Send(ct);
-        if (outcome is not Outcome<Connection?>.Done { Result: var connection }) return Answers.NotDone(HttpContext, outcome);
-        var address = baseUrl.Resolve(HttpContext);
-        if (PostWrites.WantsJson(Request))
-        {
-            var handle = (await Participant.Get(personId, ct))?.ShownHandle() ?? personId;
-            return Ok(new { bluesky = Account(connection, handle, address, remains: false), connections = address + Path });
-        }
-
-        Response.Headers.Location = address + Path;
+        if (outcome is not Outcome<Connection?>.Done) return Answers.NotDone(HttpContext, outcome);
+        if (PostWrites.WantsJson(Request)) return await Get(null, ct);
+        Response.Headers.Location = baseUrl.Resolve(HttpContext) + Path;
         return StatusCode(StatusCodes.Status303SeeOther);
     }
 
