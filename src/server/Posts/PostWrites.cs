@@ -191,10 +191,14 @@ public static class PostWrites
 
     /// <summary>A write that committed: a form is sent on to the Post's address; a JSON request reads the Post with the
     /// sender's <c>can</c> on it — a reply's judged by its Topic's <paramref name="root"/> — created (<c>201</c>) or
-    /// changed (<c>200</c>), with that address as its <c>Location</c>.</summary>
+    /// changed (<c>200</c>), with that address as its <c>Location</c>. The writer's profile, from the row the Doorway
+    /// loaded, is read again where it is older than its lifetime (<see cref="ProfileCapture.SubmitWhenStale"/>), so the
+    /// name and picture their words show follow their Bluesky account while they stay signed in.</summary>
     public static async Task<IActionResult> Written(HttpContext http, Post post, Post root, string address, string? personId, bool created,
         CancellationToken ct)
     {
+        if (http.Features.Get<Here>()?.Rows.Participant is { } writer)
+            await ProfileCapture.SubmitWhenStale(writer, http.RequestServices.GetRequiredService<ILogger<Participant>>(), ct);
         http.Response.Headers.CacheControl = "no-store";
         http.Response.Headers.Location = address;
         if (!WantsJson(http.Request)) return new StatusCodeResult(StatusCodes.Status303SeeOther);

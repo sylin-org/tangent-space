@@ -4,13 +4,14 @@ using Koan.Jobs;
 namespace Tangent.Participants;
 
 /// <summary>The profile job's work: skip a profile captured within its lifetime; otherwise read the bound account's public profile
-/// once and send it as a command. A read that fails leaves the cache as it was, and the next sign-in after its
-/// lifetime submits the job again.</summary>
+/// once and send it as a command. A read that fails leaves the cache as it was, and the participant's next sign-in or
+/// Post written submits the job again.</summary>
 public static class ProfileCapture
 {
-    /// <summary>Submits the profile job for a participant whose cache is empty or older than its lifetime. A
-    /// submission that fails is logged, never thrown: what it follows has already happened, and the next sign-in
-    /// submits again.</summary>
+    /// <summary>Submits the profile job for a participant whose cache is empty or older than its lifetime, at their
+    /// sign-in (<see cref="ParticipantSignIn"/>) and at each Post they write (<see cref="Posts.PostWrites.Written"/>),
+    /// where their row is already loaded; never at a read. A submission that fails is logged, never thrown: what it
+    /// follows has already happened, and the next sign-in or write submits again.</summary>
     public static async Task SubmitWhenStale(Participant participant, ILogger logger, CancellationToken ct)
     {
         if (participant.ProfileFresh(DateTimeOffset.UtcNow)) return;
