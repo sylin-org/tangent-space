@@ -13,9 +13,10 @@ namespace Tangent.Connections;
 
 /// <summary>An author publishes a public article under their own account, and it follows them: their document and its
 /// Bluesky post land in their repository, a moderator's edit stays out of it until they choose it, their own edit puts
-/// the document again, and a removal deletes both, as deleting the article's Tangent does; as the proprietor, their
-/// account holds the place as a publication until the place is private — against a repository double that holds the
-/// author's grant, never anyone's real account.</summary>
+/// the document again, and a removal deletes both, as deleting the article's Tangent does once their grant holds, their
+/// Connections saying the copy remains until it does; as the proprietor, their account holds the place as a publication
+/// until the place is private — against a repository double that holds the author's grant, never anyone's real
+/// account.</summary>
 public sealed class PublishTests
 {
     /// <summary>The longest a Connection's job takes to deliver what a write asked for.</summary>
@@ -118,7 +119,7 @@ public sealed class PublishTests
     }
 
     [Fact]
-    public async Task An_articles_copy_comes_down_when_its_tangent_is_deleted()
+    public async Task An_articles_copy_is_said_to_remain_while_the_grant_is_needed_and_comes_down_once_its_tangent_is_deleted()
     {
         var repository = new Repository();
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(),
@@ -134,10 +135,30 @@ public sealed class PublishTests
         var note = $"at://{Persona.Did(Ada)}/{AtprotoAdapter.Notes}/{article.Id}";
         await Until(() => repository.Records.ContainsKey(document));
 
+        // Ada's grant lapses, and the article's Tangent is deleted: the copy stays out, and her Connections say so.
+        repository.Holding = _ => false;
         Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new Tangents.DeleteTangent(Articles, leo, Topics: 1).Send(Cancellation));
+        await Until(async () => (await Connection.Get(Ada, Cancellation))?.NeedsGrant == true);
+        Assert.Contains(document, repository.Records.Keys);
+        var listed = (await Send(ada.Client, HttpMethod.Get, ConnectionsController.Path, json: true)).Json;
+        var line = Assert.Single(listed.GetProperty("articles").EnumerateArray().ToList());
+        Assert.Equal((ConnectionsController.DeletedWithItsTangent, "remains", "Still public on Bluesky, though it no longer is here. Grant it again to take it down.",
+            Publishing.Bluesky(note)), (line.GetProperty("title").GetString(), line.GetProperty("state").GetString(), line.GetProperty("sentence").GetString(),
+            line.GetProperty("elsewhere").GetString()));
+        Assert.False(line.TryGetProperty("address", out _));
+        Assert.EndsWith("Grant it again to take down what is still public there.", listed.GetProperty("bluesky").GetProperty("sentence").GetString());
+        Assert.Contains(ConnectionsController.DeletedWithItsTangent, (await Send(ada.Client, HttpMethod.Get, ConnectionsController.Path)).Body);
 
+        // She grants it again, as its Connections page offers, and the copy comes down.
+        repository.Holding = _ => true;
+        var head = await tangentSpace.Services.GetRequiredService<Events.EventStream>().Head(Cancellation);
+        Assert.IsType<Outcome<Connection>.Done>(await new ChooseToPublish(Ada, null, null, 0, head, DateTimeOffset.UtcNow).Send(Cancellation));
+        var nudge = tangentSpace.Services.GetRequiredService<Nudge>();
+        nudge.Changed();
+        await nudge.Wake(Ada);
         await Until(() => !repository.Records.ContainsKey(document) && !repository.Records.ContainsKey(note));
         Assert.True((await Receipt.Get(Receipt.Key(Ada, article.Id), Cancellation))?.Retracted);
+        Assert.Empty((await Send(ada.Client, HttpMethod.Get, ConnectionsController.Path, json: true)).Json.GetProperty("articles").EnumerateArray());
     }
 
     /// <summary>Waits until Ada's Connection has read the log through its head.</summary>
@@ -149,11 +170,13 @@ public sealed class PublishTests
         while ((await Connection.Get(Ada, bound.Token))?.Cursor < head) await Task.Delay(TimeSpan.FromMilliseconds(100), bound.Token);
     }
 
-    private static async Task Until(Func<bool> landed)
+    private static Task Until(Func<bool> landed) => Until(() => Task.FromResult(landed()));
+
+    private static async Task Until(Func<Task<bool>> landed)
     {
         using var bound = CancellationTokenSource.CreateLinkedTokenSource(Cancellation);
         bound.CancelAfter(Landing);
-        while (!landed()) await Task.Delay(TimeSpan.FromMilliseconds(100), bound.Token);
+        while (!await landed()) await Task.Delay(TimeSpan.FromMilliseconds(100), bound.Token);
     }
 
     /// <summary>An author's repository that holds their grant and keeps every record put in it.</summary>

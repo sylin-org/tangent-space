@@ -348,6 +348,8 @@ public sealed class TangentSettingsTests
         Assert.NotNull(await MediaUse.Get(MediaUse.Key(image.Id, root.Id), Cancellation));
         Assert.NotNull(await MediaUse.Get(MediaUse.Key(image.Id, "tangent:" + Studio), Cancellation));
 
+        Assert.Contains(await Polled(bea), row => row.Tangent == Studio);
+
         var warned = WebUtility.HtmlDecode((await Send(leo.Client, HttpMethod.Get, "/t/studio/settings")).Body);
         Assert.Contains("Its one topic and every reply in it go for good, and no tombstone stays in its place.", warned);
         Assert.Contains($"href=\"{BaseUrl}/settings/export/studio.zip\">Download it first</a> to keep a copy.", warned);
@@ -376,12 +378,14 @@ public sealed class TangentSettingsTests
         Assert.Empty((await roles.Overwrites(Overwrites.Resource(Studio), ct: Cancellation)).Items);
         var logged = (await Event.All(Cancellation)).OrderBy(e => e.Seq).Last();
         Assert.Equal((EventKind.TangentDeleted, Studio, Leo), (logged.Kind, logged.TangentId, logged.ActorId));
-        Assert.DoesNotContain(await Polled(ada), row => row.Tangent == Studio);
+        Assert.DoesNotContain(await Polled(bea), row => row.Tangent == Studio);
 
         // The slug taken again starts clean: none of the deleted Tangent's rows reaches the new one's readers.
         Assert.Equal(HttpStatusCode.Created, (await Json(leo, "/t/new", "/t/new", new { name = Studio })).Status);
         var again = (await Tangent.Get(Studio, Cancellation))!;
-        Assert.All((await Polled(ada)).Where(row => row.Tangent == Studio), row => Assert.True(row.Seq >= again.LogSeq));
+        var reached = (await Polled(bea)).Where(row => row.Tangent == Studio).ToList();
+        Assert.Contains(reached, row => row.Seq == again.LogSeq);
+        Assert.All(reached, row => Assert.True(row.Seq >= again.LogSeq));
         Assert.DoesNotContain(Leo, (await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("around").GetProperty("people")
             .EnumerateArray().Select(person => person.GetProperty("id").GetString()));
 

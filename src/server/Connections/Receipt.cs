@@ -78,10 +78,12 @@ public sealed class Receipt : Entity<Receipt>
 
     /// <summary>The state of an article against what its Connection delivered, as its author reads it; <paramref name="open"/>
     /// says whether it should be out, public and standing (<see cref="Publishing.Open"/>), so a copy still out of one that
-    /// should not be remains, and says so, until its retraction lands, and one that never went out is held.</summary>
+    /// should not be remains, and says so, until its retraction lands, and one that never went out is held. An article gone
+    /// with its Tangent (<paramref name="post"/> null) is read from the receipt alone: written as an earlier account where its
+    /// copy is in another repository than <paramref name="did"/>'s.</summary>
     public static ArticleState StateOf(Receipt receipt, Post? post, Connection connection, bool open, string did)
     {
-        if (post is not null && post.AuthorDid != did) return ArticleState.Earlier;
+        if ((post?.AuthorDid ?? receipt.Repository()) != did) return ArticleState.Earlier;
         if (!open) return receipt.IsLive() ? ArticleState.Remains : receipt.Document is null ? ArticleState.Held : ArticleState.Retracted;
         if (receipt.Retracted && receipt.Document is not null) return ArticleState.Retracted;
         var behind = post is not null && receipt.Version < post.Version;

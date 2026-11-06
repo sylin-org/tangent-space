@@ -42,10 +42,11 @@ public sealed record ConnectionsPage(
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
     public Participants.AnotherAccount.Offer Switching => Another;
 
-    /// <summary>Each article the account carries, with its state and its Bluesky post once it is out.</summary>
+    /// <summary>Each article the account carries, with its state and its Bluesky post once it is out; one gone with its
+    /// Tangent has no page to link.</summary>
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
     public Render.EntryList? Carried => Articles.Count == 0 ? null : new(Articles.Select(article =>
-        new Render.Entry(Render.Sentence.Link(article.Title, article.Address),
+        new Render.Entry(article.Address is { } at ? Render.Sentence.Link(article.Title, at) : Render.Sentence.Plain(article.Title),
             article.Elsewhere is { } elsewhere ? [new Render.LinkButton("View on Bluesky", elsewhere) { Outside = true }] : null)
         {
             Detail = Render.Sentence.Plain(article.Sentence), State = article.State
@@ -64,7 +65,7 @@ public sealed record ConnectionsPage(
             + (Since is { } since ? " Since " + since.ToUniversalTime().ToString("MMMM d, yyyy", System.Globalization.CultureInfo.InvariantCulture) + "." : "");
     }
 
-    public sealed record Article(string Title, string Address, string State, string Sentence, string? Elsewhere, DateTimeOffset At);
+    public sealed record Article(string Title, string? Address, string State, string Sentence, string? Elsewhere, DateTimeOffset At);
 
     /// <summary>Why a permission was not given, in words, and the article it was asked for, where it was asked for one.</summary>
     public sealed record Failed(string Sentence, string? Article);

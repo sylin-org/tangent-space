@@ -18,9 +18,11 @@ namespace Tangent.Connections;
 /// <summary>A participant's Connections page, one resource both ways (<see cref="ConnectionsPage"/>): their own, so a
 /// visitor's browser signs in and comes back here, and a visitor's JSON or tool call is refused with <c>sign-in</c>. It
 /// reads their Connection, at most <see cref="Shown"/> of its receipts, newest first, the articles those name, each by
-/// key, and whether each of their Tangents is public. A permission Bluesky did not give comes back here with Koan's code
-/// in <c>error</c>, and the article it was for in <see cref="ArticleQuery"/>, which the page says in words above the rest.
-/// <see cref="OfferAgainPath"/> brings back the offer they said not now to.</summary>
+/// key, and whether each of their Tangents is public; a copy still out of an article gone with its Tangent is listed from
+/// its receipt alone (<see cref="DeletedWithItsTangent"/>), and a receipt of nothing out of one is not. A permission
+/// Bluesky did not give comes back here with Koan's code in <c>error</c>, and the article it was for in
+/// <see cref="ArticleQuery"/>, which the page says in words above the rest. <see cref="OfferAgainPath"/> brings back the
+/// offer they said not now to.</summary>
 public sealed class ConnectionsController(KoanWebBaseUrl baseUrl, Nudge nudge) : ControllerBase
 {
     public const string Path = "/settings/connections";
@@ -32,6 +34,10 @@ public sealed class ConnectionsController(KoanWebBaseUrl baseUrl, Nudge nudge) :
 
     /// <summary>The query a permission that was not given names its article in, by Id.</summary>
     public const string ArticleQuery = "article";
+
+    /// <summary>What names an article gone with its Tangent whose copy is still out: nothing of it stays here but its
+    /// receipt.</summary>
+    public const string DeletedWithItsTangent = "An article deleted with its Tangent";
 
     [HttpGet(Path)]
     [Tool(Name = "read_connections")]
@@ -60,16 +66,16 @@ public sealed class ConnectionsController(KoanWebBaseUrl baseUrl, Nudge nudge) :
         foreach (var tangentId in posts.Values.Select(post => post.TangentId).Distinct(StringComparer.Ordinal))
             open[tangentId] = await Publishing.Open(space, tangentId, ct);
 
-        var articles = receipts.Where(receipt => posts.ContainsKey(receipt.PostId)).Select(receipt =>
+        var articles = receipts.Where(receipt => posts.ContainsKey(receipt.PostId) || receipt.IsLive()).Select(receipt =>
         {
-            var post = posts[receipt.PostId];
-            var shown = open[post.TangentId] && !post.Removed;
+            var post = posts.GetValueOrDefault(receipt.PostId);
+            var shown = post is not null && open[post.TangentId] && !post.Removed;
             var state = Receipt.StateOf(receipt, post, connection!, shown, participant?.Did ?? "");
             var sentence = state != ArticleState.Earlier ? Sentence(state, connection!)
                 : !shown && receipt.IsLive() ? (receipt.Stays ? Publishing.StaysSentence : Publishing.LeavingSentence)
                 : Sentence(state, connection!);
-            return new ConnectionsPage.Article(post.Title ?? "", address + AtprotoAdapter.Path(post), Word(state), sentence,
-                receipt.IsLive() && receipt.Note is { } note ? Publishing.Bluesky(note) : null, receipt.At);
+            return new ConnectionsPage.Article(post is null ? DeletedWithItsTangent : post.Title ?? "", post is null ? null : address + AtprotoAdapter.Path(post),
+                Word(state), sentence, receipt.IsLive() && receipt.Note is { } note ? Publishing.Bluesky(note) : null, receipt.At);
         }).ToList();
 
         var another = Request.Query.ContainsKey(AnotherAccount.OpenQuery);
