@@ -147,8 +147,8 @@ public sealed class Export
     /// <summary>A page of the Tangents, each with where it opens: at the root of a zip, and of an archive at <c>t/</c>, its
     /// address on the place, the root being its door.</summary>
     private Task Listing(IReadOnlyList<Tangents.Tangent> tangents, int page, bool more, CancellationToken ct) => Page((Retired ? "t/" : "") + PagePath(page), new TangentsPage(
-        tangents.Select(tangent => new Render.TangentEntry(tangent.Id, tangent.Name, PostWrites.Word(tangent.DefaultKind),
-            (Retired ? "" : "t/") + Uri.EscapeDataString(tangent.Id) + "/" + First + ".html", tangent.TopicCount)).ToList(),
+        tangents.Select(tangent => Render.TangentEntry.Of(tangent, (Retired ? "" : "t/") + Uri.EscapeDataString(tangent.Id) + "/" + First + ".html",
+            Retired ? "../" : "./", _base + "/")).ToList(),
         more ? PagePath(page + 1) + ".html" : null,
         page > 1,
         First + ".html",
@@ -218,7 +218,7 @@ public sealed class Export
             page > 1,
             null,
             null,
-            [new Render.TangentEntry(tangent.Id, tangent.Name, PostWrites.Word(tangent.DefaultKind), First + ".html", tangent.TopicCount)],
+            [Render.TangentEntry.Of(tangent, First + ".html", "../../", _base + "/")],
             _space.Name,
             "../../" + First + ".html",
             null,

@@ -27,6 +27,9 @@ public static class TangentWrites
     /// <summary>Where a Tangent is deleted, under its settings.</summary>
     public const string DeleteSegment = "delete";
 
+    /// <summary>Where an image of a person's own comes in as a Tangent's, under its settings.</summary>
+    public const string ImageSegment = "image";
+
     public const string TopicsField = "topics";
 
     public static readonly Reason KindRule = Reason.Invalid("A Tangent’s default kind is topic or article.");

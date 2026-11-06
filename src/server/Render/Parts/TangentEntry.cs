@@ -41,10 +41,11 @@ public sealed record TangentEntry(string Slug, string Name, string Kind, string 
         ? "Articles · " + Wording.Count(TopicCount, "article", "articles", "no articles yet")
         : "Discussions · " + Wording.Count(TopicCount, "topic", "topics", "no topics yet"));
 
-    /// <summary>The Tangent's row as the reader may view it, with the tile it chose, from its own row.</summary>
-    public static TangentEntry Of(Tangents.Tangent tangent, string address, string door)
-        => new(tangent.Id, tangent.Name, tangent.DefaultKind == Posts.PostKind.Article ? "article" : "topic", address, tangent.TopicCount)
+    /// <summary>The Tangent as every list builds it from its own row, at <paramref name="address"/>, wearing the tile it chose
+    /// (<see cref="Render.Tile.For(Tangents.Tangent, string, string?)"/>).</summary>
+    public static TangentEntry Of(Tangents.Tangent tangent, string address, string door, string? media = null)
+        => new(tangent.Id, tangent.Name, Posts.PostWrites.Word(tangent.DefaultKind), address, tangent.TopicCount)
         {
-            Tile = Render.Tile.For(tangent, door)
+            Tile = Render.Tile.For(tangent, door, media)
         };
 }

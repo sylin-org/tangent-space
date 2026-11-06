@@ -408,11 +408,12 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
         Media media;
         try
         {
-            byte[] bytes;
-            if (form?[FromField].ToString() == FromBluesky)
+            if (form?[FromField].ToString() != FromBluesky) media = await Media.KeepFile(form, FileField, ct);
+            else
             {
                 var profile = (await Participant.Get(personId, ct))?.Profile;
                 if ((mark ? profile?.Avatar : profile?.Banner) is not { } address) throw new Refusal(NoBlueskyPicture);
+                byte[] bytes;
                 try
                 {
                     bytes = await pictures.Picture(address, Media.SentLimit, ct);
@@ -421,16 +422,9 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
                 {
                     throw new Refusal(NoBlueskyPicture);
                 }
+
+                media = await Media.Keep(bytes, ct);
             }
-            else
-            {
-                if (form?.Files.GetFile(FileField) is not { } file) throw new Refusal(Media.NotAnImage);
-                if (file.Length > Media.SentLimit) throw new Refusal(Media.TooLarge);
-                using var sent = new MemoryStream();
-                await file.CopyToAsync(sent, ct);
-                bytes = sent.ToArray();
-            }
-            media = await Media.Keep(bytes, ct);
         }
         catch (Refusal refusal)
         {

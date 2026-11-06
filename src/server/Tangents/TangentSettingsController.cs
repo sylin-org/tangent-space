@@ -32,7 +32,9 @@ public sealed record DeleteTangentInput([Description(Holds.DeletedTopics)] int? 
 /// does; a JSON
 /// request reads the Tangent (<c>200</c>); a refusal reads the form again with the reason inline, or a problem with the
 /// gate. Both resolve the address as the Tangent page does (<see cref="Here.Find"/>) before anything else is
-/// judged, so a Tangent the reader may not view and one no row has answer alike. <c>/t/{tangent}/settings/delete</c>
+/// judged, so a Tangent the reader may not view and one no row has answer alike. <c>/t/{tangent}/settings/image</c> takes
+/// <c>file</c>, an image of the sender's own as the file of a multipart form, and wears it as the Tangent's image
+/// (<see cref="TakeImage"/>), which an agent does as <c>bring_in</c> then <c>change_tangent</c>. <c>/t/{tangent}/settings/delete</c>
 /// takes <c>topics</c>, as a form or a JSON object, and sends <see cref="DeleteTangent"/>: a form is sent on to where its
 /// <c>return</c> names, or to the Tangents (<see cref="TangentsController"/>), where it is gone, and a JSON request reads
 /// the Tangent as it stood (<c>200</c>); a refusal reads the settings again with the reason in the delete's warning,
@@ -43,6 +45,8 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
     public const string Route = "/t/{tangent}/" + TangentWrites.SettingsSegment;
 
     public const string DeleteRoute = Route + "/" + TangentWrites.DeleteSegment;
+
+    public const string ImageRoute = Route + "/" + TangentWrites.ImageSegment;
 
     /// <summary>The most copies on Bluesky the delete's warning counts; past it, it says "at least".</summary>
     public const int CopyLimit = 100;
@@ -99,6 +103,42 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
             default:
                 return Answers.NotDone(HttpContext, outcome);
         }
+    }
+
+    /// <summary>An image of the reader's own, sent as the file of a multipart form, kept as every image is
+    /// (<see cref="Media.KeepFile"/>) and worn at once as the Tangent's image, for whoever may change it; the form is sent on
+    /// to the settings, or as its <c>return</c> says, and a refusal reads the settings again with the reason above the form.</summary>
+    [HttpPost(ImageRoute)]
+    [RequestSizeLimit(NewMediaController.RequestLimit)]
+    [RequestFormLimits(MultipartBodyLengthLimit = NewMediaController.RequestLimit)]
+    [Needs(Bit.View)]
+    public async Task<IActionResult> TakeImage([FromRoute] string tangent, CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-store";
+        var personId = PostWrites.PersonId(User);
+        var found = Here.Of(HttpContext);
+        var sent = new ChangeTangentInput();
+        if (personId is null || found.Capabilities.Gate(Bit.ManageTangent) is not null)
+            return await Refused(found, personId, sent, found.Capabilities.Gate(Bit.ManageTangent) ?? Capabilities.SignIn, ct);
+
+        Media media;
+        try
+        {
+            media = await Media.KeepFile(Request.HasFormContentType ? await Request.ReadFormAsync(ct) : null, NewMediaController.FileField, ct);
+        }
+        catch (Refusal refusal)
+        {
+            return await Refused(found, personId, sent, refusal.Reason, ct);
+        }
+
+        await new BringMedia(media.Id, personId).Send();
+        return await new ChangeTangent(found.Tangent!.Id, personId, Image: Media.Reference(media.Id)).Send() switch
+        {
+            Outcome<Tangent>.Done { Result: var changed } => await TangentWrites.Written(HttpContext, changed, BaseAddress(), personId, created: false,
+                PostWrites.TangentAddress(BaseAddress(), changed.Id) + "/" + TangentWrites.SettingsSegment, ct),
+            Outcome<Tangent>.Refused { Reason: { Kind: not ReasonKind.Absent } reason } => await Refused(found, personId, sent, reason, ct),
+            var outcome => Answers.NotDone(HttpContext, outcome)
+        };
     }
 
     [HttpPost(DeleteRoute)]

@@ -65,6 +65,7 @@ public sealed record NewTopicPage(
     public Render.TangentList? StartIn => Origin is null || Choices is not { Count: > 0 } choices ? null : new("Start it in", choices.Select(choice =>
         new Render.TangentEntry(choice.Slug, choice.Name, choice.Kind, choice.Address, 0)
         {
+            Tile = choice.Tile,
             Current = choice.Current,
             Says = choice.Kind == PostWrites.Word(PostKind.Article) ? "Starts an article" : "Starts a topic"
         }).ToList());
@@ -149,6 +150,6 @@ public sealed record NewTopicPage(
     public string? First { get; init; }
 
     /// <summary>A Tangent the reader may start the Topic in: its slug, its name, the kind a Topic started there takes,
-    /// the address of this form there, and whether it is this one.</summary>
-    public sealed record Choice(string Slug, string Name, string Kind, string Address, bool Current);
+    /// the address of this form there, whether it is this one, and the tile it wears.</summary>
+    public sealed record Choice(string Slug, string Name, string Kind, string Address, bool Current, Render.Tile Tile);
 }

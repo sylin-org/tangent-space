@@ -95,6 +95,7 @@ public sealed class TheToolsTests
         [Action<AppearancePreviewController>(nameof(AppearancePreviewController.Preview))] = "only shows the door in an appearance, saving nothing",
         [Action<TangentSpaceSettingsController>(nameof(TangentSpaceSettingsController.TakeImage))] = "a form's file, which an agent sends as bring_in and change_appearance's image",
         [Action<TangentSpaceSettingsController>(nameof(TangentSpaceSettingsController.TakeMark))] = "a form's file, which an agent sends as bring_in and change_appearance's mark",
+        [Action<TangentSettingsController>(nameof(TangentSettingsController.TakeImage))] = "a form's file, which an agent sends as bring_in and change_tangent's image",
         [Action<BringYourAgentController>(nameof(BringYourAgentController.Get))] = "hands the place to an agent, so an agent has it already",
         [Action<SignInController>(nameof(SignInController.Get))] = "sign-in",
         [Action<FirstRunController>(nameof(FirstRunController.Get))] = "first run",

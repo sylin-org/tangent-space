@@ -99,12 +99,21 @@ public sealed record TangentSettingsPage(
         }
     }
 
-    /// <summary>The form's fields with the audience said in a sentence in its place where it stays as it is.</summary>
+    /// <summary>The form's fields with the audience said in a sentence in its place where it stays as it is, and, for a
+    /// reader who may change the Tangent, the way to bring in an image of their own under the image's choices.</summary>
     private IEnumerable<Render.Form.Field> Placed(IReadOnlyList<Render.Form.Field> fields)
     {
         foreach (var item in fields)
         {
             yield return item;
+            if (item.Name == TangentWrites.ImageField && Change is { } change)
+                yield return new(Posts.NewMediaController.FileField, "", As: Render.Form.Input.File)
+                {
+                    Label = "Or bring your own", Accept = "image/png,image/jpeg,image/webp",
+                    Note = "A PNG, JPEG or WebP, square. Its tile wears it at once in place of its letter, wherever the Tangent is listed.",
+                    Sends = Render.Form.Posting(change.Action + "/" + TangentWrites.ImageSegment)
+                        with { Tool = "change-tangent", Key = "tangent-image", Submit = "Use this image", Busy = "Bringing it in…", Multipart = true }
+                };
             if (Fixed && item.Name == TangentWrites.KindField)
                 yield return new(TangentWrites.AudienceField, "", "Only moderators read this Tangent; its audience stays as it is.", Render.Form.Input.Fixed) { Label = "Audience" };
         }

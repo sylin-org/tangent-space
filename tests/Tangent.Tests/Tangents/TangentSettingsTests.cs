@@ -15,7 +15,8 @@ namespace Tangent.Tangents;
 /// <summary>A Tangent's settings at <c>/t/{tangent}/settings</c>: offered to whoever holds ManageTangent there, or
 /// ManageSpace; a rename keeps the slug; an audience change writes the everyone overwrite and appends tangent.changed,
 /// and decides who reads; a move reorders the door; the moderators' Tangent keeps its audience and its place; the
-/// settings answer JSON with <c>can</c> and <c>gate</c>; and whoever holds ManageSpace deletes a Tangent whole, past its
+/// settings answer JSON with <c>can</c> and <c>gate</c>; an image brought in on them and the accent are what the Tangent
+/// wears wherever it is listed; and whoever holds ManageSpace deletes a Tangent whole, past its
 /// warning where it holds Topics, and nothing of it reaches anyone afterwards.</summary>
 public sealed class TangentSettingsTests
 {
@@ -397,6 +398,67 @@ public sealed class TangentSettingsTests
         var gated = await Json(bea, "/t/workshop/settings", "/t/workshop/settings/delete", new { topics = 0 });
         Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageSpace).Word), (gated.Status, gated.Word));
         Assert.NotNull(await Tangent.Get("workshop", Cancellation));
+    }
+
+    [Fact]
+    public async Task An_image_brought_in_on_its_settings_and_its_accent_are_what_the_tangent_wears_in_every_list_of_it()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
+        using var leo = await SignedIn(tangentSpace, Leo);
+        using var ada = await SignedIn(tangentSpace, Ada);
+        const string settings = "/t/workshop/settings";
+        const string bring = settings + "/" + TangentWrites.ImageSegment;
+
+        // The file and its own button stand under the image's choices for whoever may change the Tangent, and for no one else.
+        Assert.Contains($"action=\"{BaseUrl}{bring}\" enctype=\"multipart/form-data\"", (await Send(leo.Client, HttpMethod.Get, settings)).Body);
+        Assert.DoesNotContain(bring, (await Send(ada.Client, HttpMethod.Get, settings)).Body);
+        var refused = await Send(ada.Client, HttpMethod.Post, bring, Picture(ArticleMediaTests.Jpeg()), page: settings);
+        Assert.Equal(HttpStatusCode.Forbidden, refused.Status);
+        var notOne = await Send(leo.Client, HttpMethod.Post, bring, Picture([1, 2, 3]), page: settings);
+        Assert.Equal(HttpStatusCode.BadRequest, notOne.Status);
+        Assert.Contains(Media.NotAnImage.Text, PageContent(notOne.Body));
+        Assert.Equal("", (await Tangent.Get(Writing.Workshop, Cancellation))!.Image);
+
+        // Brought in, it is worn at once, and its settings open again with it chosen.
+        var brought = await Send(leo.Client, HttpMethod.Post, bring, Picture(ArticleMediaTests.Jpeg()), page: settings);
+        Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + settings), (brought.Status, brought.Location));
+        var image = (await Tangent.Get(Writing.Workshop, Cancellation))!.Image;
+        var id = Media.IdIn(image)!;
+        Assert.NotNull(await MediaUse.Get(MediaUse.Key(id, "tangent:" + Writing.Workshop), Cancellation));
+        Assert.Equal(image, (await Send(leo.Client, HttpMethod.Get, settings, json: true)).Json.GetProperty("image").GetString());
+        Assert.Contains($"value=\"{image}\" checked", PageContent((await Send(leo.Client, HttpMethod.Get, settings)).Body));
+
+        // With an accent chosen too, the door, the list of Tangents and the Tangents a Topic may start in all wear both.
+        Assert.IsType<Outcome<Tangent>.Done>(await new ChangeTangent(Writing.Workshop, Leo, Accent: "rose").Send(Cancellation));
+        var worn = BaseUrl + image;
+        static (string?, string?) Tile(JsonElement tangents) => tangents.EnumerateArray().Single(tangent => tangent.GetProperty("slug").GetString() == Writing.Workshop)
+            .GetProperty("tile") is var tile ? (tile.GetProperty("tone").GetString(), tile.GetProperty("image").GetString()) : default;
+        Assert.Equal(("rose", worn), Tile((await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("tangents")));
+        Assert.Equal(("rose", worn), Tile((await Send(ada.Client, HttpMethod.Get, "/t", json: true)).Json.GetProperty("tangents")));
+        var taken = await Started(Ada, "Lanterns", "On wicks.", Articles);
+        Assert.Equal(("rose", worn), Tile((await Send(ada.Client, HttpMethod.Get, $"/t/{Articles}/new?origin={taken.Id}", json: true)).Json.GetProperty("choices")));
+        var drawn = $"<span class=\"tile tangent tone-rose\" aria-hidden=\"true\"><img class=\"tangent-tile-image\" src=\"{worn}\"";
+        Assert.Contains(drawn, PageContent((await Send(ada.Client, HttpMethod.Get, "/")).Body));
+        Assert.Contains(drawn, PageContent((await Send(ada.Client, HttpMethod.Get, "/t")).Body));
+        Assert.Contains(drawn, PageContent((await Send(ada.Client, HttpMethod.Get, $"/t/{Articles}/new?origin={taken.Id}")).Body));
+
+        // Its export carries the picture beside the pages that list the Tangent.
+        using var answer = await leo.Client.GetAsync(Lifecycle.ExportController.Path + "/" + Writing.Workshop + ".zip", Cancellation);
+        using var zip = new System.IO.Compression.ZipArchive(await answer.Content.ReadAsStreamAsync(Cancellation), System.IO.Compression.ZipArchiveMode.Read);
+        string Read(string name) => new StreamReader(zip.GetEntry(name)!.Open()).ReadToEnd();
+        Assert.NotNull(zip.GetEntry($"media/{id}.jpg"));
+        Assert.Contains($"tone-rose\" aria-hidden=\"true\"><img class=\"tangent-tile-image\" src=\"./media/{id}.jpg\"", Read("index.html"));
+        Assert.Contains($"tone-rose\" aria-hidden=\"true\"><img class=\"tangent-tile-image\" src=\"../../media/{id}.jpg\"", Read("t/workshop/index.html"));
+    }
+
+    /// <summary>An image as the settings' file field sends it: the one file of a multipart form.</summary>
+    private static MultipartFormDataContent Picture(byte[] image)
+    {
+        var file = new ByteArrayContent(image);
+        file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/jpeg");
+        return new MultipartFormDataContent { { file, NewMediaController.FileField, "lantern.jpg" } };
     }
 
     /// <summary>What a poll from the start of the log brings the reader: the rows that reach them, as the poll says them.</summary>

@@ -144,10 +144,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             space.ProprietorId is { } proprietor ? Person(people, proprietor) : null,
             place.Can,
             listed
-                .Select(tangent => new TangentEntry(tangent.Id, tangent.Name, Word(tangent.DefaultKind), Address(tangent.Id), tangent.TopicCount)
-                {
-                    New = newIn?.GetValueOrDefault(tangent.Id) ?? 0
-                })
+                .Select(tangent => TangentEntry.Of(tangent, Address(tangent.Id), door) with { New = newIn?.GetValueOrDefault(tangent.Id) ?? 0 })
                 .ToList(),
             page.Next is not null,
             featured.Select(root => Shown(root, tangents, people, freshIn)).ToList(),

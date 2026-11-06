@@ -107,11 +107,12 @@ public sealed record Tile(string Tone, string Initial, string? Image = null)
     }
 
     /// <summary>The tile a Tangent wears: its own accent and image where it chose them, its image under
-    /// <paramref name="door"/>, the base URL ending in a slash.</summary>
-    public static Tile For(Tangents.Tangent tangent, string door)
+    /// <paramref name="door"/>, the base URL ending in a slash, or one brought in here under <paramref name="media"/> where a
+    /// page names its images elsewhere (<see cref="Space.Art.Address"/>).</summary>
+    public static Tile For(Tangents.Tangent tangent, string door, string? media = null)
     {
         var tile = For(tangent.Id, tangent.Name);
-        return tile with { Tone = tangent.Accent.Length > 0 ? tangent.Accent : tile.Tone, Image = Space.Art.Address(tangent.Image, door) };
+        return tile with { Tone = tangent.Accent.Length > 0 ? tangent.Accent : tile.Tone, Image = Space.Art.Address(tangent.Image, door, media) };
     }
 }
 

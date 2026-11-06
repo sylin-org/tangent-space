@@ -96,7 +96,8 @@ public sealed class TangentsController(KoanWebBaseUrl baseUrl, IDataProtectionPr
         };
     }
 
-    /// <summary>A Tangent as a list of them shows it: its slug, name, kind, address and the Topics started there.</summary>
+    /// <summary>A Tangent as a list of them shows it: its slug, name, kind, address, the Topics started there and the tile it
+    /// chose.</summary>
     public static Render.TangentEntry Listed(Tangent tangent, string baseAddress)
-        => new(tangent.Id, tangent.Name, PostWrites.Word(tangent.DefaultKind), PostWrites.TangentAddress(baseAddress, tangent.Id), tangent.TopicCount);
+        => Render.TangentEntry.Of(tangent, PostWrites.TangentAddress(baseAddress, tangent.Id), baseAddress + "/");
 }
