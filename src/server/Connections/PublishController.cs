@@ -25,13 +25,18 @@ namespace Tangent.Connections;
 /// on Bluesky's page, or a request that could not start — comes back to the Connections page, which says why
 /// (<see cref="Why"/>); a JSON or tool caller whose request could not start is refused with <see cref="NotGranted"/>'s
 /// word and why instead. Permission is asked here, the first time someone chooses to publish, never at sign-in.
-/// <see cref="NotNowPath"/> answers the first offer not now.</summary>
+/// <see cref="NotNowPath"/> answers the first offer not now. <c>POST /t/{tangent}/{topic}/retract</c>, for the same author
+/// under the same conditions, takes the article's copy off Bluesky while it stays here, until they publish it again.</summary>
 public sealed class PublishController(KoanWebBaseUrl baseUrl, AtprotoAdapter atproto, EventStream stream, Nudge nudge,
     IDataProtectionProvider protection) : ControllerBase
 {
     public const string Segment = "publish";
 
     public const string Route = "/t/{tangent}/{topic}/" + Segment;
+
+    public const string RetractSegment = "retract";
+
+    public const string RetractRoute = "/t/{tangent}/{topic}/" + RetractSegment;
 
     /// <summary>Where a granted permission comes back, with <see cref="TokenParameter"/>.</summary>
     public const string GrantedPath = "/settings/connections/granted";
@@ -56,6 +61,9 @@ public sealed class PublishController(KoanWebBaseUrl baseUrl, AtprotoAdapter atp
     public static readonly Reason EarlierAccount = Reason.Conflict("earlier account", Publishing.EarlierSentence);
     public static readonly Reason OnlyPublic = Reason.Gated("private", "Only a public article is published: members alone read this one.");
     public static readonly Reason GrantExpired = Reason.Invalid("That permission came back too late or for someone else; publish the article again.");
+
+    /// <summary>The refusal a take-down meets where nothing of the article went out or waits to.</summary>
+    public static readonly Reason NotOut = Reason.Conflict("not out", "Nothing of this article is on Bluesky.");
 
     /// <summary>The word a permission request that could not start is refused with.</summary>
     public const string NotGranted = "not-granted";
@@ -89,6 +97,32 @@ public sealed class PublishController(KoanWebBaseUrl baseUrl, AtprotoAdapter atp
         if (!await atproto.MayWrite(personId, root.AuthorDid, here.Rows.Space, ct))
             return Asked(personId, root.AuthorDid, root.Id, ConnectionsController.Path + "?" + ConnectionsController.ArticleQuery + "=" + root.Id, here.Rows.Space);
         return await Chosen(personId, root, baseUrl.Resolve(HttpContext), ct);
+    }
+
+    [HttpPost(RetractRoute)]
+    [Tool(Name = "retract", Destructive = true, Idempotent = true, OpenWorld = true)]
+    [Needs(Bit.View, Participant = true)]
+    [Description("Take your own public article off Bluesky while it stays here: its site.standard.document and the Bluesky post that embeds it are deleted from your repository, with the likes, reposts and replies there, and nothing of it goes out again, edits included, until you publish it again. read_connections says retracting until it is down, then retracted.")]
+    public async Task<IActionResult> Retract([FromRoute, Description(Holds.Tangent)] string tangent, [FromRoute, Description(Holds.Topic)] string topic,
+        [FromForm(Name = BackField), Description(Holds.RetractBack)] string? back, CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-store";
+        var here = Here.Of(HttpContext);
+        var personId = here.PersonId!;
+        var root = here.Root!;
+        if (await Refusal(root, personId, here.Rows.Space, ct) is { } refusal) return Answers.Refused(HttpContext, refusal);
+
+        var outcome = await new Withhold(personId, root.Id, DateTimeOffset.UtcNow).Send(ct);
+        if (outcome is not Outcome<Receipt?>.Done { Result: var receipt }) return Answers.NotDone(HttpContext, outcome);
+        if (receipt is null) return Answers.Refused(HttpContext, NotOut);
+        await nudge.Wake(personId);
+        var address = baseUrl.Resolve(HttpContext);
+        var article = address + AtprotoAdapter.Path(root);
+        if (PostWrites.WantsJson(Request))
+            return Accepted(new { state = ConnectionsController.Word(receipt.IsLive() ? ArticleState.Retracting : ArticleState.Retracted), article,
+                connections = address + ConnectionsController.Path });
+        Response.Headers.Location = back is { } path && ConnectionsController.IsPage(path) ? address + path : article;
+        return StatusCode(StatusCodes.Status303SeeOther);
     }
 
     /// <summary>Where atproto sends someone back once they granted the place permission to write to their repository.</summary>
@@ -185,7 +219,8 @@ public sealed class PublishController(KoanWebBaseUrl baseUrl, AtprotoAdapter atp
         return StatusCode(StatusCodes.Status303SeeOther);
     }
 
-    /// <summary>Why <paramref name="personId"/> may not publish <paramref name="root"/>, or null where they may.</summary>
+    /// <summary>Why <paramref name="personId"/> may not publish <paramref name="root"/>, or take it down, or null where they
+    /// may.</summary>
     private static async Task<Reason?> Refusal(Post root, string personId, TangentSpace space, CancellationToken ct)
     {
         if (root.ParentId is not null || root.Kind != PostKind.Article) return OnlyArticles;

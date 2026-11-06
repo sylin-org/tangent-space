@@ -133,7 +133,7 @@ Every page a reader meets says what each thing is, so any stylesheet styles it b
 | Word | Meaning | Code | URL | Never |
 | --- | --- | --- | --- | --- |
 | **Connection** | A protocol adapter a participant set up with one account. It reads the log from its own cursor. | `Connection` | `/settings/connections` | Integration, Connector (Koan's word for its packages), Publisher, *Bridge*, *Sync* |
-| **Receipt** | What a Connection recorded for one Post at one version. | `Receipt` | — | *Publication record*, Status (for this), *Delivery* |
+| **Receipt** | What a Connection recorded for one Post at one version, and whether its author took the Post's copy down. | `Receipt` | — | *Publication record*, Status (for this), *Delivery* |
 | **Reference** | An inbound reply, quote, mention or like from elsewhere, attributed and never a Post of the place. Under a published article, what the network says about it: its Bluesky post's likes, reposts, quotes and replies, and the newest replies and quotes there. | `Reference`, `Elsewhere`, `AppView`, `Readers` | — | Backlink, *Interaction*, *Engagement*, Webmention (for the row) |
 | **Publication** | The Tangent Space as a `site.standard.publication`, in the proprietor's repository. | — | — | Blog, *Site* |
 | **Feed** | What anyone with a feed reader follows without an account: a public Tangent's newest Topics, or the place's articles, as Atom and as JSON Feed, each body rendered as its page renders it; a window cut by count and by bytes, newest first, none removed. It reads as a visitor, whoever asks, so a members-only Tangent and a private place have none. | `Feed`, `AtomFeed`, `JsonFeed`, `FeedLink`; `Feeds`, `FeedsController` | `/t/{tangent}/feed.atom`, `/t/{tangent}/feed.json`, `/articles.atom`, `/articles.json` | *Stream* (for this), *Syndication* (for this) |
@@ -145,7 +145,7 @@ Every page a reader meets says what each thing is, so any stylesheet styles it b
 
 ## Verbs
 
-reply · edit · remove · delete · bring in · move · take on a tangent · say seen · join · apply · admit · decline · time out · ban · lift · give a role · take a role · report · publish · retract · connect · export · archive · restore
+reply · edit · remove · delete · bring in · move · take on a tangent · say seen · join · apply · admit · decline · time out · ban · lift · give a role · take a role · report · publish · retract · stop publishing · resume publishing · connect · export · archive · restore
 
 ## Koan's words
 

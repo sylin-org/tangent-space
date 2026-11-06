@@ -6,17 +6,26 @@ namespace Tangent.Connections;
 /// <summary>Where an article stands on its author's own account, as its page tells its author: the state's word — the
 /// word their Connections page gives it (<see cref="ConnectionsController.Word"/>), or <see cref="Offer"/> before it was
 /// ever out — its sentence, the form that publishes it, or asks for the grant again, where they may, the form that says
-/// not now to the first offer, the article's Bluesky post once it is out, and their Connections page.
+/// not now to the first offer, the article's Bluesky post once it is out, and their Connections page; and, while its copy
+/// is out, the form that takes it down from there (<see cref="Retract"/>).
 /// <see cref="Document"/> is the article's document record, which the page's head names for everyone once it is out.</summary>
 public sealed record Publishing(string State, string Sentence, string? Detail, Form? Publish, Form? NotNow, string? Elsewhere, string Connections) : IPart
 {
     public const string Offer = "offer";
 
+    /// <summary>The form that takes the article's copy down from Bluesky while it stays here, present while the copy is out
+    /// and no one asked for that yet.</summary>
+    public Form? Retract { get; init; }
+
+    /// <summary>What taking an article's copy down says before it is sent.</summary>
+    public const string RetractWarning = "Its copy and its Bluesky post come down, and the likes, reposts and replies there go with them. It stays here, and you can publish it again.";
+
     /// <summary>The article's line for <paramref name="reader"/> and its document, from two keyed reads: the receipt of
     /// its author's Connection and, for its author, that Connection. A reader other than the author and an author who said
     /// not now read no line; an article that is not public or is removed reads none either, unless its copy is still out,
-    /// which its author is told, with what takes it down; and one written as an account they are no longer bound to stays
-    /// with that account (<see cref="EarlierSentence"/>).</summary>
+    /// which its author is told, with what takes it down; one they took down is coming down until it is, and is then
+    /// offered again; and one written as an account they are no longer bound to stays with that account
+    /// (<see cref="EarlierSentence"/>).</summary>
     public static async Task<(Publishing? Line, string? Document)> For(Post root, Participants.Participant? reader, bool open,
         string articleAddress, string baseAddress, CancellationToken ct)
     {
@@ -48,15 +57,19 @@ public sealed record Publishing(string State, string Sentence, string? Detail, F
                 publish, Form.Posting(baseAddress + PublishController.NotNowPath, new Form.Field(PublishController.BackField, "The page to come back to.",
                     PublishController.Back(articleAddress, baseAddress))), null, connections), document);
         if (connection.State == ConnectionState.NotNow) return (null, document);
-        if (receipt is null || receipt.Retracted)
+        if (receipt is null || receipt.Retracted || receipt is { Withheld: true, Document: null })
             return (connection.NeedsGrant
                 ? new Publishing(ConnectionsController.Word(ArticleState.NeedsGrant), Syndication.Ungranted, null, publish, null, null, connections)
-                : new Publishing(Offer, "Publish this on Bluesky too?", null, publish, null, null, connections), document);
+                : new Publishing(Offer, receipt?.Withheld == true ? "Publish this on Bluesky again?" : "Publish this on Bluesky too?", null, publish, null, null,
+                    connections), document);
 
         var state = Receipt.StateOf(receipt, root, connection, open: true, reader.Did);
         var word = ConnectionsController.Word(state);
-        return (state switch
+        var retract = receipt.IsLive() && !receipt.Withheld ? Form.Posting(articleAddress + "/" + PublishController.RetractSegment) : null;
+        return ((state switch
         {
+            ArticleState.Retracting => new Publishing(word, "Taking it down from Bluesky…", connection.NeedsGrant || connection.Trouble is not null ? Undoing(connection) : null,
+                connection.NeedsGrant ? Form.Posting(baseAddress + PublishController.GrantPath) : null, null, elsewhere, connections),
             ArticleState.EditedByOthers => new Publishing(word, "Someone else edited this since it went out. Publish this version as yours?",
                 "Until you do, your copy on Bluesky stays as you wrote it.", publish, null, elsewhere, connections),
             ArticleState.Publishing => new Publishing(word, "Publishing on Bluesky as you…", null, null, null, null, connections),
@@ -65,7 +78,7 @@ public sealed record Publishing(string State, string Sentence, string? Detail, F
             ArticleState.NeedsGrant => new Publishing(word, Syndication.Ungranted, null, publish, null, elsewhere, connections),
             ArticleState.Updated => new Publishing(word, "Updated on Bluesky.", null, null, null, elsewhere, connections),
             _ => new Publishing(word, "Published on Bluesky as you.", null, null, null, elsewhere, connections)
-        }, document);
+        }) with { Retract = retract }, document);
     }
 
     /// <summary>What the author of an article written as a Bluesky account they are no longer bound to reads: it, and any
@@ -95,15 +108,21 @@ public sealed record Publishing(string State, string Sentence, string? Detail, F
     public bool Publishes => State == Offer || State == ConnectionsController.Word(ArticleState.EditedByOthers);
 
     /// <summary>What its author may do from the line: publish, or grant again; say not now; view the Bluesky post; open their
-    /// Connections.</summary>
+    /// Connections; take the copy down, which opens in place to say what goes and confirms there.</summary>
     [Newtonsoft.Json.JsonIgnore]
     public IReadOnlyList<IPart> Answers =>
     [
         .. Publish is { } publish ? new IPart[] { publish with { Tool = "publish", Submit = Publishes ? "Publish" : "Grant it again" } } : [],
         .. NotNow is { } notNow ? new IPart[] { notNow.AsGiven() with { Tool = "not-now", Submit = "Not now", Quiet = true } } : [],
         .. Elsewhere is { } elsewhere ? new IPart[] { new LinkButton("View on Bluesky", elsewhere) { Outside = true } } : [],
-        .. State != Offer ? new IPart[] { new LinkButton("Connections", Connections) } : []
+        .. State != Offer ? new IPart[] { new LinkButton("Connections", Connections) } : [],
+        .. Retract is { } retract ? new IPart[] { Retracting(retract) } : []
     ];
+
+    /// <summary>The form that takes an article's copy down from Bluesky, as a line or a row offers it: behind a quiet press
+    /// that says what goes, confirmed there.</summary>
+    public static Form Retracting(Form retract)
+        => retract with { Tool = "retract", Opens = "Take it down from Bluesky", Submit = "Take it down", Confirm = RetractWarning };
 
     /// <summary>Whether a visitor reads the Tangent <paramref name="tangentId"/> of a place of <paramref name="space"/>: the
     /// place is public, the Tangent's own audience, where it states one, is not private, and the Tangent stands, read after

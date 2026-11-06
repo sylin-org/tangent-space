@@ -1,13 +1,17 @@
+using System.Globalization;
 using Koan.Data.Abstractions;
 using Koan.Data.Abstractions.Annotations;
+using Koan.Data.Abstractions.Filtering;
 using Koan.Data.Core.Model;
+using Koan.Data.Core.Sorting;
 using Tangent.Posts;
 
 namespace Tangent.Connections;
 
 /// <summary>What one Connection delivered of one article, keyed by the two: the version of the Post it carries, the
 /// <c>site.standard.document</c> record in its author's repository and the Bluesky post that embeds it, each by its
-/// <c>at://</c> address, or that it was retracted. <see cref="Version"/> is zero while the article waits to be published.
+/// <c>at://</c> address, or that it was retracted, and whether its author took it down while the article stays here
+/// (<see cref="Withheld"/>). <see cref="Version"/> is zero while the article waits to be published.
 /// The state its participant reads is this against the Post's own version (<see cref="StateOf"/>); a copy stays in the
 /// repository its address names (<see cref="Repository"/>), whatever account its participant holds since.</summary>
 public sealed class Receipt : Entity<Receipt>
@@ -53,6 +57,10 @@ public sealed class Receipt : Entity<Receipt>
     /// grant no longer lets the place take it down.</summary>
     public bool Stays { get; set; }
 
+    /// <summary>Whether its author took the article off Bluesky while it stays here: its copy comes down, and nothing of it
+    /// goes out again until they publish it again.</summary>
+    public bool Withheld { get; set; }
+
     [Index(Name = "ix_receipt_connections", Order = 1)]
     public DateTimeOffset At { get; set; }
 
@@ -72,19 +80,63 @@ public sealed class Receipt : Entity<Receipt>
         return (Math.Min(live.Count, limit), live.Count > limit);
     }
 
+    /// <summary>The most receipts a page of a Connection's holds.</summary>
+    public const int PageSize = 50;
+
+    /// <summary>A page of a Connection's receipts, newest first, and where the next one starts; <see cref="Next"/> is null on
+    /// the last.</summary>
+    public sealed record Listing(IReadOnlyList<Receipt> Receipts, Cursor? Next);
+
+    /// <summary>The place of the last receipt a page held: when it last changed and its article's TID, which orders receipts
+    /// of the same instant.</summary>
+    public sealed record Cursor(DateTimeOffset At, string PostId)
+    {
+        /// <summary>The cursor a query carries, or null when the text is not one.</summary>
+        public static Cursor? Parse(string? text)
+        {
+            var parts = text?.Split('.') ?? [];
+            if (parts.Length != 2 || !Tid.IsValid(parts[1])) return null;
+            if (!long.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out var ticks)
+                || ticks < DateTimeOffset.MinValue.UtcTicks || ticks > DateTimeOffset.MaxValue.UtcTicks) return null;
+            return new Cursor(new DateTimeOffset(ticks, TimeSpan.Zero), parts[1]);
+        }
+
+        public override string ToString() => At.UtcTicks.ToString(CultureInfo.InvariantCulture) + "." + PostId;
+    }
+
+    /// <summary>The page of the Connection <paramref name="connectionId"/>'s receipts after <paramref name="after"/>, or the
+    /// first: one read of <c>ix_receipt_connections</c>, limited to the page and one more, which says whether a next page
+    /// exists. Past the cursor means changed no later than it, and at its own instant, an article before its.</summary>
+    public static async Task<Listing> Of(string connectionId, Cursor? after, CancellationToken ct)
+    {
+        var at = FieldPath.Of(nameof(At));
+        var post = FieldPath.Of(nameof(PostId));
+        var seek = after is null ? null : Filter.All(
+            Filter.On(at, FilterOperator.Lte, FilterValue.Of(after.At)),
+            Filter.Any(Filter.On(at, FilterOperator.Lt, FilterValue.Of(after.At)), Filter.On(post, FilterOperator.Lt, FilterValue.Of(after.PostId))));
+        var read = await Query(receipt => receipt.ConnectionId == connectionId,
+            new QueryDefinition { Filter = seek, Page = 1, PageSize = PageSize + 1 }
+                .WithSort<Receipt>(sort => sort.OrderByDescending(receipt => receipt.At).ThenByDescending(receipt => receipt.PostId)), ct);
+        return read.Count > PageSize
+            ? new Listing([.. read.Take(PageSize)], new Cursor(read[PageSize - 1].At, read[PageSize - 1].PostId))
+            : new Listing(read, null);
+    }
+
     /// <summary>Whether the copy may carry <paramref name="post"/> as it stands: its words are its author's own, or they
     /// chose this version as theirs.</summary>
     public static bool Theirs(Post post, Receipt? receipt) => post.EditedBy is null || receipt?.Chosen >= post.Version;
 
     /// <summary>The state of an article against what its Connection delivered, as its author reads it; <paramref name="open"/>
     /// says whether it should be out, public and standing (<see cref="Publishing.Open"/>), so a copy still out of one that
-    /// should not be remains, and says so, until its retraction lands, and one that never went out is held. An article gone
+    /// should not be remains, and says so, until its retraction lands, and one that never went out is held; one its author
+    /// took down is retracting until its copy is down, then retracted. An article gone
     /// with its Tangent (<paramref name="post"/> null) is read from the receipt alone: written as an earlier account where its
     /// copy is in another repository than <paramref name="did"/>'s.</summary>
     public static ArticleState StateOf(Receipt receipt, Post? post, Connection connection, bool open, string did)
     {
         if ((post?.AuthorDid ?? receipt.Repository()) != did) return ArticleState.Earlier;
         if (!open) return receipt.IsLive() ? ArticleState.Remains : receipt.Document is null ? ArticleState.Held : ArticleState.Retracted;
+        if (receipt.Withheld) return receipt.IsLive() ? ArticleState.Retracting : ArticleState.Retracted;
         if (receipt.Retracted && receipt.Document is not null) return ArticleState.Retracted;
         var behind = post is not null && receipt.Version < post.Version;
         if (behind && !Theirs(post!, receipt)) return ArticleState.EditedByOthers;
@@ -115,6 +167,10 @@ public enum ArticleState
 
     /// <summary>It never went out, and does not while it is not public here or is removed.</summary>
     Held,
+
+    /// <summary>Its author took it off Bluesky while it stays here: its copy comes down at the next run, or once the grant
+    /// comes back.</summary>
+    Retracting,
     Retracted,
 
     /// <summary>Its author wrote it as a Bluesky account they are no longer bound to: it, and any copy of it, stays with

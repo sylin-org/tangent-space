@@ -92,6 +92,7 @@ public static class Holds
     public const string Participant = "The id of a participant the people list.";
     public const string TimeOutFor = "How long the timeout lasts: hour, day or week.";
     public const string Back = "The page a form sent from a page returns to; a JSON request reads the participant as the people list them instead.";
+    public const string RetractBack = "The page of your Connections a form sent from it returns to; left out, the article. A JSON request reads where the article stands instead.";
     public const string GivenRole = "The role to give, by its word, one in their give.";
     public const string TakenRole = "The role to take, by its word, one in their take.";
 

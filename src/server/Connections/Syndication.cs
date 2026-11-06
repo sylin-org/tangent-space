@@ -13,8 +13,9 @@ namespace Tangent.Connections;
 /// <summary>A Connection's work, as its job runs it: the log past its cursor, a bounded page; the articles those rows
 /// name and every article its receipts name; and for each of its participant's articles, the version its receipt
 /// delivered against the Post's own. A public article that is ahead of its receipt is published or updated — one that
-/// arrived after the Connection began, or one they chose — and one that is removed or private is retracted, as is the copy
-/// of one gone with its Tangent, from its receipt alone. Only the
+/// arrived after the Connection began publishing on its own, or one they chose — and one that is removed or private, or
+/// that its author took down (<see cref="Receipt.Withheld"/>), is retracted, as is the copy of one gone with its Tangent,
+/// from its receipt alone. Only the
 /// author's own words go out as theirs: a version someone else edited waits until they choose it (<see cref="Receipt.Theirs"/>).
 /// An article that goes out starts hearing what the network says about it (<see cref="Elsewhere"/>).
 /// An article written as an account the participant is no longer bound to is only ever taken down, from the repository
@@ -87,7 +88,7 @@ public static class Syndication
                 if (!audiences.TryGetValue(article.TangentId, out var open))
                     audiences[article.TangentId] = open = await Publishing.Open(space, article.TangentId, ct);
                 var receipt = receipts.GetValueOrDefault(article.Id);
-                if (open && !article.Removed)
+                if (open && !article.Removed && receipt?.Withheld != true)
                 {
                     if (article.AuthorDid == did) await Deliver(connection, article, receipt, publication, adapter, ct);
                 }
@@ -121,19 +122,19 @@ public static class Syndication
     }
 
     /// <summary>A public article of the account the Connection is under against its receipt: published or updated where it
-    /// is behind.</summary>
+    /// is behind, and one with no receipt only where it publishes on its own (<see cref="Connection.OnItsOwn"/>).</summary>
     private static async Task Deliver(Connection connection, Post article, Receipt? receipt, Publication? publication, AtprotoAdapter adapter,
         CancellationToken ct)
     {
-        var wanted = receipt is null ? article.LogSeq > connection.From : receipt.Retracted || receipt.Version < article.Version;
+        var wanted = receipt is null ? connection.OnItsOwn(article.LogSeq) : receipt.Retracted || receipt.Version < article.Version;
         if (!wanted || !Receipt.Theirs(article, receipt)) return;
         var written = await adapter.Deliver(article, receipt, publication, ct);
         await Sent(new KeepReceipt(connection.Id, article.Id, article.TangentId, article.Version, written, DateTimeOffset.UtcNow), ct);
         if (receipt?.IsLive() != true) await Elsewhere.Start(article, ct);
     }
 
-    /// <summary>The copy a receipt names, where its article should not be out — private here, removed, or gone with its
-    /// Tangent — taken down from the receipt alone, in the repository its address names: that of the account the
+    /// <summary>The copy a receipt names, where its article should not be out — private here, removed, taken down by its
+    /// author, or gone with its Tangent — taken down from the receipt alone, in the repository its address names: that of the account the
     /// Connection is under (<paramref name="did"/>), or that of an earlier account of its participant, through that
     /// account's grant; where that grant no longer lets the place, the receipt says the copy stays there, and nothing tries
     /// again. Nothing goes out under an earlier account, and nothing moves to the new one. A receipt of nothing out is

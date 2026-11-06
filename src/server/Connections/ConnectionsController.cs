@@ -1,7 +1,5 @@
 using System.ComponentModel;
-using Koan.Data.Abstractions;
 using Koan.Data.Core.Commands;
-using Koan.Data.Core.Sorting;
 using Koan.Web.Attributes;
 using Koan.Web.Auth.Infrastructure;
 using Koan.Web.Controllers;
@@ -17,20 +15,25 @@ namespace Tangent.Connections;
 
 /// <summary>A participant's Connections page, one resource both ways (<see cref="ConnectionsPage"/>): their own, so a
 /// visitor's browser signs in and comes back here, and a visitor's JSON or tool call is refused with <c>sign-in</c>. It
-/// reads their Connection, at most <see cref="Shown"/> of its receipts, newest first, the articles those name, each by
-/// key, and whether each of their Tangents is public; a copy still out of an article gone with its Tangent is listed from
-/// its receipt alone (<see cref="DeletedWithItsTangent"/>), and a receipt of nothing out of one is not. A permission
-/// Bluesky did not give comes back here with Koan's code in <c>error</c>, and the article it was for in
-/// <see cref="ArticleQuery"/>, which the page says in words above the rest. <see cref="OfferAgainPath"/> brings back the
-/// offer they said not now to.</summary>
-public sealed class ConnectionsController(KoanWebBaseUrl baseUrl, Nudge nudge) : ControllerBase
+/// reads their Connection, one page of its receipts, newest first, continued from the cursor in <c>after</c>
+/// (<see cref="Receipt.Of"/>), the articles those name, each by key, and whether each of their Tangents is public; a copy
+/// still out of an article gone with its Tangent is listed from its receipt alone (<see cref="DeletedWithItsTangent"/>),
+/// and a receipt of nothing out of one is not. A permission Bluesky did not give comes back here with Koan's code in
+/// <c>error</c>, and the article it was for in <see cref="ArticleQuery"/>, which the page says in words above the rest.
+/// <see cref="OfferAgainPath"/> brings back the offer they said not now to; <see cref="StopPath"/> stops their new
+/// articles going out on their own, and <see cref="ResumePath"/> has them go out on their own again.</summary>
+public sealed class ConnectionsController(KoanWebBaseUrl baseUrl, Nudge nudge, Events.EventStream stream) : ControllerBase
 {
     public const string Path = "/settings/connections";
 
     public const string OfferAgainPath = Path + "/offer-again";
 
-    /// <summary>The most articles the page lists.</summary>
-    public const int Shown = 50;
+    public const string StopPath = Path + "/stop";
+
+    public const string ResumePath = Path + "/resume";
+
+    /// <summary>The query parameter that carries the cursor of the page to continue from.</summary>
+    public const string After = "after";
 
     /// <summary>The query a permission that was not given names its article in, by Id.</summary>
     public const string ArticleQuery = "article";
@@ -41,8 +44,8 @@ public sealed class ConnectionsController(KoanWebBaseUrl baseUrl, Nudge nudge) :
 
     [HttpGet(Path)]
     [Tool(Name = "read_connections")]
-    [Description("Read your Connections: whether your public articles publish under your own atproto account, and where each one stands there — publishing, published, updated, edited by someone else, still out though no longer public here, held back while it is not public here, or what could not be done and when it is tried again.")]
-    public async Task<IActionResult> Get(CancellationToken ct)
+    [Description("Read your Connections: whether your public articles publish under your own atproto account on their own or only as you choose them, and where each one stands there — publishing, published, updated, edited by someone else, being taken down or taken down at your word, still out though no longer public here, held back while it is not public here, or what could not be done and when it is tried again — newest first, a page at a time, next naming the page after this one.")]
+    public async Task<IActionResult> Get([FromQuery(Name = After), Description(Holds.After)] string? after, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var address = baseUrl.Resolve(HttpContext);
@@ -52,13 +55,19 @@ public sealed class ConnectionsController(KoanWebBaseUrl baseUrl, Nudge nudge) :
                 : Redirect(address + SignInController.Path + "?return=" + Uri.EscapeDataString(baseUrl.PathBase + Path));
         var place = await Capabilities.Load(personId, null, null, ct);
         if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
+        Receipt.Cursor? cursor = null;
+        if (after is not null && (cursor = Receipt.Cursor.Parse(after)) is null)
+            return new Problem(StatusCodes.Status400BadRequest,
+                $"The {After} parameter is the cursor a page of your Connections names as its next.") { Title = "Not a page of your Connections" }.ToResult();
 
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
         var participant = await Participant.Get(personId, ct);
         var handle = participant?.ShownHandle() ?? personId;
+        var did = participant?.Did ?? "";
         var connection = await Connection.Get(personId, ct);
-        var receipts = connection is null ? [] : await Receipt.Query(receipt => receipt.ConnectionId == personId,
-            new QueryDefinition { Page = 1, PageSize = Shown }.WithSort<Receipt>(sort => sort.OrderByDescending(receipt => receipt.At)), ct);
+        var page = connection is null ? new Receipt.Listing([], null) : await Receipt.Of(personId, cursor, ct);
+        var receipts = page.Receipts;
+        var back = Path + (cursor is null ? "" : "?" + After + "=" + cursor);
         var posts = receipts.Count == 0 ? new Dictionary<string, Post>()
             : (await Post.Get(receipts.Select(receipt => receipt.PostId).ToList(), ct)).OfType<Post>().ToDictionary(post => post.Id, StringComparer.Ordinal);
 
@@ -70,22 +79,36 @@ public sealed class ConnectionsController(KoanWebBaseUrl baseUrl, Nudge nudge) :
         {
             var post = posts.GetValueOrDefault(receipt.PostId);
             var shown = post is not null && open[post.TangentId] && !post.Removed;
-            var state = Receipt.StateOf(receipt, post, connection!, shown, participant?.Did ?? "");
+            var state = Receipt.StateOf(receipt, post, connection!, shown, did);
             var sentence = state != ArticleState.Earlier ? Sentence(state, connection!)
                 : !shown && receipt.IsLive() ? (receipt.Stays ? Publishing.StaysSentence : Publishing.LeavingSentence)
                 : Sentence(state, connection!);
-            return new ConnectionsPage.Article(post is null ? DeletedWithItsTangent : post.Title ?? "", post is null ? null : address + AtprotoAdapter.Path(post),
-                Word(state), sentence, receipt.IsLive() && receipt.Note is { } note ? Publishing.Bluesky(note) : null, receipt.At);
+            var at = post is null ? null : address + AtprotoAdapter.Path(post);
+            return new ConnectionsPage.Article(post is null ? DeletedWithItsTangent : post.Title ?? "", at,
+                Word(state), sentence, receipt.IsLive() && receipt.Note is { } note ? Publishing.Bluesky(note) : null, receipt.At)
+            {
+                Retract = shown && post!.AuthorDid == did && receipt.IsLive() && !receipt.Withheld
+                    ? Form.Posting(at + "/" + PublishController.RetractSegment, new Form.Field(PublishController.BackField, Holds.RetractBack, back, Form.Input.Hidden))
+                    : null
+            };
         }).ToList();
 
         var another = Request.Query.ContainsKey(AnotherAccount.OpenQuery);
-        return Ok(new ConnectionsPage(space.Name, address + "/", await PostWrites.Reader(personId, place, address, baseUrl.PathBase + Path, ct),
+        return Ok(new ConnectionsPage(space.Name, address + "/", await PostWrites.Reader(personId, place, address, baseUrl.PathBase + back, ct),
             Account(connection, handle, address, articles.Any(article => article.State == Word(ArticleState.Remains))), articles,
             Another(participant, handle, address, another))
         {
-            Failure = another ? null : await Failure(personId, address, ct)
+            Failure = another ? null : await Failure(personId, address, ct),
+            Next = page.Next is { } next ? address + Path + "?" + After + "=" + next : null,
+            First = cursor is null ? null : address + Path
         });
     }
+
+    /// <summary>Whether <paramref name="path"/>, under the base URL, is a page of the Connections: the first, or one a
+    /// cursor names.</summary>
+    public static bool IsPage(string path)
+        => path == Path || path.StartsWith(Path + "?" + After + "=", StringComparison.Ordinal)
+           && Receipt.Cursor.Parse(path[(Path.Length + After.Length + 2)..]) is not null;
 
     /// <summary>Use another Bluesky account, as this page draws it: coming back here bound to the new account; open, with
     /// the handle typed kept, where a refused binding or the sign-in that answers one came back, saying why it was refused,
@@ -134,8 +157,45 @@ public sealed class ConnectionsController(KoanWebBaseUrl baseUrl, Nudge nudge) :
         return StatusCode(StatusCodes.Status303SeeOther);
     }
 
-    /// <summary>The account as its participant reads it; <paramref name="remains"/> says a copy of theirs is still out of
-    /// an article that should not be, which the grant, where it is needed, comes back to take down.</summary>
+    /// <summary>Stops the reader's new articles going out on Bluesky on their own: each goes out once they publish it, and
+    /// what is out follows their edits and removals as before.</summary>
+    [HttpPost(StopPath)]
+    [Tool(Name = "stop_publishing", Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Stop your new public articles going out on Bluesky on their own: from now on each goes out only once you publish it. What is out already stays there and follows your edits and removals; resume_publishing undoes this.")]
+    public Task<IActionResult> Stop(CancellationToken ct) => Changed(personId => new StopPublishing(personId), ct);
+
+    /// <summary>Has the reader's new articles go out on Bluesky on their own again, from now on.</summary>
+    [HttpPost(ResumePath)]
+    [Tool(Name = "resume_publishing", Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("After stop_publishing, have your new public articles go out on Bluesky on their own again, from now on; one you wrote meanwhile goes out once you publish it.")]
+    public async Task<IActionResult> Resume(CancellationToken ct)
+    {
+        var head = await stream.Head(ct);
+        return await Changed(personId => new PublishOnTheirOwn(personId, head), ct);
+    }
+
+    /// <summary>A change of the reader's Connection: a form comes back here; a JSON or tool caller reads where their account
+    /// stands now.</summary>
+    private async Task<IActionResult> Changed(Func<string, ICommand<Connection?>> change, CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-store";
+        if (PostWrites.PersonId(User) is not { } personId) return Answers.Refused(HttpContext, Capabilities.SignIn);
+        var outcome = await change(personId).Send(ct);
+        if (outcome is not Outcome<Connection?>.Done { Result: var connection }) return Answers.NotDone(HttpContext, outcome);
+        var address = baseUrl.Resolve(HttpContext);
+        if (PostWrites.WantsJson(Request))
+        {
+            var handle = (await Participant.Get(personId, ct))?.ShownHandle() ?? personId;
+            return Ok(new { bluesky = Account(connection, handle, address, remains: false), connections = address + Path });
+        }
+
+        Response.Headers.Location = address + Path;
+        return StatusCode(StatusCodes.Status303SeeOther);
+    }
+
+    /// <summary>The account as its participant reads it, with the form that stops their new articles going out on their
+    /// own, or has them go out on their own again, wherever it publishes; <paramref name="remains"/> says a copy of theirs
+    /// is still out of an article that should not be, which the grant, where it is needed, comes back to take down.</summary>
     private static ConnectionsPage.Account Account(Connection? connection, string handle, string address, bool remains)
     {
         if (connection is null)
@@ -144,11 +204,22 @@ public sealed class ConnectionsController(KoanWebBaseUrl baseUrl, Nudge nudge) :
         if (connection.State == ConnectionState.NotNow)
             return new("@" + handle, "not-now", "You said not now to publishing on Bluesky, so your articles don't offer it.",
                 null, null, null, Form.Posting(address + OfferAgainPath));
+        var account = Standing(connection, handle, address, remains);
+        return connection.From is null ? account with { Resume = Form.Posting(address + ResumePath) } : account with { Stop = Form.Posting(address + StopPath) };
+    }
+
+    /// <summary>Where a Connection that publishes stands: needing the grant again, in trouble, publishing only what its
+    /// participant chooses, or publishing.</summary>
+    private static ConnectionsPage.Account Standing(Connection connection, string handle, string address, bool remains)
+    {
         if (connection.NeedsGrant)
             return new("@" + handle, "grant", Syndication.Ungranted + (remains ? " Grant it again to take down what is still public there." : " Grant it again to go on publishing."),
                 connection.Since, null, Form.Posting(address + PublishController.GrantPath), null);
         if (connection.Trouble is { } trouble)
             return new("@" + handle, "trouble", trouble, connection.Since, connection.RetryAt, null, null);
+        if (connection.From is null)
+            return new("@" + handle, "chosen", "Only the articles you choose go out on Bluesky as @" + handle + "; each new one offers it on its page. What is out follows your edits and removals.",
+                connection.Since, null, null, null);
         return new("@" + handle, "publishing", "Your public articles go out on Bluesky as @" + handle + ", and follow your edits and removals.",
             connection.Since, null, null, null);
     }
@@ -172,6 +243,7 @@ public sealed class ConnectionsController(KoanWebBaseUrl baseUrl, Nudge nudge) :
         ArticleState.EditedByOthers => "Edited by someone else; your copy stays as you wrote it",
         ArticleState.Remains => "Still public on Bluesky, though it no longer is here. " + Publishing.Undoing(connection),
         ArticleState.Held => "Not published, since it isn't public here",
+        ArticleState.Retracting => connection.NeedsGrant ? "Coming down from Bluesky once you grant it again" : connection.Trouble ?? "Taking it down from Bluesky…",
         ArticleState.Earlier => "Written as your earlier Bluesky account; it and any copy of it stay with that account",
         _ => "Retracted"
     };

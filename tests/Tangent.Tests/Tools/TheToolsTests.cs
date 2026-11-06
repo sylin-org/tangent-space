@@ -27,8 +27,8 @@ public sealed class TheToolsTests
     /// its caller (<c>Koan:Mcp:ReadByAddress</c>).</summary>
     private static readonly IReadOnlySet<string> EdgeTools = new HashSet<string> { "read" };
 
-    /// <summary>The tools that reach past the place: publishing writes the author's own repository.</summary>
-    private static readonly IReadOnlySet<string> OpenWorld = new HashSet<string> { "publish" };
+    /// <summary>The tools that reach past the place: publishing and retracting write the author's own repository.</summary>
+    private static readonly IReadOnlySet<string> OpenWorld = new HashSet<string> { "publish", "retract" };
 
     /// <summary>Each tool, with the action that is its one definition.</summary>
     private static readonly IReadOnlyDictionary<string, MethodInfo> Tools = new Dictionary<string, MethodInfo>
@@ -82,7 +82,10 @@ public sealed class TheToolsTests
         ["use_offer"] = Action<OfferController>(nameof(OfferController.Use)),
         ["decline_offer"] = Action<OfferController>(nameof(OfferController.Decline)),
         ["publish"] = Action<Connections.PublishController>(nameof(Connections.PublishController.Publish)),
-        ["read_connections"] = Action<Connections.ConnectionsController>(nameof(Connections.ConnectionsController.Get))
+        ["retract"] = Action<Connections.PublishController>(nameof(Connections.PublishController.Retract)),
+        ["read_connections"] = Action<Connections.ConnectionsController>(nameof(Connections.ConnectionsController.Get)),
+        ["stop_publishing"] = Action<Connections.ConnectionsController>(nameof(Connections.ConnectionsController.Stop)),
+        ["resume_publishing"] = Action<Connections.ConnectionsController>(nameof(Connections.ConnectionsController.Resume))
     };
 
     /// <summary>Every public action that is not a tool, with why.</summary>
@@ -156,7 +159,10 @@ public sealed class TheToolsTests
         ["leave_tangent"] = (true, false),
         ["use_offer"] = (true, true),
         ["decline_offer"] = (true, true),
-        ["publish"] = (false, true)
+        ["publish"] = (false, true),
+        ["retract"] = (true, true),
+        ["stop_publishing"] = (false, true),
+        ["resume_publishing"] = (false, true)
     };
 
     private static MethodInfo Action<TController>(string name)
