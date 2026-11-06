@@ -128,8 +128,9 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
 
         var asking = reader is null ? [] : await Tangents.Asking.For(reader.Id, baseAddress, ct);
 
-        var welcome = Welcome(place, space, listed, page.Next is not null, baseAddress);
-        var shelves = welcome is null && (news is null || news.Quiet)
+        var steps = FirstSteps.For(place, space, listed, page.Next is not null, reader, reader is null ? "" : Person(people, reader.Id).Name, baseAddress);
+        if (steps is not null) Response.Headers.CacheControl = "no-cache, no-store";
+        var shelves = steps is null && (news is null || news.Quiet)
             ? await Shelves(page.Tangents.Where(tangent => tangent.Id != space.ModeratorsTangentId).ToList(),
                 featured.Concat(alive).Select(root => root.Id).ToHashSet(StringComparer.Ordinal), people, baseAddress, ct)
             : null;
@@ -169,7 +170,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             Image = appearance.ImageAt(baseAddress + "/"),
             Feeds = space.Audience == Audience.Public ? Feeds.ArticlesLinks(baseAddress, space.Name) : null,
             Offer = offered,
-            Welcoming = welcome,
+            FirstSteps = steps,
             Shelves = shelves is { Count: > 0 } ? shelves : null,
             Applications = waiting.Count == 0
                 ? null
@@ -179,20 +180,6 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             Gate = place.Gate(Bit.Post)?.Word,
             Until = reader is not null && reader.StandingAt(now) == Standing.TimedOut ? reader.StandingUntil : null
         });
-    }
-
-    /// <summary>The steps that make the place its manager's own, for a reader who holds <see cref="Bit.ManageSpace"/>
-    /// while no Tangent but the moderators' holds a Topic, judged from the Tangents the door already read.</summary>
-    private static Door.Welcome? Welcome(Capabilities place, TangentSpace space, IReadOnlyList<Tangents.Tangent> listed, bool more, string baseAddress)
-    {
-        if (!place.Holds(Bit.ManageSpace) || more) return null;
-        var open = listed.Where(tangent => tangent.Id != space.ModeratorsTangentId).ToList();
-        if (open.Any(tangent => tangent.TopicCount > 0)) return null;
-        return new Door.Welcome(
-            open.FirstOrDefault() is { } first ? PostWrites.TangentAddress(baseAddress, first.Id) + "/" + TangentPageController.NewTopicSegment : null,
-            baseAddress + TangentSpaceSettingsController.AppearancePath + "#space-appearance-" + TangentSpaceSettingsController.DescriptionField,
-            baseAddress + TangentSpaceSettingsController.AdmissionPath,
-            baseAddress + BringYourAgentController.Path) { Place = space.Name };
     }
 
     /// <summary>The shelves of the first <see cref="ShelfLimit"/> Tangents that hold a Topic those <paramref name="above"/>

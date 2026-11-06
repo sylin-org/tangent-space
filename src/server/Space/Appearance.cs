@@ -32,7 +32,8 @@ public enum Palette
 
 /// <summary>How the place looks: the five layers of its CSS, stated once in <c>layers.css</c>, as whoever holds
 /// <c>ManageSpace</c> fills them — its <see cref="Base"/>, its <see cref="Palette"/> and its own <see cref="Css"/>; the shapes and
-/// tangent layers are always Tangent's — with its <see cref="Image"/> behind the door's head and its words in Markdown: the
+/// tangent layers are always Tangent's — with its <see cref="Image"/> behind the door's head, its <see cref="Mark"/> beside its
+/// name on every page and as every page's icon, and its words in Markdown: the
 /// <see cref="Masthead"/> line, the <see cref="Footer"/> line, the door's <see cref="Intro"/> and the
 /// <see cref="ArticleHeader"/>. Light or dark is each reader's own, kept by their browser. Each part at its default adds
 /// nothing, and the place wears Tangent's own design.</summary>
@@ -52,11 +53,13 @@ public sealed class Appearance
     public const string IntroPart = "intro";
     public const string ArticleHeaderPart = "article-header";
     public const string ImagePart = "image";
+    public const string MarkPart = "mark";
 
     public static readonly Reason BaseRule = Reason.Invalid("The base is Tangent's own or a bundled stylesheet: choose tangent, simple, mvp, marx, sakura, water, new or concord.");
     public static readonly Reason PaletteRule = Reason.Invalid("The colours are the base's own or Tangent's in an accent: choose base, gold, jade, iris or copper.");
     public static readonly Reason CssRule = Reason.Invalid("The place's own CSS holds at most 50,000 characters.");
     public static readonly Reason ImageRule = Reason.Invalid("The place's image is one of the bundled covers, by its name, or an image brought in here, as /media/ and its id; empty takes it away.");
+    public static readonly Reason MarkRule = Reason.Invalid("The place's mark is an image brought in here, as /media/ and its id; empty is its letter.");
     public static readonly Reason MastheadRule = Reason.Invalid("The masthead line holds at most 2,000 characters of Markdown that renders within its bound.");
     public static readonly Reason FooterRule = Reason.Invalid("The footer line holds at most 2,000 characters of Markdown that renders within its bound.");
     public static readonly Reason IntroRule = Reason.Invalid("The door's introduction holds at most 8,000 characters of Markdown that renders within its bound.");
@@ -75,9 +78,13 @@ public sealed class Appearance
     /// <summary>The place's own CSS, the owner layer, as its writer wrote it; empty adds nothing.</summary>
     public string Css { get; set; } = "";
 
-    /// <summary>The image behind the door's head and the icon of every page: a bundled cover's name (<see cref="Art"/>) or an
-    /// image brought in here, as <c>/media/{id}</c>; empty for none.</summary>
+    /// <summary>The image behind the door's head and on a card a link to the door shows: a bundled cover's name
+    /// (<see cref="Art"/>) or an image brought in here, as <c>/media/{id}</c>; empty for none.</summary>
     public string Image { get; set; } = "";
+
+    /// <summary>The place's mark, beside its name in every masthead and every page's icon: an image brought in here, as
+    /// <c>/media/{id}</c>, drawn square; empty for its letter in its accent.</summary>
+    public string Mark { get; set; } = "";
 
     /// <summary>Markdown beside the place's name on every page.</summary>
     public string Masthead { get; set; } = "";
@@ -119,16 +126,19 @@ public sealed class Appearance
     /// here under <paramref name="media"/> where a page names its images elsewhere; null for none.</summary>
     public string? ImageAt(string door, string? media = null) => Art.Address(Image, door, media);
 
+    /// <summary>The place's mark at its address, as <see cref="ImageAt"/> names one; null for its letter.</summary>
+    public string? MarkAt(string door, string? media = null) => Art.Address(Mark, door, media);
+
     /// <summary>A copy with the same choices.</summary>
     public Appearance Copy() => (Appearance)MemberwiseClone();
 
     /// <summary>Whether <paramref name="other"/> makes the same choices.</summary>
-    public bool Same(Appearance other) => Base == other.Base && Palette == other.Palette && Css == other.Css && Image == other.Image
+    public bool Same(Appearance other) => Base == other.Base && Palette == other.Palette && Css == other.Css && Image == other.Image && Mark == other.Mark
                                           && Masthead == other.Masthead && Footer == other.Footer && Intro == other.Intro && ArticleHeader == other.ArticleHeader;
 
     /// <summary>This appearance with what a write sends in place of what it holds, each judged; a part left null stays.
     /// Refuses with the rule of the first part that is not one of its choices or past its bound.</summary>
-    public Appearance With(string? @base = null, string? palette = null, string? css = null, string? image = null,
+    public Appearance With(string? @base = null, string? palette = null, string? css = null, string? image = null, string? mark = null,
         string? masthead = null, string? footer = null, string? intro = null, string? articleHeader = null)
     {
         var next = Copy();
@@ -136,6 +146,7 @@ public sealed class Appearance
         if (palette is not null) next.Palette = Parse<Palette>(palette, Palettes, PaletteRule);
         if (css is not null) next.Css = css.Length <= CssLimit ? css : throw new Refusal(CssRule);
         if (image is not null) next.Image = Art.Judged(image) ?? throw new Refusal(ImageRule);
+        if (mark is not null) next.Mark = mark.Trim() is var kept && (kept.Length == 0 || Media.IdIn(kept) is not null) ? kept : throw new Refusal(MarkRule);
         if (masthead is not null) next.Masthead = Words(masthead, LineLimit, MastheadRule);
         if (footer is not null) next.Footer = Words(footer, LineLimit, FooterRule);
         if (intro is not null) next.Intro = Words(intro, ProseLimit, IntroRule);
@@ -144,12 +155,12 @@ public sealed class Appearance
     }
 
     /// <summary>This appearance with what a preview sends, each part it cannot take left as it is saved.</summary>
-    public Appearance Previewed(string? @base, string? palette, string? css, string? image, string? masthead, string? footer, string? intro, string? articleHeader)
+    public Appearance Previewed(string? @base, string? palette, string? css, string? image, string? mark, string? masthead, string? footer, string? intro, string? articleHeader)
     {
         var next = this;
         foreach (var step in new Func<Appearance, Appearance>[]
                  {
-                     a => a.With(@base: @base), a => a.With(palette: palette), a => a.With(css: css), a => a.With(image: image),
+                     a => a.With(@base: @base), a => a.With(palette: palette), a => a.With(css: css), a => a.With(image: image), a => a.With(mark: mark),
                      a => a.With(masthead: masthead), a => a.With(footer: footer), a => a.With(intro: intro), a => a.With(articleHeader: articleHeader)
                  })
         {
@@ -170,6 +181,7 @@ public sealed class Appearance
     {
         var named = new HashSet<(string, string)>();
         if (Media.IdIn(Image) is { } image) named.Add((ImagePart, image));
+        if (Media.IdIn(Mark) is { } mark) named.Add((MarkPart, mark));
         foreach (var (part, text) in new[] { (MastheadPart, Masthead), (FooterPart, Footer), (IntroPart, Intro), (ArticleHeaderPart, ArticleHeader) })
             if (text.Length > 0)
                 foreach (var target in PlaceWords.Rendered(part, text).Images)
@@ -179,7 +191,7 @@ public sealed class Appearance
 
     /// <summary>Whether the part of this name stands on every page, a private place's sign-in among them, so an image it
     /// names reaches everyone.</summary>
-    public static bool OnEveryPage(string part) => part is MastheadPart or FooterPart or ImagePart;
+    public static bool OnEveryPage(string part) => part is MastheadPart or FooterPart or ImagePart or MarkPart;
 
     private static T Parse<T>(string sent, IReadOnlyList<string> words, Reason rule) where T : struct, Enum
         => words.Contains(sent, StringComparer.Ordinal) ? Enum.Parse<T>(sent, ignoreCase: true) : throw new Refusal(rule);

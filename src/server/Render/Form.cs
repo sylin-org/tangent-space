@@ -87,6 +87,11 @@ public sealed record Form(string Action, string Method, IReadOnlyList<Form.Field
         [Newtonsoft.Json.JsonIgnore]
         public Form? Sends { get; init; }
 
+        /// <summary>The form beside the field that sets it from what the place learned of its reader, in one press, as the
+        /// picture their Bluesky account shows.</summary>
+        [Newtonsoft.Json.JsonIgnore]
+        public Form? Learned { get; init; }
+
         /// <summary>The field whose value this one carries back where the write fails, and the name it carries it as.</summary>
         [Newtonsoft.Json.JsonIgnore]
         public (string From, string As)? Carries { get; init; }
@@ -107,7 +112,7 @@ public sealed record Form(string Action, string Method, IReadOnlyList<Form.Field
 
         public bool Locked { get; init; }
 
-        /// <summary>The tone and letter of the tile it shows, where it is an accent.</summary>
+        /// <summary>The tone and letter of the tile it shows, where it is an accent or a letter in place of a picture.</summary>
         [Newtonsoft.Json.JsonIgnore]
         public (string Tone, string Letter)? Tile { get; init; }
 

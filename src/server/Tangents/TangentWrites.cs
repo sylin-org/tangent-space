@@ -126,7 +126,7 @@ public static class TangentWrites
         var address = PostWrites.TangentAddress(baseAddress, tangent.Id);
         if (!PostWrites.WantsJson(http.Request))
         {
-            http.Response.Headers.Location = next;
+            http.Response.Headers.Location = PostWrites.Onward(http, baseAddress, next);
             return new StatusCodeResult(StatusCodes.Status303SeeOther);
         }
 

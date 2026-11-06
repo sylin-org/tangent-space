@@ -125,6 +125,9 @@ public sealed class TangentSpace : Entity<TangentSpace>
     /// <summary>How a newcomer arrives: joining at once, or applying and waiting until someone admits them.</summary>
     public Admission Admission { get; set; } = Admission.Join;
 
+    /// <summary>Whether the place's manager closed its first steps on the door (<see cref="FirstSteps"/>).</summary>
+    public bool FirstStepsClosed { get; set; }
+
     /// <summary>Whether a newly admitted participant's Posts wait for approval.</summary>
     public bool NewAccountsAfterApproval { get; set; }
 

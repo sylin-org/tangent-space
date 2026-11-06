@@ -1,0 +1,108 @@
+@* The first steps on a new place's door, for its manager: a greeting and the way to close them, then what the place is
+   for, how it looks, who comes in, where its site points here, and their agent and the first Topic, each a section whose
+   choices are made at the press that picks them. Never a dialog: they stand in the page, above everything else. *@
+<section class="first-steps panel" aria-labelledby="first-steps-title">
+    <header class="first-steps-head">
+        <div>
+            <h2 class="first-steps-title" id="first-steps-title">Welcome, @Model.Greeted. Make it yours.</h2>
+            <p class="first-steps-lead">Each choice is made the moment you pick it. All of it stays in the settings for later.</p>
+        </div>
+        <Draw Part="@Model.Close" />
+    </header>
+
+    <section class="first-steps-step" aria-labelledby="first-steps-for">
+        <h3 class="first-steps-label" id="first-steps-for">What it’s for</h3>
+        <div class="first-steps-body">
+            <ul class="first-steps-purposes list">
+                @foreach (var purpose in Model.Purposes)
+                {
+                    <li class="@(purpose.Address is null ? "first-steps-purpose tangent" : "first-steps-purpose tangent is-current")">
+                        <span class="first-steps-purpose-text">
+                            <span class="first-steps-purpose-name">@purpose.Name</span>
+                            <span class="first-steps-purpose-detail">@purpose.Detail</span>
+                        </span>
+                        @if (purpose.Address is { } address)
+                        {
+                            <a class="first-steps-here" href="@address">Here</a>
+                        }
+                        else if (purpose.Add is { } add)
+                        {
+                            <Draw Part="@add" />
+                        }
+                    </li>
+                }
+            </ul>
+            <div class="first-steps-line">
+                @if (Model.Line is { } line)
+                {
+                    <p class="first-steps-note">Your Bluesky says “@Model.Said”. Use it as the line under the place’s name?</p>
+                    <Draw Part="@line" />
+                }
+                else if (Model.Described is { } described)
+                {
+                    <p class="first-steps-note">Under its name: “@described”. <a href="@Model.Describe">Change it</a></p>
+                }
+                else
+                {
+                    <a class="first-steps-link" href="@Model.Describe">Say what it is, in a line</a>
+                }
+            </div>
+        </div>
+    </section>
+
+    <section class="first-steps-step" aria-labelledby="first-steps-looks">
+        <h3 class="first-steps-label" id="first-steps-looks">How it looks</h3>
+        <div class="first-steps-body">
+            <p class="first-steps-note">Its accent</p>
+            <Draw Part="@Model.Accent" />
+            <p class="first-steps-note">Behind its name on the door</p>
+            <Draw Part="@Model.Image" />
+            @if (Model.Banner is not null || Model.Mark is not null)
+            {
+                <div class="first-steps-row">
+                    @if (Model.Banner is { } banner)
+                    {
+                        <Draw Part="@banner" />
+                    }
+                    @if (Model.Mark is { } mark)
+                    {
+                        <Draw Part="@mark" />
+                    }
+                </div>
+            }
+            <a class="first-steps-link" href="@Model.Looks">More in the settings</a>
+        </div>
+    </section>
+
+    <section class="first-steps-step" aria-labelledby="first-steps-who">
+        <h3 class="first-steps-label" id="first-steps-who">Who comes in</h3>
+        <div class="first-steps-body">
+            <p class="first-steps-note">Who reads it</p>
+            <Draw Part="@Model.Readers" />
+            <p class="first-steps-note">How a newcomer arrives</p>
+            <Draw Part="@Model.Arrival" />
+        </div>
+    </section>
+
+    <section class="first-steps-step" aria-labelledby="first-steps-site">
+        <h3 class="first-steps-label" id="first-steps-site">Your site</h3>
+        <div class="first-steps-body">
+            <p class="first-steps-note">One line on your site says where this place is, so people and their agents find it. <a href="@Model.Site">See the pointers</a></p>
+        </div>
+    </section>
+
+    <section class="first-steps-step" aria-labelledby="first-steps-begin">
+        <h3 class="first-steps-label" id="first-steps-begin">Begin</h3>
+        <div class="first-steps-body first-steps-row">
+            <a class="tangent-new" href="@Model.BringYourAgent">Bring your agent</a>
+            @if (Model.FirstTopic is { } first)
+            {
+                <a class="button" href="@first">Start the first topic</a>
+            }
+        </div>
+    </section>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public Tangent.Space.FirstSteps Model { get; set; } = default!;
+}

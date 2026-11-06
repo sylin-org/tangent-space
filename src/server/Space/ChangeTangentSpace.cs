@@ -7,7 +7,7 @@ using Tangent.Posts;
 namespace Tangent.Space;
 
 /// <summary>Renames and describes the place and sets its admission, its audience and its appearance — base, palette, the
-/// place's own CSS, its image and its words in Markdown — each part judged as it is written (<see cref="Appearance.With"/>,
+/// place's own CSS, its image, its mark and its words in Markdown — each part judged as it is written (<see cref="Appearance.With"/>,
 /// <see cref="TangentSpace.Change"/>) with the images they name in step (<see cref="MediaUse.Record(Appearance, Appearance, string, CancellationToken)"/>), and appends
 /// <see cref="EventKind.SpaceChanged"/>. A field left null stays as it is. The place exists for the actor, who holds
 /// <see cref="Bit.View"/> on it, or the command answers that no place is here; the actor holds
@@ -23,6 +23,7 @@ public sealed record ChangeTangentSpace(
     string? Palette = null,
     string? Css = null,
     string? Image = null,
+    string? Mark = null,
     string? Masthead = null,
     string? Footer = null,
     string? Intro = null,
@@ -41,7 +42,7 @@ public sealed record ChangeTangentSpace(
 
         var before = space.Appearance.Copy();
         if (!space.Change(Name ?? space.Name, Description ?? space.Description, Admission ?? space.Admission, Audience ?? space.Audience,
-                space.Appearance.With(Base, Palette, Css, Image, Masthead, Footer, Intro, ArticleHeader)))
+                space.Appearance.With(Base, Palette, Css, Image, Mark, Masthead, Footer, Intro, ArticleHeader)))
             return new Outcome<TangentSpace>.Done(space);
         await space.Save(ct);
         await MediaUse.Record(before, space.Appearance, ActorId, ct);

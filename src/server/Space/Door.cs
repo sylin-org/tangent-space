@@ -122,17 +122,16 @@ public sealed record Door(
     /// <summary>What is new to a signed-in reader; see <see cref="Since"/>.</summary>
     public Since? News { get; init; }
 
-    /// <summary>The news as the door draws it: with nothing new, only where no welcome stands in its place.</summary>
+    /// <summary>The news as the door draws it: with nothing new, only where no first steps stand in its place.</summary>
     [Slot(Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Since? Told => News is { Quiet: true } && Welcoming is not null ? null : News;
+    public Since? Told => News is { Quiet: true } && FirstSteps is not null ? null : News;
 
-    /// <summary>The few steps that make the place its manager's own: present only for a reader who holds
-    /// <c>ManageSpace</c>, and only while nothing has been written in any Tangent but the moderators'.</summary>
+    /// <summary>The first steps that make the place its manager's own (<see cref="Space.FirstSteps"/>).</summary>
     [Slot(Slot.Column)]
-    public Welcome? Welcoming { get; init; }
+    public FirstSteps? FirstSteps { get; init; }
 
     [Slot(Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Note? Nothing => Welcoming is null && Featured.Count == 0 && Alive.Count == 0 ? new Note("Nothing written here yet.") : null;
+    public Note? Nothing => FirstSteps is null && Featured.Count == 0 && Alive.Count == 0 ? new Note("Nothing written here yet.") : null;
 
     [Slot(Slot.Column), Newtonsoft.Json.JsonIgnore]
     public TopicShelf? FeaturedShelf => Featured.Count == 0 ? null : new TopicShelf("door-featured", "Featured", Featured.Select(shown => shown.Topic).ToList());
@@ -233,15 +232,6 @@ public sealed record Door(
     /// <summary>How many applications wait, whether that is a lower bound because the read was full, and the address of
     /// the applications, where each is admitted or declined.</summary>
     public sealed record Waiting(int Count, bool AtLeast, string Address) : IPart;
-
-    /// <summary>Where the place's manager makes it theirs: the first Topic, in its first Tangent where it has one; the
-    /// line that says what the place is, at its field (<see cref="Describe"/>); who comes in; and bringing their agent.</summary>
-    public sealed record Welcome(string? FirstTopic, string Describe, string Admission, string BringYourAgent) : IPart
-    {
-        /// <summary>The place's name, which the welcome says.</summary>
-        [Newtonsoft.Json.JsonIgnore]
-        public string Place { get; init; } = "";
-    }
 
     /// <summary>One Tangent's shelf: its slug, name, kind, line, address, tile, how many Topics were started there, and its
     /// latest few, newest activity first, leaving out those the front page shows above it.</summary>

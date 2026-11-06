@@ -122,6 +122,14 @@
     font: 600 16px/1 var(--ts-font-display);
   }
 
+  /* The place's mark where it is a picture: square, filling the letter's tile. */
+  .masthead-mark-picture {
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    object-fit: cover;
+  }
+
   .masthead-name {
     overflow: hidden;
     font: 600 20px/1.2 var(--ts-font-display);
@@ -191,7 +199,7 @@
     font: 600 13.5px/1.3 var(--ts-font-ui);
   }
 
-  /* Beside the footer's switch, the menu's stacks its label over the three choices. */
+  /* The theme in the account menu: its label over the three choices. */
   .account-appearance.appearance {
     align-items: stretch;
     gap: 8px;
@@ -422,10 +430,6 @@
     font: var(--ts-type-ui-small);
   }
 
-  .footer-end {
-    margin-left: auto;
-  }
-
   .footer-powered {
     color: var(--ts-text-3);
   }
@@ -586,10 +590,6 @@
     .layout {
       width: calc(100% - 2 * var(--ts-phone-gutter));
       margin-top: 24px;
-    }
-
-    .footer-end {
-      margin-left: 0;
     }
 
     .segmented button {
@@ -1698,17 +1698,10 @@
       font-size: 12.5px;
     }
 
-    .tangent-new {
+    /* A Tangent's own new-topic button stands aside on a phone; every other main button stays. */
+    .topic-list-head .tangent-new,
+    .topic-empty .tangent-new {
       display: none;
-    }
-
-    /* The door keeps its welcome's steps and its Mark all seen on a phone. */
-    .door .tangent-new {
-      display: inline-flex;
-    }
-
-    .door .topic-empty-link {
-      display: block;
     }
 
     .topic-table {

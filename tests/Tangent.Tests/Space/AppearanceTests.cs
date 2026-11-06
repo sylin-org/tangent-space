@@ -1,8 +1,10 @@
 using System.Net;
 using System.Net.Http.Headers;
+using Koan.Data.Core.Commands;
 using Tangent.Access;
 using Tangent.Events;
 using Tangent.Participants;
+using Tangent.Posts;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -194,12 +196,21 @@ public sealed class AppearanceTests
 
         var door = (await Send(visitor, HttpMethod.Get, "/")).Body;
         Assert.Contains($"<img class=\"head-image\" src=\"{BaseUrl}/art/greenhouse.webp\"", door);
-        Assert.Contains($"<link rel=\"icon\" href=\"{BaseUrl}/art/greenhouse.webp\"", door);
+        Assert.DoesNotContain("<link rel=\"icon\"", door);
         Assert.Contains("make things <em>by hand</em>.", door);
         Assert.Contains("<h2", door);
         Assert.Contains("<div class=\"masthead-line\"><p><a href=\"https://sylin.org/\"", door);
         Assert.Contains("<div class=\"footer-line\">", door);
         Assert.Contains("<div class=\"masthead-line\">", (await Send(leo.Client, HttpMethod.Get, Path)).Body);
+
+        // The place's mark is its letter until an image brought in here stands in for it, beside its name and as every page's icon.
+        var mark = await Media.Keep(ArticleMediaTests.Jpeg(), Cancellation);
+        await new BringMedia(mark.Id, Leo).Send(Cancellation);
+        var marked = await Json(leo, Path, Path, new { mark = Media.Reference(mark.Id) });
+        Assert.Equal((HttpStatusCode.OK, Media.Reference(mark.Id)), (marked.Status, marked.Json.GetProperty("mark").GetString()));
+        door = (await Send(visitor, HttpMethod.Get, "/")).Body;
+        Assert.Contains($"<link rel=\"icon\" href=\"{BaseUrl}/media/{mark.Id}\"", door);
+        Assert.Contains($"<img class=\"masthead-mark-picture\" src=\"{BaseUrl}/media/{mark.Id}\"", door);
 
         // A cover Tangent does not bundle is refused, and nothing changes.
         Assert.Equal(HttpStatusCode.BadRequest, (await Json(leo, Path, Path, new { image = "elsewhere" })).Status);

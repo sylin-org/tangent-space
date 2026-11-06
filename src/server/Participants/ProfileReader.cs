@@ -20,10 +20,10 @@ public sealed class ProfileReaderOptions
     public int MaximumResponseBytes { get; set; } = 64 * 1024;
 }
 
-/// <summary>A public profile as the profile service answered it: the DID it is for, what the profile holds, and
-/// whether the account labels itself a bot on its own profile. The handle is not in it: the place shows the handle the
+/// <summary>A public profile as the profile service answered it: the DID it is for, what the profile holds, its banner among
+/// it, and whether the account labels itself a bot on its own profile. The handle is not in it: the place shows the handle the
 /// connector verified at sign-in.</summary>
-public sealed record ProfileAnswer(string Did, string? DisplayName, string? Description, string? Avatar, bool AgentLabel = false);
+public sealed record ProfileAnswer(string Did, string? DisplayName, string? Description, string? Avatar, bool AgentLabel = false, string? Banner = null);
 
 /// <summary>Why a profile could not be read: the service did not answer in time, answered past the bound, refused, or
 /// answered something that is not this DID's profile. Nothing was cached.</summary>
@@ -31,13 +31,13 @@ public sealed class ProfileReadFailed(string reason, Exception? inner = null) : 
 
 /// <summary>The one public read of a participant's profile: <c>app.bsky.actor.getProfile</c> for a DID, one request,
 /// no redirect, bounded in time and in bytes. It runs in the profile job, never in a request and never in a
-/// command.</summary>
+/// command; and the one read of a picture such a profile named, which a write that brings it in makes.</summary>
 public sealed class ProfileReader(HttpClient http, IOptions<ProfileReaderOptions> options)
 {
     /// <summary>The most characters of a display name kept.</summary>
     public const int DisplayNameLimit = 640;
     private const int DescriptionLimit = 2560;
-    private const int AvatarLimit = 2048;
+    private const int PictureLimit = 2048;
 
     /// <summary>The label value an account sets on its own profile to say it is automated: one of the known values
     /// of <c>com.atproto.label.defs#labelValue</c>.</summary>
@@ -72,10 +72,35 @@ public sealed class ProfileReader(HttpClient http, IOptions<ProfileReaderOptions
     }
 
     /// <summary>The base address as a folder, so the read's relative path lands under its path.</summary>
+    /// <summary>The bytes of a picture a profile named at <paramref name="address"/>, at most <paramref name="limit"/>: one
+    /// https request, no redirect, bounded in time as a profile's read is.</summary>
+    public async Task<byte[]> Picture(string address, int limit, CancellationToken ct)
+    {
+        if (!Uri.TryCreate(address, UriKind.Absolute, out var picture) || picture.Scheme != Uri.UriSchemeHttps)
+            throw new ProfileReadFailed($"The picture at {address} is not an https address.");
+        using var bounded = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        bounded.CancelAfter(options.Value.Timeout);
+        try
+        {
+            using var response = await http.GetAsync(picture, HttpCompletionOption.ResponseHeadersRead, bounded.Token);
+            if (response.StatusCode != HttpStatusCode.OK) throw new ProfileReadFailed($"The picture at {address} answered {(int)response.StatusCode}.");
+            if (response.Content.Headers.ContentLength > limit) throw new ProfileReadFailed($"The picture at {address} is larger than {limit} bytes.");
+            return await ReadBounded(response.Content, limit, address, bounded.Token);
+        }
+        catch (OperationCanceledException timeout) when (!ct.IsCancellationRequested)
+        {
+            throw new ProfileReadFailed($"The picture at {address} did not arrive within {options.Value.Timeout}.", timeout);
+        }
+        catch (HttpRequestException unreachable)
+        {
+            throw new ProfileReadFailed($"The picture at {address} could not be reached.", unreachable);
+        }
+    }
+
     private static Uri AsFolder(Uri baseAddress)
         => baseAddress.AbsoluteUri.EndsWith('/') ? baseAddress : new Uri(baseAddress.AbsoluteUri + "/");
 
-    private static async Task<byte[]> ReadBounded(HttpContent content, int limit, string did, CancellationToken ct)
+    private static async Task<byte[]> ReadBounded(HttpContent content, int limit, string subject, CancellationToken ct)
     {
         await using var stream = await content.ReadAsStreamAsync(ct);
         var buffer = new byte[limit + 1];
@@ -86,7 +111,7 @@ public sealed class ProfileReader(HttpClient http, IOptions<ProfileReaderOptions
             if (count == 0) return buffer[..read];
             read += count;
         }
-        throw new ProfileReadFailed($"The profile of {did} is larger than {limit} bytes.");
+        throw new ProfileReadFailed($"What {subject} answered is larger than {limit} bytes.");
     }
 
     private static ProfileAnswer Parse(string did, byte[] body)
@@ -97,18 +122,19 @@ public sealed class ProfileReader(HttpClient http, IOptions<ProfileReaderOptions
             var root = json.RootElement;
             if (Text(root, "did", int.MaxValue) != did)
                 throw new ProfileReadFailed($"The profile service answered another DID's profile for {did}.");
-            var avatar = Text(root, "avatar", AvatarLimit + 1);
-            var avatarAddress = avatar is { Length: <= AvatarLimit }
-                && Uri.TryCreate(avatar, UriKind.Absolute, out var parsed)
-                && parsed.Scheme == "https" ? avatar : null;
             return new ProfileAnswer(did, Text(root, "displayName", DisplayNameLimit),
-                Text(root, "description", DescriptionLimit), avatarAddress, AgentLabelled(root, did));
+                Text(root, "description", DescriptionLimit), PictureAt(root, "avatar"), AgentLabelled(root, did), PictureAt(root, "banner"));
         }
         catch (JsonException malformed)
         {
             throw new ProfileReadFailed($"The profile service answered something other than JSON for {did}.", malformed);
         }
     }
+
+    /// <summary>The https address a profile names a picture at, where it names one within the bound.</summary>
+    private static string? PictureAt(JsonElement root, string name)
+        => Text(root, name, PictureLimit + 1) is { Length: <= PictureLimit } address
+           && Uri.TryCreate(address, UriKind.Absolute, out var parsed) && parsed.Scheme == "https" ? address : null;
 
     /// <summary>Whether the answer's <c>labels</c> hold the bot label the account set itself: the profile view carries
     /// the profile record's self-labels as labels whose source is the account, beside any a labeler applied, which do

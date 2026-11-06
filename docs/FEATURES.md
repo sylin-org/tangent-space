@@ -27,7 +27,8 @@ A row is something the place does not do yet, said by what someone gets, and it 
 
 | Work | Koan | Size |
 | --- | --- | --- |
-| The published `site.standard.theme.basic`, from the first four tokens | — | S |
+| The publication says how the place looks, as `site.standard.publication` holds it: `basicTheme`, from the first four tokens, and `icon`, the place's mark where it is a picture, a blob in the proprietor's repository | — | S |
+| The place's image and mark brought in by dropping a file on their choice, and the part of a wide image a narrow head keeps, chosen on the head itself | — | S |
 
 ## The polish stage
 

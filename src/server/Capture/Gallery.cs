@@ -106,10 +106,7 @@ public sealed class GalleryController : ControllerBase
             new Specimen("Asks to join", new Door.Asking("The workshop", 2, false, door + "t/workshop/settings/people")),
             new Specimen("News", news),
             new Specimen("Nothing new", quiet),
-            new Specimen("The welcome", new Door.Welcome(door + "t/general/new", door + "settings/appearance", door + "settings/admission", door + "bring-your-agent")
-            {
-                Place = "Kintsugi Architecture"
-            }),
+            new Specimen("First steps", FirstStepsOf(door)),
             new Specimen("Nothing to show", new Note("Nothing written here yet.")),
             new Specimen("Topics in a table", new TopicShelf("gallery-topics", "Alive now", rows)),
             new Specimen("An article leading its list", article, Shape.Lead),
@@ -127,5 +124,41 @@ public sealed class GalleryController : ControllerBase
             Around = new Door.Crowd(4, false, [mara, lumen, leo, you]),
             Nobody = new Door.Crowd(0, false, [])
         });
+    }
+
+    /// <summary>First steps as a new place's manager reads them: General here, the rest one press away, their Bluesky line,
+    /// banner and picture offered.</summary>
+    private static FirstSteps FirstStepsOf(string door)
+    {
+        Form Press(string action, string name, string value, string words) => Form.Posting(door.TrimEnd('/') + action,
+            new Form.Field(name, "", value, Form.Input.Hidden)) with { Tool = "change-appearance", Submit = words, Quiet = true };
+        Form Switch(string action, string name, string value, params Form.Choice[] choices) => Form.Posting(door.TrimEnd('/') + action,
+            new Form.Field(name, "", value, Form.Input.Switch) { Choices = choices }) with { Tool = "change-appearance", Key = "gallery-" + name };
+        return new FirstSteps(
+            [
+                new("General", "Conversations, open to everyone", door + "t/general", null),
+                new("Articles", "Long pieces you publish", null, Press("/t/new", "name", "Articles", "Add")),
+                new("The workshop", "Code and experiments", null, Press("/t/new", "name", "The workshop", "Add")),
+                new("Off the record", "Private, for whoever you let in", null, Press("/t/new", "name", "Off the record", "Add"))
+            ],
+            Press("/settings/appearance", "description", "Repairs, systems and the things that outlast them.", "Use it"),
+            door + "settings/appearance#space-appearance-description",
+            Switch("/settings/appearance", "palette", "gold", new("gold", "Gold") { Swatch = "gold" }, new("jade", "Jade") { Swatch = "jade" },
+                new("iris", "Iris") { Swatch = "iris" }, new("copper", "Copper") { Swatch = "copper" }),
+            Switch("/settings/appearance", "image", "", new("", "None"), new("the-commons", "The Commons") { Picture = door + "art/the-commons.webp" },
+                new("greenhouse", "Greenhouse") { Picture = door + "art/greenhouse.webp" }),
+            Press("/settings/appearance/image", "from", "bluesky", "Use your Bluesky banner"),
+            Press("/settings/appearance/mark", "from", "bluesky", "Use your Bluesky picture"),
+            door + "settings/appearance",
+            Switch("/settings", "audience", "public", new("public", "Anyone"), new("private", "Only who is in")),
+            Switch("/settings/admission", "admission", "join", new("join", "Join at once"), new("apply", "Apply, and you admit them")),
+            door + "first-run",
+            door + "bring-your-agent",
+            door + "t/general/new",
+            Form.Posting(door + "first-steps/close") with { Tool = "close-first-steps", Submit = "Done", Quiet = true })
+        {
+            Greeted = "Leo",
+            Said = "Repairs, systems and the things that outlast them."
+        };
     }
 }

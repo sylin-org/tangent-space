@@ -334,6 +334,15 @@
     background: var(--ts-surface-2, var(--ts-surface));
   }
 
+  /* The place's letter, where it is the mark: drawn as the masthead draws it, in the accent. */
+  .cover-letter {
+    display: grid;
+    place-items: center;
+    background: var(--ts-accent);
+    color: var(--ts-accent-foreground);
+    font: 600 40px/1 var(--ts-font-display);
+  }
+
   .cover-choice:has(input:checked) .cover-picture {
     outline: 2px solid var(--ts-accent);
     outline-offset: 2px;
@@ -953,6 +962,184 @@
   @media (max-width: 1023px) {
     .article-outline-folded {
       display: block;
+    }
+  }
+}
+
+/* FirstSteps: a new place's first steps on its door, for its manager: a panel of sections, each a label beside its
+ * choices; a switch's choices are buttons in a row, the one the place stands at pressed, an accent's with its swatch and
+ * an image's with its picture. */
+@layer tangent {
+  .first-steps {
+    margin-bottom: 24px;
+    padding: 24px 28px 8px;
+    border: 1px solid var(--ts-line);
+    border-radius: var(--ts-radius-card);
+    background: var(--ts-surface);
+  }
+
+  .first-steps-head {
+    padding-bottom: 20px;
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .first-steps-head > div {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .first-steps-title {
+    margin: 0;
+    color: var(--ts-text);
+    font: var(--ts-type-card-title);
+    font-size: 24px;
+  }
+
+  .first-steps-lead {
+    margin: 6px 0 0;
+    color: var(--ts-text-2);
+    font: var(--ts-type-ui);
+  }
+
+  .first-steps-step {
+    padding: 18px 0;
+    display: grid;
+    grid-template-columns: 160px minmax(0, 1fr);
+    gap: 16px;
+    border-top: 1px solid var(--ts-line);
+  }
+
+  .first-steps-label {
+    margin: 4px 0 0;
+    color: var(--ts-text);
+    font: 600 14px/1.3 var(--ts-font-ui);
+  }
+
+  .first-steps-body {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .first-steps-note {
+    margin: 0;
+    color: var(--ts-text-2);
+    font: var(--ts-type-ui-small);
+  }
+
+  .first-steps-body > .first-steps-note:not(:first-child) {
+    margin-top: 6px;
+  }
+
+  .first-steps-link {
+    font: 600 13px/1.4 var(--ts-font-ui);
+  }
+
+  .first-steps-row {
+    display: flex;
+    flex-flow: row wrap;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .first-steps-row .tangent-new {
+    margin-left: 0;
+  }
+
+  .first-steps-purposes {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 8px;
+    list-style: none;
+  }
+
+  .first-steps-purpose {
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid var(--ts-line);
+    border-radius: var(--ts-radius-button);
+  }
+
+  .first-steps-purpose.is-current {
+    border-color: var(--ts-accent-line);
+    background: var(--ts-accent-soft);
+  }
+
+  .first-steps-purpose-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .first-steps-purpose-name {
+    color: var(--ts-text);
+    font: 600 14px/1.3 var(--ts-font-ui);
+  }
+
+  .first-steps-purpose-detail {
+    color: var(--ts-text-3);
+    font: var(--ts-type-ui-small);
+  }
+
+  .first-steps-here {
+    color: var(--ts-accent);
+    font: 600 13px/1 var(--ts-font-ui);
+  }
+
+  .first-steps .switch {
+    display: flex;
+    flex-flow: row wrap;
+    gap: 8px;
+  }
+
+  .first-steps .switch .button {
+    height: auto;
+    min-height: 32px;
+    padding: 6px 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .first-steps .switch .button[aria-pressed="true"] {
+    border-color: var(--ts-accent);
+    box-shadow: 0 0 0 1px var(--ts-accent);
+    color: var(--ts-text);
+    opacity: 1;
+  }
+
+  .first-steps .switch .accent-swatch {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+  }
+
+  .first-steps .switch .cover-picture {
+    width: 56px;
+    height: 34px;
+    border-radius: 4px;
+    object-fit: cover;
+  }
+
+  @media (max-width: 719px) {
+    .first-steps {
+      padding: 20px 16px 4px;
+    }
+
+    .first-steps-step {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 10px;
     }
   }
 }

@@ -110,7 +110,7 @@ public sealed class DoorTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task The_places_manager_is_welcomed_with_its_first_steps_until_a_topic_is_written()
+    public async Task The_places_manager_makes_it_theirs_in_first_steps_each_press_returning_to_the_door_until_they_close_them()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
         await Place(tangentSpace);
@@ -119,15 +119,34 @@ public sealed class DoorTests(ITestOutputHelper output)
 
         using (var json = await Json(browser.Client, "/"))
         {
-            var welcome = json.RootElement.GetProperty("welcoming");
-            Assert.Equal(BaseUrl + "/t/" + Articles + "/new", welcome.GetProperty("firstTopic").GetString());
-            Assert.Equal(BaseUrl + "/bring-your-agent", welcome.GetProperty("bringYourAgent").GetString());
+            var steps = json.RootElement.GetProperty("firstSteps");
+            Assert.Equal(BaseUrl + "/t/" + Articles + "/new", steps.GetProperty("firstTopic").GetString());
+            Assert.Equal(BaseUrl + "/bring-your-agent", steps.GetProperty("bringYourAgent").GetString());
+            Assert.Equal(BaseUrl + FirstStepsController.ClosePath, steps.GetProperty("close").GetProperty("action").GetString());
+            var purposes = steps.GetProperty("purposes").EnumerateArray().ToDictionary(purpose => purpose.GetProperty("name").GetString()!, purpose => purpose);
+            Assert.Equal(BaseUrl + "/t/" + Workshop, purposes["The workshop"].GetProperty("address").GetString());
+            Assert.Equal(BaseUrl + "/t/new", purposes["Off the record"].GetProperty("add").GetProperty("action").GetString());
         }
-        Assert.Contains("Welcome to Lantern Works", WebUtility.HtmlDecode(await Html(browser.Client, "/")));
+        Assert.Contains("Make it yours.", WebUtility.HtmlDecode(await Html(browser.Client, "/")));
 
-        await Started(Workshop, "A question", "ada");
+        // A press on the door sends the settings' own write and comes back to the door; another host is never where it goes.
+        using (var jade = await browser.Client.PostAsync(TangentSpaceSettingsController.AppearancePath,
+                   Form(new() { [TangentSpaceSettingsController.PaletteField] = "jade", [PostWrites.ReturnField] = "/" }), Cancellation))
+            Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + "/"), (jade.StatusCode, jade.Headers.Location?.OriginalString));
+        Assert.Equal(Palette.Jade, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Appearance.Palette);
+        using (var away = await browser.Client.PostAsync(TangentSpaceSettingsController.AppearancePath,
+                   Form(new() { [TangentSpaceSettingsController.PaletteField] = "iris", [PostWrites.ReturnField] = "//elsewhere.example/" }), Cancellation))
+            Assert.Equal(BaseUrl + TangentSpaceSettingsController.AppearancePath, away.Headers.Location?.OriginalString);
+        using (var created = await browser.Client.PostAsync("/t/new", Form(new()
+               {
+                   ["name"] = "Off the record", ["description"] = "For whoever is let in.", ["kind"] = "topic", ["audience"] = "private", [PostWrites.ReturnField] = "/"
+               }), Cancellation))
+            Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + "/"), (created.StatusCode, created.Headers.Location?.OriginalString));
+
+        using (var closed = await browser.Client.PostAsync(FirstStepsController.ClosePath, Form(new()), Cancellation))
+            Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + "/"), (closed.StatusCode, closed.Headers.Location?.OriginalString));
         using var after = await Json(browser.Client, "/");
-        Assert.False(after.RootElement.TryGetProperty("welcoming", out var left) && left.ValueKind != JsonValueKind.Null);
+        Assert.False(after.RootElement.TryGetProperty("firstSteps", out var left) && left.ValueKind != JsonValueKind.Null);
     }
 
     [Fact]

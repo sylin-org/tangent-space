@@ -35,7 +35,11 @@ else
     }
     @if (field.Sends is { } sends && !Model.ReadOnly)
     {
-        <form id="@(Id(field) + "-sends")" class="@sends.Tool" method="post" action="@sends.Action" enctype="multipart/form-data" hidden></form>
+        <form id="@(Id(field) + "-sends")" class="@sends.Tool" method="post" action="@sends.Action" enctype="multipart/form-data" hidden>@Hidden(sends)</form>
+    }
+    @if (field.Learned is { } learned && !Model.ReadOnly)
+    {
+        <form id="@(Id(field) + "-learned")" class="@learned.Tool" method="post" action="@learned.Action" hidden>@Hidden(learned)</form>
     }
 }
 
@@ -48,7 +52,8 @@ else
 
     private string? Island => Standalone || Model.ReadOnly ? null : Model.Island;
 
-    private string Id(Render.Form.Field field) => (Model.Key ?? Model.Tool ?? "form") + "-" + field.Name;
+    /// <summary>A field's id: its form's key and its name, or the key of the form that sends it alone, where one does.</summary>
+    private string Id(Render.Form.Field field) => (field.Sends?.Key ?? Model.Key ?? Model.Tool ?? "form") + "-" + field.Name;
 
     /// <summary>The classes named, none where none is.</summary>
     private static string? Classes(params string?[] names) => string.Join(' ', names.Where(name => !string.IsNullOrEmpty(name))) is { Length: > 0 } all ? all : null;
@@ -83,7 +88,13 @@ else
                         @foreach (var choice in pressed.Choices ?? [])
                         {
                             <button type="submit" class="button" name="@pressed.Name" value="@choice.Value" aria-pressed="@(pressed.Value is null ? null : choice.Value == pressed.Value ? "true" : "false")"
-                                    disabled="@(choice.Value == pressed.Value || choice.Locked || Model.ReadOnly)">@choice.Name</button>
+                                    disabled="@(choice.Value == pressed.Value || choice.Locked || Model.ReadOnly)">@if (choice.Swatch is { } swatch)
+                                {
+                                    <span class="accent-swatch" data-swatch="@swatch" aria-hidden="true"></span>
+                                }@if (choice.Picture is { } picture)
+                                {
+                                    <img class="cover-picture" src="@picture" alt="" loading="lazy">
+                                }@choice.Name</button>
                         }
                     </div>
                 }
@@ -307,6 +318,10 @@ else
                 {
                     <img class="cover-picture" src="@picture" alt="" loading="lazy">
                 }
+                else if (choice.Tile is { } tile)
+                {
+                    <span class="cover-picture cover-letter" aria-hidden="true">@tile.Letter</span>
+                }
                 else
                 {
                     <span class="cover-picture" aria-hidden="true"></span>
@@ -340,11 +355,16 @@ else
         }
     </text>;
 
-    /// <summary>What stands under a field: why it was refused, its note, and the press that returns it to its default.</summary>
+    /// <summary>What stands under a field: why it was refused, the press that sets it from what the place learned, its note,
+    /// and the press that returns it to its default.</summary>
     private RenderFragment Under(Render.Form.Field each) => @<text>
         @if (each.Failure is { } failure)
         {
             <p class="field-failure" id="@(Id(each) + "-failure")">@failure</p>
+        }
+        @if (each.Learned is { } learned && !Model.ReadOnly)
+        {
+            <p class="post-form-note"><button type="submit" class="button" form="@(Id(each) + "-learned")" data-busy-label="@learned.Busy">@learned.Submit</button></p>
         }
         @if (each.Note is { } note)
         {

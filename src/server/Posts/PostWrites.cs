@@ -51,6 +51,18 @@ public static class PostWrites
     public static string? PersonId(ClaimsPrincipal user)
         => user.Identity?.IsAuthenticated == true ? user.FindFirst(ClaimTypes.NameIdentifier)?.Value : null;
 
+    /// <summary>The field a form carries to say where it is sent on once its write is done.</summary>
+    public const string ReturnField = "return";
+
+    /// <summary>Where a form whose write is done is sent: the path of this place its <see cref="ReturnField"/> names, under
+    /// <paramref name="baseAddress"/>, so a write offered on the door returns there; otherwise <paramref name="fallback"/>,
+    /// the page the write belongs to. A path is one segment or more after a single slash, never another host's.</summary>
+    public static string Onward(HttpContext http, string baseAddress, string fallback)
+        => http.Request.HasFormContentType && http.Request.Form[ReturnField].ToString() is { Length: > 0 } path
+           && path[0] == '/' && !path.StartsWith("//", StringComparison.Ordinal) && !path.Contains('\\') && !path.Any(char.IsControl)
+            ? baseAddress + path
+            : fallback;
+
     /// <summary>Whether the sender reads JSON: it sent a JSON body, or its <c>Accept</c> names JSON and not HTML.</summary>
     public static bool WantsJson(HttpRequest request)
     {

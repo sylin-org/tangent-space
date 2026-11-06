@@ -5,11 +5,13 @@ namespace Tangent.Space;
 /// <summary>The place's appearance, one resource both ways: the <see cref="Sections"/> of the settings, appearance marked
 /// current; its <see cref="Base"/>, one of <see cref="Bases"/>; its colours, its <see cref="Palette"/>, one of
 /// <see cref="Palettes"/>; its own <see cref="Css"/>; its <see cref="Image"/>, empty, a cover's name or <c>/media/{id}</c>, at
-/// <see cref="ImageAddress"/>, with the <see cref="Covers"/> Tangent bundles; and its words in Markdown: its
+/// <see cref="ImageAddress"/>, with the <see cref="Covers"/> Tangent bundles; its <see cref="Mark"/>, empty for its letter or
+/// <c>/media/{id}</c>, at <see cref="MarkAddress"/>; and its words in Markdown: its
 /// <see cref="Description"/>, its <see cref="Intro"/> under the door's head, the <see cref="Masthead"/> and <see cref="Footer"/>
 /// lines and the <see cref="ArticleHeader"/>. <see cref="Change"/>, present only where the reader may change them, takes each
 /// of them; <see cref="Preview"/>, beside it, takes the same and answers the door drawn in them, saving nothing; and
-/// <see cref="Upload"/> takes an image of the reader's own as the place's. <see cref="Can"/> is what the reader holds in the
+/// <see cref="Upload"/> and <see cref="MarkUpload"/> take an image of the reader's own as the place's image or its mark, or
+/// the banner and the avatar their Bluesky account shows where <see cref="Bluesky"/> says it shows one. <see cref="Can"/> is what the reader holds in the
 /// place, and <see cref="Gate"/> why they may not change them, null when they may; <see cref="SignIn"/> is where a visitor
 /// signs in, coming back here. After a refusal the form says why above the choices.</summary>
 [Render.Page(Render.Layout.Settings)]
@@ -23,6 +25,8 @@ public sealed record AppearanceSettingsPage(
     string Image,
     string? ImageAddress,
     IReadOnlyList<AppearanceSettingsPage.Cover> Covers,
+    string Mark,
+    string? MarkAddress,
     string Description,
     string Intro,
     string Masthead,
@@ -31,6 +35,8 @@ public sealed record AppearanceSettingsPage(
     Form? Change,
     string? Preview,
     string? Upload,
+    string? MarkUpload,
+    AppearanceSettingsPage.Pictures Bluesky,
     IReadOnlyList<string> Can,
     string? Gate,
     string? SignIn,
@@ -48,7 +54,10 @@ public sealed record AppearanceSettingsPage(
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
     public Render.Notice? Line => Render.Notice.Of(Gate, null, SignIn);
 
-    /// <summary>The form as the page draws it: its preview, the place's image with the way to bring one's own, its words, its
+    /// <summary>Whether the reader's Bluesky account showed a banner and an avatar when the place last read their profile.</summary>
+    public sealed record Pictures(bool Banner, bool Avatar);
+
+    /// <summary>The form as the page draws it: its preview, the place's image and its mark with the ways to bring one's own, its words, its
     /// colours and its base, each away from its default with the one press that returns it there, and, behind one quiet line,
     /// its lines, its article header and its own CSS; read only where the reader may not change them.</summary>
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
@@ -67,7 +76,19 @@ public sealed record AppearanceSettingsPage(
             {
                 fields.Add(item.Name switch
                 {
-                    TangentSpaceSettingsController.ImageField => item with { Value = Image, Choices = images },
+                    TangentSpaceSettingsController.ImageField => item with
+                    {
+                        Value = Image, Choices = images,
+                        Learned = Upload is { } bring && Bluesky.Banner ? FromBluesky(bring, "Use your Bluesky banner") : null
+                    },
+                    TangentSpaceSettingsController.MarkField => item with
+                    {
+                        Value = Mark,
+                        Choices = Mark.Length > 0 && MarkAddress is { } mark
+                            ? [Letter, new(Mark, "Your own") { Picture = mark }]
+                            : [Letter],
+                        Learned = MarkUpload is { } bring && Bluesky.Avatar ? FromBluesky(bring, "Use your Bluesky picture") : null
+                    },
                     TangentSpaceSettingsController.DescriptionField => item with { Value = Description },
                     TangentSpaceSettingsController.IntroField => item with { Value = Intro },
                     TangentSpaceSettingsController.PaletteField => item with
@@ -102,18 +123,32 @@ public sealed record AppearanceSettingsPage(
                     _ => item
                 });
                 if (item.Name == TangentSpaceSettingsController.ImageField && Upload is { } upload)
-                    fields.Add(new Render.Form.Field(TangentSpaceSettingsController.FileField, "", As: Render.Form.Input.File)
-                    {
-                        Label = "Or bring your own",
-                        Accept = "image/png,image/jpeg,image/webp",
-                        Note = "A PNG, JPEG or WebP. The place wears it at once, behind the door’s head and as every page’s icon; anyone who reads the door sees it.",
-                        Sends = Render.Form.Posting(upload) with { Tool = "change-appearance", Submit = "Use this image", Busy = "Bringing it in…", Multipart = true }
-                    });
+                    fields.Add(Bringing("space-image", upload,
+                        "A PNG, JPEG or WebP, wide. The place wears it at once behind the door’s head, and a link to the door shows it; anyone who reads the door sees it."));
+                if (item.Name == TangentSpaceSettingsController.MarkField && MarkUpload is { } markUpload)
+                    fields.Add(Bringing("space-mark", markUpload,
+                        "A PNG, JPEG or WebP, square. The place wears it at once beside its name on every page and as every page’s icon."));
             }
 
             return form with { Fields = fields, Failure = Failure, Preview = Gate is null ? Preview : null };
         }
     }
+
+    /// <summary>The place's letter, the mark it wears until a picture stands in for it.</summary>
+    private Render.Form.Choice Letter => new("", "Its letter") { Tile = ("", Place.Length > 0 ? char.ToUpperInvariant(Place[0]).ToString() : "T") };
+
+    /// <summary>The file a person brings in as the place's image or its mark, sent by its own button to <paramref name="action"/>.</summary>
+    private static Render.Form.Field Bringing(string key, string action, string note)
+        => new(TangentSpaceSettingsController.FileField, "", As: Render.Form.Input.File)
+        {
+            Label = "Or bring your own", Accept = "image/png,image/jpeg,image/webp", Note = note,
+            Sends = Render.Form.Posting(action) with { Tool = "change-appearance", Key = key, Submit = "Use this image", Busy = "Bringing it in…", Multipart = true }
+        };
+
+    /// <summary>The one press that brings in the picture the reader's Bluesky account shows, sent to <paramref name="action"/>.</summary>
+    public static Render.Form FromBluesky(string action, string words)
+        => Render.Form.Posting(action, new Render.Form.Field(TangentSpaceSettingsController.FromField, Holds.From, TangentSpaceSettingsController.FromBluesky, Render.Form.Input.Hidden))
+            with { Tool = "change-appearance", Submit = words, Busy = "Bringing it in…" };
 
     private static string Named(string word) => char.ToUpperInvariant(word[0]) + word[1..];
 

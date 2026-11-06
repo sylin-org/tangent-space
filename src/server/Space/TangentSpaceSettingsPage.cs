@@ -64,4 +64,4 @@ public sealed record SettingsSection(string Name, string Address, bool Current);
 /// (<c>join</c> or <c>apply</c>), its audience (<c>public</c> or <c>private</c>), its base, its palette, its own CSS, its image,
 /// its words in Markdown, its door, its settings, and what the sender <see cref="Can"/> do in it.</summary>
 public sealed record WrittenTangentSpace(string Name, string Description, string Admission, string Audience, string Base, string Palette,
-    string Css, string Image, string Intro, string Masthead, string Footer, string ArticleHeader, string Door, string Settings, IReadOnlyList<string> Can);
+    string Css, string Image, string Mark, string Intro, string Masthead, string Footer, string ArticleHeader, string Door, string Settings, IReadOnlyList<string> Can);

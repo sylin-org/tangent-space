@@ -236,6 +236,7 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
             DisplayName = answer.DisplayName,
             Description = answer.Description,
             Avatar = answer.Avatar,
+            Banner = answer.Banner,
             CapturedAt = at
         };
     }

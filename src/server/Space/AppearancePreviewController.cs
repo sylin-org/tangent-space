@@ -24,7 +24,7 @@ public sealed class AppearancePreviewController : ControllerBase
         var personId = PostWrites.PersonId(User);
 
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
-        HttpContext.Items[HtmlFormatter.Previewed] = space.Appearance.Previewed(input.Base, input.Palette, input.Css, input.Image, input.Masthead, input.Footer,
+        HttpContext.Items[HtmlFormatter.Previewed] = space.Appearance.Previewed(input.Base, input.Palette, input.Css, input.Image, input.Mark, input.Masthead, input.Footer,
             input.Intro, input.ArticleHeader);
         if (input.Description is { Length: <= TangentSpace.DescriptionLimit } description && MarkdownHtml.Tractable(description))
             HttpContext.Items[HtmlFormatter.PreviewedDescription] = description.Trim();

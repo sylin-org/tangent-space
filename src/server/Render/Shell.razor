@@ -7,13 +7,13 @@
    a management page leaves out — and the two scripts every page loads, absolute from the base URL. The theme script blocks in <head> so the reader's theme applies before the first paint; the
    page script is a module, deferred by nature, that mounts the islands once the document is parsed. A standalone page
    opens with no server and no script: the device decides its theme, and no island answers on it. A resource
-   that names a frame is drawn inside it: the masthead with the place's mark and name, the search box, a form that works without JavaScript and suggests as someone types with it, and, for someone signed in, how
+   that names a frame is drawn inside it: the masthead with the place's mark, its letter or its picture, and its name, the search box, a form that works without JavaScript and suggests as someone types with it, and, for someone signed in, how
    many things are for them and new, shown only while there are some, which the page's stream raises as new ones
    arrive, a link to the door where they are read, and their account opening in the page with their name, handle and
-   role, the place's settings for whoever may change them, and the way to sign out, or for a visitor the way to
+   role, the theme they choose, the place's settings for whoever may change them, and the way to sign out, or for a visitor the way to
    sign in; the path bar whose elbow hangs from the mark, with a Tangent's crumb opening the list of Tangents
-   in the page, and where a new one is created for whoever may; and the footer with the theme a visitor can choose. A page a visitor may
-   read carries in its head the card a link to it previews, and every page the place's image as its icon. A page of the place's archive opens with the one line that says it is retired. The place's
+   in the page, and where a new one is created for whoever may; and the footer. A page a visitor may
+   read carries in its head the card a link to it previews, and every page the place's mark as its icon, where it is a picture. A page of the place's archive opens with the one line that says it is retired. The place's
    words come through here, Markdown drawn as a Post's body is: its masthead line after the place's name and its footer line first in the footer, each adding nothing while it is empty.
    Every framed page carries the person island, which opens a participant's card beside any name, mark or mention of
    them. Nothing here is a dialog. *@
@@ -52,7 +52,7 @@
     {
         @((MarkupString)Card)
     }
-    @if (Appearance.ImageAt(BaseUrl + "/", Images) is { } icon)
+    @if (Appearance.MarkAt(BaseUrl + "/", Images) is { } icon)
     {
         <link rel="icon" href="@icon">
     }
@@ -67,7 +67,14 @@
     <CascadingValue Name="@Page.ReaderValue" Value="@frame.Who?.Id" IsFixed="true">
     <header class="masthead bar place">
         <a class="masthead-place chip place" href="@frame.Door">
-            <span class="masthead-mark" aria-hidden="true">@frame.Initial</span>
+            <span class="masthead-mark" aria-hidden="true">@if (Appearance.MarkAt(BaseUrl + "/", Images) is { } mark)
+            {
+                <img class="masthead-mark-picture" src="@mark" alt="">
+            }
+            else
+            {
+                @frame.Initial
+            }</span>
             <span class="masthead-name">@frame.Place</span>
         </a>
         @if (PlaceWords.Html(Appearance.MastheadPart, Appearance.Masthead, Images) is { } masthead)
@@ -183,17 +190,6 @@
             <div class="footer-line">@((MarkupString)footer)</div>
         }
         <span class="footer-powered">Powered by Tangent Space</span>
-        @if (!Standalone)
-        {
-            <div class="footer-end appearance" data-island="appearance">
-                <span id="appearance-label">Theme</span>
-                <div class="segmented" role="group" aria-labelledby="appearance-label">
-                    <button type="button" data-theme-choice="system" aria-pressed="true">System</button>
-                    <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
-                    <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
-                </div>
-            </div>
-        }
     </footer>
     @if (!Standalone)
     {
@@ -212,7 +208,7 @@ else
 
     [Parameter, EditorRequired] public string BaseUrl { get; set; } = "";
 
-    /// <summary>How the place looks: the stylesheet of each of its layers, its accent, its own CSS, its image and its words.</summary>
+    /// <summary>How the place looks: the stylesheet of each of its layers, its accent, its own CSS, its mark and its words.</summary>
     [Parameter, EditorRequired] public Appearance Appearance { get; set; } = new();
 
     /// <summary>Whether the page is one of the place's management pages, which leave out the owner layer, so no stylesheet

@@ -12,5 +12,8 @@ public sealed class Profile
 
     public string? Avatar { get; set; }
 
+    /// <summary>The wide picture the account shows behind its name, where it has one.</summary>
+    public string? Banner { get; set; }
+
     public DateTimeOffset? CapturedAt { get; set; }
 }
