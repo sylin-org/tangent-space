@@ -241,15 +241,16 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
     {
         return new RoleForms(
             Form.Posting(baseAddress + Path,
-                new Form.Field(NameField, Holds.RoleName),
-                new Form.Field(PermissionsField, Holds.RolePermissions + " Left out, none.")),
+                new Form.Field(NameField, Holds.RoleName) { Label = "Name", Limit = RoleSettings.NameLimit, Required = true },
+                new Form.Field(PermissionsField, Holds.RolePermissions + " Left out, none.", As: Form.Input.Check) { Label = "What it grants" })
+                with { Tool = "create-role", Submit = "Create role", Busy = "Creating…", Island = "submitting" },
             Form.Posting(baseAddress + ChangePath,
                 new Form.Field(RoleField, Holds.ChangedRole),
-                new Form.Field(NameField, Holds.ChangedRoleName),
-                new Form.Field(PermissionsField, Holds.RolePermissions + " Left out, they stay."),
-                new Form.Field(MoveField, Holds.RoleMove)),
+                new Form.Field(NameField, Holds.ChangedRoleName) { Label = "Name", Limit = RoleSettings.NameLimit, Required = true },
+                new Form.Field(PermissionsField, Holds.RolePermissions + " Left out, they stay.", As: Form.Input.Check) { Label = "What it grants" },
+                new Form.Field(MoveField, Holds.RoleMove)) with { Tool = "change-role" },
             Form.Posting(baseAddress + DeletePath,
-                new Form.Field(RoleField, Holds.DeletedRole)));
+                new Form.Field(RoleField, Holds.DeletedRole)) with { Tool = "delete-role" });
     }
 
     private string BaseAddress() => baseUrl.Resolve(HttpContext);

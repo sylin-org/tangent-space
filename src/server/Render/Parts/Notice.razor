@@ -1,15 +1,9 @@
-@* Why a page's form is not the reader's to send, or why what they sent was refused: one line above it, with the way to sign
-   in for a visitor. *@
-<p class="sign-in-failure" role="alert" data-gate="@Model.Gate">
-    @if (Model.SignIn is { } signIn)
-    {
-        @(Model.Sentence + " ")<a href="@signIn">Sign in</a>
-    }
-    else
-    {
-        @Model.Sentence
-    }
-</p>
+@* Why a page's form is not the reader's to send, or why what they sent was refused: one line above it, with its links and,
+   for a visitor, the way to sign in. *@
+<p class="sign-in-failure" role="alert" data-gate="@Model.Gate"><Draw Part="@(new Render.Sentence(Model.Sentence))" As="Shape.Inline" />@if (Model.SignIn is { } signIn)
+{
+    @(" ")<a href="@signIn">Sign in</a>
+}</p>
 
 @code {
     [Parameter, EditorRequired] public Render.Notice Model { get; set; } = default!;

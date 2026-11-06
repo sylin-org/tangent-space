@@ -1,0 +1,6 @@
+@* A link drawn as a button, quiet beside the page's main one unless it is the main one. *@
+<a class="@(Model.Main ? "tangent-new" : "button")" href="@Model.Address" download="@Model.Download" rel="@(Model.Outside ? "noopener noreferrer" : null)">@Model.Label</a>
+
+@code {
+    [Parameter, EditorRequired] public Render.LinkButton Model { get; set; } = default!;
+}

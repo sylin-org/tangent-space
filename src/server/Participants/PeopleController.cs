@@ -328,11 +328,8 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
             var standing = participant.StandingAt(_now);
             var handle = participant.ShownHandle();
             return new PeoplePage.Listed(
-                participant.Id,
-                participant.ShownName(),
-                handle,
-                ProfilePage.AddressOf(_baseAddress, handle),
-                participant.Kind.ToString().ToLowerInvariant(),
+                new Render.Person(participant.Id, handle, participant.ShownName(), participant.Kind.ToString().ToLowerInvariant(), participant.Profile.Avatar,
+                    ProfilePage.AddressOf(_baseAddress, handle)),
                 People.Word(standing),
                 standing == Standing.TimedOut ? participant.StandingUntil : null,
                 names.OrderByDescending(name => name.Position).ThenBy(name => name.Name, StringComparer.Ordinal).Select(name => name.Name).ToList(),

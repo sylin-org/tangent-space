@@ -1,112 +1,2831 @@
-/* The parts, one block each, named for the part: every rule of a part reads its own classes, its shape and subject, and the
- * places that hold it size it by where it stands. */
+/* The parts, one block each, named for the part and in the order a page first meets them: every rule of a block reads
+ * the classes its part's component writes, its shape and subject, in the layer it cascades in — the shapes layer for
+ * the shape every page draws alike, the tangent layer for its own subject — and a part that holds another sizes it by
+ * where it stands. An island's block styles what its script adds to the part it takes over. */
 
-/* Tangent entry: one Tangent wherever a list holds it — its tile, its name and what it holds, how much is new to the
- * reader, and the mark of the one the page is in. */
-.row:where(.tangent) {
-  min-height: 44px;
-  padding: 6px 10px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  border-radius: var(--ts-radius-button);
-  color: var(--ts-text);
-  text-decoration: none;
+/* AnotherAccountOffer: use another Bluesky account, as a disclosure that opens into its form in the page, never a
+ * dialog. */
+@layer shapes {
+  /* Use another Bluesky account: a disclosure that opens its form in place, in the account menu and on the Connections
+   * page alike. */
+  .another-account > summary {
+    list-style: none;
+    cursor: pointer;
+  }
+
+  .another-account > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .another-account-body {
+    padding: 10px 10px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .another-account-toggle:not(.account-item) {
+    color: var(--ts-accent);
+    font: 600 13.5px/1.3 var(--ts-font-ui);
+  }
 }
 
-.row:where(.tangent):hover,
-.row:where(.tangent).is-current {
-  background: var(--ts-hover);
+/* Form: every write a page offers its reader, drawn from its record alone. */
+@layer shapes {
+  /* An account item that posts: sign out. */
+  .account-action {
+    width: 100%;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .sign-in-form {
+    margin-top: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .field-input {
+    height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0 12px;
+    border: 1px solid var(--ts-line);
+    border-radius: 10px;
+    background: var(--ts-page);
+  }
+
+  .field-input:focus-within {
+    border-color: var(--ts-accent);
+    box-shadow: 0 0 0 3px var(--ts-accent-soft);
+  }
+
+  .field-input:has(input[aria-invalid="true"]:focus) {
+    border-color: var(--ts-danger);
+    box-shadow: 0 0 0 3px var(--ts-accent-line);
+  }
+
+  .field-input:has(input[aria-invalid="true"]:not(:focus)) {
+    border-color: var(--ts-danger);
+    box-shadow: 0 0 0 3px var(--ts-danger-soft);
+  }
+
+  .field-prefix {
+    color: var(--ts-text-3);
+    font-size: 15px;
+  }
+
+  .field-input input {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--ts-text);
+    font-size: 15px;
+    outline: none;
+  }
+
+  .field-input input::placeholder {
+    color: var(--ts-text-3);
+  }
+
+  /* On its way: the field holds what was sent and takes no typing, read as such. */
+  .field-input:has(input:read-only) {
+    border-style: dashed;
+    background: var(--ts-hover);
+    box-shadow: none;
+  }
+
+  .field-input input:read-only {
+    color: var(--ts-text-2);
+    cursor: default;
+  }
+
+  .sign-in-other-toggle {
+    width: fit-content;
+    color: var(--ts-text-2);
+    font: 600 13.5px/1.4 var(--ts-font-ui);
+  }
+
+  .sign-in-other-toggle:hover {
+    color: var(--ts-text);
+  }
+
+  @media (max-width: 719px) {
+    .field-input input {
+      font-size: 16px;
+    }
+
+    /* A tap target of 44 that keeps the disclosure's marker. */
+    .sign-in-other-toggle {
+      line-height: 44px;
+    }
+  }
 }
 
-.tangent-row-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
+@layer tangent {
+  /* On the first-run panel a field's edge is one step up the ramp, so it shows on the raised panel in both themes;
+   * focus and refusal keep the looks the shared field gives them. */
+  .first-run .field-input:not(:focus-within):not(:has(input[aria-invalid="true"])) {
+    border-color: var(--ts-connector);
+  }
+
+  .post-remove {
+    margin-top: 22px;
+    padding-top: 16px;
+    border-top: 1px solid var(--ts-line);
+  }
+
+  .post-remove-toggle {
+    cursor: pointer;
+    color: var(--ts-danger);
+    font-weight: 600;
+  }
+
+  .post-remove-confirm {
+    margin-top: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 16px;
+  }
+
+  .post-remove-note {
+    flex: 1 1 280px;
+    margin: 0;
+    color: var(--ts-text-2);
+    font: var(--ts-type-ui-small);
+    text-wrap: pretty;
+  }
+
+  .post-remove-submit {
+    height: 40px;
+    padding: 0 18px;
+    border: 1px solid var(--ts-danger);
+    border-radius: 10px;
+    background: var(--ts-danger);
+    color: var(--ts-on-accent);
+    font: 700 14px/1 var(--ts-font-ui);
+    cursor: pointer;
+  }
+
+  /* A choice of Tangents as cards. The chosen card takes the accent border and its soft fill, never a ring, so a choice
+   * never reads as focus; focus is the outline the keyboard brings. */
+  .post-form-choice {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .post-form-choice legend {
+    margin-bottom: 6px;
+  }
+
+  .post-form-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .post-form-option {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 14px 16px;
+    border: 1.5px solid var(--ts-connector);
+    border-radius: var(--ts-radius-row);
+    background: transparent;
+    color: inherit;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .post-form-option:has(input:checked),
+  .post-form-option[aria-current="page"] {
+    border-color: var(--ts-accent);
+    background: var(--ts-accent-soft);
+  }
+
+  .post-form-option:has(input:focus-visible) {
+    outline: 2px solid var(--ts-accent);
+    outline-offset: 3px;
+  }
+
+  .post-form-option input:focus-visible {
+    outline: none;
+  }
+
+  .post-form-option input {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    margin: 0;
+    accent-color: var(--ts-accent);
+  }
+
+  .post-form-option-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .post-form-option-name {
+    font-weight: 600;
+  }
+
+  .post-form-option-detail {
+    color: var(--ts-text-2);
+    font-size: 13px;
+  }
+
+  /* An accent beside the others, as the place's appearance offers them, in the theme the reader reads: its tones are the
+   * ones tokens.css gives the page for that accent, and the token test holds them equal. */
+  .accent-swatch {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    background: light-dark(var(--ts-accent-light), var(--ts-accent-dark));
+  }
+
+  .accent-swatch[data-swatch="gold"] {
+    --ts-accent-light: #8a5f12; --ts-accent-dark: #d9ab55;
+  }
+
+  .accent-swatch[data-swatch="jade"] {
+    --ts-accent-light: #2f6b5e; --ts-accent-dark: #7cc4b0;
+  }
+
+  .accent-swatch[data-swatch="iris"] {
+    --ts-accent-light: #5a4fb0; --ts-accent-dark: #a99cf0;
+  }
+
+  .accent-swatch[data-swatch="copper"] {
+    --ts-accent-light: #a4472a; --ts-accent-dark: #e58f6a;
+  }
+
+  /* The forms that create a Tangent and change its settings: a short description box, a quiet note under a field, the
+   * choices that stand at their defaults behind one line, and the Tangent's place with its two moves. */
+  .post-form-short {
+    min-height: 84px;
+  }
+
+  .post-form-more-body {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* The door as the place's appearance will draw it, beside the choices: a frame the width of the form, tall enough to
+   * read the door's head and its first rows. */
+  .appearance-preview {
+    display: block;
+    width: 100%;
+    height: 560px;
+    margin: 0 0 10px;
+    border: 1px solid var(--ts-line);
+    border-radius: var(--ts-radius-card);
+    background: var(--ts-page);
+  }
+
+  /* The place's image: the bundled covers and the place's own as cards of their pictures, the chosen one ringed in the
+   * accent, and the way to bring one's own beneath them. */
+  .cover-choices {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+    gap: 10px;
+  }
+
+  .cover-choice {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    cursor: pointer;
+    font: var(--ts-type-ui);
+    font-size: 13px;
+    color: var(--ts-text-2);
+  }
+
+  .cover-choice input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .cover-picture {
+    display: block;
+    width: 100%;
+    aspect-ratio: 3 / 2;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid var(--ts-line);
+    background: var(--ts-surface-2, var(--ts-surface));
+  }
+
+  .cover-choice:has(input:checked) .cover-picture {
+    outline: 2px solid var(--ts-accent);
+    outline-offset: 2px;
+  }
+
+  .cover-choice:has(input:checked) .cover-name {
+    color: var(--ts-text);
+    font-weight: 600;
+  }
+
+  .cover-choice:has(input:focus-visible) .cover-picture {
+    outline: 2px solid var(--ts-accent);
+    outline-offset: 4px;
+  }
+
+  .cover-upload {
+    margin-top: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* A Tangent's accent: its tile in each of the six tones, and in the one its name gives it. */
+  .tone-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .tone-choice {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 1px solid var(--ts-line);
+    border-radius: 999px;
+    cursor: pointer;
+    font: var(--ts-type-ui);
+    font-size: 13px;
+  }
+
+  .tone-choice input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .tone-choice:has(input:checked) {
+    border-color: var(--ts-accent);
+    box-shadow: 0 0 0 1px var(--ts-accent);
+  }
+
+  .tone-choice:has(input:focus-visible) {
+    outline: 2px solid var(--ts-accent);
+    outline-offset: 2px;
+  }
+
+  .article-writing .post-remove {
+    margin-top: 28px;
+  }
+
+  /* The box: a form between the place and the account, taking what the masthead leaves. */
+  .masthead-search {
+    position: relative;
+    flex: 1 1 120px;
+    min-width: 0;
+    max-width: 360px;
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+  }
+
+  .masthead-search-icon {
+    position: absolute;
+    left: 10px;
+    color: var(--ts-text-3);
+    pointer-events: none;
+  }
+
+  .masthead-search-field {
+    width: 100%;
+    height: 36px;
+    padding: 0 10px 0 32px;
+    border: 1px solid var(--ts-line);
+    border-radius: var(--ts-radius-pill);
+    background: var(--ts-bg);
+    color: var(--ts-text);
+    font: var(--ts-type-ui-small);
+  }
+
+  .masthead-search-field:focus {
+    border-color: var(--ts-accent);
+    outline: none;
+  }
+
+  @media (max-width: 719px) {
+    .masthead-search {
+      position: static;
+      margin-left: 8px;
+      flex-basis: 96px;
+    }
+
+    .masthead-search-icon {
+      display: none;
+    }
+
+    .masthead-search-field {
+      padding-left: 12px;
+    }
+  }
+
+  /* A row's write that opens in place behind its quiet button, to say what sending it does; open, it takes the row's
+   * width and its answers wrap onto further lines on a narrow page. */
+  .confirm > summary {
+    width: fit-content;
+    display: inline-flex;
+    align-items: center;
+    list-style: none;
+    cursor: pointer;
+  }
+
+  .confirm > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .confirm[open] {
+    flex-basis: 100%;
+  }
+
+  .entries .door-offer-answers {
+    flex-wrap: wrap;
+  }
 }
 
-.tangent-row-name {
-  overflow: hidden;
-  font: 600 14px/1.3 var(--ts-font-ui);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* TangentEntry: a Tangent, drawn as whatever lists it chooses. */
+@layer shapes {
+  .tangent-tile-letter {
+    flex: 1;
+    display: grid;
+    place-items: center;
+    color: var(--tone-ink);
+    font: 700 calc(var(--tile) * 0.6) / 1 var(--ts-font-display);
+  }
+
+  .tangent-tile-image {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    object-fit: cover;
+  }
+
+  .tangent-tile-edge {
+    height: var(--tile-edge);
+    background: var(--tone);
+  }
 }
 
-.tangent-row-detail {
-  color: var(--ts-text-3);
-  font: var(--ts-type-meta);
+@layer tangent {
+  .tangent-head .tile .tangent-tile-letter,
+  .tangent-head-articles .tile .tangent-tile-letter {
+    font-size: 32px;
+    font-weight: 600;
+  }
+
+  .article-cover .tile .tangent-tile-letter {
+    font-size: 44px;
+  }
+
+  .door-shelf-tile .tile .tangent-tile-letter {
+    font-size: 22px;
+    font-weight: 600;
+  }
+
+  @media (max-width: 719px) {
+    .tangent-head .tile .tangent-tile-letter,
+    .tangent-head-articles .tile .tangent-tile-letter {
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .article-cover .tile .tangent-tile-letter {
+      font-size: 16px;
+    }
+  }
+
+  .tangent-row-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .tangent-row-name {
+    overflow: hidden;
+    font: 600 14px/1.3 var(--ts-font-ui);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tangent-row-detail {
+    color: var(--ts-text-3);
+    font: var(--ts-type-meta);
+  }
+
+  .tangent-row-check {
+    flex: none;
+    display: flex;
+    color: var(--ts-accent);
+  }
 }
 
-.tangent-row-check {
-  flex: none;
-  display: flex;
-  color: var(--ts-accent);
+/* Post: one Post of a Topic. */
+@layer shapes {
+  .footer {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    min-height: 72px;
+    padding: 12px var(--ts-page-gutter);
+    border-top: 1px solid var(--ts-line);
+    color: var(--ts-text-3);
+    font: var(--ts-type-ui);
+    font-size: 13px;
+  }
+
+  .footer nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+  }
+
+  .footer a {
+    color: var(--ts-text-2);
+    text-decoration: none;
+  }
+
+  @media (max-width: 719px) {
+    .footer {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 24px var(--ts-phone-gutter);
+    }
+
+    .footer nav {
+      gap: 16px;
+    }
+  }
 }
 
-.tangent-row-check .menu-icon {
-  color: inherit;
+@layer tangent {
+  .topic-rail-reply-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.25;
+  }
+
+  .topic-rail-reply-name {
+    overflow: hidden;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .topic-rail-reply-time {
+    color: var(--ts-text-3);
+    font: var(--ts-type-meta);
+  }
+
+  article.post:not(.post-article) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-content: start;
+    row-gap: 0;
+  }
+
+  .post-root {
+    margin-top: 26px;
+    padding-bottom: 14px;
+    gap: 14px;
+    border-bottom: 1px solid var(--ts-line);
+  }
+
+  .post-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 8px;
+  }
+
+  .post-time {
+    margin-left: auto;
+    color: var(--ts-text-3);
+    font: var(--ts-type-meta);
+    text-decoration: none;
+  }
+
+  .post-time:hover {
+    text-decoration: underline;
+  }
+
+  .post-parent {
+    margin-top: 2px;
+    justify-self: start;
+    display: inline-block;
+    color: var(--ts-text-3);
+    font: var(--ts-type-meta);
+  }
+
+  .post-body-root {
+    font: 400 22px/1.45 var(--ts-font-display);
+  }
+
+  .post-removed {
+    margin: 6px 0 0;
+    padding: 10px 12px;
+    border: 1px dashed var(--ts-line);
+    border-radius: var(--ts-radius-row);
+    color: var(--ts-text-3);
+    font: var(--ts-type-ui-small);
+    font-style: italic;
+  }
+
+  .post-actions {
+    margin: 6px 0 0 -8px;
+    display: flex;
+    gap: 2px;
+  }
+
+  .post-action {
+    height: 32px;
+    padding: 0 8px;
+    display: inline-flex;
+    align-items: center;
+    border-radius: 7px;
+    color: var(--ts-text-2);
+    font: 600 13px/1 var(--ts-font-ui);
+    text-decoration: none;
+  }
+
+  .post-action:hover {
+    background: var(--ts-hover);
+  }
+
+  /* Report: a disclosure among a Post's actions that opens a short form in the page. */
+  .post-report {
+    margin: 2px 0 0 -8px;
+  }
+
+  .post-report > summary {
+    width: fit-content;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .post-report > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .post-report > form {
+    margin: 8px 0 0 8px;
+    display: grid;
+    gap: 8px;
+    max-width: 560px;
+  }
+
+  @media (max-width: 719px) {
+    .post-body-root {
+      font-size: 19px;
+    }
+  }
+
+  /* An article's root is its body alone. */
+  .post-article {
+    display: block;
+    margin-top: 0;
+    padding-top: 26px;
+  }
+
+  /* The body in the article's type. */
+  .article-prose {
+    color: var(--ts-text);
+    font: var(--ts-type-article-body);
+    overflow-wrap: anywhere;
+  }
+
+  .article-prose > :first-child {
+    margin-top: 0;
+  }
+
+  .article-prose > :last-child {
+    margin-bottom: 0;
+  }
+
+  .article-prose :is(p, ul, ol, blockquote, pre, table, figure, hr) {
+    margin: 0 0 1.1em;
+  }
+
+  .article-prose h1,
+  .article-prose h2 {
+    margin: 1.5em 0 0.5em;
+    font: var(--ts-type-section);
+    letter-spacing: -0.01em;
+  }
+
+  .article-prose :is(h3, h4, h5, h6) {
+    margin: 1.4em 0 0.4em;
+    font: 600 23px/1.25 var(--ts-font-display);
+  }
+
+  .article-prose :is(ul, ol) {
+    padding-left: 1.3em;
+  }
+
+  .article-prose li {
+    margin: 0.25em 0;
+  }
+
+  .article-prose li > p {
+    margin: 0;
+  }
+
+  .article-prose blockquote {
+    padding-left: 20px;
+    border-left: 3px solid var(--ts-accent);
+    color: var(--ts-text-2);
+    font-style: italic;
+  }
+
+  .article-prose blockquote > :last-child {
+    margin-bottom: 0;
+  }
+
+  .article-prose a {
+    color: var(--ts-accent);
+  }
+
+  .article-prose code {
+    font: 0.84em/1.5 var(--ts-font-mono);
+  }
+
+  .article-prose pre {
+    max-width: 100%;
+    padding: 14px 16px;
+    overflow-x: auto;
+    border: 1px solid var(--ts-line);
+    border-radius: var(--ts-radius-row);
+    background: var(--ts-surface);
+    overflow-wrap: normal;
+  }
+
+  .article-prose table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+    font: var(--ts-type-ui);
+  }
+
+  .article-prose :is(th, td) {
+    padding: 6px 12px;
+    border: 1px solid var(--ts-line);
+    text-align: left;
+  }
+
+  .article-prose hr {
+    border: 0;
+    border-top: 1px solid var(--ts-line);
+  }
+
+  .article-prose img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--ts-radius-row);
+  }
+
+  .article-prose figcaption {
+    margin-top: 8px;
+    color: var(--ts-text-3);
+    font: var(--ts-type-ui-small);
+  }
+
+  /* An image and the emphasis under it read as the figure they will be. The editor's own marks after an image take no
+   * line of their own, so the image stands as it will. */
+  .article-prose figcaption em {
+    font-style: normal;
+  }
+
+  @media (max-width: 719px) {
+    .article-prose {
+      font-size: 18px;
+    }
+
+    .article-prose h1,
+    .article-prose h2 {
+      font-size: 26px;
+    }
+
+    .article-prose :is(h3, h4, h5, h6) {
+      font-size: 21px;
+    }
+  }
+
+  /* A Post's earlier versions: a quiet disclosure under its body, read when it opens. */
+  .post-history {
+    margin: 6px 0 0;
+    font: var(--ts-type-ui-small);
+  }
+
+  .post-history > summary {
+    width: fit-content;
+    color: var(--ts-text-3);
+    cursor: pointer;
+  }
+
+  .post-history > summary:hover {
+    color: var(--ts-text-2);
+  }
+
+  .post-history-body {
+    margin: 8px 0 0;
+    padding: 0 0 0 12px;
+    border-left: 2px solid var(--ts-line);
+  }
+
+  .post-history-body[aria-busy="true"] {
+    opacity: 0.6;
+  }
+
+  /* Copy link, among a Post's actions. */
+  .post-copy-link {
+    border: 0;
+    background: none;
+    cursor: pointer;
+  }
+
+  /* An article's headings stand clear of the masthead when the outline opens them. */
+  .article-prose :is(h2, h3)[id] {
+    scroll-margin-top: calc(var(--ts-header-height) + var(--ts-pathbar-height) + 24px);
+  }
 }
 
-.rail-views .row:where(.tangent) {
-  height: auto;
-  margin: 0 -10px;
-  padding: 6px 10px;
-  color: var(--ts-text);
-  font: inherit;
+/* ArticleHead: how an article opens, the same when it is read and while it is written, its title and cover then the
+ * fields they will be read as. */
+@layer shapes {
+  /* The place's words: the masthead and footer lines, the door's welcome under its head at the width of what follows it,
+  and the article header, each image held to what it stands in. */
+  :is(.masthead-line, .footer-line, .door-intro, .article-header) img {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .article-header {
+    margin: 0 0 16px;
+  }
 }
 
-/* Person: a participant's mark, sized by where it stands; their name, where a part says it beside their mark or in a
- * sentence; and as a row, their mark beside their name and handle. */
-:where(.mark.participant) {
-  width: 32px;
-  height: 32px;
-  font-size: 12px;
+@layer tangent {
+  .article-byline {
+    margin: 18px 0 0;
+    padding-bottom: 22px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--ts-line);
+  }
+
+  .article-byline-text {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .article-byline-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    color: var(--ts-text-3);
+    font: var(--ts-type-meta);
+  }
+
+  /* The form an article is written in. Without script the body is a plain field under its label; with it the field stands
+   * for the source view, and the surface takes its place. */
+  .article-form .article-byline {
+    margin-bottom: 26px;
+  }
+
+  .article-outline-folded {
+    display: none;
+    margin: 0 0 24px;
+    padding: 10px 14px;
+    border: 1px solid var(--ts-line);
+    border-radius: var(--ts-radius-row);
+    font: var(--ts-type-ui-small);
+  }
+
+  .article-outline-folded > summary {
+    color: var(--ts-text-2);
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .article-outline-folded ul {
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  @media (max-width: 1023px) {
+    .article-outline-folded {
+      display: block;
+    }
+  }
 }
 
-.row:where(.participant) {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+/* Intro: the place's welcome under its door's head. */
+@layer shapes {
+  .door-intro {
+    width: min(100% - 2 * var(--ts-page-gutter), var(--ts-home-container));
+    margin: 32px auto 0;
+  }
+
+  @media (max-width: 719px) {
+    .door-intro {
+      width: calc(100% - 2 * var(--ts-phone-gutter));
+      margin-top: 24px;
+    }
+  }
 }
 
-.participant-names {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
+/* PlaceHead: the place's head on its door. */
+@layer shapes {
+  /* The door's head over the place's image: the picture fills the band, and a wash of the surface keeps the words on it
+  readable in either theme. */
+  .tangent-head.is-pictured {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    min-height: 280px;
+    display: flex;
+    align-items: flex-end;
+  }
+
+  .head-image {
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .tangent-head.is-pictured::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(to top, var(--ts-surface) 12%, color-mix(in srgb, var(--ts-surface) 72%, transparent) 55%, color-mix(in srgb, var(--ts-surface) 10%, transparent));
+  }
+
+  .door-description p {
+    margin: 0;
+  }
+
+  @media (max-width: 719px) {
+    .tangent-head.is-pictured {
+      padding-top: 56px;
+      min-height: 220px;
+    }
+  }
 }
 
-.participant-handle {
-  color: var(--ts-text-3);
-  font: var(--ts-type-meta);
+/* PlaceBand: a panel's head. */
+@layer shapes {
+  /* A panel's head: one band of the reference's dark ink in both themes, the place's atmosphere drawn in the accent
+   * across all of it, a shade deepening its foot, and the mark and the name at its bottom left in the light ink the
+   * reference sets over a place's image. */
+  .panel-head {
+    position: relative;
+    height: 128px;
+    overflow: hidden;
+    background: var(--ts-image-band);
+  }
+
+  /* The atmosphere's field covers the band and fades out before the name's line, as the reference shades its image
+   * under the name, and toward both sides of the band, so no character is cut at the panel's edge. */
+  .panel-head-field {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    mask-image: linear-gradient(180deg, #000 30%, transparent 64%), linear-gradient(90deg, transparent 2%, #000 14%, #000 86%, transparent 98%);
+    mask-composite: intersect;
+  }
+
+  .panel-head-atmosphere {
+    position: absolute;
+    top: 8px;
+    right: -40px;
+    margin: 0;
+    color: var(--ts-accent);
+    font: 400 13px/1.2 var(--ts-font-mono);
+    opacity: 0.6;
+  }
+
+  /* The reference's shade under the mark and the name. */
+  .panel-head-shade {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(10, 9, 8, 0.05) 20%, rgba(10, 9, 8, 0.8) 100%);
+  }
+
+  /* In dark the band sits on a raised panel of nearly its own colour: a rule along its foot parts them. */
+  :root[data-theme="dark"] .panel-head {
+    border-bottom: 1px solid var(--ts-line);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) .panel-head,
+    :root[data-theme="system"] .panel-head {
+      border-bottom: 1px solid var(--ts-line);
+    }
+  }
+
+  .panel-head-mark {
+    position: absolute;
+    left: 20px;
+    bottom: 16px;
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    background: var(--ts-accent);
+    color: var(--ts-on-accent);
+    font: 600 18px/1 var(--ts-font-display);
+    box-shadow: 0 0 0 1px var(--ts-image-edge);
+  }
+
+  .panel-head-name {
+    position: absolute;
+    left: 64px;
+    right: 20px;
+    bottom: 18px;
+    overflow: hidden;
+    color: var(--ts-image-ink);
+    font: 500 22px/1.2 var(--ts-font-display);
+    letter-spacing: -0.01em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  @media (max-width: 719px) {
+    .panel-head {
+      height: 104px;
+    }
+
+    .panel-head-mark {
+      bottom: 12px;
+    }
+
+    .panel-head-name {
+      bottom: 14px;
+      font-size: 20px;
+    }
+  }
 }
 
-.participant-name {
-  color: inherit;
+/* SignInGains: what signing in gives. */
+@layer shapes {
+  .sign-in-gains {
+    margin: 20px 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .sign-in-gains li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--ts-text-2);
+    font-size: 13.5px;
+  }
+
+  .sign-in-gain-icon {
+    width: 30px;
+    height: 30px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--ts-line);
+    border-radius: 8px;
+    color: var(--ts-text-2);
+  }
 }
 
-a.participant-name {
-  text-decoration: none;
+/* LobbyHandOff: where an agent comes in. */
+@layer tangent {
+  /* A reading measure for every sentence inside the card, and no word left alone on a last line. */
+  .first-run-note {
+    max-width: 68ch;
+    text-wrap: pretty;
+  }
+
+  .first-run-note {
+    margin: 0;
+    color: var(--ts-text-3);
+    font-size: 12.5px;
+  }
+
+  .first-run-first {
+    margin-top: 16px;
+  }
+
+  .first-run-onward {
+    margin: 20px 0 0;
+  }
+
+  .first-run-door {
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    background: var(--ts-accent);
+    color: var(--ts-on-accent);
+    font: 700 14.5px/1 var(--ts-font-ui);
+    text-decoration: none;
+  }
+
+  .first-run-door:hover {
+    background: color-mix(in srgb, var(--ts-accent) 88%, var(--ts-text));
+  }
+
+  /* Another account: the waiting card's next step, beside the frame's account menu. */
+  .first-run-switch {
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--ts-line);
+    border-radius: 10px;
+    color: var(--ts-text);
+    font: 600 14px/1 var(--ts-font-ui);
+    text-decoration: none;
+  }
+
+  button.first-run-switch {
+    width: 100%;
+    background: none;
+    cursor: pointer;
+  }
+
+  .first-run-switch:hover {
+    background: var(--ts-hover);
+  }
 }
 
-a.participant-name:hover {
-  text-decoration: underline;
+/* Pointing: the pointers a site places, any one of them enough. */
+@layer tangent {
+  /* A reading measure for every sentence inside the card, and no word left alone on a last line. */
+  .first-run-pointer-where {
+    max-width: 68ch;
+    text-wrap: pretty;
+  }
+
+  .first-run-snippet {
+    font-family: var(--ts-font-mono);
+  }
+
+  /* The pointers: a numbered list read as cards, the title and its copy button on one line. */
+  .first-run-pointers {
+    margin: 20px 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .first-run-pointer {
+    padding: 14px 16px 16px;
+    border: 1px solid var(--ts-line);
+    border-radius: var(--ts-radius-card);
+    background: var(--ts-surface);
+  }
+
+  .first-run-pointer-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .first-run-pointer-title {
+    flex: 1;
+    margin: 0;
+    font: 600 14.5px/1.35 var(--ts-font-ui);
+    letter-spacing: 0;
+  }
+
+  .first-run-pointer-where {
+    margin: 4px 0 10px;
+    color: var(--ts-text-2);
+    font-size: 13px;
+  }
+
+  .first-run-copy {
+    height: 32px;
+    flex: none;
+    padding: 0 12px;
+    border: 1px solid var(--ts-line);
+    border-radius: var(--ts-radius-button);
+    background: transparent;
+    color: var(--ts-text);
+    font: 600 13px/1 var(--ts-font-ui);
+  }
+
+  .first-run-copy:hover {
+    background: var(--ts-hover);
+  }
+
+  /* The code element would take the browser's own monospace; it reads the snippet's face instead. */
+  .first-run-snippet code {
+    font: inherit;
+  }
+
+  .first-run-snippet {
+    margin: 0;
+    padding: 12px 14px;
+    overflow-x: auto;
+    border: 1px solid var(--ts-line);
+    border-radius: var(--ts-radius-input);
+    background: var(--ts-page);
+    color: var(--ts-text);
+    font-size: 13px;
+    line-height: 1.55;
+    white-space: pre;
+  }
+
+  @media (max-width: 719px) {
+    .first-run-pointer {
+      padding: 12px 12px 14px;
+    }
+
+    .first-run-copy {
+      height: 44px;
+      min-width: 44px;
+    }
+
+    /* On a phone a snippet wraps rather than scrolls, so all of it shows before it is copied. */
+    .first-run-snippet {
+      font-size: 12px;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+  }
 }
 
-/* The place's head: on the door it names nothing, the masthead does; its line leads. */
-.tangent-head.place .tangent-head-text {
-  gap: 6px;
+/* Code: code inside a sentence, in the mono face. */
+@layer tangent {
+  /* Code inside a sentence: the mono face in the text colour, a size under the sentence's; an address breaks only after
+   * a slash (each run between slashes holds together), never at a hyphen. */
+  .first-run .code-text {
+    font-family: var(--ts-font-mono);
+    font-size: 0.92em;
+    color: var(--ts-text);
+    hyphens: none;
+  }
+
+  .first-run a .code-text {
+    color: inherit;
+  }
+
+  .first-run .code-run {
+    white-space: nowrap;
+  }
 }
 
-/* Specimen: a part under the name of the state it stands in, as the gallery of parts shows it. */
-.specimen {
-  margin: 0 0 40px;
+/* PanelTitle: a panel's title. */
+@layer tangent {
+  .post-form-where {
+    margin: 0 0 4px;
+    color: var(--ts-text-2);
+    font: var(--ts-type-ui-small);
+  }
+
+  .post-form-where a {
+    color: var(--ts-text);
+    font-weight: 600;
+  }
 }
 
-.specimen-title {
-  margin: 0 0 12px;
-  color: var(--ts-text-3);
-  font: var(--ts-type-caps);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+/* ArticleEditor: the form an article is written in, laid out as the article reads. */
+@layer tangent {
+  .post-form-unsaved-title {
+    margin: 0;
+    color: var(--ts-text-2);
+    font-weight: 600;
+  }
+
+  .article-title-field {
+    resize: none;
+    overflow: hidden;
+    outline: none;
+  }
+
+  .article-title-field::placeholder {
+    color: var(--ts-text-3);
+    opacity: 1;
+  }
+
+  .article-cover-field:empty {
+    display: none;
+  }
+
+  .article-source {
+    font: 400 15px/1.6 var(--ts-font-mono);
+  }
+
+  .article-body-field:not(.is-visual) .article-source {
+    min-height: 420px;
+  }
+
+  .article-form-actions {
+    margin-top: 28px;
+    padding-top: 14px;
+    border-top: 1px solid var(--ts-line);
+  }
+}
+
+/* TangentHead: a Tangent's head. */
+@layer tangent {
+  .tangent-head-articles {
+    padding: 36px 0 32px;
+  }
+
+  .tangent-audience {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  @media (max-width: 719px) {
+    .tangent-head-articles {
+      padding: 20px 0;
+    }
+  }
+
+  /* The Tangent head's actions: for whoever may change it, the Tangent's settings. */
+  .tangent-head-actions {
+    margin: 12px 0 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+}
+
+/* AudienceNote: who can read a Tangent. */
+@layer tangent {
+  .rail-audience-icon {
+    width: 28px;
+    height: 28px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--ts-line);
+    border-radius: var(--ts-radius-button);
+    color: var(--ts-text-2);
+  }
+}
+
+/* TangentTopics: a page of a Tangent's Topics, latest activity first. */
+@layer tangent {
+  .topic-list-head-ruled {
+    border-bottom: 1px solid var(--ts-line);
+  }
+
+  .topic-table-heading {
+    height: 38px;
+    padding: 0 18px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    border-bottom: 1px solid var(--ts-line);
+    color: var(--ts-text-3);
+    font: var(--ts-type-caps);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .topic-table-topic {
+    flex: 1;
+    padding-left: 26px;
+  }
+
+  .topic-table-people {
+    width: 80px;
+    flex: none;
+  }
+
+  .topic-table-replies {
+    width: 64px;
+    flex: none;
+    text-align: right;
+  }
+
+  .topic-table-latest {
+    width: 96px;
+    flex: none;
+    text-align: right;
+  }
+
+  @media (max-width: 719px) {
+    .topic-table-heading {
+      display: none;
+    }
+  }
+}
+
+/* Person: a participant, drawn as whatever holds them chooses. */
+@layer tangent {
+  .topic-row-opening > .participant-name {
+    color: var(--ts-text-2);
+  }
+
+  .post-head > .participant-name {
+    font: var(--ts-type-ui-large);
+    font-size: 14px;
+  }
+
+  .post-root .post-head > .participant-name {
+    font-size: 15px;
+  }
+
+  .article-byline-text > .participant-name {
+    color: var(--ts-text);
+    font: var(--ts-type-ui-large);
+    text-decoration: none;
+  }
+
+  .article-byline-text > a.participant-name:hover {
+    text-decoration: underline;
+  }
+
+  [data-person] {
+    cursor: pointer;
+  }
+
+  .participant-names {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .participant-handle {
+    color: var(--ts-text-3);
+    font: var(--ts-type-meta);
+  }
+
+  .participant-name {
+    color: inherit;
+  }
+
+  a.participant-name {
+    text-decoration: none;
+  }
+
+  a.participant-name:hover {
+    text-decoration: underline;
+  }
+
+  /* The reader in the account menu: their mark at 32px, and their name and handle each on one line, cut short. */
+  .account-button > .mark,
+  .account-who .mark {
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .account-who .participant-name {
+    overflow: hidden;
+    color: var(--ts-text);
+    font: var(--ts-type-ui-large);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .account-who .participant-handle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  @media (max-width: 719px) {
+    .account-button > .mark {
+      width: 30px;
+      height: 30px;
+    }
+  }
+}
+
+/* TopicEntry: one Topic in a list. */
+@layer tangent {
+  .topic-row-count {
+    font: 600 15px/1.3 var(--ts-font-ui);
+  }
+
+  .topic-row-count-word {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .topic-row-who {
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--ts-text-3);
+    font: 400 12px/1.3 var(--ts-font-ui);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .topic-row-new-separator {
+    display: none;
+  }
+
+  /* The latest reply, on the page's colour: who wrote it and its first words. */
+  .topic-row-latest-reply {
+    margin-top: 12px;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: var(--ts-radius-button);
+    background: var(--ts-page);
+    color: var(--ts-text-2);
+    font: 400 13px/1.45 var(--ts-font-ui);
+  }
+
+  .row:where(.topic):hover .topic-row-latest-reply {
+    background: var(--ts-surface);
+  }
+
+  .topic-row-latest-line {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .topic-row-latest-line b,
+  .article-strip-line b {
+    color: var(--ts-text);
+    font-weight: 600;
+  }
+
+  .new-inline {
+    display: none;
+  }
+
+  /* The articles: the lead with its cover, date and read time, opening, author and latest-reply strip; the rest as rows.
+   * An article without a cover image leads with its letter cover: its title's first letter on its tone. */
+  .article-card {
+    padding: 26px 0;
+    border-bottom: 1px solid var(--ts-line);
+  }
+
+  .article-card:last-child {
+    border-bottom: 0;
+  }
+
+  .article-lead {
+    padding: 28px 0;
+    display: flex;
+    gap: 32px;
+  }
+
+  /* A lead without a cover image carries the Tangent's own: its tile and its name on the image band, over its edge,
+   * the same in both themes, with nothing set larger than the title beside it. */
+  .article-cover {
+    position: relative;
+    width: 400px;
+    height: 350px;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    overflow: hidden;
+    border-radius: var(--ts-radius-image);
+    background: var(--ts-image-band);
+    color: var(--ts-image-ink);
+    text-decoration: none;
+  }
+
+  .article-cover-tangent {
+    max-width: calc(100% - 48px);
+    overflow: hidden;
+    font: 500 12px/1.3 var(--ts-font-mono);
+    letter-spacing: 0.14em;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+    opacity: 0.8;
+  }
+
+  .article-cover-edge {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 6px;
+    background: var(--tone);
+  }
+
+  .article-card-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .article-card-date {
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    color: var(--ts-text-3);
+    font: 400 13px/1.45 var(--ts-font-ui);
+  }
+
+  .article-card-title {
+    margin: 8px 0 0;
+    font: 500 27px/1.15 var(--ts-font-display);
+    letter-spacing: -0.01em;
+    overflow-wrap: anywhere;
+  }
+
+  .article-lead .article-card-title {
+    margin-top: 10px;
+    font-size: 34px;
+    line-height: 1.1;
+    letter-spacing: -0.015em;
+  }
+
+  .article-card-title a {
+    color: var(--ts-text);
+    text-decoration: none;
+  }
+
+  .article-card-title a:hover {
+    text-decoration: underline;
+    text-decoration-color: var(--ts-line);
+  }
+
+  .article-card-opening {
+    margin: 10px 0 0;
+    max-width: 680px;
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    color: var(--ts-text-2);
+    font: 400 16px/1.55 var(--ts-font-display);
+  }
+
+  .article-lead .article-card-opening {
+    margin-top: 14px;
+    -webkit-line-clamp: 4;
+    font-size: 17px;
+  }
+
+  .article-card-author {
+    margin: 14px 0 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    color: var(--ts-text-3);
+    font: var(--ts-type-meta);
+  }
+
+  .article-strip {
+    margin-top: auto;
+    padding: 11px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid var(--ts-line);
+    border-radius: var(--ts-radius-row);
+    background: var(--ts-surface);
+    color: var(--ts-text-2);
+    font: 400 13px/1.4 var(--ts-font-ui);
+    text-decoration: none;
+  }
+
+  .article-strip:hover {
+    background: var(--ts-hover);
+  }
+
+  .article-lead .article-card-author + .article-strip {
+    margin-top: 20px;
+  }
+
+  .article-strip-line {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .article-strip-count {
+    flex: none;
+    color: var(--ts-text-3);
+    font-size: 12.5px;
+  }
+
+  @media (max-width: 1199px) {
+    .article-lead {
+      flex-direction: column;
+      gap: 22px;
+    }
+
+    .article-cover {
+      width: 100%;
+      height: 200px;
+    }
+  }
+
+  @media (max-width: 719px) {
+    .topic-row-count {
+      font: 400 12.5px/1.3 var(--ts-font-ui);
+    }
+
+    .topic-row-count-word {
+      position: static;
+      width: auto;
+      height: auto;
+      overflow: visible;
+      clip-path: none;
+    }
+
+    .topic-row-new-separator {
+      display: inline;
+    }
+
+    .topic-row-who {
+      display: none;
+    }
+
+    .topic-row-latest-reply {
+      align-items: flex-start;
+      padding: 10px;
+      font-size: 13.5px;
+    }
+
+    .topic-row-latest-line {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      white-space: normal;
+    }
+
+    .article-lead {
+      gap: 16px;
+    }
+
+    .article-cover {
+      height: 56px;
+      padding: 0 16px 4px;
+      flex-direction: row;
+      justify-content: flex-start;
+      gap: 12px;
+      background: var(--tone-tint);
+      color: var(--tone-ink);
+    }
+
+    .article-cover-edge {
+      height: 4px;
+    }
+
+    .new-inline {
+      display: inline;
+      margin-left: 4px;
+    }
+
+    .new-beside {
+      display: none;
+    }
+
+    .article-card-title,
+    .article-lead .article-card-title {
+      font-size: 24px;
+    }
+  }
+
+  /* A list's covers. */
+  .article-cover-image {
+    display: block;
+    background: var(--ts-image-band);
+  }
+
+  @media (max-width: 1199px) {
+    .article-cover-image {
+      width: 100%;
+      height: auto;
+      padding: 0;
+      aspect-ratio: 16 / 9;
+    }
+  }
+
+  .article-cover-image img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .article-card-covered {
+    display: flex;
+    flex-direction: row-reverse;
+    gap: 24px;
+  }
+
+  .article-card-cover {
+    width: 168px;
+    height: 112px;
+    flex: none;
+    overflow: hidden;
+    border-radius: var(--ts-radius-row);
+    background: var(--ts-image-band);
+  }
+
+  .article-card-cover img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  @media (max-width: 719px) {
+    .article-card-cover {
+      width: 96px;
+      height: 72px;
+    }
+
+    .article-card-covered {
+      gap: 14px;
+    }
+  }
+}
+
+/* ElsewhereLine: under a published article, for everyone. */
+@layer tangent {
+  /* What the network says under a published article: its counts on Bluesky in one line, and the newest replies and
+  quotes there, each attributed and linked to where it is read. */
+  .elsewhere {
+    margin-top: 16px;
+  }
+
+  .elsewhere-line {
+    margin: 0;
+    color: var(--ts-text-3);
+    font: var(--ts-type-ui);
+  }
+
+  .elsewhere-line a {
+    margin-left: 8px;
+  }
+
+  .elsewhere-references {
+    margin: 16px 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .elsewhere-reference {
+    padding: 12px 16px;
+    border: 1px solid var(--ts-line);
+    border-radius: var(--ts-radius-card);
+    background: var(--ts-surface);
+  }
+
+  .elsewhere-who,
+  .elsewhere-text {
+    margin: 0 0 6px;
+    overflow-wrap: anywhere;
+  }
+
+  .elsewhere-name {
+    font-weight: 600;
+  }
+
+  .elsewhere-who time {
+    margin-left: 6px;
+    color: var(--ts-text-3);
+  }
+}
+
+/* Shelf: one Tangent's shelf on the front page, in its tone. */
+@layer tangent {
+  /* A Tangent's shelf on the door: its tile, name and line over an edge in its tone, the way to the rest at the end of
+  the head, and its latest Topics under it. */
+  .door-shelf {
+    margin-top: 32px;
+  }
+
+  .door-shelf-head {
+    padding-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border-bottom: 2px solid var(--tone);
+  }
+
+  .door-shelf-tile {
+    display: flex;
+  }
+
+  .door-shelf-text {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .door-shelf-name {
+    margin: 0;
+    font: 600 18px/1.3 var(--ts-font-display);
+  }
+
+  .door-shelf-name a {
+    color: var(--ts-text);
+    text-decoration: none;
+  }
+
+  .door-shelf-name a:hover {
+    color: var(--tone-ink);
+  }
+
+  .door-shelf-line {
+    margin: 2px 0 0;
+    overflow: hidden;
+    color: var(--ts-text-2);
+    font: 400 14px/1.4 var(--ts-font-ui);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .door-shelf-all {
+    flex: none;
+    color: var(--tone-ink);
+    font: 600 13px/1.4 var(--ts-font-ui);
+    text-decoration: none;
+  }
+
+  .door-shelf-all:hover {
+    text-decoration: underline;
+  }
+}
+
+/* The seen island: the form at the end of the door’s news that marks it seen, which the island takes over. */
+@layer tangent {
+  /* The door's seen control, at the end of its news's head. */
+  .topic-list-head > .seen {
+    margin-left: auto;
+  }
+}
+
+/* TopicRail: a Topic's rail. */
+@layer tangent {
+  .topic-rail-replies {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .topic-rail-replies a {
+    margin: 0 -8px;
+    padding: 6px 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-radius: var(--ts-radius-button);
+    color: var(--ts-text);
+    text-decoration: none;
+  }
+
+  .topic-rail-replies a:hover,
+  .topic-rail-replies a[aria-current="true"] {
+    background: var(--ts-hover);
+  }
+
+  /* An article's outline: in the rail beside it, and folded above its body where the rail folds. */
+  .article-outline a {
+    height: auto;
+    min-height: 32px;
+    padding-block: 6px;
+    line-height: 1.35;
+  }
+}
+
+/* TopicTitle: a discussion's head. */
+@layer tangent {
+  .topic-title {
+    margin: 0;
+    font: var(--ts-type-topic-title);
+    letter-spacing: -0.02em;
+    overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 719px) {
+    .topic-title {
+      font-size: 30px;
+    }
+  }
+}
+
+/* Edited: beside a Post's words or first words, right after its author, who else last edited them, so they never
+ * read as the author's own. */
+@layer tangent {
+  .edited-by {
+    color: var(--ts-text-3);
+    font-weight: 400;
+  }
+}
+
+/* TopicReplies: one window of a Topic's replies, in order. */
+@layer tangent {
+  .topic-replies-head {
+    margin-top: 18px;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .topic-replies-range {
+    color: var(--ts-text-3);
+    font: var(--ts-type-ui-small);
+    font-weight: 400;
+  }
+
+  .topic-replies-empty {
+    margin: 20px 0 0;
+    color: var(--ts-text-3);
+    font: var(--ts-type-ui);
+  }
+}
+
+/* ReplyBox: where a reader replies in a Topic, under its replies. */
+@layer tangent {
+  .topic-closed {
+    margin: 20px 0 0;
+    color: var(--ts-text-3);
+    font: var(--ts-type-ui);
+  }
+
+  .topic-closed {
+    padding-top: 16px;
+    border-top: 1px solid var(--ts-line);
+  }
+
+  .topic-closed a {
+    color: var(--ts-text);
+    font-weight: 600;
+  }
+
+  .topic-reply {
+    margin-top: 28px;
+    padding-top: 20px;
+    border-top: 1px solid var(--ts-line);
+  }
+
+  .reply-form {
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .reply-form-to {
+    margin: 0;
+    color: var(--ts-text-2);
+    font: var(--ts-type-ui-small);
+  }
+
+  .reply-form-to a {
+    color: var(--ts-text);
+    font-weight: 600;
+  }
+}
+
+/* The composer island: the draft it keeps and the Reply it gives each Post. */
+@layer tangent {
+  .composer-status {
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--ts-line);
+    border-radius: var(--ts-radius-input);
+    background: var(--ts-hover);
+    color: var(--ts-text-2);
+    font: var(--ts-type-ui-small);
+    text-wrap: pretty;
+  }
+
+  .composer-status[data-tone="failure"] {
+    border-color: var(--ts-danger);
+    background: var(--ts-danger-soft);
+    color: var(--ts-text);
+  }
+
+  .composer-reply-to {
+    border: 0;
+    background: none;
+    cursor: pointer;
+  }
+}
+
+/* The suggestion island: the @ and # pickers’ list under the caret. */
+@layer tangent {
+  /* What a writer can name as they type @ or #: a short list under the caret, beside the field it serves. */
+  :has(> .suggestions) {
+    position: relative;
+  }
+
+  .suggestions {
+    position: absolute;
+    z-index: 5;
+    min-width: 260px;
+    max-width: min(420px, 100%);
+    max-height: 320px;
+    overflow-y: auto;
+    margin: 0;
+    padding: 4px;
+    list-style: none;
+    border: 1px solid var(--ts-line);
+    border-radius: var(--ts-radius-panel);
+    background: var(--ts-page);
+    box-shadow: var(--ts-shadow-popover);
+  }
+
+  .suggestions [role="option"] {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 8px;
+    align-items: baseline;
+    padding: 6px 10px;
+    border-radius: var(--ts-radius-row);
+    cursor: pointer;
+  }
+
+  .suggestions [role="option"][aria-selected="true"] {
+    background: var(--ts-hover);
+  }
+
+  .suggestion-name {
+    color: var(--ts-text);
+    font: var(--ts-type-ui-small);
+    font-weight: 600;
+  }
+
+  .suggestion-insert {
+    overflow: hidden;
+    color: var(--ts-text-2);
+    font: var(--ts-type-ui-small);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .suggestion-note {
+    grid-column: 1 / -1;
+    color: var(--ts-text-2);
+    font: var(--ts-type-ui-small);
+  }
+
+  .suggestion-note:empty {
+    display: none;
+  }
+}
+
+/* The article island: the visual editor a body becomes, with its tools. */
+@layer tangent {
+  .article-figure.is-coming > img {
+    opacity: 0.6;
+  }
+
+  .article-surface p:has(> img:not(.ProseMirror-separator)) + p:has(> em:only-child) {
+    margin-top: 8px;
+    color: var(--ts-text-3);
+    font: var(--ts-type-ui-small);
+  }
+
+  /* An image and the emphasis under it read as the figure they will be. The editor's own marks after an image take no
+   * line of their own, so the image stands as it will. */
+  .article-surface p:has(> img:not(.ProseMirror-separator)) + p:has(> em:only-child) em {
+    font-style: normal;
+  }
+
+  .article-surface p:has(> img:not(.ProseMirror-separator)):has(+ p > em:only-child) {
+    margin-bottom: 0;
+  }
+
+  .article-surface p:has(> img:not(.ProseMirror-separator)) > :is(img.ProseMirror-separator, br.ProseMirror-trailingBreak) {
+    display: none !important;
+  }
+
+  .article-cover-offer {
+    margin-bottom: 18px;
+    padding: 8px 0;
+    width: 100%;
+    border: 1px dashed var(--ts-connector);
+    border-radius: var(--ts-radius-row);
+    background: transparent;
+    color: var(--ts-text-2);
+    font: var(--ts-type-ui-small);
+    cursor: pointer;
+  }
+
+  .article-cover-offer:hover {
+    border-color: var(--ts-text-3);
+    color: var(--ts-text);
+  }
+
+  .article-cover-actions {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: flex;
+    gap: 6px;
+  }
+
+  .article-cover-actions .article-tool {
+    background: var(--ts-surface);
+    border-color: var(--ts-line);
+  }
+
+  .article-surface {
+    min-height: 320px;
+    outline: none;
+  }
+
+  .article-surface p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    color: var(--ts-text-3);
+    pointer-events: none;
+  }
+
+  .article-surface img.ProseMirror-selectednode {
+    outline: 2px solid var(--ts-accent);
+    outline-offset: 2px;
+  }
+
+  .article-image-coming {
+    display: block;
+    margin-bottom: 1.1em;
+    opacity: 0.55;
+  }
+
+  .article-image-coming img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--ts-radius-row);
+  }
+
+  .article-toolbar {
+    position: sticky;
+    top: calc(var(--ts-header-height) + var(--ts-pathbar-height));
+    z-index: 2;
+    margin: 0 0 22px;
+    padding: 6px 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--ts-line);
+    background: var(--ts-page);
+  }
+
+  .article-tools {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+  }
+
+  .article-tool {
+    height: 32px;
+    padding: 0 8px;
+    flex: none;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--ts-text-2);
+    font: 600 13px/1 var(--ts-font-ui);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .article-tool:hover:not(:disabled) {
+    background: var(--ts-hover);
+    color: var(--ts-text);
+  }
+
+  .article-tool:disabled {
+    cursor: default;
+    opacity: 0.4;
+  }
+
+  .article-tool[aria-pressed="true"] {
+    background: var(--ts-accent-soft);
+    color: var(--ts-text);
+  }
+
+  .article-views {
+    flex: none;
+    display: flex;
+    gap: 2px;
+  }
+
+  .article-status {
+    margin: 0 0 16px;
+  }
+
+  .article-panel {
+    margin: 0 0 22px;
+    padding: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px;
+    border: 1px solid var(--ts-line);
+    border-radius: var(--ts-radius-row);
+    background: var(--ts-surface);
+  }
+
+  .article-panel[hidden] {
+    display: none;
+  }
+
+  .article-panel-field {
+    flex: 1 1 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: var(--ts-text-2);
+    font: var(--ts-type-ui-small);
+  }
+
+  .article-panel-field input {
+    height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--ts-line);
+    border-radius: 8px;
+    background: var(--ts-page);
+    color: var(--ts-text);
+    font: var(--ts-type-ui);
+  }
+
+  /* A Post written in the article's editor — a reply, a discussion's opening, an edit: its toolbar on the field's frame,
+   * the words in a Post's own type. */
+  .post-body-field.is-visual {
+    border: 1px solid var(--ts-line);
+    border-radius: 10px;
+    background: var(--ts-page);
+  }
+
+  .post-body-field.is-visual:focus-within {
+    border-color: var(--ts-accent);
+    box-shadow: 0 0 0 3px var(--ts-accent-soft);
+  }
+
+  .post-body-field .article-toolbar {
+    position: static;
+    margin: 0;
+    padding: 4px 6px;
+    border-radius: 10px 10px 0 0;
+    background: transparent;
+  }
+
+  .post-body-field .article-panel,
+  .post-body-field .article-status {
+    margin: 10px 12px 0;
+  }
+
+  .post-surface {
+    min-height: 140px;
+    padding: 10px 12px;
+  }
+}
+
+/* ProfileHead: a participant's head on their profile. */
+@layer tangent {
+  .profile-handle {
+    color: var(--ts-text-3);
+  }
+
+  .profile-description {
+    white-space: pre-line;
+  }
+
+  .profile-roles {
+    color: var(--ts-text-2);
+  }
+}
+
+/* The search island: what the masthead’s search finds as one types. */
+@layer tangent {
+  /* The suggestions open in the page, under the box. Never a dialog. */
+  .masthead-search-panel {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    width: min(420px, calc(100vw - 32px));
+    overflow: hidden;
+    border: 1px solid var(--ts-line);
+    border-radius: var(--ts-radius-card);
+    background: var(--ts-surface);
+    box-shadow: var(--ts-shadow-popover);
+  }
+
+  .masthead-search-panel[hidden] {
+    display: none;
+  }
+
+  .masthead-search-hit {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2px 12px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--ts-line);
+    color: var(--ts-text);
+    text-decoration: none;
+  }
+
+  .masthead-search-hit:hover,
+  .masthead-search-hit[aria-selected="true"] {
+    background: var(--ts-hover);
+  }
+
+  .masthead-search-topic {
+    overflow: hidden;
+    font: var(--ts-type-ui-small);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .masthead-search-where {
+    color: var(--ts-text-3);
+    font: var(--ts-type-meta);
+  }
+
+  .masthead-search-words {
+    grid-column: 1 / -1;
+    overflow: hidden;
+    color: var(--ts-text-2);
+    font: var(--ts-type-meta);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .masthead-search-all {
+    display: block;
+    margin: 0;
+    padding: 10px 14px;
+    color: var(--ts-text-2);
+    font: var(--ts-type-meta);
+    overflow-wrap: anywhere;
+  }
+
+  a.masthead-search-all:hover {
+    background: var(--ts-hover);
+  }
+
+  @media (max-width: 719px) {
+    .masthead-search-panel {
+      top: calc(100% + 6px);
+      left: 16px;
+      right: 16px;
+      width: auto;
+    }
+  }
+}
+
+/* SearchHit: one Post a search found. */
+@layer tangent {
+  /* The words a search matched, wherever its words are shown. */
+  .search-mark {
+    border-radius: 2px;
+    background: var(--ts-accent-soft);
+    color: inherit;
+  }
+
+  .search-hit-body {
+    flex: 1 1 320px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .search-hit-line {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .search-hit-text {
+    min-width: 0;
+  }
+
+  .search-hit-link {
+    color: var(--ts-text);
+    font-weight: 600;
+  }
+
+  .snippet {
+    margin: 0;
+    color: var(--ts-text-2);
+    font: var(--ts-type-ui);
+    overflow-wrap: anywhere;
+  }
+}
+
+/* SearchHits: what a search found, best first, each Post a line, or one sentence where it found none, and the pages
+ * either side. */
+@layer tangent {
+  /* The hits of a search, each in an Offer's line: who wrote it by their mark, the Topic it is in linked, its Tangent and
+   * when, and its snippet under it. */
+  .search-hits {
+    margin: 16px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+}
+
+/* Versions: a Post's earlier versions, newest first. */
+@layer tangent {
+  .post-history-version + .post-history-version {
+    margin-top: 12px;
+  }
+
+  .post-history-meta {
+    margin: 0 0 4px;
+    display: flex;
+    gap: 8px;
+    color: var(--ts-text-3);
+    font: var(--ts-type-ui-small);
+  }
+
+  .post-history-meta strong {
+    color: var(--ts-text-2);
+  }
+
+  .post-history-none {
+    margin: 8px 0 0;
+    color: var(--ts-text-3);
+  }
+
+  .post-history-body .post-history-back {
+    display: none;
+  }
+}
+
+/* The quote island: a passage of an article offered as a quote in the reply box. */
+@layer tangent {
+  /* Quote in reply: beside the passage the reader selected. */
+  .has-quote-offer {
+    position: relative;
+  }
+
+  .quote-offer {
+    position: absolute;
+    z-index: 3;
+    box-shadow: var(--ts-shadow-popover);
+  }
+
+  .quote-offer[hidden] {
+    display: none;
+  }
+}
+
+/* ContinueReading: where a signed-in reader who left a Topic mid-way continues, which their browser kept. */
+@layer tangent {
+  /* The door's way back to a Topic left mid-way: one quiet line. */
+  .door-continue {
+    margin: 0 0 20px;
+    font: var(--ts-type-ui);
+  }
+
+  .door-continue a {
+    color: var(--ts-text-2);
+    text-decoration: none;
+  }
+
+  .door-continue strong {
+    color: var(--ts-text);
+  }
+
+  .door-continue a:hover strong {
+    text-decoration: underline;
+  }
+}
+
+/* TopicViews: the ways a Tangent's page lists its Topics. */
+@layer tangent {
+  /* The articles filter: a month and an author among the rail's views, pressed to narrow the page's articles. */
+  .article-filter[hidden] {
+    display: none;
+  }
+
+  .article-filter-choice {
+    width: calc(100% + 20px);
+    min-height: 36px;
+    margin: 0 -10px;
+    padding: 0 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    border: 0;
+    border-radius: var(--ts-radius-button);
+    background: none;
+    color: var(--ts-text-2);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .article-filter-choice:hover {
+    background: var(--ts-hover);
+  }
+
+  .article-filter-choice[aria-pressed="true"] {
+    background: var(--ts-hover);
+    color: var(--ts-text);
+    font-weight: 600;
+  }
+
+  .article-filter-count {
+    color: var(--ts-text-3);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .article-filter-note:empty {
+    display: none;
+  }
+
+  .article-filter-note {
+    margin: 10px 0 0;
+    color: var(--ts-text-3);
+  }
+}
+
+/* The person island: the card a participant’s mark opens. */
+@layer tangent {
+  /* A participant's card, beside the name, mark or mention it opened from (islands/person.ts): their mark and name over
+  their handle, roles and since when, their description, what the reader may change of them, and the card's actions.
+  It sits over the page and never covers it whole. A name in a body, as a pick writes it, is one chip in the visual
+  editor. */
+  .person-card {
+    position: absolute;
+    z-index: 6;
+    width: min(22rem, calc(100vw - 16px));
+    padding: 14px;
+    display: grid;
+    gap: 10px;
+    border: 1px solid var(--ts-line);
+    border-radius: var(--ts-radius-panel);
+    background: var(--ts-page);
+    box-shadow: var(--ts-shadow-popover);
+    color: var(--ts-text);
+    font: var(--ts-type-ui);
+  }
+
+  .person-card:focus {
+    outline: none;
+  }
+
+  .person-card[aria-busy="true"] {
+    min-height: 64px;
+  }
+
+  .person-card-who {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .person-card-text {
+    min-width: 0;
+  }
+
+  .person-card-name {
+    margin: 0;
+    font: var(--ts-type-ui-large);
+    overflow-wrap: anywhere;
+  }
+
+  .person-card-meta {
+    margin: 2px 0 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 10px;
+    color: var(--ts-text-2);
+    font: var(--ts-type-ui-small);
+    font-weight: 400;
+  }
+
+  .person-card-description {
+    margin: 0;
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+    color: var(--ts-text-2);
+  }
+
+  .person-card-standing {
+    margin: 0;
+  }
+
+  .person-card-said {
+    margin: 0;
+    color: var(--ts-text-2);
+  }
+
+  .person-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .person-card-action {
+    text-decoration: none;
+  }
+}
+
+/* The article island’s chips: a mention or a Tangent picked into the editor. */
+@layer tangent {
+  .article-surface .named {
+    padding: 0 2px;
+    border-radius: var(--ts-radius-row);
+    background: var(--ts-accent-soft);
+    color: var(--ts-accent);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .article-surface .named.ProseMirror-selectednode {
+    outline: 2px solid var(--ts-accent-line);
+  }
+}
+
+/* Specimen: a part under the name of the state it stands in, drawn in the shape the gallery names. */
+@layer tangent {
+  /* Specimen: a part under the name of the state it stands in, as the gallery of parts shows it. */
+  .specimen {
+    margin: 0 0 40px;
+  }
+
+  .specimen-title {
+    margin: 0 0 12px;
+    color: var(--ts-text-3);
+    font: var(--ts-type-caps);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
 }

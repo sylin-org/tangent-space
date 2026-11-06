@@ -34,7 +34,70 @@ public sealed record RolesPage(
     public Render.SettingsRail Rail => new(Sections);
 
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Render.RoleList Body => new(this);
+    public Render.PanelTitle Heading => new(TangentSpaceSettingsController.RolesSection, "Settings of " + Render.Sentence.Link(Place, Door));
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.Notice? Line => Render.Notice.Of(Gate, Failure, SignIn);
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.Sentence? Order => Gate is not null ? null : new("Roles stand one above another, the highest first. You shape the roles below your own highest, and change the standing and roles of someone whose highest role is below yours.");
+
+    /// <summary>A role's permissions as checks, the ones it grants checked, one the reader does not hold locked.</summary>
+    private IReadOnlyList<Render.Form.Choice> Grantable => Permissions.Select(permission => new Render.Form.Choice(permission.Bit, permission.Words) { Locked = !permission.Held }).ToList();
+
+    /// <summary>A new role, which opens in place, opening already where a refused one comes back.</summary>
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.Form? Creating => Gate is not null || Forms is not { } forms ? null : forms.Create
+        .Changing(RolesController.NameField, item => item with { Value = Name })
+        .Changing(RolesController.PermissionsField, item => item with { Choices = Grantable, Values = Chosen ?? [] })
+        with { Opens = "New role", Open = Chosen is not null, Note = "It stands directly above the member role until you move it.", Key = "role-new" };
+
+    /// <summary>The roles in their order, each with what it grants and what the reader may do to it inline: move it one place,
+    /// change its name and what it grants, opening in place, and delete it, confirmed in the page.</summary>
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.EntryList? Listing => Gate is not null ? null : new(Roles.Select(role => new Render.Entry(Render.Sentence.Plain(role.Name), Answers(role))
+    {
+        Detail = Render.Sentence.Plain(Grants(role))
+    }).ToList());
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.Pager? Pages => Gate is not null ? null : new("More roles",
+        Previous is { } previous ? new Render.Onward("Higher roles", previous) : null, Next is { } next ? new Render.Onward("Lower roles", next) : null);
+
+    private IReadOnlyList<Render.IPart>? Answers(Listed role)
+    {
+        if (Forms is not { } forms || role.Can.Count == 0) return null;
+        var answers = new List<Render.IPart>();
+        var change = forms.Change.Given(RolesController.RoleField, role.Word);
+        if (role.Can.Contains(Verb.Higher))
+            answers.Add(change.Keeping(RolesController.RoleField).Given(RolesController.MoveField, RolesController.Word(RoleMove.Higher)) with { Submit = "Move higher", Quiet = true });
+        if (role.Can.Contains(Verb.Lower))
+            answers.Add(change.Keeping(RolesController.RoleField).Given(RolesController.MoveField, RolesController.Word(RoleMove.Lower)) with { Submit = "Move lower", Quiet = true });
+        if (role.Can.Contains(Verb.Change))
+            answers.Add(change.Keeping(RolesController.RoleField, RolesController.NameField, RolesController.PermissionsField)
+                .Changing(RolesController.NameField, item => item with { Value = role.Name })
+                .Changing(RolesController.PermissionsField, item => item with { Choices = Grantable, Values = role.Permissions })
+                with { Opens = "Change", Submit = "Save", Quiet = true, Key = "role-" + role.Word });
+        if (role.Can.Contains(Verb.Delete))
+            answers.Add(forms.Delete.Given(RolesController.RoleField, role.Word) with
+            {
+                Opens = "Delete", Submit = "Delete", Confirm = "Everyone in it loses it, and so does every Tangent’s access for it."
+            });
+        return answers;
+    }
+
+    /// <summary>What a role grants, in plain words.</summary>
+    private string Grants(Listed role)
+    {
+        if (role.Word == Access.Roles.Everyone) return "every reader; the place’s audience says what they read";
+        if (role.Permissions.Count == 0) return "grants nothing of its own";
+        var words = Permissions.ToDictionary(permission => permission.Bit, permission => permission.Words, StringComparer.Ordinal);
+        return string.Join(", ", role.Permissions.Select(bit => words.GetValueOrDefault(bit, bit)));
+    }
+
+    /// <summary>The frame the shell draws around the page: its settings as its one crumb, and who reads, or where a visitor
+    /// signs in.</summary>
+    public static Render.Frame Frame(RolesPage page) => new(page.Place, page.Door, [new Render.Crumb("Settings")], page.Who, page.SignIn);
 
 
     /// <summary>What a reader may do to a role, as a role's <c>can</c> lists it: change its name and what it grants, move

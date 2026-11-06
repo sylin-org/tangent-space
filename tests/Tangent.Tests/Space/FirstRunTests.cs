@@ -57,11 +57,11 @@ public sealed class FirstRunTests
             var page = WebUtility.HtmlDecode(html);
 
             Assert.Equal((HttpStatusCode.OK, HttpStatusCode.OK), (htmlStatus, jsonStatus));
-            Assert.Contains("<h1 id=\"first-run-title\" class=\"sign-in-title\">Set up this Tangent Space</h1>", html);
+            Assert.Contains("<h1 class=\"sign-in-title\">Set up this Tangent Space</h1>", html);
             // The one action signs in with Bluesky: the challenge, coming back to first run, naming no account.
             Assert.Matches(BlueskyAction("/first-run"), page);
             // An account on another server signs in by its handle, behind a quiet disclosure.
-            Assert.Matches(AnotherServer("first-run-sign-in-handle", "/first-run"), page);
+            Assert.Matches(AnotherServer("first-run-sign-in-identifier", "/first-run"), page);
             Assert.Contains("<span class=\"panel-head-name\">New Tangent Space</span>", html);
             // Nothing before setup shows the base URL or the key that holds it.
             Assert.DoesNotContain(Code(BaseUrl), html);
@@ -157,11 +157,12 @@ public sealed class FirstRunTests
         using var json = JsonDocument.Parse(body);
 
         Assert.Equal((HttpStatusCode.OK, "/first-run"), (page.StatusCode, page.RequestMessage!.RequestUri!.AbsolutePath));
-        Assert.Contains("<h1 id=\"first-run-title\" class=\"sign-in-title\">Waiting for its operator</h1>", html);
-        Assert.Contains("You’re signed in as <strong>@ada.example</strong>, and this place is still being set up: check back soon.", html);
+        Assert.Contains("<h1 class=\"sign-in-title\">Waiting for its operator</h1>", html);
+        Assert.Contains("You’re signed in as <strong>@ada.example</strong>, and this place is still being set up: check back soon.", WebUtility.HtmlDecode(html));
         Assert.Matches(@"Only\s+<strong>@leo\.sylin\.org</strong>\s+can set it up\.", html);
-        Assert.DoesNotContain("first-run-did", html);
-        Assert.DoesNotContain("type=\"submit\"", html);
+        Assert.DoesNotContain("(<code", html);
+        // The page's one button signs this person out, so they can sign in with another account; nothing sets the place up.
+        Assert.Single(Regex.Matches(Tangent.Posts.Writing.PageContent(html), "type=\"submit\""));
         Assert.Equal("leo.sylin.org", json.RootElement.GetProperty("operator").GetString());
         Assert.Equal(("ada.example", "leo.sylin.org"),
             (json.RootElement.GetProperty("waiting").GetProperty("handle").GetString(), json.RootElement.GetProperty("waiting").GetProperty("operatorHandle").GetString()));
@@ -169,8 +170,8 @@ public sealed class FirstRunTests
         // The way out is the frame's account: its menu signs this person out and comes back to first run.
         var signOut = json.RootElement.GetProperty("reader").GetProperty("signOut").GetString();
         Assert.EndsWith("?return=" + Uri.EscapeDataString("/first-run"), signOut);
-        Assert.Contains($"<form method=\"post\" action=\"{WebUtility.HtmlEncode(signOut)}\"><button class=\"account-item account-action\">", html);
-        Assert.Contains($"<form method=\"post\" action=\"{WebUtility.HtmlEncode(signOut)}\"><button class=\"first-run-switch\">Use another account</button></form>", html);
+        Assert.Contains($"<form class=\"sign-out\" method=\"post\" action=\"{WebUtility.HtmlEncode(signOut)}\"><button type=\"submit\" class=\"account-item account-action\">", html);
+        Assert.Contains($"<form class=\"first-run-switch\" method=\"post\" action=\"{WebUtility.HtmlEncode(signOut)}\"><button type=\"submit\" class=\"button\">Use another account</button></form>", html);
         Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
         Assert.DoesNotContain(Ada, await Administrators(tangentSpace.Services));
 
@@ -198,7 +199,7 @@ public sealed class FirstRunTests
         using var json = JsonDocument.Parse(body);
 
         Assert.Matches($@"Only\s+{Regex.Escape(Code(Persona.Did(Leo)))}\s+can set it up\.", beforeLeo);
-        Assert.Matches($@"Only\s+<strong>@leo\.example</strong>\s+<span class=""first-run-did"">\({Regex.Escape(Code(Persona.Did(Leo)))}\)</span>\s+can set it up\.", afterLeo);
+        Assert.Matches($@"Only\s+<strong>@leo\.example</strong>\s+\({Regex.Escape(Code(Persona.Did(Leo)))}\)\s+can set it up\.", afterLeo);
         Assert.Equal((Persona.Did(Leo), "leo.example"),
             (json.RootElement.GetProperty("operator").GetString(), json.RootElement.GetProperty("waiting").GetProperty("operatorHandle").GetString()));
         Assert.Equal(0, await TangentSpace.Count.Exact(Cancellation));
@@ -574,10 +575,10 @@ public sealed class FirstRunTests
     /// <summary>The handle form for an account on another server, in a decoded page, closed behind its disclosure: a
     /// form to the same challenge that sends the typed handle as its identifier.</summary>
     private static string AnotherServer(string field, string comeBack)
-        => @"<details class=""sign-in-other"">\s*<summary class=""sign-in-other-toggle"">Use another server</summary>\s*"
-            + $@"<form class=""sign-in-form"" method=""get"" action=""{Regex.Escape(BaseUrl)}/auth/atproto/challenge"" data-island=""submitting"">[\s\S]*?"
-            + $@"<input id=""{field}"" name=""identifier"" type=""text"" required[\s\S]*?"
-            + $@"<input type=""hidden"" name=""return"" value=""{Regex.Escape(comeBack)}"" />[\s\S]*?</form>\s*</details>";
+        => @"<details class=""post-form-more opens"">\s*<summary class=""sign-in-other-toggle"">Use another server</summary>\s*<div class=""post-form-more-body"">"
+            + $@"<form class=""sign-in-form"" method=""get"" action=""{Regex.Escape(BaseUrl)}/auth/atproto/challenge"" data-island=""submitting"">\s*"
+            + $@"<input type=""hidden"" name=""return"" value=""{Regex.Escape(comeBack)}"" />[\s\S]*?"
+            + $@"<input id=""{field}"" name=""identifier"" type=""text"" required[\s\S]*?</form>\s*</div>\s*</details>";
 
     /// <summary>Keeps every formatted log line of the host it is added to.</summary>
     private sealed class Lines(ConcurrentQueue<string> lines) : ILoggerProvider, ILogger

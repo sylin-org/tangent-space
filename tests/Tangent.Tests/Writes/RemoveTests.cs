@@ -26,7 +26,7 @@ public sealed class RemoveTests
         var page = await Send(ada.Client, HttpMethod.Get, PostPath(root, own) + "/edit");
         var byForm = await Form(ada, PostPath(root, own) + "/edit", PostPath(root, own) + "/remove", new Dictionary<string, string>());
 
-        Assert.Contains("<details class=\"post-remove\">", page.Body);
+        Assert.Contains("<details class=\"post-remove remove\">", page.Body);
         Assert.Contains("action=\"" + AddressOf(root, own) + "/remove\"", page.Body);
         Assert.Equal((HttpStatusCode.SeeOther, AddressOf(root, own)), (byForm.Status, byForm.Location));
         var tombstone = await Post.Get(own.Id, Cancellation);

@@ -9,9 +9,6 @@ public sealed record ProfileHead(Person Person, string Did, IReadOnlyList<string
 /// may change their standing or roles.</summary>
 public sealed record Keeping(Participants.PeoplePage.Listed Person, Participants.PeopleForms Forms) : IPart;
 
-/// <summary>What the reader may change of a participant inline: their standing and roles, each change confirmed in the page.</summary>
-public sealed record PersonActions(Participants.PeoplePage.Listed Person, Participants.PeopleForms Forms) : IPart;
-
 /// <summary>What a participant wrote, newest first, a page at a time: each Post's row, the way to older ones and back to the
 /// latest.</summary>
 public sealed record WrittenList(IReadOnlyList<Participants.ProfilePage.Written> Posts, bool Continued, string? Older, string Address) : IPart;

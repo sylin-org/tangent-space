@@ -1,12 +1,12 @@
-@* A panel's title: whose it is, linked, its heading, and the sentence under it. *@
-@if (Model.Place is { } place)
+@* A panel's title: where it stands, with its links, its heading, and the sentence under it. *@
+@if (Model.Where is { } where)
 {
-    <p class="post-form-where">@(Model.Within + " ")<a href="@Model.Address">@place</a></p>
+    <p class="post-form-where"><Draw Part="@(new Render.Sentence(where))" As="Shape.Inline" /></p>
 }
 <h1 class="sign-in-title">@Model.Title</h1>
 @if (Model.Lede is { } lede)
 {
-    <p class="sign-in-lede">@lede</p>
+    <p class="sign-in-lede"><Draw Part="@(new Render.Sentence(lede))" As="Shape.Inline" /></p>
 }
 
 @code {

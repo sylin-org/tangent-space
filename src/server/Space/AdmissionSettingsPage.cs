@@ -26,7 +26,7 @@ public sealed record AdmissionSettingsPage(
     public SettingsRail Rail => new(Sections);
 
     [Slot(Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public PanelTitle Heading => new(TangentSpaceSettingsController.AdmissionSection, "Settings of", Place, Door);
+    public PanelTitle Heading => new(TangentSpaceSettingsController.AdmissionSection, "Settings of " + Render.Sentence.Link(Place, Door));
 
     [Slot(Slot.Column), Newtonsoft.Json.JsonIgnore]
     public Notice? Line => Notice.Of(Gate, Failure, SignIn);

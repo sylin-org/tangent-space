@@ -55,7 +55,7 @@ public sealed record ProfilePage(
     public Render.ProfileHead Head => new(new Render.Person(Id, Handle, Name, Kind, Avatar, Address), Did, Roles, Arrived, Description);
 
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Render.Keeping? Keeper => Listed is { } listed && Forms is { } forms && listed.Id != Who?.Id ? new(listed, forms) : null;
+    public Render.Keeping? Keeper => Listed is { } listed && Forms is { } forms && listed.Person.Id != Who?.Id ? new(listed, forms) : null;
 
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
     public Render.WrittenList Writing => new(Posts, Continued, Older, Address);

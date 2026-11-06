@@ -332,10 +332,10 @@ public sealed class TheToolsTests
         await Worked(mine, "start_topic", new { tangent = slug, title = "A picture", body = "![a dot](" + brought.GetProperty("reference").GetString() + ")" });
 
         // read_people, then each change an entry allows.
-        var bea = (await Worked(admin, "read_people", new { })).GetProperty("people").EnumerateArray().Single(row => row.GetProperty("id").GetString() == Bea);
+        var bea = (await Worked(admin, "read_people", new { })).GetProperty("people").EnumerateArray().Single(row => row.GetProperty("person").GetProperty("id").GetString() == Bea);
         var given = bea.GetProperty("give")[0].GetProperty("word").GetString();
         await Worked(admin, "give_role", new { participant = Bea, role = given });
-        var again = (await Worked(admin, "read_people", new { })).GetProperty("people").EnumerateArray().Single(row => row.GetProperty("id").GetString() == Bea);
+        var again = (await Worked(admin, "read_people", new { })).GetProperty("people").EnumerateArray().Single(row => row.GetProperty("person").GetProperty("id").GetString() == Bea);
         await Worked(admin, "take_role", new { participant = Bea, role = again.GetProperty("take")[0].GetProperty("word").GetString() });
         await Worked(admin, "time_out", new { participant = Bea, @for = "hour" });
         await Worked(admin, "lift", new { participant = Bea });

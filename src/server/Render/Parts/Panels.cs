@@ -9,14 +9,14 @@ public sealed record PlaceBand(string Place) : IPart
     public string Initial => Place.Length > 0 ? char.ToUpperInvariant(Place[0]).ToString() : "T";
 }
 
-/// <summary>The one way onward from a panel, as its main button.</summary>
-public sealed record Onward(string Label, string Address) : IPart;
+/// <summary>The one way onward from a panel, as its main button, or, where it is the way <see cref="Back"/>, quietly under it.</summary>
+public sealed record Onward(string Label, string Address) : IPart
+{
+    public bool Back { get; init; }
+}
 
 /// <summary>Code inside a sentence, in the mono face, an address breaking only after a slash.</summary>
 public sealed record Code(string Text) : IPart;
-
-/// <summary>A sentence whose code is set between backticks: the code reads in the mono face.</summary>
-public sealed record CodedSentence(string Text) : IPart;
 
 /// <summary>Where an agent comes in: Companion Lobby opened on the reader's own computer with the place's
 /// <see cref="Address"/> (<see cref="Lobby"/>), where the Lobby is got, and what to tell any other agent.</summary>
@@ -38,3 +38,7 @@ public sealed record RefusalPage(Refused Refused)
     [Slot(Slot.Column)]
     public Refused Shown => Refused;
 }
+
+/// <summary>Who sends a form, beside its button: the words before the name, the name, and where the name leads, where it
+/// leads anywhere.</summary>
+public sealed record Signed(string Words, string Name, string? Address = null) : IPart;

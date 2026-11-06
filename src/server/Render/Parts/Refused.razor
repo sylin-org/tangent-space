@@ -32,7 +32,7 @@
             {
                 <div class="sign-in-foot problem-account">
                     <span>Signed in as @(account.Name == account.Handle ? "@" + account.Handle : account.Name + " (@" + account.Handle + ")")</span>
-                    <form method="post" action="@account.SignOut"><button type="submit" class="button">Sign out</button></form>
+                    <Draw Part="@(Render.Form.Posting(account.SignOut) with { Tool = "sign-out", Submit = "Sign out", Quiet = true })" />
                 </div>
             }
 </div>

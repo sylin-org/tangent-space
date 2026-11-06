@@ -56,7 +56,7 @@ public sealed class PeopleTests
 
     /// <summary>The row a page of the people lists for <paramref name="id"/>.</summary>
     private static JsonElement Row(JsonElement page, string id)
-        => page.GetProperty("people").EnumerateArray().Single(row => row.GetProperty("id").GetString() == id);
+        => page.GetProperty("people").EnumerateArray().Single(row => row.GetProperty("person").GetProperty("id").GetString() == id);
 
     private static async Task<IReadOnlyList<Event>> Since(long before)
         => (await Event.All(Cancellation)).Where(e => e.Seq > before).OrderBy(e => e.Seq).ToList();
@@ -82,7 +82,7 @@ public sealed class PeopleTests
         Assert.Equal(HttpStatusCode.OK, listed.Status);
         Assert.Contains("People", listed.Json.GetProperty("sections").EnumerateArray().Select(section => section.GetProperty("name").GetString()));
         var adaRow = Row(listed.Json, Ada);
-        Assert.Equal(("admitted", "person"), (adaRow.GetProperty("standing").GetString(), adaRow.GetProperty("kind").GetString()));
+        Assert.Equal(("admitted", "person"), (adaRow.GetProperty("standing").GetString(), adaRow.GetProperty("person").GetProperty("kind").GetString()));
         Assert.Equal([People.Verb.TimeOut, People.Verb.Ban], Strings(adaRow, "can"));
         Assert.Empty(Offered(adaRow, "give"));
         Assert.Equal(["Member"], Strings(adaRow, "roles"));
@@ -354,7 +354,7 @@ public sealed class PeopleTests
         var path = PeopleController.Path;
 
         var first = await Send(mo.Client, HttpMethod.Get, path, json: true);
-        var firstHandles = first.Json.GetProperty("people").EnumerateArray().Select(row => row.GetProperty("handle").GetString()!).ToList();
+        var firstHandles = first.Json.GetProperty("people").EnumerateArray().Select(row => row.GetProperty("person").GetProperty("handle").GetString()!).ToList();
         Assert.Equal(People.PageSize, firstHandles.Count);
         Assert.Equal(firstHandles.Order(StringComparer.Ordinal), firstHandles);
         Assert.False(first.Json.GetProperty("continued").GetBoolean());
@@ -365,7 +365,7 @@ public sealed class PeopleTests
         var second = await Send(mo.Client, HttpMethod.Get, new Uri(next).PathAndQuery, json: true);
         Assert.Equal(HttpStatusCode.OK, second.Status);
         Assert.True(second.Json.GetProperty("continued").GetBoolean());
-        var secondHandles = second.Json.GetProperty("people").EnumerateArray().Select(row => row.GetProperty("handle").GetString()!).ToList();
+        var secondHandles = second.Json.GetProperty("people").EnumerateArray().Select(row => row.GetProperty("person").GetProperty("handle").GetString()!).ToList();
         var all = firstHandles.Concat(secondHandles).ToList();
         // Every admitted participant once, in handle order, and no applicant.
         Assert.Equal(People.PageSize + 2 + 3, all.Count);
@@ -382,7 +382,7 @@ public sealed class PeopleTests
         // The start of a handle, typed as a person types it, finds those whose handles start with it.
         var found = await Send(mo.Client, HttpMethod.Get, path + "?handle=" + Uri.EscapeDataString(" @Person2"), json: true);
         Assert.Equal(Enumerable.Range(20, People.PageSize + 2 - 20).Select(i => Persona.Id($"person{i:D2}")),
-            found.Json.GetProperty("people").EnumerateArray().Select(row => row.GetProperty("id").GetString()));
+            found.Json.GetProperty("people").EnumerateArray().Select(row => row.GetProperty("person").GetProperty("id").GetString()));
         Assert.Equal("person2", found.Json.GetProperty("handle").GetString());
         Assert.Empty((await Send(mo.Client, HttpMethod.Get, path + "?handle=nobody", json: true)).Json.GetProperty("people").EnumerateArray());
         Assert.Contains("No one here has a handle that starts with nobody.", (await Send(mo.Client, HttpMethod.Get, path + "?handle=nobody")).Body);

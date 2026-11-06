@@ -1,8 +1,8 @@
 namespace Tangent.Render;
 
-/// <summary>A panel's title: whose it is, as a line linking to it (<see cref="Within"/>, the words before the link, and
-/// <see cref="Place"/> at <see cref="Address"/>), its heading, and the sentence under it where it has one.</summary>
-public sealed record PanelTitle(string Title, string? Within = null, string? Place = null, string? Address = null, string? Lede = null) : IPart;
+/// <summary>A panel's title: where it stands, as a sentence above its heading with its links (<see cref="Where"/>), its
+/// heading, and the sentence under it where it has one (<see cref="Lede"/>), both written as a <see cref="Sentence"/>.</summary>
+public sealed record PanelTitle(string Title, string? Where = null, string? Lede = null) : IPart;
 
 /// <summary>The Posts a search found, best first, or the one sentence where it found none, and the pages either side.</summary>
 public sealed record SearchHits(IReadOnlyList<Posts.SearchPage.Hit> Hits, string Empty, string? Previous, string? Next) : IPart;

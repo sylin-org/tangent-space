@@ -129,7 +129,7 @@ public static class PostWrites
         {
             Label = "Anything the moderators should know? (optional)",
             Note = "Only the moderators read it, and its author is never told. It removes nothing by itself."
-        }) with { Tool = "report", Submit = "Send the report", Key = "report-" + minted };
+        }) with { Tool = "report", Submit = "Send the report", Busy = "Sending…", Key = "report-" + minted };
 
     public static string TangentAddress(string baseUrl, string tangent) => baseUrl + "/t/" + Uri.EscapeDataString(tangent);
 

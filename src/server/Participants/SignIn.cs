@@ -24,8 +24,7 @@ public sealed record SignIn(
     [Render.Slot(Render.Slot.Head), Newtonsoft.Json.JsonIgnore]
     public Render.PlaceBand Band => new(Name);
 
-    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Render.SignInForm Body => new(this);
+
 
 
     /// <summary>How to sign in with an account the challenge's start at Bluesky cannot find.</summary>
@@ -75,6 +74,43 @@ public sealed record SignIn(
 
     /// <summary>The challenge's address without its query: where the sign-in forms go.</summary>
     public string ChallengeAddress() => Challenge.Split('?', 2)[0];
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.PanelTitle Heading => new(Private ? Access.Capabilities.SignInToRead.Text.TrimEnd('.') : "Sign in to reply",
+        Lede: "Use your Bluesky account, or any AT\u00a0Protocol account.");
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.Notice? Line => Render.Notice.Of(null, Failure, null);
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public IReadOnlyList<Render.Form> Ways => Forms(ChallengeAddress(), ChallengeReturn(), FailureLanding(), Handle, HandleFailure, "sign-in");
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.SignInGains Gains => new(Private);
+
+    /// <summary>Signing in: with Bluesky, whose own account chooser does the rest, and behind one line, by the handle of an
+    /// account on another server, open with its handle and why where a sign-in by handle came back; each comes back to
+    /// <paramref name="back"/>, and a failure lands at <paramref name="failure"/>, carrying the handle typed.</summary>
+    public static IReadOnlyList<Render.Form> Forms(string challenge, string back, string? failure, string? handle, string? refused, string key)
+    {
+        Render.Form.Field[] carried = failure is null
+            ? [new("return", "", back, Render.Form.Input.Hidden)]
+            : [new("return", "", back, Render.Form.Input.Hidden), new("failure", "", failure, Render.Form.Input.Hidden)];
+        var byHandle = handle is not null || refused is not null;
+        return
+        [
+            Render.Form.Reading(challenge, carried) with { Submit = "Sign in with Bluesky", Busy = "Continuing…", Island = "submitting", Main = true, Key = key },
+            Render.Form.Reading(challenge,
+            [
+                new("identifier", "", handle) { Label = "Handle", Prefix = "@", Handle = true, Required = true, Placeholder = "you.example.com", Failure = refused, Focus = byHandle },
+                new("return", "", back, Render.Form.Input.Hidden),
+                .. failure is null ? [] : new[] { new Render.Form.Field("failure", "", failure, Render.Form.Input.Hidden) { Carries = ("identifier", "handle") } }
+            ]) with { Submit = "Continue", Busy = "Continuing…", Island = "submitting", Opens = "Use another server", Open = byHandle, Key = key }
+        ];
+    }
+
+    /// <summary>The frame the shell draws around the page: "Sign in" as its one crumb, and no search.</summary>
+    public static Render.Frame Frame(SignIn signIn) => new(signIn.Name, signIn.Door, [new Render.Crumb("Sign in")], Searchable: false);
 
     /// <summary>The address the challenge comes back to, as the sign-in forms carry it.</summary>
     public string ChallengeReturn()

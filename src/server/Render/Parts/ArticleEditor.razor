@@ -1,17 +1,20 @@
 @using Tangent.Posts
 @* The form an article is written in, laid out as the article reads: the same column, the cover in its place, the title
-   in its place at its size, the byline, then the body in the article's type. It is an ordinary form: without script the
+   in its place at its size, the byline, then the body in the article's type; who last edited it and the words sent that
+   were not saved; who writes it, the way back and its button. It is the island's root: without script the
    title and the body are plain fields that post, and the cover it holds stays. With script the article island turns the
    body's field into the visual editor, which writes its Markdown back there, and brings a cover and images in the page. *@
 <div class="article-writing">
         <h1 class="visually-hidden">@Heading</h1>
-        @Above
         @if (Failure is not null)
         {
             <p class="sign-in-failure" id="article-failure" role="alert" data-gate="@FailureGate">@Failure</p>
         }
         <form class="@("article-form " + Tool)" method="post" action="@Action" data-island="@Island" data-props="@IslandProps">
-            @Hidden
+            @foreach (var given in Model.Hidden)
+            {
+                <input type="hidden" name="@given.Name" value="@given.Value">
+            }
             <input type="hidden" name="@PostWrites.CoverField" value="@CoverId">
             <article class="article">
                 <Draw Part="@(new Render.ArticleHead("", null, Author, At, Minutes, null, []) { CoverSlot = CoverField, TitleSlot = TitleField })" />
@@ -26,12 +29,33 @@
                     }
                 </div>
             </article>
-            @Below
+            @if (Model.EditedBy is { } edited)
+            {
+                <p class="post-form-note">Last edited by @edited.</p>
+            }
+            @if (Model.SentBody is { } sentBody)
+            {
+                <div class="field post-form-unsaved">
+                    <label class="field-label" for="@(BodyId + "-sent")">Your words, not saved</label>
+                    @if (Model.SentTitle is { } sentTitle)
+                    {
+                        <p class="post-form-unsaved-title">@sentTitle</p>
+                    }
+                    <textarea class="post-form-body" id="@(BodyId + "-sent")" rows="6" readonly>@sentBody</textarea>
+                </div>
+            }
             <div class="post-form-actions article-form-actions">
-                @Actions
+                @if (Model.By is { } by)
+                {
+                    <Draw Part="@by" />
+                }
+                @if (Model.Cancel is { } cancel)
+                {
+                    <a class="post-form-cancel" href="@cancel.Address">@cancel.Label</a>
+                }
+                <button type="submit" class="sign-in-submit post-form-submit" data-busy-label="@Model.Busy">@Model.Submit</button>
             </div>
         </form>
-        @After
 </div>
 
 @code {
@@ -76,15 +100,10 @@
     private string? BodyFailure => Model.BodyFailure;
 
     /// <summary>The hidden fields of this form.</summary>
-    private RenderFragment? Hidden => Model.Hidden;
 
     /// <summary>What stands above the form, such as the Post a new article takes on a tangent.</summary>
-    private RenderFragment? Above => Model.Above;
 
     /// <summary>What stands under the article inside the form, what its actions are, and what stands after the form.</summary>
-    private RenderFragment? Below => Model.Below;
-    private RenderFragment Actions => Model.Actions;
-    private RenderFragment? After => Model.After;
 
     /// <summary>The address of the cover the form holds, where it holds one.</summary>
     private string? CoverAddress => CoverId is { } cover ? Door + Media.Reference(cover).TrimStart('/') : null;

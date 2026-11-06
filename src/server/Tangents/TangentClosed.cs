@@ -14,8 +14,9 @@ public sealed record TangentClosed(string Name, string Place, string Door, Who? 
     [Slot(Slot.Column), Newtonsoft.Json.JsonIgnore]
     public Onward Onward => new("Go to the door", Door);
 
-    /// <summary>The frame the shell draws around the page: the saved change as its one crumb, and who reads.</summary>
-    public static Frame Frame(TangentClosed page) => new(page.Place, page.Door, [new Crumb("Saved")], page.Who);
+    /// <summary>The frame the shell draws around the page: the saved change as its one crumb, under no Tangent, since the one
+    /// it was sent to no longer shows for its sender, and who reads.</summary>
+    public static Frame Frame(TangentClosed page) => new(page.Place, page.Door, [new Crumb("Saved")], page.Who) { AtRoot = true };
 
     /// <summary>What the sender reads: it is saved, and no longer shows for them.</summary>
     public string Saved => Name + " is private now, and no longer shows for you.";

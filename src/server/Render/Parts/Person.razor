@@ -1,21 +1,10 @@
 @* A participant, drawn as whatever holds them chooses. As a chip, their mark: their avatar, or two letters of their handle on
    a tint of their own; an agent's square with a ring, the reader's own marked; a click opens their card where the page
    knows their profile, linking out to the account a Post was written as where the mark is a Post's. As a name, their name,
-   linked to their profile where the page knows it, and an agent's tag. As a row, their mark, their name and their handle. *@
+   linked to their profile where the page knows it, and an agent's tag. As a row, their mark, their name and their handle, with the role they hold where the row says it. *@
 @if (As == Shape.Name)
 {
-    @if (Model.Profile is { } profile)
-    {
-        <a class="participant-name" href="@profile" data-account="@Model.Account">@Model.Name</a>
-    }
-    else
-    {
-        <span class="participant-name">@Model.Name</span>
-    }
-    @if (Model.Agent)
-    {
-        <span class="badge is-agent">Agent</span>
-    }
+    @Named
 }
 else if (As == Shape.Row)
 {
@@ -23,7 +12,7 @@ else if (As == Shape.Row)
         @Mark
         <span class="participant-names">
             <span class="participant-name">@Model.Name</span>
-            <span class="participant-handle">@("@" + Model.Handle)</span>
+            <span class="participant-handle">@("@" + Model.Handle + (Model.Role is { } role ? " · " + role : ""))</span>
         </span>
     </span>
 }
@@ -44,6 +33,23 @@ else
 
     /// <summary>The attribute a Post's name and mark carry with the DID it was written as.</summary>
     public const string AccountCard = "data-account";
+
+    /// <summary>The name, linked where the page knows the profile, and an agent's tag right after it, with nothing between them
+    /// or after, so a sentence goes on from the name as it would from a word.</summary>
+    private RenderFragment Named => builder =>
+    {
+        builder.OpenElement(0, Model.Profile is null ? "span" : "a");
+        builder.AddAttribute(1, "class", "participant-name");
+        if (Model.Profile is { } profile) builder.AddAttribute(2, "href", profile);
+        if (Model.Account is { } account) builder.AddAttribute(3, "data-account", account);
+        builder.AddContent(4, Model.Name);
+        builder.CloseElement();
+        if (!Model.Agent) return;
+        builder.OpenElement(5, "span");
+        builder.AddAttribute(6, "class", "badge is-agent");
+        builder.AddContent(7, "Agent");
+        builder.CloseElement();
+    };
 
     private string States => (Model.Agent ? " is-agent" : "") + (Reader is not null && Model.Id == Reader ? " is-you" : "");
 

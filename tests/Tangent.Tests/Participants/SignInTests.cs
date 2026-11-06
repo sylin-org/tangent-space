@@ -49,12 +49,12 @@ public sealed class SignInTests
             + Regex.Escape("<button type=\"submit\" class=\"sign-in-submit\" data-busy-label=\"Continuing…\">Sign in with Bluesky</button>") + @"\s*</form>", html);
         // An account on another server signs in by the handle it types, sent to the same challenge as its identifier, behind a
         // closed disclosure whose field takes no focus.
-        Assert.Matches(Regex.Escape("<details class=\"sign-in-other\">") + @"\s*"
-            + Regex.Escape("<summary class=\"sign-in-other-toggle\">Use another server</summary>") + @"\s*" + challenge + @"[\s\S]*?"
-            + Regex.Escape("<input id=\"sign-in-handle\" name=\"identifier\" type=\"text\" required autocomplete=\"username\"") + @"[\s\S]*?"
+        Assert.Matches(Regex.Escape("<details class=\"post-form-more opens\">") + @"\s*"
+            + Regex.Escape("<summary class=\"sign-in-other-toggle\">Use another server</summary>") + @"\s*" + Regex.Escape("<div class=\"post-form-more-body\">") + challenge + @"\s*"
             + returned + @"\s*"
-            + Regex.Escape($"<input type=\"hidden\" name=\"failure\" value=\"{comeBack}\" data-carry=\"identifier\" data-carry-as=\"handle\" />") + @"\s*"
-            + Regex.Escape("<button type=\"submit\" class=\"sign-in-submit\" data-busy-label=\"Continuing…\">Continue</button>") + @"\s*</form>\s*</details>", html);
+            + Regex.Escape($"<input type=\"hidden\" name=\"failure\" value=\"{comeBack}\" data-carry=\"identifier\" data-carry-as=\"handle\" />") + @"[\s\S]*?"
+            + Regex.Escape("<input id=\"sign-in-identifier\" name=\"identifier\" type=\"text\" required autocomplete=\"username\"") + @"[\s\S]*?"
+            + Regex.Escape("<button type=\"submit\" class=\"sign-in-submit post-form-submit\" data-busy-label=\"Continuing…\">Continue</button>") + @"\s*</div>\s*</form>\s*</div>\s*</details>", html);
         Assert.DoesNotContain("autofocus", html);
         Assert.Contains("<span aria-current=\"page\" class=\"path-current path-only is-current\">Sign in</span>", html);
         Assert.Contains("data-island=\"appearance\"", html);
@@ -88,21 +88,20 @@ public sealed class SignInTests
         using var json = JsonDocument.Parse(await Read(tangentSpace, query, "application/json"));
 
         // Back from a sign-in by handle, the handle form is open with the handle kept and the field focused.
-        Assert.Contains("<details class=\"sign-in-other\" open>", html);
-        Assert.Contains("name=\"identifier\" type=\"text\" required autofocus", html);
+        Assert.Contains("<details class=\"post-form-more opens\" open>", html);
+        Assert.Matches("name=\"identifier\" type=\"text\" required [^>]*autofocus", html);
         Assert.Contains("value=\"ada.bsky.social\"", html);
         Assert.DoesNotContain("provider said", html);
         if (ofHandle)
         {
-            Assert.Contains($"<p class=\"field-failure\" id=\"sign-in-handle-failure\">{words}</p>", html);
-            Assert.Contains("aria-invalid=\"true\" aria-describedby=\"sign-in-handle-failure\"", html);
+            Assert.Contains($"<p class=\"field-failure\" id=\"sign-in-identifier-failure\">{words}</p>", html);
+            Assert.Contains("aria-invalid=\"true\" aria-describedby=\"sign-in-identifier-failure\"", html);
             Assert.DoesNotContain("role=\"alert\"", html);
             Assert.Equal(words, json.RootElement.GetProperty("handleFailure").GetString());
         }
         else
         {
-            Assert.Contains($"<p class=\"sign-in-failure\" id=\"sign-in-failure\" role=\"alert\">{words}</p>", html);
-            Assert.Contains("aria-invalid=\"false\" aria-describedby=\"sign-in-failure\"", html);
+            Assert.Contains($"<p class=\"sign-in-failure\" role=\"alert\">{words}</p>", html);
             Assert.Equal(words, json.RootElement.GetProperty("failure").GetString());
         }
     }

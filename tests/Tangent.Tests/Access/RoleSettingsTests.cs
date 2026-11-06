@@ -94,7 +94,7 @@ public sealed class RoleSettingsTests
 
         // Given on People as the seeded roles are, and listed among her roles.
         Assert.Contains(("night-shift", "Night watch"), (await Send(leo.Client, HttpMethod.Get, PeopleController.Path, json: true)).Json
-            .GetProperty("people").EnumerateArray().Single(row => row.GetProperty("id").GetString() == Ada).GetProperty("give").EnumerateArray()
+            .GetProperty("people").EnumerateArray().Single(row => row.GetProperty("person").GetProperty("id").GetString() == Ada).GetProperty("give").EnumerateArray()
             .Select(role => (role.GetProperty("word").GetString(), role.GetProperty("name").GetString())));
         var given = await Json(leo, PeopleController.Path, PeopleController.GivePath, new { participant = Ada, role = "night-shift" });
         Assert.Equal(HttpStatusCode.OK, given.Status);

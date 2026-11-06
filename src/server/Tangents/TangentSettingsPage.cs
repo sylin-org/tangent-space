@@ -47,5 +47,88 @@ public sealed record TangentSettingsPage(
     string? DescriptionFailure = null)
 {
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Render.TangentSettingsForm Body => new(this);
+    public Render.PanelTitle Heading => new("Tangent settings", "Settings of " + Render.Sentence.Link(Name, Address));
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.Notice? Line => Render.Notice.Of(Gate, null, SignIn);
+
+    /// <summary>The letter a tile shows of the Tangent.</summary>
+    private string Initial => Name.Length > 0 ? char.ToUpperInvariant(Name[0]).ToString() : "T";
+
+    /// <summary>The form as the page draws it: the reader's to send, or read only where it is not, with what it holds and why
+    /// a change was refused; its moves are a form of their own below it.</summary>
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.Form Shown
+    {
+        get
+        {
+            var form = Change ?? (TangentWrites.ChangeForm("", Fixed, false) with { ReadOnly = true });
+            List<Render.Form.Choice> images = [new("", "None")];
+            if (Image.StartsWith("/media/", StringComparison.Ordinal)) images.Add(new(Image, "Its own") { Picture = Door + Image.TrimStart('/') });
+            images.AddRange(Covers.Select(cover => new Render.Form.Choice(cover.Name, cover.Title) { Picture = cover.Address }));
+            var settings = Access[..Access.LastIndexOf('/')];
+            return form with
+            {
+                Fields = Placed(form.Fields).Where(item => item.Name != TangentWrites.MoveField).Select(item => item.Name switch
+                {
+                    TangentWrites.NameField => item with { Value = Name, Failure = NameFailure, Note = "Its address stays `/t/" + Slug + "`, whatever its name." },
+                    TangentWrites.DescriptionField => item with { Value = Description, Failure = DescriptionFailure },
+                    TangentWrites.KindField => item with { Value = Kind },
+                    TangentWrites.AudienceField when !Fixed => item with { Value = Audience },
+                    TangentWrites.AccentField => item with
+                    {
+                        Value = Accent,
+                        Choices = [new("", "From its name") { Tile = (Tone, Initial) }, .. Render.Tile.Tones.Select(tone =>
+                            new Render.Form.Choice(tone, char.ToUpperInvariant(tone[0]) + tone[1..]) { Tile = (tone, Initial) })]
+                    },
+                    TangentWrites.ImageField => item with { Value = Image, Choices = images },
+                    _ => item
+                }).ToList(),
+                Failure = Failure,
+                Key = "settings",
+                Cancel = new Render.Onward("Back to the Tangent", Address),
+                Note = Gate is null && !Fixed
+                    ? Render.Sentence.Link("Access", Access) + " sets which roles read and post here; "
+                      + Render.Sentence.Link("People", settings + "/" + TangentPeopleController.Segment) + ", who joins and who is in."
+                    : null
+            };
+        }
+    }
+
+    /// <summary>The form's fields with the audience said in a sentence in its place where it stays as it is.</summary>
+    private IEnumerable<Render.Form.Field> Placed(IReadOnlyList<Render.Form.Field> fields)
+    {
+        foreach (var item in fields)
+        {
+            yield return item;
+            if (Fixed && item.Name == TangentWrites.KindField)
+                yield return new(TangentWrites.AudienceField, "", "Only moderators read this Tangent; its audience stays as it is.", Render.Form.Input.Fixed) { Label = "Audience" };
+        }
+    }
+
+    /// <summary>Where the Tangent stands among the Tangents, and, for a reader who may move it, one move earlier or later, the
+    /// one at its end unpressable.</summary>
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.Form? Moves => !Movable ? null : new Render.Form(Change?.Action ?? "", HttpMethods.Post,
+        [
+            new(TangentWrites.MoveField, Holds.TangentMove, As: Render.Form.Input.Switch)
+            {
+                Label = "Place among the Tangents",
+                Note = (Fixed, Before, After) switch
+                {
+                    (true, _, _) => "It comes after every other Tangent, and stays there.",
+                    (_, { } before, { } after) => $"It comes after {Render.Sentence.Plain(before)} and before {Render.Sentence.Plain(after)}.",
+                    (_, null, { } after) => $"It comes first, before {Render.Sentence.Plain(after)}.",
+                    (_, { } before, null) => $"It comes last, after {Render.Sentence.Plain(before)}.",
+                    _ => "It is the only Tangent you can read."
+                },
+                Choices = Fixed
+                    ? []
+                    : [new(TangentWrites.Word(Move.Earlier), "Move earlier") { Locked = Before is null }, new(TangentWrites.Word(Move.Later), "Move later") { Locked = After is null }]
+            }
+        ]) { Tool = "change-tangent move-tangent", ReadOnly = Gate is not null || Change is null };
+
+    /// <summary>The frame the shell draws around the page: its settings as its own crumb past the Tangent, and who reads, or
+    /// where a visitor signs in.</summary>
+    public static Render.Frame Frame(TangentSettingsPage page) => new(page.Place, page.Door, [new Render.Crumb("Settings")], page.Who, page.SignIn);
 }

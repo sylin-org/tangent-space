@@ -50,10 +50,28 @@ public static class TangentWrites
     /// <summary>The form that creates a Tangent at <paramref name="action"/>: its name, and what else stands at its default
     /// until it is sent.</summary>
     public static Form CreateForm(string action) => Form.Posting(action,
-        new Form.Field(NameField, Holds.TangentName),
-        new Form.Field(DescriptionField, Holds.TangentDescription),
-        new Form.Field(KindField, Holds.TangentKind),
-        new Form.Field(AudienceField, Holds.TangentAudience));
+        new Form.Field(NameField, Holds.TangentName) { Label = "Name", Limit = Tangent.NameLimit, Required = true, Placeholder = "The workshop", Focus = true },
+        new Form.Field(DescriptionField, Holds.TangentDescription, As: Form.Input.Area) { Label = "Description", Limit = Tangent.DescriptionLimit, Default = "", Group = Quietly },
+        new Form.Field(KindField, Holds.TangentKind, As: Form.Input.Choice) { Label = "Default kind", Choices = KindChoices, Default = PostWrites.Word(PostKind.Topic), Group = Quietly },
+        new Form.Field(AudienceField, Holds.TangentAudience, As: Form.Input.Choice) { Label = "Audience", Choices = AudienceChoices, Default = Word(Audience.Public), Group = Quietly })
+        with { Tool = "create-tangent", Submit = "Create", Busy = "Creating…", Island = "submitting" };
+
+    /// <summary>The line the fields of a new Tangent other than its name sit behind, which stays true whatever is chosen.</summary>
+    private const string Quietly = "Description, kind and audience";
+
+    /// <summary>A Tangent's default kinds as a form offers them, each with what it means.</summary>
+    public static readonly IReadOnlyList<Form.Choice> KindChoices =
+    [
+        new(PostWrites.Word(PostKind.Topic), "Discussions", "Topics are conversations, latest activity first."),
+        new(PostWrites.Word(PostKind.Article), "Articles", "Each topic opens with a published piece.")
+    ];
+
+    /// <summary>A Tangent's audiences as a form offers them, each with what it means.</summary>
+    public static readonly IReadOnlyList<Form.Choice> AudienceChoices =
+    [
+        new(Word(Audience.Public), "Public", "Everyone who reads this place reads it; members post."),
+        new(Word(Audience.Private), "Private", "Only administrators, and roles given access, read it.")
+    ];
 
     /// <summary>The form that changes a Tangent's settings at <paramref name="action"/>, each field left as it is when not
     /// sent: its audience only where it is not <paramref name="fixedAudience"/>, its place among the Tangents only where
@@ -62,15 +80,16 @@ public static class TangentWrites
     {
         List<Form.Field> fields =
         [
-            new(NameField, Holds.ChangedTangentName),
-            new(DescriptionField, Holds.ChangedTangentDescription),
-            new(AccentField, Holds.TangentAccent),
-            new(ImageField, Holds.TangentImage),
-            new(KindField, Holds.ChangedTangentKind)
+            new(NameField, Holds.ChangedTangentName) { Label = "Name", Limit = Tangent.NameLimit, Required = true },
+            new(DescriptionField, Holds.ChangedTangentDescription, As: Form.Input.Area) { Label = "Description", Limit = Tangent.DescriptionLimit },
+            new(AccentField, Holds.TangentAccent, As: Form.Input.Tone) { Label = "Its accent" },
+            new(ImageField, Holds.TangentImage, As: Form.Input.Picture) { Label = "Its image, in place of its letter" },
+            new(KindField, Holds.ChangedTangentKind, As: Form.Input.Choice) { Label = "Default kind", Choices = KindChoices },
+            new(AudienceField, Holds.ChangedTangentAudience, As: Form.Input.Choice) { Label = "Audience", Choices = AudienceChoices }
         ];
-        if (!fixedAudience) fields.Add(new(AudienceField, Holds.ChangedTangentAudience));
-        if (movable && !fixedAudience) fields.Add(new(MoveField, Holds.TangentMove));
-        return new Form(action, HttpMethods.Post, fields);
+        if (fixedAudience) fields.RemoveAll(field => field.Name == AudienceField);
+        if (movable && !fixedAudience) fields.Add(new(MoveField, Holds.TangentMove, As: Form.Input.Switch));
+        return new Form(action, HttpMethods.Post, fields) { Tool = "change-tangent", Submit = "Save", Busy = "Saving…", Island = "submitting" };
     }
 
     public static string Word(Audience audience) => audience.ToString().ToLowerInvariant();

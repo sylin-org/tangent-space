@@ -101,16 +101,39 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
         }), "change-admission", baseAddress) with { Key = "space-admission" };
 
     /// <summary>The form that sets the place's appearance, under <paramref name="baseAddress"/>.</summary>
-    private static Form AppearanceForm(string baseAddress) => Form.Posting(baseAddress + AppearancePath,
-        new Form.Field(BaseField, Holds.Base),
-        new Form.Field(PaletteField, Holds.Palette),
-        new Form.Field(CssField, Holds.Css),
-        new Form.Field(ImageField, Holds.PlaceImage),
-        new Form.Field(DescriptionField, Holds.PlaceDescription),
-        new Form.Field(IntroField, Holds.Intro),
-        new Form.Field(MastheadField, Holds.Masthead),
-        new Form.Field(FooterField, Holds.Footer),
-        new Form.Field(ArticleHeaderField, Holds.ArticleHeader));
+    public static Form AppearanceForm(string baseAddress) => Saving(Form.Posting(baseAddress + AppearancePath,
+        new Form.Field(ImageField, Holds.PlaceImage, As: Form.Input.Picture) { Label = "The place’s image" },
+        Words(DescriptionField, Holds.PlaceDescription, "Description", 2, TangentSpace.DescriptionLimit,
+            "Under the place’s name on the door. Its words are what a link to the door says of it."),
+        Words(IntroField, Holds.Intro, "Welcome", 5, Appearance.ProseLimit,
+            "Under the door’s head, for whoever the place exists for: what this place is for and how to begin."),
+        new Form.Field(PaletteField, Holds.Palette, As: Form.Input.Choice)
+        {
+            Label = "The colours",
+            Note = "Links, buttons and what is new take the accent on every page, for everyone. Light or dark is each reader’s own, at the foot of any page."
+        },
+        new Form.Field(BaseField, Holds.Base, As: Form.Input.Choice) { Label = "The base: the plain elements and the fonts" },
+        Words(MastheadField, Holds.Masthead, "Masthead line", 2, Appearance.LineLimit, "Beside the place’s name on every page.") with { Group = Lines, Default = "" },
+        Words(FooterField, Holds.Footer, "Footer line", 2, Appearance.LineLimit, "First in every page’s footer.") with { Group = Lines, Default = "" },
+        Words(ArticleHeaderField, Holds.ArticleHeader, "Article header", 3, Appearance.ProseLimit,
+            "Above every article’s title.", " Each is Markdown, written as a Post is. An image comes from another site or from under `/media/` here. The pages of an export and of the archive carry them.")
+            with { Group = Lines, Default = "" },
+        new Form.Field(CssField, Holds.Css, As: Form.Input.Area)
+        {
+            Label = "Your own CSS", Rows = 8, Limit = Appearance.CssLimit, Exact = true, Group = Lines, Default = "",
+            Note = "Over every other layer, on every page but these settings. Pages say what each thing is: `article.post.by-agent > header`, `.row.topic.is-new`, `.tangent-head.is-pictured`. At most "
+                   + Appearance.CssLimit.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " characters."
+        }), "change-appearance", baseAddress) with { Key = "space-appearance" };
+
+    /// <summary>The line the place's lines, its article header and its own CSS sit behind.</summary>
+    private const string Lines = "Lines, the article header and your own CSS";
+
+    /// <summary>One of the place's words: its Markdown, where it shows and how much it holds.</summary>
+    private static Form.Field Words(string name, string holds, string label, int rows, int limit, string note, string after = "") => new(name, holds, As: Form.Input.Area)
+    {
+        Label = label, Rows = rows, Limit = limit,
+        Note = note + " Markdown, at most " + limit.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " characters." + after
+    };
 
     /// <summary>The section that names the place and says who reads it.</summary>
     public const string General = "General";

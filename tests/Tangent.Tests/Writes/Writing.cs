@@ -154,6 +154,12 @@ internal static partial class Writing
             : await Send(session.Client, method, action[BaseUrl.Length..], FormBody(fields));
     }
 
+    /// <summary>The page's own content in <paramref name="html"/>, without the masthead and its account menu.</summary>
+    public static string PageContent(string html)
+        => html.IndexOf("<main", StringComparison.Ordinal) is var start and >= 0 && html.IndexOf("</main>", start, StringComparison.Ordinal) is var end and >= 0
+            ? html[start..end]
+            : throw new InvalidOperationException("The page holds no main.");
+
     /// <summary>The TID the new-topic form at <paramref name="html"/> carries.</summary>
     public static string MintedId(string html) => MintedField().Match(html) is { Success: true } match
         ? match.Groups["id"].Value

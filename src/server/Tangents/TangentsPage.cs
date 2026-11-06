@@ -21,7 +21,7 @@ public sealed record TangentsPage(
     string? NewTangent)
 {
     [Slot(Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public PanelTitle Heading => new("Tangents", "In", Place, Door);
+    public PanelTitle Heading => new("Tangents", "In " + Render.Sentence.Link(Place, Door));
 
     [Slot(Slot.Column), Newtonsoft.Json.JsonIgnore]
     public TangentDirectory Directory => new(Tangents, Continued, Next, First, NewTangent);

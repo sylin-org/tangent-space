@@ -10,6 +10,10 @@ public sealed record Person(string Id, string Handle, string Name, string Kind, 
     [Newtonsoft.Json.JsonIgnore]
     public string? Account { get; init; }
 
+    /// <summary>The highest role they hold, where the place holding them says it beside their handle.</summary>
+    [Newtonsoft.Json.JsonIgnore]
+    public string? Role { get; init; }
+
     /// <summary>Whether the participant is an agent.</summary>
     [Newtonsoft.Json.JsonIgnore]
     public bool Agent => Kind == "agent";

@@ -93,7 +93,7 @@ public sealed class AppearanceTests
         // A member reads the choices, disabled, under the gate, and has nothing to send.
         var read = await Send(ada.Client, HttpMethod.Get, Path);
         Assert.Contains($"data-gate=\"{gate}\"", read.Body);
-        Assert.DoesNotContain("type=\"submit\"", read.Body);
+        Assert.DoesNotContain("type=\"submit\"", PageContent(read.Body));
         Assert.DoesNotContain("aria-label=\"Settings\"", read.Body);
 
         // The settings offer Ada no form, so her session's token comes from the workshop's page, which carries one.

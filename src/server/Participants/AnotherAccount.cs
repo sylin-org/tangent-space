@@ -30,20 +30,32 @@ public static class AnotherAccount
     public sealed record Offer(string Action, string Return, string Failure, string Holding, string? Handle = null, string? Refused = null,
         Form? SignInAgain = null, bool Open = false) : Render.IPart
     {
-        /// <summary>What sets this form's ids apart on the page it stands on.</summary>
-        [Newtonsoft.Json.JsonIgnore]
-        public string Id { get; init; } = "another";
-
-        /// <summary>The class of the line that opens the form, as the place holding it draws its lines.</summary>
-        [Newtonsoft.Json.JsonIgnore]
-        public string SummaryClass { get; init; } = "another-account-toggle";
-
-        /// <summary>The icon before the line that opens the form, where the place holding it draws one.</summary>
-        [Newtonsoft.Json.JsonIgnore]
-        public string? Icon { get; init; }
-
         /// <summary>The one line that says what stays: earlier Posts keep linking to the account they were written as.</summary>
         public string Note => "Your earlier Posts stay linked to @" + Holding + ".";
+
+        /// <summary>The step that answers a sign-in that is not fresh enough, with why above its button, its ids under
+        /// <paramref name="key"/>.</summary>
+        public Form? Again(string key) => SignInAgain is not { } again ? null : again.AsGiven() with
+        {
+            Tool = "another-account-again", Key = key + "-again", Island = "submitting", Main = true, Submit = "Sign in again", Busy = "Opening Bluesky…",
+            Failure = Refused
+        };
+
+        /// <summary>The binding: the handle, with why it was refused under it and what stays below it, coming back here, and a
+        /// refusal coming back with the handle typed; its ids under <paramref name="key"/>.</summary>
+        public Form Binding(string key) => new(Action, HttpMethods.Post,
+        [
+            new("identifier", "", Handle)
+            {
+                Label = "Bluesky handle", Prefix = "@", Placeholder = "you.bsky.social", Required = true, Handle = true,
+                Failure = SignInAgain is null ? Refused : null, Note = Render.Sentence.Plain(Note)
+            },
+            new("return", "", Return, Form.Input.Hidden),
+            new("failure", "", Failure, Form.Input.Hidden) { Carries = ("identifier", HandleQuery) }
+        ])
+        {
+            Tool = "another-account-form", Key = key, Island = "submitting", Submit = "Continue on Bluesky", Busy = "Opening Bluesky…", Quiet = SignInAgain is not null
+        };
     }
 
     /// <summary>The form in the account menu of <paramref name="who"/>, coming back to the page they are on: the place's

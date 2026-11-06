@@ -31,5 +31,22 @@ public sealed record NewTangentPage(
     string? DescriptionFailure = null)
 {
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Render.NewTangentForm Body => new(this);
+    public Render.PanelTitle Heading => new("New Tangent", "In " + Render.Sentence.Link(Place, Door));
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.Notice? Line => Render.Notice.Of(Gate, null, SignIn);
+
+    /// <summary>The form as the page draws it: the reader's to send, or read only where it is not, with what was sent and why
+    /// it was refused.</summary>
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.Form Shown => (Create ?? (TangentWrites.CreateForm("") with { ReadOnly = true }))
+        .Changing(TangentWrites.NameField, item => item with { Value = Name, Failure = NameFailure, Focus = Gate is null })
+        .Changing(TangentWrites.DescriptionField, item => item with { Value = Description, Failure = DescriptionFailure })
+        .With(TangentWrites.KindField, Kind)
+        .With(TangentWrites.AudienceField, Audience)
+        with { Failure = Failure, Key = "new-tangent", By = Who is { } who ? new Render.Signed("Created by", "@" + who.Handle) : null };
+
+    /// <summary>The frame the shell draws around the page: the form as its one crumb, and who reads, or where a visitor signs
+    /// in.</summary>
+    public static Render.Frame Frame(NewTangentPage page) => new(page.Place, page.Door, [new Render.Crumb("New Tangent")], page.Who, page.SignIn);
 }

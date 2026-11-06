@@ -38,13 +38,13 @@ public sealed class MembersOnlyTests
         Assert.Equal((HttpStatusCode.OK, "asked"), (asked.Status, asked.Json.GetProperty("state").GetString()));
         Assert.Equal(1, (await Send(leo.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("asks")[0].GetProperty("count").GetInt32());
         var page = await Send(leo.Client, HttpMethod.Get, people, json: true);
-        Assert.Equal([Ada], page.Json.GetProperty("asking").EnumerateArray().Select(person => person.GetProperty("id").GetString()));
+        Assert.Equal([Ada], page.Json.GetProperty("asking").EnumerateArray().Select(row => row.GetProperty("person").GetProperty("id").GetString()));
 
         // Leo lets her in: she is listed among the people, reads the studio, and her door tells her.
         var letIn = await Json(leo, people, people, new { person = Ada, choice = "in" });
         Assert.Equal(HttpStatusCode.OK, letIn.Status);
         Assert.Empty(letIn.Json.GetProperty("asking").EnumerateArray());
-        Assert.Equal([Ada], letIn.Json.GetProperty("people").EnumerateArray().Select(person => person.GetProperty("id").GetString()));
+        Assert.Equal([Ada], letIn.Json.GetProperty("people").EnumerateArray().Select(row => row.GetProperty("person").GetProperty("id").GetString()));
         var studio = await Send(ada.Client, HttpMethod.Get, "/t/" + Studio, json: true);
         Assert.Equal(HttpStatusCode.OK, studio.Status);
         var let = (await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news").GetProperty("let")[0];

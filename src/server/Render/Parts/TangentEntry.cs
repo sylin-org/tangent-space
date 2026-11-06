@@ -31,11 +31,15 @@ public sealed record TangentEntry(string Slug, string Name, string Kind, string 
     [Newtonsoft.Json.JsonIgnore]
     public bool Current { get; init; }
 
-    /// <summary>Its kind and how many Topics it holds, in words.</summary>
+    /// <summary>What its line says in place of what it holds, where a list says something else of it.</summary>
     [Newtonsoft.Json.JsonIgnore]
-    public string Detail => Kind == "article"
+    public string? Says { get; init; }
+
+    /// <summary>Its kind and how many Topics it holds, in words, unless the list says something else of it.</summary>
+    [Newtonsoft.Json.JsonIgnore]
+    public string Detail => Says ?? (Kind == "article"
         ? "Articles · " + Wording.Count(TopicCount, "article", "articles", "no articles yet")
-        : "Discussions · " + Wording.Count(TopicCount, "topic", "topics", "no topics yet");
+        : "Discussions · " + Wording.Count(TopicCount, "topic", "topics", "no topics yet"));
 
     /// <summary>The Tangent's row as the reader may view it, with the tile it chose, from its own row.</summary>
     public static TangentEntry Of(Tangents.Tangent tangent, string address, string door)

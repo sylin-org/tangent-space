@@ -32,37 +32,43 @@ public sealed record ApplicationsPage(
 {
     /// <summary>One applicant: their id, the name to show, their handle, their profile's address, the state of their
     /// application (<c>waiting</c> or <c>declined</c>) and when they applied.</summary>
-    public sealed record Applicant(string Id, string Name, string Handle, string Profile, string State, DateTimeOffset AppliedAt) : Render.IPart
-    {
-        /// <summary>The form that admits them, where the reader may.</summary>
-        [Newtonsoft.Json.JsonIgnore]
-        public Render.Form? Admit { get; init; }
-
-        /// <summary>The form that declines them, while they wait, where the reader may.</summary>
-        [Newtonsoft.Json.JsonIgnore]
-        public Render.Form? Decline { get; init; }
-    }
+    public sealed record Applicant(string Id, string Name, string Handle, string Profile, string State, DateTimeOffset AppliedAt);
 
     [Render.Slot(Render.Slot.Rail), Newtonsoft.Json.JsonIgnore]
     public Render.SettingsRail Rail => new(Sections);
 
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Render.PanelTitle Heading => new(Space.TangentSpaceSettingsController.ApplicationsSection, "Settings of", Place, Door);
+    public Render.PanelTitle Heading => new(Space.TangentSpaceSettingsController.ApplicationsSection, "Settings of " + Render.Sentence.Link(Place, Door));
 
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
     public Render.Notice? Line => Render.Notice.Of(Gate, Failure, SignIn);
 
+    /// <summary>Each applicant: who, linked to their profile, their handle, when they applied and whether they were declined, and
+    /// what the reader may decide — admit, and for one waiting, decline, confirmed in the page.</summary>
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Render.Applicants? Listed => Gate is not null ? null : new(Applications.Select(applicant => applicant with
-    {
-        Admit = Admit is { } admit ? admit.Given(ApplicationsController.ParticipantField, applicant.Id) with { Tool = "admit", Submit = "Admit" } : null,
-        Decline = applicant.State == Waiting && Decline is { } decline
-            ? decline.Given(ApplicationsController.ParticipantField, applicant.Id) with
+    public Render.EntryList? Listed => Gate is not null ? null : new(Applications.Select(applicant => new Render.Entry(null,
+    [
+        .. Admit is { } admit ? new Render.IPart[] { admit.Given(ApplicationsController.ParticipantField, applicant.Id) with { Tool = "admit", Submit = "Admit" } } : [],
+        .. applicant.State == Waiting && Decline is { } decline
+            ? new Render.IPart[]
             {
-                Tool = "decline", Submit = "Decline", Confirm = "They keep reading what a visitor reads, and you can still admit them later."
+                decline.Given(ApplicationsController.ParticipantField, applicant.Id) with
+                {
+                    Tool = "decline", Opens = "Decline", Submit = "Decline", Confirm = "They keep reading what a visitor reads, and you can still admit them later."
+                }
             }
-            : null
-    }).ToList(), Continued, Next, First);
+            : []
+    ])
+    {
+        Subject = new Render.Person(applicant.Id, applicant.Handle, applicant.Name, "person", null, applicant.Profile),
+        Detail = Render.Sentence.Plain("@" + applicant.Handle + " · applied " + Render.Wording.When(applicant.AppliedAt, Day)
+            + (applicant.State == Declined ? " · declined" : "")),
+        State = applicant.State
+    }).ToList(), Empty: Continued ? "No older applications." : "No one is waiting to be admitted.");
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.Pager? Pages => Gate is not null ? null
+        : new("More applications", Continued ? new Render.Onward("Newest applications", First) : null, Next is { } next ? new Render.Onward("Older applications", next) : null);
 
     /// <summary>The frame the shell draws around the page: its settings as its one crumb, and who reads, or where a visitor
     /// signs in.</summary>

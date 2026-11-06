@@ -157,7 +157,7 @@ public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollecti
         var named = await Named(inIds.Concat(asks.Select(ask => ask.PersonId)).Distinct(StringComparer.Ordinal).ToList(), ct);
         foreach (var participant in matched) named[participant.Id] = participant;
 
-        IReadOnlyList<TangentPeoplePage.Person>? foundPeople = null;
+        IReadOnlyList<TangentPeoplePage.Someone>? foundPeople = null;
         if (start is not null)
         {
             var own = await PermissionOverwrite.Get(matched.Select(p =>
@@ -165,7 +165,7 @@ public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollecti
             var asked = await Ask.Get(matched.Select(p => Ask.Key(row.Id, p.Id)).ToList(), ct);
             // Each found participant by what they can do here: kept out, in by their own place, reading through a role, or
             // asked, declined or out, where asks wait.
-            var listed = new List<TangentPeoplePage.Person>(matched.Count);
+            var listed = new List<TangentPeoplePage.Someone>(matched.Count);
             for (var index = 0; index < matched.Count; index++)
             {
                 var participant = matched[index];
@@ -200,7 +200,15 @@ public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollecti
             Joinings,
             isFixed || audience != Audience.Private
                 ? null
-                : Form.Posting(settings + "/" + JoiningSegment, new Form.Field(JoiningField, Holds.Joining, Word(row.Joining))),
+                : Form.Posting(settings + "/" + JoiningSegment, new Form.Field(JoiningField, Holds.Joining, Word(row.Joining), Form.Input.Switch)
+                {
+                    Choices = Enum.GetValues<Joining>().Select(way => new Form.Choice(Word(way), way switch
+                    {
+                        Joining.Join => "Anyone joins",
+                        Joining.Ask => "People ask to join",
+                        _ => "Only who you let in"
+                    })).ToList()
+                }) with { Tool = "change-tangent-joining" },
             asks.Where(ask => named.ContainsKey(ask.PersonId)).Select(ask => Shown(ask.PersonId, Joined.AskedState)).ToList(),
             roleRows,
             personal.Where(o => named.ContainsKey(o.SubjectId)).Select(o => Shown(o.SubjectId, Inside.Out(o) ? KeptOutState : Joined.InState)).ToList(),
@@ -222,7 +230,7 @@ public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollecti
             _ => [InChoice]
         };
 
-        TangentPeoplePage.Person Shown(string personId, string state) => Person(named[personId], baseAddress, state, Choices(state, personId, false));
+        TangentPeoplePage.Someone Shown(string personId, string state) => Person(named[personId], baseAddress, state, Choices(state, personId, false));
     }
 
     private static async Task<Dictionary<string, Participant>> Named(IReadOnlyList<string> ids, CancellationToken ct)
@@ -230,12 +238,12 @@ public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollecti
             ? new Dictionary<string, Participant>(StringComparer.Ordinal)
             : (await Participant.Get(ids, ct)).OfType<Participant>().ToDictionary(p => p.Id, StringComparer.Ordinal);
 
-    private static TangentPeoplePage.Person Person(Participant participant, string baseAddress, string state, IReadOnlyList<string> choices)
+    private static TangentPeoplePage.Someone Person(Participant participant, string baseAddress, string state, IReadOnlyList<string> choices)
     {
         var handle = participant.ShownHandle();
         var name = participant.ShownName();
-        return new TangentPeoplePage.Person(participant.Id, name, handle, participant.Kind.ToString().ToLowerInvariant(),
-            ProfilePage.AddressOf(baseAddress, handle), state, choices);
+        return new TangentPeoplePage.Someone(new Render.Person(participant.Id, handle, name, participant.Kind.ToString().ToLowerInvariant(),
+            participant.Profile.Avatar, ProfilePage.AddressOf(baseAddress, handle)), state, choices);
     }
 
     private string BaseAddress() => baseUrl.Resolve(HttpContext);

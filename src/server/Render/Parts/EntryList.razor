@@ -1,0 +1,25 @@
+@* Entries under their heading, each a line of the list, or the one sentence where there are none. *@
+@if (Model.Heading is { } heading)
+{
+    <h2 class="rail-heading rail-heading-spaced">@heading</h2>
+}
+@if (Model.Entries.Count == 0)
+{
+    @if (Model.Empty is { } empty)
+    {
+        <Draw Part="@(new Render.Sentence(empty))" />
+    }
+}
+else
+{
+    <ul class="door-offers entries">
+        @foreach (var entry in Model.Entries)
+        {
+            <Draw Part="@entry" />
+        }
+    </ul>
+}
+
+@code {
+    [Parameter, EditorRequired] public Render.EntryList Model { get; set; } = default!;
+}

@@ -15,6 +15,10 @@ public sealed record Frame(string Place, string Door, IReadOnlyList<Crumb> Crumb
 {
     public Switcher? Switcher { get; init; }
 
+    /// <summary>Whether the page's crumbs start at the root whatever its address names, as the saved change that shut its
+    /// sender out of the Tangent it was sent to.</summary>
+    public bool AtRoot { get; init; }
+
     /// <summary>Where a page is: the Tangent and the Topic its address names, the Tangent's crumb opening the switcher where
     /// the page holds one, then the page's own crumbs; the last is the page itself and has no address.</summary>
     public static IReadOnlyList<Crumb> Trail(Crumb? tangent, Crumb? topic, IReadOnlyList<Crumb> own)
@@ -30,6 +34,7 @@ public sealed record Frame(string Place, string Door, IReadOnlyList<Crumb> Crumb
     /// <summary>The path bar of a page whose address <paramref name="here"/> names, under <paramref name="baseAddress"/>.</summary>
     public IReadOnlyList<Crumb> Under(Access.Here? here, string baseAddress)
     {
+        if (AtRoot) return Trail(null, null, Crumbs);
         var tangent = here?.Tangent is { } row ? new Crumb(row.Name, Posts.PostWrites.TangentAddress(baseAddress, row.Id), Switcher) : null;
         var topic = here?.Tangent is { } inTangent && here.Root is { } root
             ? new Crumb(root.Title ?? "", Posts.PostWrites.TangentAddress(baseAddress, inTangent.Id) + "/" + Uri.EscapeDataString(root.Slug ?? root.Id))
@@ -39,6 +44,12 @@ public sealed record Frame(string Place, string Door, IReadOnlyList<Crumb> Crumb
 
     /// <summary>Where the search box sends its words.</summary>
     public string Search => Door.TrimEnd('/') + Posts.SearchPage.Path;
+
+    /// <summary>The search box, where the page is searchable.</summary>
+    public Form? Searching => Searchable
+        ? Form.Reading(Search, new Form.Field("q", "", Searched, Form.Input.Search) { Label = "Search this place", Placeholder = "Search", Limit = 200 })
+            with { Tool = "search", Island = "search" }
+        : null;
 
     /// <summary>The mark drawn for a place with no image of its own: the first letter of its name.</summary>
     public string Initial => Place.Length > 0 ? char.ToUpperInvariant(Place[0]).ToString() : "T";
@@ -50,7 +61,20 @@ public sealed record Frame(string Place, string Door, IReadOnlyList<Crumb> Crumb
 /// and how many things are for them and new (<see cref="Events.Unread"/>), which the masthead shows beside the account,
 /// linked to the door.</summary>
 public sealed record Who(string Id, string Name, string Handle, string? Role, string? Avatar, string SignOut, string? Settings = null,
-    Events.Unread.Badge? ForYou = null);
+    Events.Unread.Badge? ForYou = null)
+{
+    /// <summary>Them as the Person part, with the role they hold.</summary>
+    [Newtonsoft.Json.JsonIgnore]
+    public Person Person => new(Id, Handle, Name, "person", Avatar) { Role = Role };
+
+    /// <summary>Signing out, coming back to the page they are on.</summary>
+    [Newtonsoft.Json.JsonIgnore]
+    public Form Leaving => Form.Posting(SignOut) with { Tool = "sign-out", Submit = "Sign out" };
+
+    /// <summary>Using another Bluesky account, coming back to the page they are on.</summary>
+    [Newtonsoft.Json.JsonIgnore]
+    public Participants.AnotherAccount.Offer Another => Participants.AnotherAccount.For(this);
+}
 
 /// <summary>One step of the path bar. The last crumb is the page itself and has no address. A crumb with a
 /// <see cref="Switcher"/> is a Tangent's, drawn with its tile and opening the list of Tangents in the page.</summary>

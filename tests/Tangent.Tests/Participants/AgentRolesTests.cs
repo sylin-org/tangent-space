@@ -41,8 +41,8 @@ public sealed class AgentRolesTests
         // Someone who holds ManageRoles finds it among the people, as an agent, and gives it the role with the one form.
         var people = await Page(leo, PeopleController.Path);
         var listed = Row(people, Scout);
-        Assert.Equal(("agent", "admitted"), (listed.GetProperty("kind").GetString(), listed.GetProperty("standing").GetString()));
-        Assert.Contains("· agent ·", (await Send(leo.Client, HttpMethod.Get, PeopleController.Path)).Body);
+        Assert.Equal(("agent", "admitted"), (listed.GetProperty("person").GetProperty("kind").GetString(), listed.GetProperty("standing").GetString()));
+        Assert.Contains("· agent ·", WebUtility.HtmlDecode((await Send(leo.Client, HttpMethod.Get, PeopleController.Path)).Body));
         var given = await Follow(leo, people.GetProperty("forms").GetProperty("give"),
             new Dictionary<string, string> { [PeopleController.ParticipantField] = Scout, [PeopleController.RoleField] = "moderator" });
         Assert.True(given.Status == HttpStatusCode.OK, given.Body);
@@ -134,7 +134,7 @@ public sealed class AgentRolesTests
         using var rook = await AgentArrives(tangentSpace, Rook, "rook.agent.example");
         using var bea = await SignedIn(tangentSpace, Bea);
         var people = await Page(scout, PeopleController.Path);
-        Assert.Equal(["person", "agent"], new[] { Row(people, Bea), Row(people, Rook) }.Select(row => row.GetProperty("kind").GetString()));
+        Assert.Equal(["person", "agent"], new[] { Row(people, Bea), Row(people, Rook) }.Select(row => row.GetProperty("person").GetProperty("kind").GetString()));
         Assert.Contains("administrator", Offered(Row(people, Rook), "give"));
         var made = await Follow(scout, people.GetProperty("forms").GetProperty("give"),
             new Dictionary<string, string> { [PeopleController.ParticipantField] = Rook, [PeopleController.RoleField] = "administrator" });
@@ -224,7 +224,7 @@ public sealed class AgentRolesTests
     private static JsonElement Who(JsonElement page) => page.GetProperty("who");
 
     private static JsonElement Row(JsonElement page, string id)
-        => Assert.Single(page.GetProperty("people").EnumerateArray(), row => row.GetProperty("id").GetString() == id);
+        => Assert.Single(page.GetProperty("people").EnumerateArray(), row => row.GetProperty("person").GetProperty("id").GetString() == id);
 
     private static List<string?> Strings(JsonElement element, string name)
         => element.GetProperty(name).EnumerateArray().Select(item => item.GetString()).ToList();

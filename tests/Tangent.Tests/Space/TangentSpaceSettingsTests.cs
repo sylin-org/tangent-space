@@ -102,7 +102,7 @@ public sealed class TangentSpaceSettingsTests
         Assert.DoesNotContain(nameof(Bit.ManageSpace), page.Json.GetProperty("can").EnumerateArray().Select(verb => verb.GetString()));
         var html = await Send(ada.Client, HttpMethod.Get, TangentSpaceSettingsController.Path);
         Assert.Contains($"data-gate=\"{gate}\"", html.Body);
-        Assert.DoesNotContain("type=\"submit\"", html.Body);
+        Assert.DoesNotContain("type=\"submit\"", PageContent(html.Body));
 
         var before = await Event.Count.Exact(Cancellation);
         // The settings offer Ada no form, so her session's token comes from the workshop's page, which carries one.

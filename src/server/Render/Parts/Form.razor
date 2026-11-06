@@ -1,92 +1,48 @@
-@* A write the page offers its reader, drawn from its record alone. A destructive form confirms in the page: its button opens
-   what sending it does and the button that sends it, never a dialog. A form whose every field the page gives is one button,
-   quiet beside the page's main one where the form says so. Any other lays its fields out: a line or a few lines under their
-   label, a choice as its options, each with what it means, a field's refusal under it and its note below; then the way back
-   and its button, which says what it does while the form is sent. Shown to a reader who may not send it, its fields read only,
-   its choices disabled, and it has no button. An island acts on it where the form names one. *@
-@if (Model.Confirm is { } confirm)
+@using System.Globalization
+@* Every write a page offers its reader, drawn from its record alone. A form that opens in place stands behind its line — as
+   a row of a list, behind a quiet button that opens what sending it does — and a destructive one confirms there, never in
+   a dialog. A form whose every field the page gives is one button, or one button for each of a switch's choices, the one
+   it stands at pressed. Any other lays its fields out: a line or several under their label, a body in Markdown that its
+   island makes the editor, a choice as cards, accents or pictures, checks, a file sent by its own button, a value no one
+   changes here in a sentence; a field's refusal under it, its note below, a press beside it that returns it to its default;
+   neighbours of one group behind one quiet line, open once one is away from its default or refused; the form's own refusal
+   above its fields, a preview beside them, a sentence before its button; then who sends it, the way back and its button,
+   which says what it does while the form is sent. Shown to a reader who may not send it, its fields read only, its choices
+   disabled, and it has no button. A search of one field stands on one line, and in a bar as its field alone; a button in a
+   menu is one of its items, with its icon. *@
+@if (Model.Opens is { } opens)
 {
-    <details class="@("confirm " + Model.Tool)">
-        <summary class="button">@Model.Submit</summary>
-        <div class="post-remove-confirm">
-            <p class="post-remove-note">@confirm</p>
-            <form class="@Model.Tool" method="@Model.Method.ToLowerInvariant()" action="@Model.Action" data-island="@Island">
-                @Hidden
-                <button type="submit" class="post-remove-submit">@Model.Submit</button>
-            </form>
+    <details class="@Classes(As == Shape.Row ? "confirm" : Model.Confirm is not null ? "post-remove" : "post-form-more opens", Model.Tool)" open="@(As != Shape.Row && Model.Open)">
+        <summary class="@(As == Shape.Row ? "button" : Model.Confirm is not null ? "post-remove-toggle" : "sign-in-other-toggle")">@opens</summary>
+        <div class="@(As == Shape.Row || Model.Confirm is not null ? "post-remove-confirm" : "post-form-more-body")">
+            @if (Model.Confirm is { } confirm)
+            {
+                <p class="post-remove-note">@confirm</p>
+            }
+            @Element
         </div>
     </details>
 }
-else if (Model.Fields.All(field => field.As == Render.Form.Input.Hidden) && Model.Cancel is null)
-{
-    <form class="@Model.Tool" method="@Model.Method.ToLowerInvariant()" action="@Model.Action" data-island="@Island">
-        @Hidden
-        <button type="submit" class="@(Model.Quiet ? "button" : "tangent-new")" data-busy-label="@Model.Busy">@Model.Submit</button>
-    </form>
-}
 else
 {
-    <form class="@("sign-in-form " + Model.Tool)" method="@Model.Method.ToLowerInvariant()" action="@(Model.ReadOnly ? null : Model.Action)" data-island="@Island">
-        @Hidden
-        @foreach (var field in Model.Fields.Where(field => field.As != Render.Form.Input.Hidden))
-        {
-            var id = Id(field);
-            var said = field.Failure is null ? field.Note is null ? null : id + "-note" : id + "-failure";
-            @if (field.As == Render.Form.Input.Choice)
-            {
-                <fieldset class="post-form-choice">
-                    <legend class="field-label">@(field.Label ?? field.Name)</legend>
-                    <div class="post-form-options">
-                        @foreach (var choice in field.Choices ?? [])
-                        {
-                            <label class="post-form-option">
-                                <span class="post-form-option-text">
-                                    <span class="post-form-option-name">@choice.Name</span>
-                                    <span class="post-form-option-detail">@choice.Detail</span>
-                                </span>
-                                <input type="radio" name="@field.Name" value="@choice.Value" checked="@(choice.Value == field.Value)" disabled="@Model.ReadOnly">
-                            </label>
-                        }
-                    </div>
-                    @Said(field, id)
-                </fieldset>
-            }
-            else
-            {
-                <div class="field">
-                    <label class="field-label" for="@id">@(field.Label ?? field.Name)</label>
-                    @if (field.As == Render.Form.Input.Area)
-                    {
-                        <textarea class="post-form-body" id="@id" name="@field.Name" rows="3" required="@field.Required" maxlength="@field.Limit"
-                                  readonly="@Model.ReadOnly" aria-invalid="@(field.Failure is null ? null : "true")" aria-describedby="@said">@field.Value</textarea>
-                    }
-                    else
-                    {
-                        <span class="field-input">
-                            <input id="@id" name="@field.Name" type="text" required="@field.Required" maxlength="@field.Limit" autocomplete="off"
-                                   readonly="@Model.ReadOnly" value="@field.Value" autofocus="@(field.Failure is not null)"
-                                   aria-invalid="@(field.Failure is null ? "false" : "true")" aria-describedby="@said">
-                        </span>
-                    }
-                    @Said(field, id)
-                </div>
-            }
-        }
-        @if (!Model.ReadOnly)
-        {
-            <div class="post-form-actions">
-                @if (Model.Cancel is { } cancel)
-                {
-                    <a class="post-form-cancel" href="@cancel.Address">@cancel.Label</a>
-                }
-                <button type="submit" class="sign-in-submit post-form-submit" data-busy-label="@Model.Busy">@Model.Submit</button>
-            </div>
-        }
-    </form>
+    @Element
+}
+@foreach (var field in Model.Fields)
+{
+    @if (field.Reset is { } reset && !Model.ReadOnly)
+    {
+        <form id="@(Id(field) + "-reset")" class="@reset.Tool" method="post" action="@reset.Action" hidden>@Hidden(reset)</form>
+    }
+    @if (field.Sends is { } sends && !Model.ReadOnly)
+    {
+        <form id="@(Id(field) + "-sends")" class="@sends.Tool" method="post" action="@sends.Action" enctype="multipart/form-data" hidden></form>
+    }
 }
 
 @code {
     [Parameter, EditorRequired] public Render.Form Model { get; set; } = default!;
+
+    [Parameter] public Shape As { get; set; }
 
     [CascadingParameter(Name = nameof(Shell.Standalone))] public bool Standalone { get; set; }
 
@@ -94,18 +50,322 @@ else
 
     private string Id(Render.Form.Field field) => (Model.Key ?? Model.Tool ?? "form") + "-" + field.Name;
 
-    private RenderFragment Hidden => @<text>@foreach (var given in Model.Fields.Where(each => each.As == Render.Form.Input.Hidden))
+    /// <summary>The classes named, none where none is.</summary>
+    private static string? Classes(params string?[] names) => string.Join(' ', names.Where(name => !string.IsNullOrEmpty(name))) is { Length: > 0 } all ? all : null;
+
+    private static bool Shown(Render.Form.Field field) => field.As is not (Render.Form.Input.Hidden or Render.Form.Input.Switch);
+
+    /// <summary>The field the page opens on: the first a refusal concerns, else the one the form names.</summary>
+    private Render.Form.Field? Focused => Model.ReadOnly
+        ? null
+        : Model.Fields.FirstOrDefault(each => each.Failure is not null) ?? Model.Fields.FirstOrDefault(each => each.Focus);
+
+    private RenderFragment Element => @<text>
+        @if (!Model.Fields.Any(Shown) && Model.Cancel is null)
         {
-            <input type="hidden" name="@given.Name" value="@given.Value">
+            <form class="@Classes(Model.Main ? "sign-in-form" : null, Model.Tool)" method="@Model.Method.ToLowerInvariant()" action="@Model.Action" data-island="@Island" data-props="@(Island is null ? null : Model.IslandProps)">
+                @if (Model.Failure is { } refused)
+                {
+                    <p class="sign-in-failure" id="@((Model.Key ?? Model.Tool ?? "form") + "-failure")" role="alert">@refused</p>
+                }
+                @Hidden(Model)
+                @if (Model.Fields.FirstOrDefault(item => item.As == Render.Form.Input.Switch) is { } pressed)
+                {
+                    @if (pressed.Label is { } label)
+                    {
+                        <h2 class="field-label">@label</h2>
+                    }
+                    @if (pressed.Note is { } note)
+                    {
+                        <Draw Part="@(new Render.Sentence(note))" />
+                    }
+                    <div class="switch">
+                        @foreach (var choice in pressed.Choices ?? [])
+                        {
+                            <button type="submit" class="button" name="@pressed.Name" value="@choice.Value" aria-pressed="@(pressed.Value is null ? null : choice.Value == pressed.Value ? "true" : "false")"
+                                    disabled="@(choice.Value == pressed.Value || choice.Locked || Model.ReadOnly)">@choice.Name</button>
+                        }
+                    </div>
+                }
+                else if (!Model.ReadOnly && As == Shape.Menu)
+                {
+                    <button type="submit" class="account-item account-action"><Draw Part="@(new Render.Icon(Model.Tool ?? ""))" />@Model.Submit</button>
+                }
+                else if (!Model.ReadOnly)
+                {
+                    <button type="submit" class="@(Model.Confirm is not null ? "post-remove-submit" : Model.Main ? "sign-in-submit" : Model.Quiet ? "button" : "tangent-new")" data-busy-label="@Model.Busy">@Model.Submit</button>
+                }
+            </form>
+        }
+        else if (As == Shape.Inline && Model.Method == HttpMethods.Get && Model.Fields.Count(Shown) == 1 && Model.Fields.Single(Shown) is { As: Render.Form.Input.Search } bar)
+        {
+            <form class="@Classes("masthead-search", Model.Tool)" role="search" method="get" action="@Model.Action" data-island="@Island">
+                <svg class="masthead-search-icon" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="9" r="5.5"></circle><path d="M13 13l3.5 3.5"></path></svg>
+                <input class="masthead-search-field" type="search" name="@bar.Name" value="@bar.Value" placeholder="@bar.Placeholder" aria-label="@(bar.Label ?? bar.Name)"
+                       maxlength="@bar.Limit" autocomplete="off">
+            </form>
+        }
+        else if (Model.Method == HttpMethods.Get && Model.Fields.Count(Shown) == 1 && Model.Fields.Single(Shown) is { As: Render.Form.Input.Search } search)
+        {
+            <form class="@Model.Tool" method="get" action="@Model.Action" role="search">
+                @Hidden(Model)
+                <label class="item-label" for="@Id(search)">@(search.Label ?? search.Name)</label>
+                <span class="item-row">
+                    <input id="@Id(search)" class="item-input" type="search" name="@search.Name" value="@search.Value" placeholder="@search.Placeholder"
+                           maxlength="@search.Limit" autocomplete="off" spellcheck="false">
+                    <button type="submit" class="button">@Model.Submit</button>
+                </span>
+            </form>
+        }
+        else
+        {
+            <form class="@Classes("sign-in-form", Model.Tool)" method="@Model.Method.ToLowerInvariant()" action="@(Model.ReadOnly ? null : Model.Action)"
+                  enctype="@(Model.Multipart ? "multipart/form-data" : null)" data-island="@Island" data-props="@(Island is null ? null : Model.IslandProps)">
+                @if (Model.Failure is { } failure)
+                {
+                    <p class="sign-in-failure" id="@((Model.Key ?? Model.Tool ?? "form") + "-failure")" role="alert">@failure</p>
+                }
+                @Hidden(Model)
+                @if (Model.Preview is { } preview && !Standalone)
+                {
+                    <div class="item appearance-preview-item">
+                        <span class="item-label">As it will look</span>
+                        <iframe class="appearance-preview" name="@(Model.Tool + "-preview")" src="@preview" title="As it will look"
+                                data-island="preview" data-props="@System.Text.Json.JsonSerializer.Serialize(new { button = Model.Tool + "-preview-button" })"></iframe>
+                        <button type="submit" class="button" id="@(Model.Tool + "-preview-button")" formaction="@preview" formtarget="@(Model.Tool + "-preview")">Preview</button>
+                    </div>
+                }
+                @foreach (var run in Runs())
+                {
+                    @if (run.Group is { } group)
+                    {
+                        <details class="post-form-more" open="@run.Fields.Any(item => item.Failure is not null || (item.Value ?? "") != (item.Default ?? ""))">
+                            <summary class="sign-in-other-toggle">@group</summary>
+                            <div class="post-form-more-body">
+                                @foreach (var item in run.Fields)
+                                {
+                                    @Drawn(item)
+                                }
+                            </div>
+                        </details>
+                    }
+                    else
+                    {
+                        @foreach (var item in run.Fields)
+                        {
+                            @Drawn(item)
+                        }
+                    }
+                }
+                @if (Model.Note is { } note)
+                {
+                    <Draw Part="@(new Render.Sentence(note))" />
+                }
+                @if (!Model.ReadOnly)
+                {
+                    <div class="post-form-actions">
+                        @if (Model.By is { } by)
+                        {
+                            <Draw Part="@by" />
+                        }
+                        @if (Model.Cancel is { } cancel)
+                        {
+                            <a class="post-form-cancel" href="@cancel.Address">@cancel.Label</a>
+                        }
+                        <button type="submit" class="@(Model.Confirm is not null ? "post-remove-submit" : Model.Quiet ? "button" : "sign-in-submit post-form-submit")" data-busy-label="@Model.Busy">@Model.Submit</button>
+                    </div>
+                }
+            </form>
+        }
+    </text>;
+
+    /// <summary>The fields in order, neighbours of one group together.</summary>
+    private IEnumerable<(string? Group, List<Render.Form.Field> Fields)> Runs()
+    {
+        (string? Group, List<Render.Form.Field> Fields)? run = null;
+        foreach (var each in Model.Fields.Where(Shown))
+        {
+            if (run is { } open && open.Group == each.Group)
+            {
+                open.Fields.Add(each);
+                continue;
+            }
+
+            if (run is { } done) yield return done;
+            run = (each.Group, [each]);
+        }
+
+        if (run is { } last) yield return last;
+    }
+
+    private static RenderFragment Hidden(Render.Form form) => @<text>@foreach (var given in form.Fields.Where(each => each.As == Render.Form.Input.Hidden))
+        {
+            <input type="hidden" name="@given.Name" value="@given.Value" data-carry="@given.Carries?.From" data-carry-as="@given.Carries?.As">
         }</text>;
 
-    /// <summary>What is said under a field: why what was sent there was refused, and its note.</summary>
-    private static RenderFragment Said(Render.Form.Field field, string id) => @<text>@if (field.Failure is { } failure)
+    /// <summary>What a field reads as for whoever cannot see its label and note: its refusal, then its note.</summary>
+    private string? Said(Render.Form.Field each)
+        => string.Join(' ', new[] { each.Failure is null ? null : Id(each) + "-failure", each.Note is null ? null : Id(each) + "-note" }.OfType<string>())
+            is { Length: > 0 } ids ? ids : null;
+
+    private RenderFragment Drawn(Render.Form.Field each) => @<text>
+        @switch (each.As)
         {
-            <p class="field-failure" id="@(id + "-failure")">@failure</p>
+            case Render.Form.Input.Choice:
+            case Render.Form.Input.Tone:
+            case Render.Form.Input.Picture:
+            case Render.Form.Input.Check:
+                <fieldset class="@(each.As == Render.Form.Input.Tone ? "post-form-choice tangent-accent" : each.As == Render.Form.Input.Picture ? "post-form-choice pictures" : "post-form-choice")">
+                    <legend class="field-label">@(each.Label ?? each.Name)</legend>
+                    @if (each.As == Render.Form.Input.Check)
+                    {
+                        <input type="hidden" name="@each.Name" value="">
+                    }
+                    <div class="@(each.As == Render.Form.Input.Tone ? "tone-choices" : each.As == Render.Form.Input.Picture ? "cover-choices" : "post-form-options")">
+                        @foreach (var choice in each.Choices ?? [])
+                        {
+                            @Chosen(each, choice)
+                        }
+                    </div>
+                    @Under(each)
+                </fieldset>
+                break;
+            case Render.Form.Input.File:
+                <div class="field cover-upload">
+                    <label class="field-label" for="@Id(each)">@(each.Label ?? each.Name)</label>
+                    <input id="@Id(each)" type="file" name="@each.Name" form="@(Id(each) + "-sends")" accept="@each.Accept" required disabled="@Model.ReadOnly">
+                    @if (each.Sends is { } sends && !Model.ReadOnly)
+                    {
+                        <button type="submit" class="button" form="@(Id(each) + "-sends")" data-busy-label="@sends.Busy">@sends.Submit</button>
+                    }
+                    @Under(each)
+                </div>
+                break;
+            case Render.Form.Input.Fixed:
+                <div class="field">
+                    <span class="field-label">@(each.Label ?? each.Name)</span>
+                    <Draw Part="@(new Render.Sentence(each.Value ?? ""))" />
+                </div>
+                break;
+            case Render.Form.Input.Markdown:
+                <div class="field post-body-field" data-island="@(Standalone || Model.ReadOnly || each.ReadOnly ? null : each.Island)" data-props="@(Standalone || Model.ReadOnly || each.ReadOnly ? null : each.IslandProps)">
+                    <label class="field-label" for="@Id(each)">@(each.Label ?? each.Name)</label>
+                    <textarea class="post-form-body" id="@Id(each)" name="@each.Name" rows="@each.Rows" required="@each.Required" maxlength="@each.Limit"
+                              readonly="@(Model.ReadOnly || each.ReadOnly)" autofocus="@(Focused == each)" aria-invalid="@(each.Failure is null ? "false" : "true")"
+                              aria-describedby="@Said(each)">@each.Value</textarea>
+                    @Under(each)
+                </div>
+                break;
+            case Render.Form.Input.Area:
+                <div class="field">
+                    <label class="field-label" for="@Id(each)">@(each.Label ?? each.Name)</label>
+                    <textarea class="@(each.Rows <= 3 ? "post-form-body post-form-short" : "post-form-body")" id="@Id(each)" name="@(each.ReadOnly ? null : each.Name)"
+                              rows="@each.Rows" required="@each.Required" maxlength="@each.Limit" spellcheck="@(each.Handle || each.Exact ? "false" : null)"
+                              readonly="@(Model.ReadOnly || each.ReadOnly)" autofocus="@(Focused == each)" aria-invalid="@(each.Failure is null ? "false" : "true")"
+                              aria-describedby="@Said(each)">@each.Value</textarea>
+                    @Under(each)
+                </div>
+                break;
+            default:
+                <div class="field">
+                    <label class="field-label" for="@Id(each)">@(each.Label ?? each.Name)</label>
+                    <span class="field-input">
+                        @if (each.Prefix is { } prefix)
+                        {
+                            <span class="field-prefix" aria-hidden="true">@prefix</span>
+                        }
+                        <input id="@Id(each)" name="@each.Name" type="@(each.As == Render.Form.Input.Search ? "search" : "text")" required="@each.Required"
+                               maxlength="@each.Limit" autocomplete="@(each.Handle ? "username" : "off")" autocapitalize="@(each.Handle ? "none" : null)"
+                               spellcheck="@(each.Handle ? "false" : null)" placeholder="@each.Placeholder" readonly="@(Model.ReadOnly || each.ReadOnly)"
+                               value="@each.Value" autofocus="@(Focused == each)" aria-invalid="@(each.Failure is null ? "false" : "true")"
+                               aria-describedby="@Said(each)">
+                    </span>
+                    @Under(each)
+                </div>
+                break;
         }
-        @if (field.Note is { } note)
+    </text>;
+
+    /// <summary>One choice of a field: a card with its name and what it means, an accent's tile, a picture, or a check.</summary>
+    private RenderFragment Chosen(Render.Form.Field each, Render.Form.Choice choice) => @<text>
+        @if (each.As == Render.Form.Input.Tone)
         {
-            <p class="post-form-note" id="@(id + "-note")">@note</p>
-        }</text>;
+            <label class="tone-choice">
+                <input type="radio" name="@each.Name" value="@choice.Value" checked="@(choice.Value == (each.Value ?? ""))" disabled="@Model.ReadOnly">
+                @if (choice.Tile is { } tile)
+                {
+                    <Draw Part="@(new Render.TangentEntry("", tile.Letter, "topic", "", 0) { Tile = new Render.Tile(tile.Tone, tile.Letter) })" As="Shape.Tile" />
+                }
+                <span class="tone-name">@choice.Name</span>
+            </label>
+        }
+        else if (each.As == Render.Form.Input.Picture)
+        {
+            <label class="@(choice.Picture is null ? "cover-choice is-none" : "cover-choice")">
+                <input type="radio" name="@each.Name" value="@choice.Value" checked="@(choice.Value == (each.Value ?? ""))" disabled="@Model.ReadOnly">
+                @if (choice.Picture is { } picture)
+                {
+                    <img class="cover-picture" src="@picture" alt="" loading="lazy">
+                }
+                else
+                {
+                    <span class="cover-picture" aria-hidden="true"></span>
+                }
+                <span class="cover-name">@choice.Name</span>
+            </label>
+        }
+        else
+        {
+            var many = each.As == Render.Form.Input.Check;
+            var chosen = many ? each.Values?.Contains(choice.Value, StringComparer.OrdinalIgnoreCase) == true : choice.Value == each.Value;
+            <label class="post-form-option">
+                @if (choice.Swatch is { } swatch)
+                {
+                    <span class="accent-swatch" data-swatch="@swatch" aria-hidden="true"></span>
+                }
+                <span class="post-form-option-text">
+                    <span class="post-form-option-name">@choice.Name</span>
+                    @if (choice.Detail.Length > 0)
+                    {
+                        <span class="post-form-option-detail">@choice.Detail</span>
+                    }
+                </span>
+                <input type="@(many ? "checkbox" : "radio")" id="@(Id(each) + "-" + choice.Value)" name="@each.Name" value="@choice.Value" checked="@chosen"
+                       disabled="@(Model.ReadOnly || choice.Locked)">
+            </label>
+            @if (many && choice.Locked && chosen)
+            {
+                <input type="hidden" name="@each.Name" value="@choice.Value">
+            }
+        }
+    </text>;
+
+    /// <summary>What stands under a field: why it was refused, its note, and the press that returns it to its default.</summary>
+    private RenderFragment Under(Render.Form.Field each) => @<text>
+        @if (each.Failure is { } failure)
+        {
+            <p class="field-failure" id="@(Id(each) + "-failure")">@failure</p>
+        }
+        @if (each.Note is { } note)
+        {
+            <p class="post-form-note" id="@(Id(each) + "-note")"><Draw Part="@(new Render.Sentence(note))" As="Shape.Inline" /></p>
+        }
+        @if (each.Reset is { } reset && !Model.ReadOnly)
+        {
+            @if (reset.Confirm is { } confirm)
+            {
+                <details class="post-form-more">
+                    <summary class="sign-in-other-toggle">@reset.Opens</summary>
+                    <div class="post-form-more-body">
+                        <p class="post-form-note">@confirm</p>
+                        <button type="submit" class="button" form="@(Id(each) + "-reset")">@reset.Submit</button>
+                    </div>
+                </details>
+            }
+            else
+            {
+                <p class="post-form-note"><button type="submit" class="button" form="@(Id(each) + "-reset")">@reset.Submit</button></p>
+            }
+        }
+    </text>;
 }

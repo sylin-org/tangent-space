@@ -49,7 +49,7 @@ public sealed class TangentSettingsTests
         var gate = Capabilities.NoRoleGrants(Bit.ManageTangent).Word;
         var offered = await Send(ada.Client, HttpMethod.Get, "/t/workshop/settings");
         Assert.Contains($"data-gate=\"{gate}\"", offered.Body);
-        Assert.DoesNotContain("type=\"submit\"", offered.Body);
+        Assert.DoesNotContain("type=\"submit\"", PageContent(offered.Body));
         var refused = await Form(ada, "/t/workshop", "/t/workshop/settings", Workshop("Ada's workshop"));
         Assert.Equal(HttpStatusCode.Forbidden, refused.Status);
         Assert.Contains($"data-gate=\"{gate}\"", refused.Body);

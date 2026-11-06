@@ -167,7 +167,7 @@ public sealed class TangentPageTests
         Assert.Contains("<span class=\"badge is-new\">1 new</span>", html);
         // The reader's account opens in the page, with the way to sign out and come back here.
         Assert.Contains("<details class=\"account menu participant is-you\">", html);
-        Assert.Contains($"<form method=\"post\" action=\"{BaseUrl}/auth/logout?return={Uri.EscapeDataString("/t/" + Workshop)}\"><button class=\"account-item account-action\">", html);
+        Assert.Contains($"<form class=\"sign-out\" method=\"post\" action=\"{BaseUrl}/auth/logout?return={Uri.EscapeDataString("/t/" + Workshop)}\"><button type=\"submit\" class=\"account-item account-action\">", html);
         Assert.Contains("</svg>Sign out</button></form>", html);
 
         using (var json = await Json(tangentSpace.Client, "/t/" + Workshop))
@@ -319,7 +319,7 @@ public sealed class TangentPageTests
         var readerHtml = await Html(browser.Client, "/t/" + Workshop);
         Assert.DoesNotContain("masthead-sign-in", readerHtml);
         Assert.Contains(" · Member</span>", WebUtility.HtmlDecode(readerHtml));
-        Assert.Contains($"<li><form method=\"post\" action=\"{BaseUrl}/auth/logout?return={Uri.EscapeDataString("/t/" + Workshop)}\">", readerHtml);
+        Assert.Contains($"<li><form class=\"sign-out\" method=\"post\" action=\"{BaseUrl}/auth/logout?return={Uri.EscapeDataString("/t/" + Workshop)}\">", readerHtml);
         Assert.Contains("data-theme-choice=\"dark\"", readerHtml[..readerHtml.IndexOf("account-items", StringComparison.Ordinal)]);
         Assert.DoesNotContain("The studio", readerHtml);
         Assert.Contains("<span class=\"badge is-new new-beside\">New</span>", readerHtml);

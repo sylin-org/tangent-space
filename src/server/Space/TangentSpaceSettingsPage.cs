@@ -31,7 +31,7 @@ public sealed record TangentSpaceSettingsPage(
     public SettingsRail Rail => new(Sections);
 
     [Slot(Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public PanelTitle Heading => new(Sections.FirstOrDefault(section => section.Current)?.Name ?? TangentSpaceSettingsController.General, "Settings of", Place, Door);
+    public PanelTitle Heading => new(Sections.FirstOrDefault(section => section.Current)?.Name ?? TangentSpaceSettingsController.General, "Settings of " + Render.Sentence.Link(Place, Door));
 
     [Slot(Slot.Column), Newtonsoft.Json.JsonIgnore]
     public Notice? Line => Notice.Of(Gate, Failure, SignIn);

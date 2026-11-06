@@ -94,6 +94,17 @@ public sealed record Publishing(string State, string Sentence, string? Detail, F
     [Newtonsoft.Json.JsonIgnore]
     public bool Publishes => State == Offer || State == ConnectionsController.Word(ArticleState.EditedByOthers);
 
+    /// <summary>What its author may do from the line: publish, or grant again; say not now; view the Bluesky post; open their
+    /// Connections.</summary>
+    [Newtonsoft.Json.JsonIgnore]
+    public IReadOnlyList<IPart> Answers =>
+    [
+        .. Publish is { } publish ? new IPart[] { publish with { Tool = "publish", Submit = Publishes ? "Publish" : "Grant it again" } } : [],
+        .. NotNow is { } notNow ? new IPart[] { notNow.AsGiven() with { Tool = "not-now", Submit = "Not now", Quiet = true } } : [],
+        .. Elsewhere is { } elsewhere ? new IPart[] { new LinkButton("View on Bluesky", elsewhere) { Outside = true } } : [],
+        .. State != Offer ? new IPart[] { new LinkButton("Connections", Connections) } : []
+    ];
+
     /// <summary>Whether a visitor reads the Tangent <paramref name="tangentId"/> of a place of <paramref name="space"/>: the
     /// place is public and the Tangent's own audience, where it states one, is not private. Only such an article is
     /// published.</summary>

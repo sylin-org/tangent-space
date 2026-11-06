@@ -56,8 +56,10 @@ public sealed class PageAttribute(Layout layout) : Attribute
 
 /// <summary>How a part that holds another draws it, in LANGUAGE's shapes: a person is a <see cref="Chip"/> in a Post's head and
 /// among who is around, a <see cref="Row"/> in a list of people; a Topic a <see cref="Row"/> of a table or a <see cref="Card"/>
-/// among articles. <see cref="Name"/> is a person's name alone, linked to their profile; <see cref="Lead"/> the first article,
-/// drawn large. A part draws its own first shape where it is given none.</summary>
+/// among articles; a form opens in place as a <see cref="Row"/> of a list. <see cref="Name"/> is a person's name alone,
+/// linked to their profile; <see cref="Inline"/> a sentence inside another's line; <see cref="Menu"/> an item of the
+/// account's menu; <see cref="Lead"/> the first article, drawn large. A part draws its own first shape where it is given
+/// none.</summary>
 public enum Shape
 {
     Default,
@@ -66,7 +68,9 @@ public enum Shape
     Row,
     Tile,
     Badge,
+    Menu,
     Name,
+    Inline,
     Lead
 }
 

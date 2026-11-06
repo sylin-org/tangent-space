@@ -34,7 +34,7 @@ public sealed record SearchPage(
         IReadOnlyList<Run> Snippet, TangentPage.Edited? Edited = null, string TangentSlug = "", string TopicSlug = "") : Render.IPart;
 
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Render.PanelTitle Heading => new(Text is { } text ? "Search: " + text : "Search", "In", Place, Door);
+    public Render.PanelTitle Heading => new(Text is { } text ? "Search: " + text : "Search", "In " + Render.Sentence.Link(Place, Door));
 
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
     public Render.SearchHits Found => new(Hits,
