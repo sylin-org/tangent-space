@@ -31,9 +31,8 @@ Each package delivers one thing a person or an agent meets, and builds the seam 
 
 The packages, as `id · what you get · what it absorbs from the design · after`:
 
-1. k52-person-is-koans-own (koan, with a Tangent half: the account package) · Koan creates its own person, a GUIDv7, and binds the credentials that arrive, one per provider, rebound at will; each Post keeps the account it was written as · SEC-0007's binding follow-on · the Koan half none; the Tangent half mentions-by-name
-2. export-and-archive-are-one-copy · The place as you or as a visitor, and each Tangent, as one static copy; retirement, the restore verb and the archive's second host go · life-1, life-2, cut-1; Koan k-snapshot · none
-3. webmention-and-mastodon · A Post goes out by Webmention and to Mastodon under its author's own account, and replies come back as references · the brief's protocols · none
+1. export-and-archive-are-one-copy · The place as you or as a visitor, and each Tangent, as one static copy; retirement, the restore verb and the archive's second host go · life-1, life-2, cut-1; Koan k-snapshot · none
+2. webmention-and-mastodon · A Post goes out by Webmention and to Mastodon under its author's own account, and replies come back as references · the brief's protocols · none
 
 The design's other packages (forms and pages from routes, standing in one command, people from Koan's person, the sweep, the islands, the Markdown dialect, the test kit, feeds, backup, keyset pages, the connector's profile and identifiers, each consumer's build) fold into the first feature that needs them, or wait; none runs for its own sake.
 
