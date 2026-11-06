@@ -79,14 +79,17 @@ public sealed class TangentsController(KoanWebBaseUrl baseUrl, IDataProtectionPr
 
     /// <summary>A members-only Tangent as someone outside it finds it listed: what it is about, how they come in, and the
     /// form that joins or asks, or that withdraws their waiting ask. Where anyone joins, an ask they made before, waiting or
-    /// declined, says nothing, and they join.</summary>
+    /// declined, says nothing, and they join. Its tile carries no picture brought in here, which reaches only those who may
+    /// view the Tangent (<see cref="MediaUse.Reaches"/>); a cover reaches anyone and stays.</summary>
     public static Render.TangentEntry Outside(Tangent tangent, string baseAddress, Ask? asked)
     {
         var address = PostWrites.TangentAddress(baseAddress, tangent.Id);
         var ask = tangent.Joining == Joining.Join ? null : asked;
         var joining = ask is null ? tangent.Joining == Joining.Join ? "join" : "ask" : ask.Declined ? Joined.DeclinedState : Joined.AskedState;
-        return Listed(tangent, baseAddress) with
+        var listed = Listed(tangent, baseAddress);
+        return listed with
         {
+            Tile = Media.IdIn(tangent.Image) is null ? listed.Tile : listed.Tile! with { Image = null },
             Description = tangent.Description,
             Joining = joining,
             Join = ask is null

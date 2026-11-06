@@ -11,8 +11,8 @@ using static Tangent.Posts.Writing;
 namespace Tangent.Tangents;
 
 /// <summary>A members-only Tangent whose joining says ask: someone outside it finds it listed, and at its own address its
-/// card, and asks to join; whoever manages it sees the ask on their door and on its people tab and lets them in; the asker's
-/// door tells them, they read it, and they leave it with one action.</summary>
+/// card, which carries no picture of its own they could not open, and asks to join; whoever manages it sees the ask on their
+/// door and on its people tab and lets them in; the asker's door tells them, they read it, and they leave it with one action.</summary>
 public sealed class MembersOnlyTests
 {
     private static readonly string Leo = Persona.Id("leo4members");
@@ -38,6 +38,14 @@ public sealed class MembersOnlyTests
             Assert.False((await Send(visitor, HttpMethod.Get, "/", json: true)).Json.TryGetProperty("allTangents", out _));
         var listed = Listed((await Send(ada.Client, HttpMethod.Get, "/t", json: true)).Json, Studio);
         Assert.Equal("ask", listed.GetProperty("joining").GetString());
+
+        // Leo brings the studio a picture of its own, which reaches only its members, so the card Ada reads carries none.
+        var picture = await Media.Keep(ArticleMediaTests.Jpeg(), Cancellation);
+        Assert.IsType<Outcome<MediaUse>.Done>(await new BringMedia(picture.Id, Leo).Send(Cancellation));
+        Assert.IsType<Outcome<Tangent>.Done>(await new ChangeTangent(Studio, Leo, Image: Media.Reference(picture.Id)).Send(Cancellation));
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(ada.Client, HttpMethod.Get, Media.Reference(picture.Id))).Status);
+        listed = Listed((await Send(ada.Client, HttpMethod.Get, "/t", json: true)).Json, Studio);
+        Assert.Null(Image(listed));
 
         // A member's link to the studio opens its card for her, the same card, with nothing it holds; under it, nothing.
         var card = await Send(ada.Client, HttpMethod.Get, "/t/" + Studio, json: true);
@@ -65,6 +73,8 @@ public sealed class MembersOnlyTests
         Assert.Equal([Ada], letIn.Json.GetProperty("people").EnumerateArray().Select(row => row.GetProperty("person").GetProperty("id").GetString()));
         var studio = await Send(ada.Client, HttpMethod.Get, "/t/" + Studio, json: true);
         Assert.Equal(HttpStatusCode.OK, studio.Status);
+        Assert.Equal(BaseUrl + Media.Reference(picture.Id), Image(Listed((await Send(ada.Client, HttpMethod.Get, "/t", json: true)).Json, Studio)));
+        Assert.Equal(HttpStatusCode.OK, (await Send(ada.Client, HttpMethod.Get, Media.Reference(picture.Id))).Status);
         var let = (await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news").GetProperty("let")[0];
         Assert.True(let.GetProperty("given").GetBoolean());
 
@@ -114,4 +124,8 @@ public sealed class MembersOnlyTests
 
     private static JsonElement Listed(JsonElement page, string slug)
         => page.GetProperty("tangents").EnumerateArray().Single(tangent => tangent.GetProperty("slug").GetString() == slug);
+
+    /// <summary>The image a listed Tangent's tile carries, or null where it carries none.</summary>
+    private static string? Image(JsonElement tangent)
+        => tangent.GetProperty("tile").TryGetProperty("image", out var image) ? image.GetString() : null;
 }
