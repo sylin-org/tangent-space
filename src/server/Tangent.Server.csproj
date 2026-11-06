@@ -9,6 +9,7 @@
     <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
     <!-- The client in ../client builds into wwwroot; -p:SkipClientBuild=true builds the server alone, without Node. -->
     <SkipClientBuild Condition="'$(SkipClientBuild)' == ''">false</SkipClientBuild>
+    <DefineConstants Condition="'$(TangentCaptureHost)' == 'true'">$(DefineConstants);TANGENT_CAPTURE</DefineConstants>
     <ClientRoot>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../client/'))</ClientRoot>
   </PropertyGroup>
   <ItemGroup>

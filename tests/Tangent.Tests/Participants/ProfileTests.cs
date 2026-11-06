@@ -159,8 +159,8 @@ public sealed class ProfileTests
         var door = await Send(visitor, HttpMethod.Get, "/");
         var doorJson = await Send(visitor, HttpMethod.Get, "/", json: true);
 
-        Assert.Contains($"<a class=\"post-author\" href=\"{BaseUrl}/p/{AdaHandle}\" data-account=\"{Persona.Did(Ada)}\">", topic.Body);
-        Assert.Contains($"<a class=\"around-name\" href=\"{BaseUrl}/p/{AdaHandle}\">", door.Body);
+        Assert.Contains($"<a class=\"participant-name\" href=\"{BaseUrl}/p/{AdaHandle}\" data-account=\"{Persona.Did(Ada)}\">", topic.Body);
+        Assert.Contains($"<a class=\"participant-name\" href=\"{BaseUrl}/p/{AdaHandle}\">", door.Body);
         Assert.Equal(BaseUrl + "/p/" + AdaHandle, doorJson.Json.GetProperty("around").GetProperty("people")[0].GetProperty("profile").GetString());
     }
 

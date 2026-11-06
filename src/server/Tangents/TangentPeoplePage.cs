@@ -11,6 +11,7 @@ namespace Tangent.Tangents;
 /// they can do there — <c>in</c> by their own place, <c>by-role</c>, <c>kept-out</c>, <c>asked</c>, <c>declined</c> or
 /// <c>out</c> — and the choices the reader may send for them through <see cref="Change"/>, which lets them in or keeps them
 /// out. <see cref="Fixed"/> says this is the moderators' Tangent, whose access stays as it is.</summary>
+[Render.Page(Render.Layout.Panel)]
 public sealed record TangentPeoplePage(
     string Slug,
     string Name,
@@ -35,6 +36,10 @@ public sealed record TangentPeoplePage(
     string? Failure = null,
     string? First = null)
 {
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.TangentPeopleList Body => new(this);
+
+
     /// <summary>One participant as the people tab lists them: their id, name, handle, kind, profile, where they stand
     /// here, and the choices the reader may send for them: <c>in</c>, <c>out</c>, both for an ask, or none.</summary>
     public sealed record Person(string Id, string Name, string Handle, string Kind, string? Profile, string State, IReadOnlyList<string> Choices);

@@ -98,7 +98,7 @@ public sealed partial class ArchiveTests
         Assert.Contains($"url=../index.html#{long_.Id}", await Read(folder, "t", Workshop, "a-long-one", long_.Id, "index.html"));
 
         // The door is the door, and a removed Post stays a tombstone.
-        Assert.Contains("id=\"door-title\"", await Read(folder, "index.html"));
+        Assert.Contains("class=\"tangent-head place", await Read(folder, "index.html"));
         Assert.Contains("post-removed", await Read(folder, "t", Workshop, "a-long-one", "2.html"));
         Assert.DoesNotContain(Files(folder), file => File.ReadAllText(file).Contains("Words nobody keeps"));
 

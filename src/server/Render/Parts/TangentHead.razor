@@ -1,0 +1,49 @@
+@using System.Globalization
+@* A Tangent's head: its tile, name and description, what it holds — its Topics and, where the page holds them all, their
+   Posts (articles: their replies) — who can read it, and its settings for a reader who may change them. *@
+<section class="@("tangent-head tangent" + (Articles ? " tangent-head-articles" : "") + (Model.Private ? " is-private" : ""))" aria-labelledby="tangent-title">
+    <div class="tangent-head-inner">
+        <Draw Part="@Model.Tangent" As="Shape.Tile" />
+        <div class="tangent-head-text">
+            <h1 id="tangent-title" class="tangent-title">@Model.Tangent.Name</h1>
+            @if (Model.Tangent.Description is { Length: > 0 } description)
+            {
+                <p class="tangent-description">@description</p>
+            }
+            <p class="tangent-meta">
+                @if (Model.Tangent.TopicCount > 0)
+                {
+                    <span>@((MarkupString)Holds)</span>
+                }
+                <span class="tangent-audience"><Draw Part="@(new Render.AudienceNote(Model.Private))" As="Shape.Badge" /></span>
+            </p>
+            @if (Model.Settings is { } settings)
+            {
+                <div class="tangent-head-actions">
+                    <a class="button tangent-settings" href="@settings">Settings</a>
+                </div>
+            }
+        </div>
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public Render.TangentHead Model { get; set; } = default!;
+
+    private bool Articles => Model.Tangent.Kind == "article";
+
+    private string Holds
+    {
+        get
+        {
+            var started = Model.Tangent.TopicCount;
+            var held = Bold(started, Articles ? "article" : "topic", Articles ? "articles" : "topics");
+            if (Model.Replies is not { } replies) return held;
+            if (Articles) return replies > 0 ? held + " · " + Bold(replies, "reply", "replies") : held;
+            return held + " · " + Bold(started + replies, "post", "posts");
+        }
+    }
+
+    private static string Bold(int count, string one, string many)
+        => "<b>" + count.ToString(CultureInfo.InvariantCulture) + "</b> " + (count == 1 ? one : many);
+}

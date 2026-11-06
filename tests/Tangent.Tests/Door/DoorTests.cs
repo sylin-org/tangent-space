@@ -388,8 +388,8 @@ public sealed class DoorTests(ITestOutputHelper output)
         }
 
         var html = WebUtility.HtmlDecode(await Html(tangentSpace.Client, "/"));
-        Assert.Contains("<h1 id=\"door-title\" class=\"tangent-title\">Lantern Works</h1>", html);
-        Assert.Contains("The place of leo.example, @leo.example", html);
+        Assert.Contains("<span class=\"masthead-name\">Lantern Works</span>", html);
+        Assert.Matches("The place of <a class=\"participant-name\" href=\"[^\"]*/p/leo.example\">leo.example</a>, @leo.example", html);
         Assert.Contains("What should we build?", html);
         Assert.Contains("On lanterns", html);
         Assert.Contains($"<a class=\"masthead-sign-in\" href=\"{BaseUrl}/sign-in?return=%2F\">Sign in</a>", html);

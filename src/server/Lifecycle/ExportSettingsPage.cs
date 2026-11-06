@@ -9,6 +9,7 @@ namespace Tangent.Lifecycle;
 /// after, null on the last, and <see cref="First"/> the first page's, for a page that <see cref="Continued"/> from a cursor.
 /// <see cref="Can"/> is what the reader holds in the place, and <see cref="Gate"/> why they may not export, null when they
 /// may; <see cref="SignIn"/> is where a visitor signs in, coming back here.</summary>
+[Page(Layout.Settings)]
 public sealed record ExportSettingsPage(
     IReadOnlyList<SettingsSection> Sections,
     string? Whole,
@@ -26,4 +27,20 @@ public sealed record ExportSettingsPage(
     /// <summary>A Tangent the reader may take: its slug, name, kind, how many Topics were started there, and where its zip
     /// is.</summary>
     public sealed record Download(string Slug, string Name, string Kind, int TopicCount, string Address);
+
+    [Slot(Slot.Rail), Newtonsoft.Json.JsonIgnore]
+    public SettingsRail Rail => new(Sections);
+
+    [Slot(Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public PanelTitle Heading => new(Space.TangentSpaceSettingsController.ExportSection, "Settings of", Place, Door);
+
+    [Slot(Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Notice? Line => Notice.Of(Gate, null, SignIn);
+
+    [Slot(Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Downloads? Offered => Gate is null ? new(Place, Whole, Tangents, Continued, Next, First) : null;
+
+    /// <summary>The frame the shell draws around the page: its settings as its one crumb, and who reads, or where a visitor
+    /// signs in.</summary>
+    public static Frame Frame(ExportSettingsPage page) => new(page.Place, page.Door, [new Crumb("Settings")], page.Who, page.SignIn);
 }

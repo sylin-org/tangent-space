@@ -32,12 +32,12 @@ public sealed class ExportController(KoanWebBaseUrl baseUrl, IDataProtectionProv
     private const string Extension = ".zip";
 
     [HttpGet(Path)]
+    [Needs(Bit.View)]
     public async Task<IActionResult> Get([FromQuery(Name = After)] string? after, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
+        var place = Here.Of(HttpContext).Around;
         if (place.Gate(Bit.ManageSpace) is { } refused && PostWrites.WantsJson(Request)) return this.Refused(refused);
 
         ViewableTangents.Cursor? cursor = null;

@@ -1,0 +1,36 @@
+@* A Topic's rail: the way back to its Tangent and where a new Topic is started there; the replies this window holds, each a
+   Post's row; and an article's outline. *@
+<h2 class="rail-heading">@Model.Tangent.Name</h2>
+<ul class="rail-views list">
+    <li><a href="@Model.Tangent.Address">@(Model.Article ? "All articles" : "All topics")</a></li>
+    @if (Model.NewTopic is { } start)
+    {
+        <li><a href="@start">@(Model.Article ? "New article" : "New topic")</a></li>
+    }
+</ul>
+@if (Model.Replies.Count > 0)
+{
+    <h2 class="rail-heading rail-heading-spaced">In this window</h2>
+    <ul class="topic-rail-replies list">
+        @foreach (var reply in Model.Replies)
+        {
+            <li><Draw Part="@reply" As="Shape.Row" /></li>
+        }
+    </ul>
+}
+@if (Model.Outline.Count > 1)
+{
+    <nav class="article-outline" aria-labelledby="article-outline-heading">
+        <h2 id="article-outline-heading" class="rail-heading rail-heading-spaced">In this article</h2>
+        <ul class="rail-views list">
+            @foreach (var entry in Model.Outline)
+            {
+                <li class="@(entry.Level > 2 ? "article-outline-sub" : null)"><a href="@("#" + entry.Id)">@entry.Text</a></li>
+            }
+        </ul>
+    </nav>
+}
+
+@code {
+    [Parameter, EditorRequired] public Render.TopicRail Model { get; set; } = default!;
+}

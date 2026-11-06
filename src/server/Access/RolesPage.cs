@@ -12,6 +12,7 @@ namespace Tangent.Access;
 /// the place, and <see cref="Gate"/> why they may not shape its roles, null when they may, when the list is empty;
 /// <see cref="SignIn"/> is where a visitor signs in, coming back here. After a refusal the page says why above the list
 /// and keeps the new role's <see cref="Name"/> and <see cref="Chosen"/> permissions as they were sent.</summary>
+[Render.Page(Render.Layout.Settings)]
 public sealed record RolesPage(
     IReadOnlyList<SettingsSection> Sections,
     IReadOnlyList<RolesPage.Listed> Roles,
@@ -29,6 +30,13 @@ public sealed record RolesPage(
     string Name = "",
     IReadOnlyList<string>? Chosen = null)
 {
+    [Render.Slot(Render.Slot.Rail), Newtonsoft.Json.JsonIgnore]
+    public Render.SettingsRail Rail => new(Sections);
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.RoleList Body => new(this);
+
+
     /// <summary>What a reader may do to a role, as a role's <c>can</c> lists it: change its name and what it grants, move
     /// it one place higher or lower, and delete it.</summary>
     public static class Verb

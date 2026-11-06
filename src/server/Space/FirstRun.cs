@@ -13,6 +13,7 @@ namespace Tangent.Space;
 /// <see cref="Pointers"/>, what the site places to point at it: none while the base URL is local, which no site can
 /// point at, and <see cref="PointersLater"/> says instead when they appear. <see cref="Reader"/> is whoever is
 /// signed in, as the account menu shows them, with where they sign out.</summary>
+[Render.Page(Render.Layout.Panel)]
 public sealed record FirstRun(
     string Name,
     string Door,
@@ -24,6 +25,13 @@ public sealed record FirstRun(
     FirstRunReader? Reader = null,
     string? PointersLater = null)
 {
+    [Render.Slot(Render.Slot.Head), Newtonsoft.Json.JsonIgnore]
+    public Render.PlaceBand Band => new(Name);
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.SetUp Body => new(this);
+
+
     /// <summary>The configuration key that names the account that may set the place up.</summary>
     public const string OperatorSetting = "Tangent:Operator";
 

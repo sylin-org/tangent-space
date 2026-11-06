@@ -48,12 +48,12 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, RoleCollecti
     [HttpGet(Route)]
     [Tool(Name = "read_tangent_access")]
     [Description("Read which roles read and post in a Tangent, a page at a time, for whoever may change it. Follow with change_tangent_access.")]
+    [Needs(Bit.View)]
     public async Task<IActionResult> Get([Description(Holds.Tangent)] string tangent, [FromQuery(Name = RolesController.PageQuery), Description(Holds.Number)] string? page, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var (found, refused) = await Here.Find(personId, tangent, null, null, ct);
-        if (refused is not null) return this.Refused(refused);
+        var found = Here.Of(HttpContext);
         var gate = found.Capabilities.Gate(Bit.ManageTangent);
         if (gate is not null && PostWrites.WantsJson(Request)) return this.Refused(gate);
         var read = await Page(found, personId, RolesController.Numbered(page), ct);
@@ -64,12 +64,12 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, RoleCollecti
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "change_tangent_access", Destructive = true, Idempotent = true, OpenWorld = false)]
     [Description("Set what one role may do in a Tangent, for whoever may change the Tangent and manages the role. Everyone in the role reads or posts there as you set it, at once.")]
+    [Needs(Bit.View)]
     public async Task<IActionResult> Change([FromRoute, Description(Holds.Tangent)] string tangent, ChangeAccessInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var (found, refused) = await Here.Find(personId, tangent, null, null, ct);
-        if (refused is not null) return this.Refused(refused);
+        var found = Here.Of(HttpContext);
 
         if (TangentWrites.Choice(input.Access, Accesses, out _) is not { } chosen) return await Refused(found, personId, AccessRule, ct);
         if ((input.Role == Roles.Word(Roles.Everyone) ? Roles.Everyone : Roles.KeyOf(input.Role)) is not { } key)

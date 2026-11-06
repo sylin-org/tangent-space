@@ -38,12 +38,12 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
     [HttpGet(Route)]
     [Tool(Name = "read_tangent_settings")]
     [Description("Read a Tangent's name, description, default kind, audience, accent and image, for whoever may change them. Call this before change_tangent.")]
+    [Needs(Bit.View)]
     public async Task<IActionResult> Get([Description(Holds.Tangent)] string tangent, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var (found, refused) = await Here.Find(personId, tangent, null, null, ct);
-        if (refused is not null) return this.Refused(refused);
+        var found = Here.Of(HttpContext);
         return Ok(await Page(found, personId, ct));
     }
 
@@ -51,12 +51,12 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "change_tangent", Destructive = true, Idempotent = false, OpenWorld = false)]
     [Description("Change a Tangent's name, description, default kind, audience, accent or image, or move it among the Tangents, for whoever holds ManageTangent there or ManageSpace. What you send replaces what stood, and sending a move again moves it again.")]
+    [Needs(Bit.View)]
     public async Task<IActionResult> Change([FromRoute, Description(Holds.Tangent)] string tangent, ChangeTangentInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var (found, refused) = await Here.Find(personId, tangent, null, null, ct);
-        if (refused is not null) return this.Refused(refused);
+        var found = Here.Of(HttpContext);
 
         var kind = TangentWrites.Choice(input.Kind, TangentWrites.Kinds, out var kindValid);
         if (!kindValid) return await Refused(found, personId, input, TangentWrites.KindRule, ct);

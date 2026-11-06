@@ -102,7 +102,7 @@ public sealed class SearchController(KoanWebBaseUrl baseUrl) : ControllerBase
                 root?.Title ?? "",
                 tangent.Name,
                 post.ParentId is null ? PostWrites.TopicAddress(baseAddress, tangent.Id, slug) : PostWrites.Address(baseAddress, tangent.Id, slug, post.Id),
-                people.TryGetValue(post.AuthorId, out var author) ? author : new TangentPage.Author(post.AuthorId, post.AuthorId, post.AuthorId, "person", null),
+                people.TryGetValue(post.AuthorId, out var author) ? author : Render.Person.Unknown(post.AuthorId),
                 post.CreatedAt,
                 Snippet(hit, people),
                 TangentPage.EditedOf(post, people),
@@ -113,7 +113,7 @@ public sealed class SearchController(KoanWebBaseUrl baseUrl) : ControllerBase
 
     /// <summary>A hit's words as a reader reads them: the store's snippet read as Markdown to plain text, or, where the
     /// title is what it cut, the Post's first words, since the line above already shows the title.</summary>
-    private static IReadOnlyList<SearchPage.Run> Snippet(PostSearch.Hit hit, IReadOnlyDictionary<string, TangentPage.Author> people)
+    private static IReadOnlyList<SearchPage.Run> Snippet(PostSearch.Hit hit, IReadOnlyDictionary<string, Render.Person> people)
     {
         var post = hit.Post;
         var runs = hit.Snippet is { Length: > 0 } snippet ? SearchPage.Runs(Mentions.PlainFragment(snippet, people)) : [];
@@ -122,9 +122,9 @@ public sealed class SearchController(KoanWebBaseUrl baseUrl) : ControllerBase
     }
 
     /// <summary>Everyone the page shows, in one keyed read, by participant Id, each with their profile's address.</summary>
-    private static async Task<IReadOnlyDictionary<string, TangentPage.Author>> People(string baseAddress, IEnumerable<string> ids, CancellationToken ct)
+    private static async Task<IReadOnlyDictionary<string, Render.Person>> People(string baseAddress, IEnumerable<string> ids, CancellationToken ct)
     {
         var wanted = ids.Distinct(StringComparer.Ordinal).ToList();
-        return (await Participant.Get(wanted, ct)).OfType<Participant>().ToDictionary(row => row.Id, row => TangentPage.Author.Of(row, baseAddress), StringComparer.Ordinal);
+        return (await Participant.Get(wanted, ct)).OfType<Participant>().ToDictionary(row => row.Id, row => Render.Person.Of(row, baseAddress), StringComparer.Ordinal);
     }
 }

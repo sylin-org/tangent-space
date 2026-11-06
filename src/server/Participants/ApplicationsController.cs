@@ -46,12 +46,12 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
     [HttpGet(Path)]
     [Tool(Name = "read_applications")]
     [Description("Read who waits to be admitted and who was declined, a page at a time, for whoever holds ManageStanding. Follow with admit or decline on an applicant's id.")]
+    [Needs(Bit.View)]
     public async Task<IActionResult> Get([FromQuery(Name = After), Description(Holds.After)] string? after, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
+        var place = Here.Of(HttpContext).Around;
         if (place.Gate(Bit.ManageStanding) is { } refused && PostWrites.WantsJson(Request)) return this.Refused(refused);
 
         Applications.Cursor? cursor = null;

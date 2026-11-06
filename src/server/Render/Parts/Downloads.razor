@@ -1,0 +1,43 @@
+@* What the reader may download of the place: a zip of readable pages that open with no server, each beside its data; the
+   whole place, then each Tangent; and the Tangents after and the first ones a link away. *@
+<p class="post-form-note">A zip of readable pages that open with no server, each beside its data as JSON. It holds everything you may read here, and removed posts stay as they stand.</p>
+<ul class="door-offers applications">
+    @if (!Model.Continued && Model.Whole is { } whole)
+    {
+        <li class="door-offer">
+            <p class="door-offer-line">The whole of @Model.Place</p>
+            <div class="door-offer-answers">
+                <a class="tangent-new" href="@whole" download>Download</a>
+            </div>
+        </li>
+    }
+    @foreach (var tangent in Model.Tangents)
+    {
+        <li class="door-offer" @key="tangent.Slug">
+            <p class="door-offer-line">
+                @tangent.Name
+                <span class="topic-row-none">· @(new Render.TangentEntry(tangent.Slug, tangent.Name, tangent.Kind, tangent.Address, tangent.TopicCount).Detail)</span>
+            </p>
+            <div class="door-offer-answers">
+                <a class="button" href="@tangent.Address" download>Download</a>
+            </div>
+        </li>
+    }
+</ul>
+@if (Model.Continued || Model.Next is not null)
+{
+    <nav class="topic-pages" aria-label="More Tangents">
+        @if (Model.Continued)
+        {
+            <a href="@Model.First">First Tangents</a>
+        }
+        @if (Model.Next is { } next)
+        {
+            <a class="topic-pages-next" href="@next">More Tangents →</a>
+        }
+    </nav>
+}
+
+@code {
+    [Parameter, EditorRequired] public Render.Downloads Model { get; set; } = default!;
+}

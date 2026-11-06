@@ -16,6 +16,7 @@ namespace Tangent.Tangents;
 /// <see cref="Gate"/> why they may not change it, null when they may; <see cref="SignIn"/> is where a visitor signs in,
 /// coming back here. After a refusal the form keeps what was sent and says why: under the name, under the description,
 /// or above the form.</summary>
+[Render.Page(Render.Layout.Panel)]
 public sealed record TangentSettingsPage(
     string Slug,
     string Name,
@@ -43,4 +44,8 @@ public sealed record TangentSettingsPage(
     Who? Who,
     string? Failure = null,
     string? NameFailure = null,
-    string? DescriptionFailure = null);
+    string? DescriptionFailure = null)
+{
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.TangentSettingsForm Body => new(this);
+}

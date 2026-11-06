@@ -1,0 +1,18 @@
+@using System.Globalization
+@* A Post quoted for context: who wrote it and when, linked to it, its words cut short or that it is removed, and who
+   edited it where someone else did. *@
+<blockquote class="post-quote" cite="@Model.Address">
+    <p>
+        <a href="@Model.Address"><strong>@Model.Author.Name</strong> <span class="post-handle">@("@" + Model.Author.Handle)</span>
+            · <time datetime="@Model.CreatedAt.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture)">@Model.CreatedAt.ToUniversalTime().ToString("MMM d, yyyy", CultureInfo.InvariantCulture)</time></a>
+    </p>
+    <p>@(Model.Removed ? "This post is removed." : Model.Text)</p>
+    @if (Model.Edited is { } edited)
+    {
+        <p class="post-edited">Edited by @edited.By.Name</p>
+    }
+</blockquote>
+
+@code {
+    [Parameter, EditorRequired] public Posts.QuotedPost Model { get; set; } = default!;
+}

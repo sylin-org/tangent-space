@@ -7,8 +7,9 @@ namespace Tangent.Tangents;
 /// last, and <see cref="First"/>, the first page's, for a page that <see cref="Continued"/> from a cursor. <see cref="Can"/>
 /// is what the reader holds in the place; <see cref="NewTangent"/> is where a Tangent is created, for whoever may;
 /// <see cref="SignIn"/> is where a visitor signs in, coming back here.</summary>
+[Page(Layout.Panel)]
 public sealed record TangentsPage(
-    IReadOnlyList<TangentPage.Listed> Tangents,
+    IReadOnlyList<Render.TangentEntry> Tangents,
     string? Next,
     bool Continued,
     string First,
@@ -17,4 +18,15 @@ public sealed record TangentsPage(
     string Place,
     string Door,
     Who? Who,
-    string? NewTangent);
+    string? NewTangent)
+{
+    [Slot(Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public PanelTitle Heading => new("Tangents", "In", Place, Door);
+
+    [Slot(Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public TangentDirectory Directory => new(Tangents, Continued, Next, First, NewTangent);
+
+    /// <summary>The frame the shell draws around the page: its Tangents as its one crumb, and who reads, or where a visitor
+    /// signs in.</summary>
+    public static Frame Frame(TangentsPage page) => new(page.Place, page.Door, [new Crumb("Tangents")], page.Who, page.SignIn);
+}

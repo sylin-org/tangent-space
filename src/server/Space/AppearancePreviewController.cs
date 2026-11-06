@@ -17,13 +17,11 @@ public sealed class AppearancePreviewController : ControllerBase
     [HttpGet(Path)]
     [HttpPost(Path)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
+    [Needs(Bit.ManageSpace)]
     public async Task<IActionResult> Preview(ChangeAppearanceInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
-        if (place.Gate(Bit.ManageSpace) is { } gate) return Answers.Refused(HttpContext, gate);
 
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
         HttpContext.Items[HtmlFormatter.Previewed] = space.Appearance.Previewed(input.Base, input.Palette, input.Css, input.Image, input.Masthead, input.Footer,

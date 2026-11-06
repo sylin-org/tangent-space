@@ -13,6 +13,7 @@ namespace Tangent.Posts;
 /// the cover the form holds, and <see cref="Day"/> is the UTC day the article would carry. A Topic that takes a Post on a
 /// tangent quotes it as <see cref="Origin"/>, offers a title from its first words, and lists as <see cref="Choices"/> the
 /// Tangents the reader may start it in, each a link to this form there, the next page and the first a link away.</summary>
+[Render.Page(Render.Layout.Panel)]
 public sealed record NewTopicPage(
     string Tangent,
     string TangentName,
@@ -34,8 +35,18 @@ public sealed record NewTopicPage(
     string? CoverId = null,
     DateOnly Day = default,
     QuotedPost? Origin = null,
-    IReadOnlyList<NewTopicPage.Choice>? Choices = null)
+    IReadOnlyList<NewTopicPage.Choice>? Choices = null) : Render.ILaidOut
 {
+    /// <summary>An article is written in the article's own layout; anything else in one panel.</summary>
+    [Newtonsoft.Json.JsonIgnore]
+    public Render.Layout Layout => Kind == PostWrites.Word(PostKind.Article) && Start is not null && Who is not null ? Render.Layout.Reading : Render.Layout.Panel;
+
+    [Render.Slot(Render.Slot.Rail), Newtonsoft.Json.JsonIgnore]
+    public Render.TangentBack? Back => Layout == Render.Layout.Reading ? new(TangentName, TangentAddress, "All articles") : null;
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.NewTopicForm Shown => new(this);
+
     /// <summary>The address of the form with the next page of Tangents to choose from; null on the last.</summary>
     public string? More { get; init; }
 

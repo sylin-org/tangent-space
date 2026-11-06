@@ -24,20 +24,20 @@
 
 /* The head's tile by kind, as the reference draws them: 64 with a 5px edge for discussions, 72 with a 6px edge for
  * articles. */
-.tangent-tile-head {
+.tangent-head .tile {
   --tile: 64px;
   --tile-edge: 5px;
   border-radius: 13px;
 }
 
-.tangent-tile-head-articles {
+.tangent-head-articles .tile {
   --tile: 72px;
   --tile-edge: 6px;
   border-radius: 14px;
 }
 
-.tangent-tile-head .tangent-tile-letter,
-.tangent-tile-head-articles .tangent-tile-letter {
+.tangent-head .tile .tangent-tile-letter,
+.tangent-head-articles .tile .tangent-tile-letter {
   font-size: 32px;
   font-weight: 600;
 }
@@ -335,7 +335,7 @@
   font: 400 13px/1.5 var(--ts-font-ui);
 }
 
-.topic-row-author {
+.topic-row-opening > .participant-name {
   color: var(--ts-text-2);
 }
 
@@ -382,7 +382,7 @@
   box-shadow: 0 0 0 1px var(--ts-surface), 0 0 0 2px var(--ts-agent-ring);
 }
 
-.author-mark {
+.article-strip > .mark {
   width: 24px;
   height: 24px;
   font-size: 10.5px;
@@ -475,20 +475,20 @@
   font-weight: 600;
 }
 
-.reply-mark {
+.topic-row-latest-reply > .mark {
   width: 18px;
   height: 18px;
   font-size: 9.5px;
 }
 
-.reply-mark.mark:where(.is-agent) {
+.topic-row-latest-reply > .mark:where(.is-agent) {
   border-radius: 5px;
   box-shadow: 0 0 0 1px var(--ts-page), 0 0 0 2px var(--ts-agent-ring);
 }
 
 /* The faces of a Topic's recent authors, overlapping, each parted from the next by a 2px ring of the surface; an
  * agent's square ring sits inside it. */
-.face {
+.topic-row-people > .mark {
   position: relative;
   width: 24px;
   height: 24px;
@@ -498,20 +498,20 @@
 }
 
 /* The newest author's face lies on top, and each face overlaps the next only as far as its letters allow. */
-.face + .face {
+.topic-row-people > .mark + .mark {
   margin-left: -3px;
 }
 
-.face:nth-child(1) { z-index: 3; }
-.face:nth-child(2) { z-index: 2; }
-.face:nth-child(3) { z-index: 1; }
+.topic-row-people > .mark:nth-child(1) { z-index: 3; }
+.topic-row-people > .mark:nth-child(2) { z-index: 2; }
+.topic-row-people > .mark:nth-child(3) { z-index: 1; }
 
-.face.mark:where(.is-agent) {
+.topic-row-people > .mark:where(.is-agent) {
   border: 1.5px solid var(--ts-agent-ring);
   box-shadow: 0 0 0 2px var(--ts-surface);
 }
 
-.row:where(.topic):hover .face {
+.row:where(.topic):hover .topic-row-people > .mark {
   box-shadow: 0 0 0 2px var(--ts-hover);
 }
 
@@ -555,13 +555,13 @@
   text-decoration: none;
 }
 
-.tangent-tile-cover {
+.article-cover .tile {
   --tile: 88px;
   --tile-edge: 6px;
   border-radius: 18px;
 }
 
-.tangent-tile-cover .tangent-tile-letter {
+.article-cover .tile .tangent-tile-letter {
   font-size: 44px;
 }
 
@@ -667,13 +667,13 @@
   font-size: 14px;
 }
 
-.author-mark-small {
+.article-card-author > .mark {
   width: 20px;
   height: 20px;
   font-size: 10px;
 }
 
-.author-mark-lead {
+.article-lead .article-card-author > .mark {
   width: 28px;
   height: 28px;
   font-size: 12px;
@@ -881,13 +881,13 @@
   display: flex;
 }
 
-.tangent-tile-shelf {
+.door-shelf-tile .tile {
   --tile: 40px;
   --tile-edge: 3px;
   border-radius: 9px;
 }
 
-.tangent-tile-shelf .tangent-tile-letter {
+.door-shelf-tile .tile .tangent-tile-letter {
   font-size: 22px;
   font-weight: 600;
 }
@@ -1015,15 +1015,15 @@
     gap: 12px;
   }
 
-  .tangent-tile-head,
-  .tangent-tile-head-articles {
+  .tangent-head .tile,
+  .tangent-head-articles .tile {
     --tile: 44px;
     --tile-edge: 4px;
     border-radius: 10px;
   }
 
-  .tangent-tile-head .tangent-tile-letter,
-  .tangent-tile-head-articles .tangent-tile-letter {
+  .tangent-head .tile .tangent-tile-letter,
+  .tangent-head-articles .tile .tangent-tile-letter {
     font-size: 22px;
     font-weight: 700;
   }
@@ -1196,13 +1196,13 @@
     color: var(--tone-ink);
   }
 
-  .tangent-tile-cover {
+  .article-cover .tile {
     --tile: 28px;
     --tile-edge: 2px;
     border-radius: 6px;
   }
 
-  .tangent-tile-cover .tangent-tile-letter {
+  .article-cover .tile .tangent-tile-letter {
     font-size: 16px;
   }
 

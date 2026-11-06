@@ -1,0 +1,10 @@
+@* Leaving a private Tangent the participant joined, opened in the page: what leaving keeps, and its button. *@
+<details class="tangent-leave">
+    <summary>Leave this Tangent</summary>
+    <p class="rail-audience-note">Your posts stay. You stop reading it unless you join again.</p>
+    <Draw Part="@(Model.Leave with { Submit = "Leave", Quiet = true })" />
+</details>
+
+@code {
+    [Parameter, EditorRequired] public Render.LeaveTangent Model { get; set; } = default!;
+}

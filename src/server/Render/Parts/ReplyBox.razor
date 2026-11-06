@@ -1,0 +1,47 @@
+@using System.Text.Json
+@using Tangent.Posts
+@* Where a reader replies in a Topic, under its replies. A reader who may reply holds the reply form, which posts to the
+   Topic's address: the TID minted for it, so a form sent twice posts once; the Post it answers, which is the Post the
+   address named when that is someone else's reply and not removed, and the Topic otherwise, with the way back to replying
+   to the Topic; and the body, which the article island makes the article's own editor, with its tools for a reply, its
+   pictures brought into this Tangent and its @ and # pickers. The composer island keeps its words and gives each Post a
+   Reply action. A reader who may not reply reads the gate's sentence instead, and a visitor the way to sign in. *@
+@if (Model.Reply is { } reply && Model.Participant is { } participant)
+{
+    <section class="topic-reply" id="reply" aria-labelledby="reply-heading">
+        <h2 id="reply-heading" class="topic-replies-title">Reply</h2>
+        <form class="reply-form reply" method="post" action="@reply.Action" data-island="composer" data-props="@JsonSerializer.Serialize(new { participant, scope = "topic:" + Model.TopicId, locate = Model.Address + "/", noun = "reply" })">
+            <input type="hidden" name="@PostWrites.IdField" value="@reply.Value(PostWrites.IdField)" id="reply-form-id">
+            <input type="hidden" name="@PostWrites.ParentField" value="@Model.Parent?.Id">
+            <p class="reply-form-to" data-reply-to hidden="@(Model.Parent is null)">
+                Replying to <a href="@("#" + Model.Parent?.Id)" data-reply-to-post>@Model.Parent?.Author.Name</a> ·
+                <a href="@(Model.Address + "#reply")" data-reply-to-topic>reply to the topic instead</a>
+            </p>
+            <div class="post-body-field" data-island="article" data-props="@JsonSerializer.Serialize(new { door = Model.Door, bring = Model.Bring, participant, suggest = Model.Suggest, post = true })">
+                <label class="field-label" for="reply-body">Your reply</label>
+                <textarea class="post-form-body" id="reply-body" name="@PostWrites.BodyField" rows="5" required></textarea>
+            </div>
+            <div class="post-form-actions">
+                <span class="post-form-as">Posting as <strong>@("@" + Model.Handle)</strong></span>
+                <button type="submit" class="sign-in-submit post-form-submit" data-busy-label="Posting…">Post reply</button>
+            </div>
+        </form>
+    </section>
+}
+else if (Model.Gate is { } gate)
+{
+    <p class="topic-closed" data-gate="@gate">
+        @if (Model.SignIn is { } signIn && gate == Access.Capabilities.SignIn.Word)
+        {
+            @(Access.Capabilities.Sentence(gate) + " ")<a href="@signIn">Sign in</a>
+        }
+        else
+        {
+            @Access.Capabilities.Sentence(gate)
+        }
+    </p>
+}
+
+@code {
+    [Parameter, EditorRequired] public Render.ReplyBox Model { get; set; } = default!;
+}

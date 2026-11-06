@@ -13,6 +13,7 @@ namespace Tangent.Participants;
 /// <see cref="Gate"/> why they may not read the people, null when they may, when the list is empty whoever is here;
 /// <see cref="SignIn"/> is where a visitor signs in, coming back here. <see cref="Day"/> is the UTC day the times are
 /// written for. After a refusal the page says why above the list.</summary>
+[Render.Page(Render.Layout.Settings)]
 public sealed record PeoplePage(
     IReadOnlyList<SettingsSection> Sections,
     IReadOnlyList<PeoplePage.Listed> People,
@@ -39,6 +40,22 @@ public sealed record PeoplePage(
     /// <see cref="Take"/>, lowest first. Nothing is offered that the reader may not do.</summary>
     public sealed record Listed(string Id, string Name, string Handle, string Profile, string Kind, string Standing, DateTimeOffset? Until,
         IReadOnlyList<string> Roles, IReadOnlyList<string> Can, IReadOnlyList<Offered> Give, IReadOnlyList<Offered> Take);
+
+    [Render.Slot(Render.Slot.Rail), Newtonsoft.Json.JsonIgnore]
+    public Render.SettingsRail Rail => new(Sections);
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.PanelTitle Heading => new(Space.TangentSpaceSettingsController.PeopleSection, "Settings of", Place, Door);
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.Notice? Line => Gate is { } gate ? new Render.Notice(Access.Capabilities.Sentence(gate), gate, SignIn) : null;
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.PeopleList? Shown => Gate is null ? new(this) : null;
+
+    /// <summary>The frame the shell draws around the page: its settings as its one crumb, and who reads, or where a visitor
+    /// signs in.</summary>
+    public static Render.Frame Frame(PeoplePage page) => new(page.Place, page.Door, [new Render.Crumb("Settings")], page.Who, page.SignIn);
 
     /// <summary>A role the reader may give or take: its word, which a form sends and which never changes
     /// (<c>moderator</c>, <c>administrator</c>, or a word of the place's own), and its name as the place now calls it.</summary>

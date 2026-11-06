@@ -1,0 +1,110 @@
+@using Tangent.Tangents
+@using global::Tangent.Posts
+@using global::Tangent.Render
+@* A Tangent's access: one panel in the page that says who reads it by its audience, linked to the settings that change
+   it, then the roles in their order, one line each with what the role holds here, and, for a reader who may change it,
+   a button for each other access, each its own small form. The moderators' Tangent says instead that its access stays.
+   A reader who may not change it reads why and nothing else, and a visitor the way to sign in; a refusal shows above
+   the list. *@
+<p class="post-form-where">Settings of <a href="@Page.Address">@Page.Name</a></p>
+<h1 id="access-heading" class="sign-in-title">Access</h1>
+@if (Page.Gate is { } gate)
+{
+    <p class="sign-in-failure" id="access-failure" role="alert" data-gate="@gate">
+        @if (Page.SignIn is { } signIn)
+        {
+            @(Access.Capabilities.Sentence(gate) + " ")<a href="@signIn">Sign in</a>
+        }
+        else
+        {
+            @Access.Capabilities.Sentence(gate)
+        }
+    </p>
+}
+else
+{
+    @if (Page.Failure is { } failure)
+    {
+        <p class="sign-in-failure" id="access-failure" role="alert">@failure</p>
+    }
+    <p class="post-form-note">
+        @Audience()
+        @if (!Page.Fixed)
+        {
+            @(" ")<a href="@Page.Settings">Its settings</a>@(" change who reads it.")
+        }
+    </p>
+    <ul class="door-offers applications people tangent-access">
+        @foreach (var role in Page.Roles)
+        {
+            <li class="door-offer" @key="role.Word">
+                <p class="door-offer-line">
+                    @role.Name <span class="topic-row-none">· @Holds(role.Access)</span>
+                </p>
+                @if (Page.Change is { } change && role.Offered.Count > 0)
+                {
+                    <div class="door-offer-answers people-answers">
+                        @foreach (var access in role.Offered)
+                        {
+                            <form class="change-tangent-access" method="post" action="@change.Action">
+                                <input type="hidden" name="@TangentAccessController.RoleField" value="@role.Word">
+                                <button type="submit" class="button" name="@TangentAccessController.AccessField" value="@access">@Button(access)</button>
+                            </form>
+                        }
+                    </div>
+                }
+            </li>
+        }
+    </ul>
+    <p class="post-form-note">Administrators read and post in every Tangent.</p>
+    @if (Page.Previous is not null || Page.Next is not null)
+    {
+        <nav class="topic-pages" aria-label="More roles">
+            @if (Page.Previous is { } previous)
+            {
+                <a href="@previous">Higher roles</a>
+            }
+            @if (Page.Next is { } next)
+            {
+                <a class="topic-pages-next" href="@next">Lower roles</a>
+            }
+        </nav>
+    }
+    <div class="post-form-actions">
+        <a class="post-form-cancel" href="@Page.Settings">Back to the settings</a>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Render.TangentAccessForm Model { get; set; } = default!;
+
+    private TangentAccessPage Page => Model.Page;
+
+    /// <summary>Who reads the Tangent, in a sentence.</summary>
+    private string Audience() => Page.Fixed
+        ? "Only moderators read this Tangent, and its access stays as it is."
+        : Page.Audience == "private"
+            ? "It is private: administrators read it, and so do the roles given read or post below."
+            : "It is public: everyone who reads the place reads it, and each role posts as it does in the place unless it is given read alone.";
+
+    /// <summary>What a role holds here, in words.</summary>
+    private static string Holds(string access) => access switch
+    {
+        "read" => "reads here, and posts nothing",
+        "post" => "reads and posts here",
+        _ => "as its role allows in the place"
+    };
+
+    /// <summary>The button that sets a role's access, in words.</summary>
+    private static string Button(string access) => access switch
+    {
+        "read" => "Reads only",
+        "post" => "Reads and posts",
+        _ => "As in the place"
+    };
+
+    /// <summary>The frame the shell draws around the page: the place; the Tangent, its settings and its access as crumbs;
+    /// and who reads, or where a visitor signs in.</summary>
+    public static Frame Frame(TangentAccessPage page)
+        => new(page.Place, page.Door, [new Crumb("Settings", page.Settings), new Crumb("Access")], page.Who, page.SignIn);
+}

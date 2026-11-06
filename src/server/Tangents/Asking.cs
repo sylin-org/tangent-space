@@ -32,7 +32,7 @@ public static class Asking
 
     /// <summary>The decisions about the reader's asks, from their rows of the log, with one keyed read of the Tangents
     /// they name.</summary>
-    public static async Task<IReadOnlyList<Door.Let>?> Decided(IReadOnlyList<Event> rows, IReadOnlyDictionary<string, TangentPage.Author> people,
+    public static async Task<IReadOnlyList<Door.Let>?> Decided(IReadOnlyList<Event> rows, IReadOnlyDictionary<string, Render.Person> people,
         string baseAddress, CancellationToken ct)
     {
         if (rows.Count == 0) return null;

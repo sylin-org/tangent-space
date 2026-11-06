@@ -1,0 +1,13 @@
+@using System.Text.Json
+@* Where a signed-in reader who left a Topic mid-way continues, which their browser kept: hidden until the continue island
+   finds it; nothing on a page standing alone. *@
+@if (!Standalone)
+{
+    <p class="door-continue" hidden data-island="continue" data-props="@JsonSerializer.Serialize(new { participant = Model.Participant })"><a href="#">Continue reading</a></p>
+}
+
+@code {
+    [Parameter, EditorRequired] public Render.ContinueReading Model { get; set; } = default!;
+
+    [CascadingParameter(Name = nameof(Shell.Standalone))] public bool Standalone { get; set; }
+}

@@ -200,8 +200,8 @@ public sealed class EditPostController(KoanWebBaseUrl baseUrl) : ControllerBase
             Kind: PostWrites.Word(row.ParentId is null ? row.Kind : PostKind.Topic),
             CoverId: row.CoverId,
             Bring: editable ? PostWrites.MediaForm(PostWrites.TangentAddress(baseAddress, root.TangentId)) : null,
-            Author: article ? (author is null ? new Tangents.TangentPage.Author(row.AuthorId, row.AuthorId, row.AuthorId, "person", null)
-                : Tangents.TangentPage.Author.Of(author)) : null,
+            Author: article ? (author is null ? new Render.Person(row.AuthorId, row.AuthorId, row.AuthorId, "person", null)
+                : Render.Person.Of(author)) : null,
             CreatedAt: row.CreatedAt);
     }
 

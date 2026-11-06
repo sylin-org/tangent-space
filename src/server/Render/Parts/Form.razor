@@ -1,0 +1,111 @@
+@* A write the page offers its reader, drawn from its record alone. A destructive form confirms in the page: its button opens
+   what sending it does and the button that sends it, never a dialog. A form whose every field the page gives is one button,
+   quiet beside the page's main one where the form says so. Any other lays its fields out: a line or a few lines under their
+   label, a choice as its options, each with what it means, a field's refusal under it and its note below; then the way back
+   and its button, which says what it does while the form is sent. Shown to a reader who may not send it, its fields read only,
+   its choices disabled, and it has no button. An island acts on it where the form names one. *@
+@if (Model.Confirm is { } confirm)
+{
+    <details class="@("confirm " + Model.Tool)">
+        <summary class="button">@Model.Submit</summary>
+        <div class="post-remove-confirm">
+            <p class="post-remove-note">@confirm</p>
+            <form class="@Model.Tool" method="@Model.Method.ToLowerInvariant()" action="@Model.Action" data-island="@Island">
+                @Hidden
+                <button type="submit" class="post-remove-submit">@Model.Submit</button>
+            </form>
+        </div>
+    </details>
+}
+else if (Model.Fields.All(field => field.As == Render.Form.Input.Hidden) && Model.Cancel is null)
+{
+    <form class="@Model.Tool" method="@Model.Method.ToLowerInvariant()" action="@Model.Action" data-island="@Island">
+        @Hidden
+        <button type="submit" class="@(Model.Quiet ? "button" : "tangent-new")" data-busy-label="@Model.Busy">@Model.Submit</button>
+    </form>
+}
+else
+{
+    <form class="@("sign-in-form " + Model.Tool)" method="@Model.Method.ToLowerInvariant()" action="@(Model.ReadOnly ? null : Model.Action)" data-island="@Island">
+        @Hidden
+        @foreach (var field in Model.Fields.Where(field => field.As != Render.Form.Input.Hidden))
+        {
+            var id = Id(field);
+            var said = field.Failure is null ? field.Note is null ? null : id + "-note" : id + "-failure";
+            @if (field.As == Render.Form.Input.Choice)
+            {
+                <fieldset class="post-form-choice">
+                    <legend class="field-label">@(field.Label ?? field.Name)</legend>
+                    <div class="post-form-options">
+                        @foreach (var choice in field.Choices ?? [])
+                        {
+                            <label class="post-form-option">
+                                <span class="post-form-option-text">
+                                    <span class="post-form-option-name">@choice.Name</span>
+                                    <span class="post-form-option-detail">@choice.Detail</span>
+                                </span>
+                                <input type="radio" name="@field.Name" value="@choice.Value" checked="@(choice.Value == field.Value)" disabled="@Model.ReadOnly">
+                            </label>
+                        }
+                    </div>
+                    @Said(field, id)
+                </fieldset>
+            }
+            else
+            {
+                <div class="field">
+                    <label class="field-label" for="@id">@(field.Label ?? field.Name)</label>
+                    @if (field.As == Render.Form.Input.Area)
+                    {
+                        <textarea class="post-form-body" id="@id" name="@field.Name" rows="3" required="@field.Required" maxlength="@field.Limit"
+                                  readonly="@Model.ReadOnly" aria-invalid="@(field.Failure is null ? null : "true")" aria-describedby="@said">@field.Value</textarea>
+                    }
+                    else
+                    {
+                        <span class="field-input">
+                            <input id="@id" name="@field.Name" type="text" required="@field.Required" maxlength="@field.Limit" autocomplete="off"
+                                   readonly="@Model.ReadOnly" value="@field.Value" autofocus="@(field.Failure is not null)"
+                                   aria-invalid="@(field.Failure is null ? "false" : "true")" aria-describedby="@said">
+                        </span>
+                    }
+                    @Said(field, id)
+                </div>
+            }
+        }
+        @if (!Model.ReadOnly)
+        {
+            <div class="post-form-actions">
+                @if (Model.Cancel is { } cancel)
+                {
+                    <a class="post-form-cancel" href="@cancel.Address">@cancel.Label</a>
+                }
+                <button type="submit" class="sign-in-submit post-form-submit" data-busy-label="@Model.Busy">@Model.Submit</button>
+            </div>
+        }
+    </form>
+}
+
+@code {
+    [Parameter, EditorRequired] public Render.Form Model { get; set; } = default!;
+
+    [CascadingParameter(Name = nameof(Shell.Standalone))] public bool Standalone { get; set; }
+
+    private string? Island => Standalone || Model.ReadOnly ? null : Model.Island;
+
+    private string Id(Render.Form.Field field) => (Model.Key ?? Model.Tool ?? "form") + "-" + field.Name;
+
+    private RenderFragment Hidden => @<text>@foreach (var given in Model.Fields.Where(each => each.As == Render.Form.Input.Hidden))
+        {
+            <input type="hidden" name="@given.Name" value="@given.Value">
+        }</text>;
+
+    /// <summary>What is said under a field: why what was sent there was refused, and its note.</summary>
+    private static RenderFragment Said(Render.Form.Field field, string id) => @<text>@if (field.Failure is { } failure)
+        {
+            <p class="field-failure" id="@(id + "-failure")">@failure</p>
+        }
+        @if (field.Note is { } note)
+        {
+            <p class="post-form-note" id="@(id + "-note")">@note</p>
+        }</text>;
+}

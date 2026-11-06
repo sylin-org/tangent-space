@@ -39,12 +39,12 @@ public sealed class NewTangentController(KoanWebBaseUrl baseUrl) : ControllerBas
     public const int Attempts = 3;
 
     [HttpGet(Route)]
+    [Needs(Bit.View)]
     public async Task<IActionResult> Get(CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
+        var place = Here.Of(HttpContext).Around;
         return Ok(await Page(place, personId, ct));
     }
 

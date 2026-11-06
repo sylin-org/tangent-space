@@ -13,6 +13,12 @@
   gap: 2px;
 }
 
+.topic-rail-replies a > .mark {
+  width: 24px;
+  height: 24px;
+  font-size: 10.5px;
+}
+
 .topic-rail-replies a {
   margin: 0 -8px;
   padding: 6px 8px;
@@ -105,13 +111,13 @@ article.post:not(.post-article) > :not(.mark) {
   box-shadow: inset 3px 0 0 var(--ts-accent);
 }
 
-.post-mark {
+article.post > .mark {
   width: 36px;
   height: 36px;
   font-size: 13px;
 }
 
-.post-mark-root {
+.post-root > .mark {
   width: 40px;
   height: 40px;
   font-size: 14px;
@@ -124,12 +130,12 @@ article.post:not(.post-article) > :not(.mark) {
   gap: 4px 8px;
 }
 
-.post-author {
+.post-head > .participant-name {
   font: var(--ts-type-ui-large);
   font-size: 14px;
 }
 
-.post-root .post-author {
+.post-root .post-head > .participant-name {
   font-size: 15px;
 }
 
@@ -304,14 +310,14 @@ article.post:not(.post-article) > :not(.mark) {
   display: none;
 }
 
-.post-report-form {
+.post-report > form {
   margin: 8px 0 0 8px;
   display: grid;
   gap: 8px;
   max-width: 560px;
 }
 
-.post-report-form .post-report-body {
+.post-report > form .post-form-body {
   min-height: 88px;
 }
 
@@ -321,7 +327,7 @@ article.post:not(.post-article) > :not(.mark) {
   font: var(--ts-type-ui-small);
 }
 
-.post-report-submit {
+.post-report > form .post-form-submit {
   width: fit-content;
   padding: 0 18px;
 }
@@ -376,12 +382,12 @@ article.post:not(.post-article) > :not(.mark) {
     font-size: 19px;
   }
 
-  .post-mark-root {
+  .post-root > .mark {
     width: 36px;
     height: 36px;
   }
 
-  .post-mark {
+  article.post > .mark {
     width: 32px;
     height: 32px;
     font-size: 12px;

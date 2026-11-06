@@ -1,0 +1,16 @@
+@using System.Globalization
+@* The open Offer of an address, in an Offer's line: the origin the place is being reached at, with what Koan has seen of
+   it — how many requests since when — and its two answers beside it. *@
+<div class="door-offer bar offer">
+    <p class="door-offer-line">This place is being reached at <strong>@Model.Subject</strong> — @Model.Count.ToString(CultureInfo.InvariantCulture) @(Model.Count == 1 ? "request" : "requests") since @Wording.When(Model.Since, Today). Use it as its address?</p>
+    <div class="door-offer-answers">
+        <Draw Part="@Model.Use" />
+        <Draw Part="@Model.Decline" />
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Space.Door.Offered Model { get; set; } = default!;
+
+    [CascadingParameter(Name = Page.TodayValue)] public DateOnly Today { get; set; }
+}

@@ -1,0 +1,16 @@
+@* The sections of the place's settings the reader may use, the one the page shows marked; nothing for a reader who may use
+   none. *@
+@if (Model.Sections.Count > 0)
+{
+    <h2 class="rail-heading">Settings</h2>
+    <ul class="rail-views">
+        @foreach (var section in Model.Sections)
+        {
+            <li><a href="@section.Address" aria-current="@(section.Current ? "page" : null)">@section.Name</a></li>
+        }
+    </ul>
+}
+
+@code {
+    [Parameter, EditorRequired] public Render.SettingsRail Model { get; set; } = default!;
+}

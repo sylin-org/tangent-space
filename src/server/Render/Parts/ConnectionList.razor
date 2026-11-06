@@ -1,0 +1,81 @@
+@using Tangent.Connections
+@using System.Globalization
+@using global::Tangent.Render
+@* A participant's Connections: one panel, first why a permission Bluesky was asked for was not given, where that is what
+   brought them here, then their Bluesky account with where it stands and the one thing they may do about it, and the way
+   to use another Bluesky account, open with why where a binding was refused, then each article it carries with its state
+   and its Bluesky post once it is out. *@
+<div class="connections">
+    <p class="post-form-where">Yours, at <a href="@Page.Door">@Page.Place</a></p>
+    <h1 id="connections-heading" class="sign-in-title">Connections</h1>
+    @if (Page.Failure is { } failure)
+    {
+        <p class="sign-in-failure" id="connections-failure" role="alert">
+            @failure.Sentence
+            @if (failure.Article is { } article)
+            {
+                @(" ")<a href="@article">Back to the article</a>
+            }
+        </p>
+    }
+    <ul class="door-offers connection-accounts">
+        <li class="door-offer connection" data-state="@Page.Bluesky.State">
+            <p class="door-offer-line">
+                <strong>Bluesky</strong> <span class="topic-row-none">· @Page.Bluesky.Handle</span><br>
+                @Page.Bluesky.Sentence
+                @if (Page.Bluesky.RetryAt is { } retry)
+                {
+                    <span class="topic-row-none"> Next attempt <time datetime="@retry.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture)">@retry.ToUniversalTime().ToString("HH:mm 'UTC'", CultureInfo.InvariantCulture)</time>.</span>
+                }
+                @if (Page.Bluesky.Since is { } since)
+                {
+                    <span class="topic-row-none"> Since @since.ToUniversalTime().ToString("MMMM d, yyyy", CultureInfo.InvariantCulture).</span>
+                }
+            </p>
+            @if (Page.Bluesky.Grant is { } grant)
+            {
+                <div class="door-offer-answers">
+                    <form method="post" action="@grant.Action"><button type="submit" class="tangent-new">Grant it again</button></form>
+                </div>
+            }
+            else if (Page.Bluesky.OfferAgain is { } again)
+            {
+                <div class="door-offer-answers">
+                    <form method="post" action="@again.Action"><button type="submit" class="button">Offer it again</button></form>
+                </div>
+            }
+            <Draw Part="@Page.Another" />
+        </li>
+    </ul>
+    @if (Page.Articles.Count > 0)
+    {
+        <h2 class="rail-heading rail-heading-spaced">Articles</h2>
+        <ul class="door-offers connection-articles">
+            @foreach (var article in Page.Articles)
+            {
+                <li class="door-offer" data-state="@article.State" @key="article.Address">
+                    <p class="door-offer-line">
+                        <a href="@article.Address">@article.Title</a>
+                        <span class="topic-row-none">· @article.Sentence</span>
+                    </p>
+                    @if (article.Elsewhere is { } elsewhere)
+                    {
+                        <div class="door-offer-answers">
+                            <a class="button" href="@elsewhere" rel="noopener noreferrer">View on Bluesky</a>
+                        </div>
+                    }
+                </li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Render.ConnectionList Model { get; set; } = default!;
+
+    private ConnectionsPage Page => Model.Page;
+
+    /// <summary>The frame the shell draws around the page: the place, the page as the one crumb, and the account of whoever
+    /// reads it.</summary>
+    public static Frame Frame(ConnectionsPage page) => new(page.Place, page.Door, [new Crumb("Connections")], page.Reader);
+}

@@ -1,0 +1,154 @@
+@using Tangent.Tangents
+@using global::Tangent.Posts
+@using global::Tangent.Render
+@* A Tangent's settings: one panel in the page, with the form that renames and describes it, sets its default kind and
+   its audience, saying that its address stays; then, for a reader who may arrange the place's list, its place among
+   the Tangents, between the nearest they may view, with a button to move it one place earlier and one to move it
+   later, each its own small form. The moderators' Tangent says
+   instead that its audience and its place stay. A reader who may not change it reads why above the form, whose fields
+   are read-only and which has no button, and a visitor the way to sign in; a refusal of a field shows under that
+   field, and any other above the form. *@
+<p class="post-form-where">Settings of <a href="@Page.Address">@Page.Name</a></p>
+<h1 id="settings-heading" class="sign-in-title">Tangent settings</h1>
+@if (Page.Gate is { } gate)
+{
+    <p class="sign-in-failure" id="settings-failure" role="alert" data-gate="@gate">
+        @if (Page.SignIn is { } signIn)
+        {
+            @(Access.Capabilities.Sentence(gate) + " ")<a href="@signIn">Sign in</a>
+        }
+        else
+        {
+            @Access.Capabilities.Sentence(gate)
+        }
+    </p>
+}
+else if (Page.Failure is { } failure)
+{
+    <p class="sign-in-failure" id="settings-failure" role="alert">@failure</p>
+}
+<form class="sign-in-form change-tangent" method="post" action="@Page.Change?.Action" data-island="@(Mutable ? "submitting" : null)">
+    @if (Page.Change is { } change)
+    {
+    }
+    <div class="field">
+        <label class="field-label" for="settings-name">Name</label>
+        <span class="field-input">
+            <input id="settings-name" name="@TangentWrites.NameField" type="text" required maxlength="@Tangent.NameLimit" autocomplete="off"
+                   readonly="@(!Mutable)" value="@Page.Name" autofocus="@(Page.NameFailure is not null)"
+                   aria-invalid="@(Page.NameFailure is null ? "false" : "true")"
+                   aria-describedby="@(Page.NameFailure is null ? "settings-address" : "settings-name-failure settings-address")">
+        </span>
+        @if (Page.NameFailure is { } nameFailure)
+        {
+            <p class="field-failure" id="settings-name-failure">@nameFailure</p>
+        }
+        <p class="post-form-note" id="settings-address">Its address stays <code>/t/@Page.Slug</code>, whatever its name.</p>
+    </div>
+    <Draw Part="@(new Render.TangentChoices("settings", Page.Description, Page.Kind, Page.Audience, Page.Kinds, Page.Audiences, Page.DescriptionFailure, !Mutable, false, Page.Fixed ? "Only moderators read this Tangent; its audience stays as it is." : null))" />
+    <fieldset class="post-form-choice tangent-accent">
+        <legend class="field-label">Its accent</legend>
+        <div class="tone-choices">
+            <label class="tone-choice">
+                <input type="radio" name="@TangentWrites.AccentField" value="" checked="@(Page.Accent.Length == 0)" disabled="@(!Mutable)">
+                <span class="@("tile tangent tangent-tile-menu tone-" + Page.Tone)" aria-hidden="true"><span class="tangent-tile-letter">@Initial</span><span class="tangent-tile-edge"></span></span>
+                <span class="tone-name">From its name</span>
+            </label>
+            @foreach (var tone in Tile.Tones)
+            {
+                <label class="tone-choice">
+                    <input type="radio" name="@TangentWrites.AccentField" value="@tone" checked="@(tone == Page.Accent)" disabled="@(!Mutable)">
+                    <span class="@("tile tangent tangent-tile-menu tone-" + tone)" aria-hidden="true"><span class="tangent-tile-letter">@Initial</span><span class="tangent-tile-edge"></span></span>
+                    <span class="tone-name">@(char.ToUpperInvariant(tone[0]) + tone[1..])</span>
+                </label>
+            }
+        </div>
+    </fieldset>
+    <fieldset class="post-form-choice tangent-image">
+        <legend class="field-label">Its image, in place of its letter</legend>
+        <div class="cover-choices">
+            <label class="cover-choice is-none">
+                <input type="radio" name="@TangentWrites.ImageField" value="" checked="@(Page.Image.Length == 0)" disabled="@(!Mutable)">
+                <span class="cover-picture" aria-hidden="true"></span>
+                <span class="cover-name">None</span>
+            </label>
+            @if (Page.Image.StartsWith("/media/", StringComparison.Ordinal))
+            {
+                <label class="cover-choice">
+                    <input type="radio" name="@TangentWrites.ImageField" value="@Page.Image" checked disabled="@(!Mutable)">
+                    <img class="cover-picture" src="@(Page.Door + Page.Image.TrimStart('/'))" alt="" loading="lazy">
+                    <span class="cover-name">Its own</span>
+                </label>
+            }
+            @foreach (var cover in Page.Covers)
+            {
+                <label class="cover-choice">
+                    <input type="radio" name="@TangentWrites.ImageField" value="@cover.Name" checked="@(cover.Name == Page.Image)" disabled="@(!Mutable)">
+                    <img class="cover-picture" src="@cover.Address" alt="" loading="lazy">
+                    <span class="cover-name">@cover.Title</span>
+                </label>
+            }
+        </div>
+    </fieldset>
+    @if (Mutable && !Page.Fixed)
+    {
+        <p class="post-form-note"><a href="@Page.Access">Access</a> sets which roles read and post here; <a href="@(Page.Access[..Page.Access.LastIndexOf('/')] + "/" + TangentPeopleController.Segment)">People</a>, who joins and who is in.</p>
+    }
+    @if (Mutable)
+    {
+        <div class="post-form-actions">
+            <a class="post-form-cancel" href="@Page.Address">Back to the Tangent</a>
+            <button type="submit" class="sign-in-submit post-form-submit" data-busy-label="Saving…">Save</button>
+        </div>
+    }
+</form>
+@if (Page.Movable)
+{
+    <section class="post-form-place" aria-labelledby="settings-place">
+        <h2 id="settings-place" class="field-label">Place among the Tangents</h2>
+        <p class="post-form-note">@PlaceSentence()</p>
+        @if (!Page.Fixed)
+        {
+            <div class="post-form-moves">
+                @Moved(Move.Earlier, "Move earlier", Page.Before is not null)
+                @Moved(Move.Later, "Move later", Page.After is not null)
+            </div>
+        }
+    </section>
+}
+
+@code {
+    /// <summary>The letter a tile shows of the Tangent.</summary>
+    private string Initial => Page.Name.Length > 0 ? char.ToUpperInvariant(Page.Name[0]).ToString() : "T";
+
+    [Parameter, EditorRequired] public Render.TangentSettingsForm Model { get; set; } = default!;
+
+    private TangentSettingsPage Page => Model.Page;
+
+    /// <summary>Whether the reader may change the Tangent here.</summary>
+    private bool Mutable => Page.Gate is null;
+
+    /// <summary>Where the Tangent stands, in a sentence.</summary>
+    private string PlaceSentence() => (Page.Fixed, Page.Before, Page.After) switch
+    {
+        (true, _, _) => "It comes after every other Tangent, and stays there.",
+        (_, { } before, { } after) => $"It comes after {before} and before {after}.",
+        (_, null, { } after) => $"It comes first, before {after}.",
+        (_, { } before, null) => $"It comes last, after {before}.",
+        _ => "It is the only Tangent you can read."
+    };
+
+    /// <summary>One move as a small form of its own, posting the move alone; disabled where the Tangent is already at
+    /// that end.</summary>
+    private RenderFragment Moved(Move move, string label, bool possible) => @<form class="change-tangent" method="post" action="@Page.Change?.Action">
+        @if (Page.Change is { } change)
+        {
+        }
+        <button type="submit" class="post-form-move" name="@TangentWrites.MoveField" value="@TangentWrites.Word(move)" disabled="@(!possible)">@label</button>
+    </form>;
+
+    /// <summary>The frame the shell draws around the page: the place; the Tangent and its settings as crumbs; and who
+    /// reads, or where a visitor signs in.</summary>
+    public static Frame Frame(TangentSettingsPage page)
+        => new(page.Place, page.Door, [new Crumb("Settings")], page.Who, page.SignIn);
+}

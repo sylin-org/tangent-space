@@ -18,7 +18,7 @@ export const history = defineComponent({
       if (!body) return
       body.setAttribute('aria-busy', 'true')
       try {
-        body.replaceChildren((await fetchFragment(props.url)).firstElementChild!)
+        body.replaceChildren((await fetchFragment(props.url)).querySelector('.post-history-versions')!)
       } catch {
         read = false
       } finally {

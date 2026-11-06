@@ -16,6 +16,7 @@ namespace Tangent.Tangents;
 /// reader who may change them; <see cref="NewTangent"/> is where a Tangent is created, present only for a reader who
 /// may create one. <see cref="Feeds"/> are the Tangent's feeds, present only where a visitor may read it. <see cref="Leave"/> is where a
 /// participant who joined a private Tangent leaves it, present only for them.</summary>
+[Render.Page(Render.Layout.Home)]
 public sealed partial record TangentPage(
     string Slug,
     string Name,
@@ -24,12 +25,12 @@ public sealed partial record TangentPage(
     string Audience,
     string Address,
     IReadOnlyList<string> Can,
-    IReadOnlyList<TangentPage.Topic> Topics,
+    IReadOnlyList<Render.TopicEntry> Topics,
     string? Next,
     bool Continued,
     string? NewTopic,
     string? SignIn,
-    IReadOnlyList<TangentPage.Listed> Tangents,
+    IReadOnlyList<Render.TangentEntry> Tangents,
     string Place,
     string Door,
     TangentPage.Reader? Who,
@@ -39,6 +40,44 @@ public sealed partial record TangentPage(
     IReadOnlyList<Render.FeedLink>? Feeds = null,
     Render.Form? Leave = null)
 {
+    /// <summary>This Tangent as the page lists it: its own row among <see cref="Tangents"/>, with the Topics started there.</summary>
+    [Newtonsoft.Json.JsonIgnore]
+    public Render.TangentEntry Self => (Tangents.FirstOrDefault(tangent => tangent.Slug == Slug) ?? new Render.TangentEntry(Slug, Name, Kind, Address, Topics.Count))
+        with { Description = Description, Address = Address };
+
+    /// <summary>Whether the page holds every Topic of the Tangent: the first page, with no page after it.</summary>
+    [Newtonsoft.Json.JsonIgnore]
+    public bool Whole => !Continued && Next is null;
+
+    [Render.Slot(Render.Slot.Head), Newtonsoft.Json.JsonIgnore]
+    public Render.TangentHead Head => new(Self, Audience != "public", Whole ? Topics.Sum(topic => topic.ReplyCount) : null, Settings);
+
+    [Render.Slot(Render.Slot.Rail), Newtonsoft.Json.JsonIgnore]
+    public Render.TopicViews Views => new(Self, Continued, Topics);
+
+    [Render.Slot(Render.Slot.Rail), Newtonsoft.Json.JsonIgnore]
+    public Render.AudienceNote Reach => new(Audience != "public");
+
+    [Render.Slot(Render.Slot.Rail), Newtonsoft.Json.JsonIgnore]
+    public Render.LeaveTangent? Leaving => Leave is { } leave ? new(leave) : null;
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.TangentTopics List => new(Self, Topics, Continued, NewTopic, SignIn, Next);
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.LiveUpdates Live => new(Render.LiveUpdates.TangentPage, Slug);
+
+    /// <summary>The frame the shell draws around the page: the place; the switcher the Tangent's crumb opens, listing the
+    /// Tangents the reader may view and, for one who may, where a new one is created; and who reads, or where a visitor signs
+    /// in.</summary>
+    public static Render.Frame Frame(TangentPage page)
+    {
+        var switcher = new Render.Switcher(page.Self, page.Tangents.Select(tangent => tangent with { Current = tangent.Slug == page.Slug }).ToList(),
+            page.Door + TangentsController.Route.TrimStart('/'), page.NewTangent);
+        var who = page.Who is { } reader ? new Render.Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut, reader.Settings, reader.ForYou) : null;
+        return new(page.Place, page.Door, [], who, page.SignIn, page.Feeds) { Switcher = switcher };
+    }
+
     /// <summary>The most characters of a body the page carries as a Topic's <see cref="Topic.Opening"/> or a reply's
     /// <see cref="Latest.Line"/>.</summary>
     public const int OpeningLimit = 180;
@@ -46,62 +85,9 @@ public sealed partial record TangentPage(
     /// <summary>The words a reader reads in a minute, for an article's read time.</summary>
     public const int WordsPerMinute = 230;
 
-    /// <summary>One Topic on the page: its root's title, slug, kind and author, the opening words of its body, the
-    /// minutes it takes to read, its reply count, when it started and when it last gained a Post, its
-    /// <see cref="Latest"/> reply and its most recent <see cref="People"/>, and, for a signed-in reader, whether it is
-    /// <see cref="New"/> to them (<see cref="Events.Unread.InTopic"/>) with <see cref="NewPosts"/>, how many of its Posts
-    /// are, absent where they never read it and so it is new with no count. <see cref="Edited"/> says who other
-    /// than its author last edited its root, where someone did. <see cref="Cover"/> is the address of an article's cover,
-    /// while its root stands and has one.</summary>
-    public sealed record Topic(
-        string Id,
-        string Slug,
-        string Title,
-        string Kind,
-        string Address,
-        Author Author,
-        string Opening,
-        int ReadMinutes,
-        int ReplyCount,
-        DateTimeOffset CreatedAt,
-        DateTimeOffset LastActivityAt,
-        Latest? Latest,
-        IReadOnlyList<Author> People,
-        bool New,
-        long? NewPosts,
-        Edited? Edited = null,
-        string? Cover = null);
-
-    /// <summary>A Topic's latest reply: its author, its first words, when it was written, whether it is new to the
-    /// reader, and who other than its author last edited it, where someone did.</summary>
-    public sealed record Latest(string Id, Author Author, string Line, DateTimeOffset At, bool New, Edited? Edited = null);
-
     /// <summary>Someone other than a Post's author last edited it, so its words are not said to be its author's: who, and
     /// when. It travels with the Post wherever its words are read.</summary>
-    public sealed record Edited(Author By, DateTimeOffset At);
-
-    /// <summary>A participant as the page shows them: the name to show, their handle, their kind and avatar, and, where
-    /// the page links their name, their profile's address.</summary>
-    public sealed record Author(string Id, string Handle, string Name, string Kind, string? Avatar, string? Profile = null)
-    {
-        /// <summary>A participant as a page shows them, their name linked to their profile under
-        /// <paramref name="baseAddress"/> where one is given.</summary>
-        public static Author Of(Participants.Participant row, string? baseAddress = null)
-            => new(row.Id, row.ShownHandle(), row.ShownName(), row.Kind.ToString().ToLowerInvariant(), row.Profile.Avatar,
-                baseAddress is null ? null : Participants.ProfilePage.AddressOf(baseAddress, row.ShownHandle()));
-    }
-
-    /// <summary>A Tangent the reader may view: its slug, name, kind, address and how many Topics were started there, and the
-    /// tile it wears, where the page draws it. A members-only Tangent the reader is outside of lists what it is about
-    /// (<see cref="Description"/>), how they come in (<see cref="Joining"/>: <c>join</c>, <c>ask</c>, or <c>asked</c> or
-    /// <c>declined</c> once they asked) and, while they may, the form that joins or asks (<see cref="Join"/>), or that
-    /// withdraws a waiting ask (<see cref="Withdraw"/>).</summary>
-    public sealed record Listed(string Slug, string Name, string Kind, string Address, int TopicCount, string? Description = null,
-        string? Joining = null, Render.Form? Join = null, Render.Form? Withdraw = null, Render.Tile? Tile = null)
-    {
-        /// <summary>The tile it wears: its own, or the one its slug gives it.</summary>
-        public Render.Tile Worn => Tile ?? Render.Tile.For(Slug, Name);
-    }
+    public sealed record Edited(Render.Person By, DateTimeOffset At) : Render.IPart;
 
     /// <summary>The signed-in participant reading the page: their id, the name to show, their handle, the highest role
     /// they hold where they hold one, their avatar, where they sign out, coming back to this page, and the place's
@@ -114,7 +100,7 @@ public sealed partial record TangentPage(
     /// written for among it, so the same page for a visitor on the same day answers the same tag, and a new Post, a
     /// changed <c>can</c> or a new day changes it.</summary>
     public static long Version(TangentPage page)
-        => BitConverter.ToInt64(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(page)), 0) & long.MaxValue;
+        => Render.PageVersion.Of(page);
 
     /// <summary>The minutes a body takes to read: its words at <see cref="WordsPerMinute"/>, at least one.</summary>
     public static int ReadTime(string body)
@@ -125,14 +111,14 @@ public sealed partial record TangentPage(
 
     /// <summary>Who other than its author last edited <paramref name="post"/> and when, named from
     /// <paramref name="people"/>; null where nobody did.</summary>
-    public static Edited? EditedOf(Post post, IReadOnlyDictionary<string, Author> people) => post.EditedBy is { } by
-        ? new Edited(people.TryGetValue(by, out var person) ? person : new Author(by, by, by, "person", null), post.EditedAt ?? post.CreatedAt)
+    public static Edited? EditedOf(Post post, IReadOnlyDictionary<string, Render.Person> people) => post.EditedBy is { } by
+        ? new Edited(people.TryGetValue(by, out var person) ? person : Render.Person.Unknown(by), post.EditedAt ?? post.CreatedAt)
         : null;
 
     /// <summary>The opening words of a Post's body as plain text on one line, each mention of a participant among
     /// <paramref name="people"/> their name now (<see cref="Mentions.PlainText"/>), cut at a word within
     /// <see cref="OpeningLimit"/> characters.</summary>
-    public static string Opening(Post post, IReadOnlyDictionary<string, Author> people) => Opening(Mentions.PlainText(post, people));
+    public static string Opening(Post post, IReadOnlyDictionary<string, Render.Person> people) => Opening(Mentions.PlainText(post, people));
 
     /// <summary>The opening words of plain text, cut at a word within <see cref="OpeningLimit"/> characters.</summary>
     public static string Opening(string text)

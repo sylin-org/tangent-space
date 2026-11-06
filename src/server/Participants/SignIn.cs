@@ -10,6 +10,7 @@ namespace Tangent.Participants;
 /// <see cref="Failure"/> is a failure of the sign-in as a whole and <see cref="HandleFailure"/> one of the handle
 /// itself, both in words. <see cref="Door"/> is the place's door. <see cref="Private"/> says the place is read by its
 /// participants alone, so signing in is how to read it.</summary>
+[Render.Page(Render.Layout.Panel)]
 public sealed record SignIn(
     string Name,
     string Door,
@@ -20,6 +21,13 @@ public sealed record SignIn(
     string? HandleFailure = null,
     bool Private = false)
 {
+    [Render.Slot(Render.Slot.Head), Newtonsoft.Json.JsonIgnore]
+    public Render.PlaceBand Band => new(Name);
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.SignInForm Body => new(this);
+
+
     /// <summary>How to sign in with an account the challenge's start at Bluesky cannot find.</summary>
     public string AnotherServer => AnotherServerText;
 

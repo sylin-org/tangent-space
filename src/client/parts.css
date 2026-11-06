@@ -1,0 +1,112 @@
+/* The parts, one block each, named for the part: every rule of a part reads its own classes, its shape and subject, and the
+ * places that hold it size it by where it stands. */
+
+/* Tangent entry: one Tangent wherever a list holds it — its tile, its name and what it holds, how much is new to the
+ * reader, and the mark of the one the page is in. */
+.row:where(.tangent) {
+  min-height: 44px;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: var(--ts-radius-button);
+  color: var(--ts-text);
+  text-decoration: none;
+}
+
+.row:where(.tangent):hover,
+.row:where(.tangent).is-current {
+  background: var(--ts-hover);
+}
+
+.tangent-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tangent-row-name {
+  overflow: hidden;
+  font: 600 14px/1.3 var(--ts-font-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tangent-row-detail {
+  color: var(--ts-text-3);
+  font: var(--ts-type-meta);
+}
+
+.tangent-row-check {
+  flex: none;
+  display: flex;
+  color: var(--ts-accent);
+}
+
+.tangent-row-check .menu-icon {
+  color: inherit;
+}
+
+.rail-views .row:where(.tangent) {
+  height: auto;
+  margin: 0 -10px;
+  padding: 6px 10px;
+  color: var(--ts-text);
+  font: inherit;
+}
+
+/* Person: a participant's mark, sized by where it stands; their name, where a part says it beside their mark or in a
+ * sentence; and as a row, their mark beside their name and handle. */
+:where(.mark.participant) {
+  width: 32px;
+  height: 32px;
+  font-size: 12px;
+}
+
+.row:where(.participant) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.participant-names {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.participant-handle {
+  color: var(--ts-text-3);
+  font: var(--ts-type-meta);
+}
+
+.participant-name {
+  color: inherit;
+}
+
+a.participant-name {
+  text-decoration: none;
+}
+
+a.participant-name:hover {
+  text-decoration: underline;
+}
+
+/* The place's head: on the door it names nothing, the masthead does; its line leads. */
+.tangent-head.place .tangent-head-text {
+  gap: 6px;
+}
+
+/* Specimen: a part under the name of the state it stands in, as the gallery of parts shows it. */
+.specimen {
+  margin: 0 0 40px;
+}
+
+.specimen-title {
+  margin: 0 0 12px;
+  color: var(--ts-text-3);
+  font: var(--ts-type-caps);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}

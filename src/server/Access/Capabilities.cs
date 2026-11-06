@@ -42,7 +42,7 @@ public sealed class Capabilities
 
     /// <summary>Why a timed-out participant reads and reports and posts nothing, saying until when, as their door does.</summary>
     public static Reason TimedOutUntil(DateTimeOffset until)
-        => Reason.Gated(TimedOut.Word, $"You’re timed out until {Participants.PeopleView.Until(until)}: you can read and report here, and post again then.");
+        => Reason.Gated(TimedOut.Word, $"You’re timed out until {Render.Wording.Until(until)}: you can read and report here, and post again then.");
 
     /// <summary>The resource does not exist for this reader: banned, or without <see cref="Bit.View"/> where they
     /// stand. Every verb carries this one reason, and a command answers what it answers for a missing resource, which

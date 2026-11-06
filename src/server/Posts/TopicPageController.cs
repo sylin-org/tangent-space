@@ -171,7 +171,7 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Read
     /// signed-in reader, the form that reports it: on someone else's Post that is
     /// not removed, outside the moderators' Tangent.</summary>
     private static TopicPage.Post Shown(Post post, Post root, string topicAddress, Capabilities.Rows rows,
-        IReadOnlyDictionary<string, TangentPage.Author> people, IReadOnlyDictionary<string, TopicPage.Mention> mentioned, Unread? unread,
+        IReadOnlyDictionary<string, Render.Person> people, IReadOnlyDictionary<string, TopicPage.Mention> mentioned, Unread? unread,
         long? mark, Participant? reader, IReadOnlyDictionary<string, TopicPage.Taken> taken, string? takeOn)
     {
         var address = topicAddress + "/" + Uri.EscapeDataString(post.Id);
@@ -214,12 +214,12 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Read
     private static IActionResult NotAWindow(string detail)
         => new Problem(StatusCodes.Status400BadRequest, detail) { Title = "Not a window of this Topic" }.ToResult();
 
-    public static TangentPage.Author Person(IReadOnlyDictionary<string, TangentPage.Author> people, string id)
-        => people.TryGetValue(id, out var person) ? person : new TangentPage.Author(id, id, id, "person", null);
+    public static Render.Person Person(IReadOnlyDictionary<string, Render.Person> people, string id)
+        => people.TryGetValue(id, out var person) ? person : Render.Person.Unknown(id);
 
     /// <summary>The authors of these Posts, then who removed or else edited any of them, at most <paramref name="limit"/>, in one keyed
     /// read, by participant Id, each with their profile's address.</summary>
-    public static async Task<IReadOnlyDictionary<string, TangentPage.Author>> People(IReadOnlyList<Post> posts, string baseAddress,
+    public static async Task<IReadOnlyDictionary<string, Render.Person>> People(IReadOnlyList<Post> posts, string baseAddress,
         CancellationToken ct, int limit = PeopleLimit)
     {
         var ids = posts.Select(post => post.AuthorId)
@@ -227,7 +227,7 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Read
             .Concat(posts.Select(post => post.EditedBy).OfType<string>())
             .Distinct(StringComparer.Ordinal).Take(limit).ToList();
         var found = await Participant.Get(ids, ct);
-        return found.OfType<Participant>().ToDictionary(row => row.Id, row => TangentPage.Author.Of(row, baseAddress), StringComparer.Ordinal);
+        return found.OfType<Participant>().ToDictionary(row => row.Id, row => Render.Person.Of(row, baseAddress), StringComparer.Ordinal);
     }
 
 

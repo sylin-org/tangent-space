@@ -32,11 +32,11 @@ public sealed class TangentsController(KoanWebBaseUrl baseUrl, IDataProtectionPr
     [HttpHead(Route)]
     [Tool(Name = "read_tangents")]
     [Description("List the Tangents you may read, a page at a time, and the members-only ones you may join or ask to join, which carry joining. Follow with read_tangent on one's slug, start_topic in it, or join_tangent.")]
+    [Needs(Bit.View)]
     public async Task<IActionResult> Get([FromQuery(Name = After), Description(Holds.After)] string? after, CancellationToken ct)
     {
         var personId = PostWrites.PersonId(User);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
+        var place = Here.Of(HttpContext).Around;
 
         ViewableTangents.Cursor? cursor = null;
         if (after is not null && (cursor = ViewableTangents.Cursor.Open(after, protection)) is null)
@@ -80,7 +80,7 @@ public sealed class TangentsController(KoanWebBaseUrl baseUrl, IDataProtectionPr
     /// <summary>A members-only Tangent as someone outside it finds it listed: what it is about, how they come in, and the
     /// form that joins or asks, or that withdraws their waiting ask. Where anyone joins, an ask they made before, waiting or
     /// declined, says nothing, and they join.</summary>
-    public static TangentPage.Listed Outside(Tangent tangent, string baseAddress, Ask? asked)
+    public static Render.TangentEntry Outside(Tangent tangent, string baseAddress, Ask? asked)
     {
         var address = PostWrites.TangentAddress(baseAddress, tangent.Id);
         var ask = tangent.Joining == Joining.Join ? null : asked;
@@ -89,12 +89,14 @@ public sealed class TangentsController(KoanWebBaseUrl baseUrl, IDataProtectionPr
         {
             Description = tangent.Description,
             Joining = joining,
-            Join = ask is null ? Form.Posting(address + "/" + JoinController.JoinSegment) : null,
-            Withdraw = ask is { Declined: false } ? Form.Posting(address + "/" + JoinController.LeaveSegment) : null
+            Join = ask is null
+                ? Form.Posting(address + "/" + JoinController.JoinSegment) with { Tool = "join-tangent", Submit = joining == "join" ? "Join" : "Ask to join", Quiet = true }
+                : null,
+            Withdraw = ask is { Declined: false } ? Form.Posting(address + "/" + JoinController.LeaveSegment) with { Tool = "withdraw-ask", Submit = "Withdraw", Quiet = true } : null
         };
     }
 
     /// <summary>A Tangent as a list of them shows it: its slug, name, kind, address and the Topics started there.</summary>
-    public static TangentPage.Listed Listed(Tangent tangent, string baseAddress)
+    public static Render.TangentEntry Listed(Tangent tangent, string baseAddress)
         => new(tangent.Id, tangent.Name, PostWrites.Word(tangent.DefaultKind), PostWrites.TangentAddress(baseAddress, tangent.Id), tangent.TopicCount);
 }

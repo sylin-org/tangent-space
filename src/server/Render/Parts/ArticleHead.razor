@@ -1,0 +1,61 @@
+@using System.Globalization
+@using Tangent.Posts
+@* How an article opens, the same when it is read and while it is written, its title and cover then the fields they will be
+   read as: its cover, the proprietor's article header where they wrote one, its title, then who wrote it and
+   when, and the minutes it takes to read; its outline folded under them, for where the rail folds. A page standing alone
+   holds its cover alone, with no render beside it. *@
+<header class="article-head">
+    @if (Model.CoverSlot is { } coverSlot)
+    {
+        @coverSlot
+    }
+    else if (Model.Cover is { } alone && Standalone)
+    {
+        <figure class="article-figure"><img src="@alone" alt="" decoding="async"></figure>
+    }
+    else if (Model.Cover is { } cover)
+    {
+        <figure class="article-figure"><img src="@cover" srcset="@(cover + "/" + MediaRecipes.CardName + " " + MediaRecipes.CardWidth.ToString(CultureInfo.InvariantCulture) + "w, " + cover + " " + Media.LongestEdge.ToString(CultureInfo.InvariantCulture) + "w")" sizes="(max-width: 719px) 100vw, 680px" alt="" decoding="async"></figure>
+    }
+    @if (Model.Header is { } header)
+    {
+        <div class="article-header post-body">@((MarkupString)header)</div>
+    }
+    @if (Model.TitleSlot is { } titleSlot)
+    {
+        @titleSlot
+    }
+    else
+    {
+        <h1 class="article-title">@Model.Title</h1>
+    }
+    <p class="article-byline">
+        <Draw Part="@Model.Author" />
+        <span class="article-byline-text">
+            <Draw Part="@Model.Author" As="Shape.Name" />
+            <span class="article-byline-meta">
+                <time datetime="@Model.At.ToUniversalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@Model.At.ToUniversalTime().ToString("MMMM d, yyyy", CultureInfo.InvariantCulture)</time>
+                <span aria-hidden="true">·</span>
+                <span data-article-minutes>@Model.Minutes.ToString(CultureInfo.InvariantCulture) min read</span>
+            </span>
+        </span>
+    </p>
+</header>
+@if (Model.Outline.Count > 1)
+{
+    <details class="article-outline-folded">
+        <summary>In this article</summary>
+        <ul class="list">
+            @foreach (var entry in Model.Outline)
+            {
+                <li class="@(entry.Level > 2 ? "article-outline-sub" : null)"><a href="@("#" + entry.Id)">@entry.Text</a></li>
+            }
+        </ul>
+    </details>
+}
+
+@code {
+    [Parameter, EditorRequired] public Render.ArticleHead Model { get; set; } = default!;
+
+    [CascadingParameter(Name = nameof(Shell.Standalone))] public bool Standalone { get; set; }
+}

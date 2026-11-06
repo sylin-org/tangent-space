@@ -1,0 +1,155 @@
+@using Tangent.Space
+@using Tangent.Render
+@* First run: one panel in the page, headed by the place's mark and name. Before setup it holds the one action, signing
+   in with Bluesky, whose sign-in sets the place up, with the handle form for an account on another server behind a
+   disclosure, and says who may set the place up where the configuration names someone; signed in as anyone else, who
+   may and the way to another account; once established, the pointers the site places, each ready to copy, or, while
+   the place answers only at a local address, when they will appear. Every hint is one sentence. *@
+<div class="first-run">
+    @if (Page.Pointers is { } pointers)
+    {
+        <h1 id="first-run-title" class="sign-in-title">@Page.Name is ready</h1>
+        @if (Page.PointersLater is { } later)
+        {
+            <p class="sign-in-lede">It answers at <a href="@Page.Door"><Draw Part="@(new Render.Code(Page.BaseUrl ?? ""))" /></a>, which only this machine reaches.</p>
+            <p class="first-run-rule first-run-later"><Draw Part="@(new Render.CodedSentence(later))" /></p>
+        }
+        else
+        {
+            <p class="sign-in-lede">It answers at <a href="@Page.Door"><Draw Part="@(new Render.Code(Page.BaseUrl ?? ""))" /></a>; place any one of these on your site.</p>
+        }
+        <p class="first-run-note first-run-first">Welcome: it is yours now. Its door shows the few steps that make it so.</p>
+        @if (pointers.Count > 0)
+        {
+            <ol class="first-run-pointers">
+                @for (var index = 0; index < pointers.Count; index++)
+                {
+                    var pointer = pointers[index];
+                    var id = "pointer-" + pointer.Kind;
+                    <li class="first-run-pointer" data-pointer="@pointer.Kind">
+                        <div class="first-run-pointer-head">
+                            <h2 class="first-run-pointer-title" id="@(id)-title">@Title(pointer)</h2>
+                            @if (pointer.Text.Length > 0)
+                            {
+                                <button type="button" class="first-run-copy" data-island="copy" data-props="@("{\"target\":\"" + id + "\"}")"
+                                        aria-describedby="@(id)-title" hidden>Copy</button>
+                            }
+                        </div>
+                        <p class="first-run-pointer-where"><Draw Part="@(new Render.CodedSentence(pointer.Where))" /></p>
+                        @if (pointer.Text.Length > 0)
+                        {
+                            <pre class="first-run-snippet" id="@id" tabindex="0"><code>@pointer.Text</code></pre>
+                        }
+                    </li>
+                }
+            </ol>
+        }
+        <p class="first-run-onward">
+            <a class="first-run-door" href="@Page.Door">Open @Page.Name</a>
+        </p>
+    }
+    else if (Page.Waiting is { } waiting)
+    {
+        <h1 id="first-run-title" class="sign-in-title">Waiting for its operator</h1>
+        <p class="sign-in-lede">
+            @if (waiting.Handle.Length > 0)
+            {
+                <text>You’re signed in as <strong>@("@" + waiting.Handle)</strong>, and this place is still being set up: check back soon.</text>
+            }
+            else
+            {
+                <text>You’re signed in, and this place is still being set up: check back soon.</text>
+            }
+        </p>
+        <p class="first-run-rule">
+            Only
+            @if (waiting.OperatorHandle is { } operatorHandle && NamedByDid)
+            {
+                <strong>@("@" + operatorHandle)</strong> <span class="first-run-did">(<Draw Part="@(new Render.Code(Page.Operator ?? ""))" />)</span>
+            }
+            else if (waiting.OperatorHandle is { } configuredHandle)
+            {
+                <strong>@("@" + configuredHandle)</strong>
+            }
+            else
+            {
+                <Draw Part="@(new Render.Code(Page.Operator ?? ""))" />
+            }
+            can set it up.
+        </p>
+        <p class="first-run-note first-run-first">If that is you, sign in with that account.</p>
+        @if (Page.Reader is { } reader)
+        {
+            <p class="first-run-onward">
+                <form method="post" action="@reader.SignOut"><button class="first-run-switch">Use another account</button></form>
+            </p>
+        }
+    }
+    else
+    {
+        <h1 id="first-run-title" class="sign-in-title">Set up this Tangent Space</h1>
+        <p class="sign-in-lede">Sign in with the account that will run it to set it up.</p>
+        <form class="sign-in-form" method="get" action="@Page.ChallengeAddress()" data-island="submitting">
+            <input type="hidden" name="return" value="@Page.ChallengeReturn()">
+            <button type="submit" class="sign-in-submit" data-busy-label="Continuing…">Sign in with Bluesky</button>
+        </form>
+        <details class="sign-in-other">
+            <summary class="sign-in-other-toggle">Use another server</summary>
+            <form class="sign-in-form" method="get" action="@Page.ChallengeAddress()" data-island="submitting">
+                <div class="field">
+                    <label class="field-label" for="first-run-sign-in-handle">Handle</label>
+                    <span class="field-input">
+                        <span class="field-prefix" aria-hidden="true">@@</span>
+                        <input id="first-run-sign-in-handle" name="identifier" type="text" required
+                               autocomplete="username" autocapitalize="none" spellcheck="false"
+                               placeholder="you.example.com">
+                    </span>
+                </div>
+                <input type="hidden" name="return" value="@Page.ChallengeReturn()">
+                <button type="submit" class="sign-in-submit" data-busy-label="Continuing…">Continue</button>
+            </form>
+        </details>
+        @if (Page.Operator is { } named)
+        {
+            <p class="first-run-note first-run-first">
+                Only
+                @if (NamedByDid)
+                {
+                    <Draw Part="@(new Render.Code(named))" />
+                }
+                else
+                {
+                    <strong>@("@" + named)</strong>
+                }
+                can set it up.
+            </p>
+        }
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Render.SetUp Model { get; set; } = default!;
+
+    private FirstRun Page => Model.Page;
+
+    /// <summary>The frame the shell draws around the page: the place, the step as the one crumb, and the account of
+    /// whoever is signed in.</summary>
+    public static Frame Frame(FirstRun firstRun)
+        => new(firstRun.Name, firstRun.Door, [new Crumb(firstRun.Pointers is null ? "First run" : "Pointers")],
+            firstRun.Reader is { } reader ? new Who(reader.Id, reader.Name, reader.Handle, reader.Role, reader.Avatar, reader.SignOut, reader.Settings, reader.ForYou) : null,
+            Searchable: false);
+
+    private string PanelClass => Page.Pointers is null ? "sign-in-panel" : "sign-in-panel first-run-panel";
+
+    /// <summary>Whether the configuration names the account that may set the place up by its DID.</summary>
+    private bool NamedByDid => Page.Operator?.StartsWith("did:", StringComparison.Ordinal) == true;
+
+    private static string Title(Pointer pointer) => pointer.Kind switch
+    {
+        Pointers.Link => "A link on your site’s pages",
+        Pointers.WellKnown => "A file at your site’s origin",
+        Pointers.Txt => "A DNS record",
+        Pointers.Proxy => "The reverse-proxy rule for the path",
+        _ => pointer.Kind
+    };
+}

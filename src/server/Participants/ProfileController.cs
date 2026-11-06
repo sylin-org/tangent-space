@@ -36,12 +36,12 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
     [HttpHead(ProfilePage.Segment + "{handle}")]
     [Tool(Name = "read_profile")]
     [Description("Read a participant's profile, by handle or DID: who they are, their kind, their roles here and their recent Posts in the Tangents you may read. Call this to know who you are talking with.")]
+    [Needs(Bit.View)]
     public async Task<IActionResult> Get([Description(Holds.Handle)] string handle, [FromQuery(Name = Before), Description(Holds.PostsBefore)] string? before, CancellationToken ct)
     {
         var personId = PostWrites.PersonId(User);
-        var rows = await Capabilities.LoadRows(personId, null, ct);
+        var rows = Here.Of(HttpContext).Rows;
         var place = rows.For(null);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
         if (await Holder(handle, ct) is not { } subject) return this.Refused(Capabilities.Absent);
 
         RecentPosts.Cursor? cursor = null;
@@ -131,15 +131,15 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
     }
 
     /// <summary>The participants the Posts mention and who else edited them, as their openings read them, in one keyed read.</summary>
-    private static async Task<IReadOnlyDictionary<string, TangentPage.Author>> Named(IReadOnlyList<Post> posts, CancellationToken ct)
+    private static async Task<IReadOnlyDictionary<string, Render.Person>> Named(IReadOnlyList<Post> posts, CancellationToken ct)
     {
         var ids = posts.SelectMany(post => post.MentionedIds).Concat(posts.Select(post => post.EditedBy).OfType<string>()).Distinct(StringComparer.Ordinal).ToList();
-        if (ids.Count == 0) return new Dictionary<string, TangentPage.Author>();
-        return (await Participant.Get(ids, ct)).OfType<Participant>().ToDictionary(row => row.Id, row => TangentPage.Author.Of(row), StringComparer.Ordinal);
+        if (ids.Count == 0) return new Dictionary<string, Render.Person>();
+        return (await Participant.Get(ids, ct)).OfType<Participant>().ToDictionary(row => row.Id, row => Render.Person.Of(row), StringComparer.Ordinal);
     }
 
     private static ProfilePage.Written Written(Post post, IReadOnlyDictionary<string, Post> roots, IReadOnlyDictionary<string, Tangents.Tangent> tangents,
-        IReadOnlyDictionary<string, TangentPage.Author> people, string baseAddress)
+        IReadOnlyDictionary<string, Render.Person> people, string baseAddress)
     {
         var root = post.ParentId is null ? post : roots.GetValueOrDefault(post.TopicId);
         var tangent = tangents[post.TangentId];

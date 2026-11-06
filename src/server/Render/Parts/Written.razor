@@ -1,0 +1,33 @@
+@* One Post someone wrote, as a row: its Topic, a reply said as one, who else edited it before its words, its first words,
+   its Tangent and when. *@
+<a class="row topic" href="@Model.Address">
+    <span class="topic-row-dot"></span>
+    <span class="topic-row-body">
+        <span class="topic-row-title">@Model.Topic</span>
+        <span class="topic-row-opening">@Opening</span>
+    </span>
+    <span class="topic-row-people"></span>
+    <span class="topic-row-replies"><span class="topic-row-none">@Model.Tangent</span></span>
+    <span class="topic-row-activity"><time datetime="@Wording.Iso(Model.At)" title="@Wording.Full(Model.At)">@Wording.When(Model.At, Today)</time></span>
+</a>
+
+@code {
+    [Parameter, EditorRequired] public Participants.ProfilePage.Written Model { get; set; } = default!;
+
+    [CascadingParameter(Name = Page.TodayValue)] public DateOnly Today { get; set; }
+
+    private string Opening
+    {
+        get
+        {
+            var lead = (Model.Kind == "reply", Model.Edited) switch
+            {
+                (true, { } edited) => "Replied (edited by " + edited.By.Name + ")",
+                (true, null) => "Replied",
+                (false, { } edited) => "Edited by " + edited.By.Name,
+                _ => ""
+            };
+            return lead.Length == 0 ? Model.Line : lead + (Model.Line.Length > 0 ? ": " + Model.Line : "");
+        }
+    }
+}

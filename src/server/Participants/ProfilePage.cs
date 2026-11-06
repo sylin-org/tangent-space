@@ -16,6 +16,7 @@ namespace Tangent.Participants;
 /// coming back here; both are absent for anyone else. <see cref="Place"/>, <see cref="Door"/>, <see cref="Who"/> and
 /// <see cref="SignIn"/> say where the page is and who reads it; <see cref="Day"/> is the UTC day its times are written
 /// for.</summary>
+[Render.Page(Render.Layout.Home)]
 public sealed record ProfilePage(
     string Id,
     string Did,
@@ -48,7 +49,20 @@ public sealed record ProfilePage(
     /// title of its Topic, the Tangent it is in, its address, its first words, when it was written, and who other than
     /// the participant last edited it, where someone did.</summary>
     public sealed record Written(string Id, string Kind, string Topic, string Tangent, string TangentAddress, string Address, string Line,
-        DateTimeOffset At, Tangents.TangentPage.Edited? Edited = null);
+        DateTimeOffset At, Tangents.TangentPage.Edited? Edited = null) : Render.IPart;
+
+    [Render.Slot(Render.Slot.Head), Newtonsoft.Json.JsonIgnore]
+    public Render.ProfileHead Head => new(new Render.Person(Id, Handle, Name, Kind, Avatar, Address), Did, Roles, Arrived, Description);
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.Keeping? Keeper => Listed is { } listed && Forms is { } forms && listed.Id != Who?.Id ? new(listed, forms) : null;
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.WrittenList Writing => new(Posts, Continued, Older, Address);
+
+    /// <summary>The frame the shell draws around the page: the participant's name as its one crumb, and who reads, or where a
+    /// visitor signs in.</summary>
+    public static Render.Frame Frame(ProfilePage page) => new(page.Place, page.Door, [new Render.Crumb(page.Name)], page.Who, page.SignIn);
 
     /// <summary>A participant's profile address under the base URL in force: by their handle, or by their DID where they have
     /// none.</summary>
@@ -57,5 +71,5 @@ public sealed record ProfilePage(
     /// <summary>The version the page's <c>ETag</c> carries: a hash of everything the page says, so a new Post, a changed
     /// profile or role, a changed <c>can</c> or a new day changes it.</summary>
     public static long Version(ProfilePage page)
-        => BitConverter.ToInt64(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(page)), 0) & long.MaxValue;
+        => Render.PageVersion.Of(page);
 }

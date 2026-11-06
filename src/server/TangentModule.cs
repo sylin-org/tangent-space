@@ -74,33 +74,38 @@ public sealed class TangentModule : KoanModule
         // without a preference reads a page, and every other type keeps Koan's JSON.
         services.AddScoped<HtmlRenderer>();
         services.AddSingleton(new ResourceComponents()
-            .Add<Door, DoorView>(door => door.Name, Door.Version, DoorView.Frame, Door.Card)
-            .Add<Koan.Web.Controllers.Problem, ProblemView>(ProblemView.Heading)
-            .Add<Participants.SignIn, Participants.SignInView>(signIn => "Sign in · " + signIn.Name, frame: Participants.SignInView.Frame)
-            .Add<Tangents.TangentPage, Tangents.TangentView>(page => page.Name + " · " + page.Place, Tangents.TangentPage.Version, Tangents.TangentView.Frame, Tangents.TangentPage.Card)
-            .Add<Tangents.TangentsPage, Tangents.TangentsView>(page => "Tangents · " + page.Place, frame: Tangents.TangentsView.Frame)
-            .Add<Tangents.NewTangentPage, Tangents.NewTangentView>(page => "New Tangent · " + page.Place, frame: Tangents.NewTangentView.Frame)
-            .Add<Tangents.TangentSettingsPage, Tangents.TangentSettingsView>(page => "Settings · " + page.Name, frame: Tangents.TangentSettingsView.Frame)
-            .Add<Tangents.TangentClosed, Tangents.TangentClosedView>(page => "Saved · " + page.Name, frame: Tangents.TangentClosedView.Frame)
-            .Add<Tangents.TangentAccessPage, Tangents.TangentAccessView>(page => "Access · " + page.Name, frame: Tangents.TangentAccessView.Frame)
-            .Add<Tangents.TangentPeoplePage, Tangents.TangentPeopleView>(page => "People · " + page.Name, frame: Tangents.TangentPeopleView.Frame)
-            .Add<Posts.TopicPage, Posts.TopicView>(page => page.Title + " · " + page.Tangent.Name, Posts.TopicPage.Version, Posts.TopicView.Frame, Posts.TopicPage.Card)
-            .Add<Posts.NewTopicPage, Posts.NewTopicView>(page => page.Origin is { } origin ? "Take this on a tangent · " + origin.Topic : (page.Kind == Posts.PostWrites.Word(Posts.PostKind.Article) ? "New article · " : "New topic · ") + page.TangentName, frame: Posts.NewTopicView.Frame)
-            .Add<Posts.EditPage, Posts.EditView>(page => (!page.Root ? "Edit post · " : page.Kind == Posts.PostWrites.Word(Posts.PostKind.Article) ? "Edit article · " : "Edit topic · ") + page.TopicTitle, frame: Posts.EditView.Frame)
-            .Add<Posts.PostHistory, Posts.PostHistoryView>(page => "Earlier versions · " + page.Topic, frame: Posts.PostHistoryView.Frame)
-            .Add<Posts.ReportPage, Posts.ReportView>(page => (page.Received ? "Report received · " : "Report · ") + page.Reported.Topic, frame: Posts.ReportView.Frame)
-            .Add<Participants.ProfilePage, Participants.ProfileView>(page => page.Name + " · " + page.Place, Participants.ProfilePage.Version, Participants.ProfileView.Frame)
-            .Add<FirstRun, FirstRunView>(firstRun => "Set up · " + firstRun.Name, frame: FirstRunView.Frame)
-            .Add<TangentSpaceSettingsPage, TangentSpaceSettingsView>(page => "Settings · " + page.Place, frame: TangentSpaceSettingsView.Frame)
-            .Add<AdmissionSettingsPage, AdmissionSettingsView>(page => "Admission · " + page.Place, frame: AdmissionSettingsView.Frame)
-            .Add<AppearanceSettingsPage, AppearanceSettingsView>(page => "Appearance · " + page.Place, frame: AppearanceSettingsView.Frame)
-            .Add<Participants.ApplicationsPage, Participants.ApplicationsView>(page => "Applications · " + page.Place, frame: Participants.ApplicationsView.Frame)
-            .Add<Participants.PeoplePage, Participants.PeopleView>(page => "People · " + page.Place, frame: Participants.PeopleView.Frame)
-            .Add<RolesPage, RolesView>(page => "Roles · " + page.Place, frame: RolesView.Frame)
-            .Add<Lifecycle.ExportSettingsPage, Lifecycle.ExportSettingsView>(page => "Export · " + page.Place, frame: Lifecycle.ExportSettingsView.Frame)
-            .Add<Posts.SearchPage, Posts.SearchView>(page => (page.Text is { } text ? text + " · Search · " : "Search · ") + page.Place, frame: Posts.SearchView.Frame)
-            .Add<Participants.BringYourAgent, Participants.BringYourAgentView>(page => "Bring your agent · " + page.Place, frame: Participants.BringYourAgentView.Frame)
-            .Add<Connections.ConnectionsPage, Connections.ConnectionsView>(page => "Connections · " + page.Place, frame: Connections.ConnectionsView.Frame));
+            .Add<Door>(door => door.Name, Door.Version, Door.Frame, Door.Card)
+            .Add<Koan.Web.Controllers.Problem, Page>(Render.Parts.Refused.Heading)
+            .Add<Participants.SignIn>(signIn => "Sign in · " + signIn.Name, frame: Render.Parts.SignInForm.Frame)
+            .Add<Tangents.TangentPage>(page => page.Name + " · " + page.Place, Tangents.TangentPage.Version, Tangents.TangentPage.Frame, Tangents.TangentPage.Card)
+            .Add<Tangents.TangentsPage>(page => "Tangents · " + page.Place, frame: Tangents.TangentsPage.Frame)
+            .Add<Tangents.NewTangentPage>(page => "New Tangent · " + page.Place, frame: Render.Parts.NewTangentForm.Frame)
+            .Add<Tangents.TangentSettingsPage>(page => "Settings · " + page.Name, frame: Render.Parts.TangentSettingsForm.Frame)
+            .Add<Tangents.TangentClosed>(page => "Saved · " + page.Name, frame: Tangents.TangentClosed.Frame)
+            .Add<Tangents.TangentAccessPage>(page => "Access · " + page.Name, frame: Render.Parts.TangentAccessForm.Frame)
+            .Add<Tangents.TangentPeoplePage>(page => "People · " + page.Name, frame: Render.Parts.TangentPeopleList.Frame)
+            .Add<Posts.TopicPage>(page => page.Title + " · " + page.Tangent.Name, Posts.TopicPage.Version, Posts.TopicPage.Frame, Posts.TopicPage.Card)
+            .Add<Posts.NewTopicPage>(page => page.Origin is { } origin ? "Take this on a tangent · " + origin.Topic : (page.Kind == Posts.PostWrites.Word(Posts.PostKind.Article) ? "New article · " : "New topic · ") + page.TangentName, frame: Render.Parts.NewTopicForm.Frame)
+            .Add<Posts.EditPage>(page => (!page.Root ? "Edit post · " : page.Kind == Posts.PostWrites.Word(Posts.PostKind.Article) ? "Edit article · " : "Edit topic · ") + page.TopicTitle, frame: Render.Parts.EditForm.Frame)
+            .Add<Posts.PostHistory>(page => "Earlier versions · " + page.Topic, frame: Posts.PostHistory.Frame)
+            .Add<Posts.ReportPage>(page => (page.Received ? "Report received · " : "Report · ") + page.Reported.Topic, frame: Render.Parts.ReportPanel.Frame)
+            .Add<Participants.ProfilePage>(page => page.Name + " · " + page.Place, Participants.ProfilePage.Version, Participants.ProfilePage.Frame)
+            .Add<FirstRun>(firstRun => "Set up · " + firstRun.Name, frame: Render.Parts.SetUp.Frame)
+            .Add<TangentSpaceSettingsPage>(page => "Settings · " + page.Place, frame: TangentSpaceSettingsPage.Frame)
+            .Add<AdmissionSettingsPage>(page => "Admission · " + page.Place, frame: AdmissionSettingsPage.Frame)
+            .Add<AppearanceSettingsPage>(page => "Appearance · " + page.Place, frame: Render.Parts.AppearanceForm.Frame)
+            .Add<Participants.ApplicationsPage>(page => "Applications · " + page.Place, frame: Participants.ApplicationsPage.Frame)
+            .Add<Participants.PeoplePage>(page => "People · " + page.Place, frame: Participants.PeoplePage.Frame)
+            .Add<RolesPage>(page => "Roles · " + page.Place, frame: Render.Parts.RoleList.Frame)
+            .Add<Lifecycle.ExportSettingsPage>(page => "Export · " + page.Place, frame: Lifecycle.ExportSettingsPage.Frame)
+            .Add<Posts.SearchPage>(page => (page.Text is { } text ? text + " · Search · " : "Search · ") + page.Place, frame: Posts.SearchPage.Frame)
+            .Add<Participants.BringYourAgent>(page => "Bring your agent · " + page.Place, frame: Participants.BringYourAgent.Frame)
+            .Add<Connections.ConnectionsPage>(page => "Connections · " + page.Place, frame: Render.Parts.ConnectionList.Frame)
+#if TANGENT_CAPTURE
+            // The capture host's gallery of every part in its states.
+            .Add<Capture.Gallery>(_ => "Parts", frame: Capture.Gallery.Frame)
+#endif
+        );
         services.AddSingleton<HtmlFormatter>();
         services.AddOptions<MvcOptions>().Configure<HtmlFormatter>((mvc, html) =>
         {
@@ -117,6 +122,7 @@ public sealed class TangentModule : KoanModule
 
     public override async Task Start(IServiceProvider services, CancellationToken ct)
     {
+        PartComponents.Check(services.GetRequiredService<ResourceComponents>().Pages);
         await TablesExist(services.GetRequiredService<IDataService>(), ct);
         await Roles.Seed(services.GetRequiredService<RoleCollection>(), ct);
         await FirstRunStart.Run(services, ct);

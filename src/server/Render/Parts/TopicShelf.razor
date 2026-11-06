@@ -1,0 +1,19 @@
+@* Topics under a heading, newest activity first, each a row of the table. *@
+<section aria-labelledby="@Model.Id">
+    <div class="topic-list-head">
+        <h2 id="@Model.Id" class="topic-list-title">@Model.Title</h2>
+        <span class="topic-list-order">latest activity first</span>
+    </div>
+    <div class="topic-table">
+        <ul class="topic-rows list">
+            @foreach (var topic in Model.Topics)
+            {
+                <li @key="topic.Id"><Draw Part="@topic" /></li>
+            }
+        </ul>
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public Render.TopicShelf Model { get; set; } = default!;
+}

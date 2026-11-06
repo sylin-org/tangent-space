@@ -13,6 +13,7 @@ namespace Tangent.Posts;
 /// author last edited the words the form holds, where someone did. <see cref="Bring"/> is the form that brings an image
 /// in, for an editor who may edit it. On an article, <see cref="CoverId"/> is its cover, <see cref="Author"/> who wrote it
 /// and <see cref="CreatedAt"/> when.</summary>
+[Render.Page(Render.Layout.Panel)]
 public sealed record EditPage(
     string Id,
     string Address,
@@ -46,9 +47,19 @@ public sealed record EditPage(
     string Kind = "topic",
     string? CoverId = null,
     Form? Bring = null,
-    Tangents.TangentPage.Author? Author = null,
-    DateTimeOffset CreatedAt = default)
+    Render.Person? Author = null,
+    DateTimeOffset CreatedAt = default) : Render.ILaidOut
 {
+    /// <summary>An article is written in the article's own layout; anything else in one panel.</summary>
+    [Newtonsoft.Json.JsonIgnore]
+    public Render.Layout Layout => Root && !Removed && Kind == PostWrites.Word(PostKind.Article) && Edit is not null && Author is not null ? Render.Layout.Reading : Render.Layout.Panel;
+
+    [Render.Slot(Render.Slot.Rail), Newtonsoft.Json.JsonIgnore]
+    public Render.TangentBack? Back => Layout == Render.Layout.Reading ? new(TangentName, TangentAddress, "All articles") : null;
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.EditForm Shown => new(this);
+
     /// <summary>The Topic's slug, the last segment of its address.</summary>
     public string TopicSlug => Uri.UnescapeDataString(TopicAddress[(TopicAddress.LastIndexOf('/') + 1)..]);
 }

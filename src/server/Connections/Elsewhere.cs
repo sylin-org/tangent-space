@@ -92,7 +92,7 @@ public sealed class Elsewhere : Entity<Elsewhere>, IKoanJob<Elsewhere>
 
     /// <summary>What an article's page shows from elsewhere: the counts of its Bluesky post, where it is read, and the
     /// newest replies and quotes there.</summary>
-    public sealed record Line(int Likes, int Reposts, int Quotes, int Replies, string Address, IReadOnlyList<Reference> References);
+    public sealed record Line(int Likes, int Reposts, int Quotes, int Replies, string Address, IReadOnlyList<Reference> References) : Render.IPart;
 }
 
 /// <summary>When each published article was last read, in memory and nowhere else, so the <see cref="Elsewhere"/> job

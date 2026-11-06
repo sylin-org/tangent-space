@@ -56,7 +56,7 @@ public sealed class TangentSpaceSettingsTests
         var logged = Assert.Single(await Event.All(Cancellation), e => e.Seq > before);
         Assert.Equal((EventKind.SpaceChanged, Leo), (logged.Kind, logged.ActorId));
         var door = await Send(leo.Client, HttpMethod.Get, "/");
-        Assert.Contains("<h1 id=\"door-title\" class=\"tangent-title\">Lantern Works</h1>", door.Body);
+        Assert.Contains("<span class=\"masthead-name\">Lantern Works</span>", door.Body);
 
         // The description is one of the place's words, written with its appearance, drawn on the door as Markdown.
         var described = await Json(leo, TangentSpaceSettingsController.Path, TangentSpaceSettingsController.AppearancePath, new { description = "Fired *weekly*." });

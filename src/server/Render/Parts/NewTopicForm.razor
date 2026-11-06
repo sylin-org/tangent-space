@@ -1,0 +1,197 @@
+@using Tangent.Posts
+@using global::Tangent.Tangents
+@* The form that starts a Topic: one panel in the page, saying which Tangent it posts in, with a title and a body. The
+   Post's Id rides in a hidden field, minted when the page was rendered, so a form sent twice starts one Topic. A reader
+   who may not start a Topic here reads why above the form, whose fields are read-only and which has no button, and a
+   visitor the way to sign in; a refusal of a field shows under that field, which takes the focus, and any other above
+   the form. For a participant who may post, the composer island keeps the words as a draft and sends them, and the
+   article island makes the body the visual editor, with its tools for a Post, pictures and @ and # pickers. Taking a
+   Post on a tangent, the panel quotes the Post, lists the Tangents the reader may start the Topic in as links to this
+   form there, the one it is in marked, offers a title from the Post's first words, and leaves the reader's own words
+   optional. *@
+@if (Article && Page.Start is { } writing && Page.Who is { } author)
+{
+    <Draw Part="@(new Render.ArticleEditor
+    {
+        Tool = "start-topic", Heading = Heading, TangentAddress = Page.TangentAddress, Action = writing.Action,
+        Author = new Render.Person(author.Id, author.Handle, author.Name, "person", author.Avatar),
+        At = new DateTimeOffset(Page.Day, TimeOnly.MinValue, TimeSpan.Zero), Door = Page.Door, TitleId = "new-topic-title", BodyId = "new-topic-body",
+        Island = "composer", IslandProps = ComposerProps(), Bring = Page.Bring, Participant = author.Id, Title = Page.Title, Body = Page.Body,
+        CoverId = Page.CoverId, Failure = Page.Failure, TitleFailure = Page.TitleFailure, BodyFailure = Page.BodyFailure,
+        Above = Taking, Hidden = Starting(writing), Actions = Publishing
+    })" />
+}
+else
+{
+            @if (Page.Origin is { } origin)
+            {
+                <p class="post-form-where">From <a href="@origin.TopicAddress">@origin.Topic</a> in <a href="@origin.TangentAddress">@origin.Tangent</a></p>
+            }
+            else
+            {
+                <p class="post-form-where">Posting in <a href="@Page.TangentAddress">@Page.TangentName</a></p>
+            }
+            <h1 id="new-topic-heading" class="sign-in-title">@Heading</h1>
+            @Taking
+            @if (Page.Gate is { } gate)
+            {
+                <p class="sign-in-failure" id="new-topic-failure" role="alert" data-gate="@gate">
+                    @if (Page.SignIn is { } signIn)
+                    {
+                        @(Access.Capabilities.Sentence(gate) + " ")<a href="@signIn">Sign in</a>
+                    }
+                    else
+                    {
+                        @Access.Capabilities.Sentence(gate)
+                    }
+                </p>
+            }
+            else if (Page.Failure is { } failure)
+            {
+                <p class="sign-in-failure" id="new-topic-failure" role="alert">@failure</p>
+            }
+            <form class="sign-in-form start-topic" method="post" action="@Page.Start?.Action" data-island="@(Composing ? "composer" : null)" data-props="@ComposerProps()">
+                @if (Page.Start is { } start)
+                {
+                    <input type="hidden" name="@PostWrites.IdField" value="@start.Value(PostWrites.IdField)">
+                    @OriginField
+                }
+                <div class="field">
+                    <label class="field-label" for="new-topic-title">Title</label>
+                    <span class="field-input">
+                        <input id="new-topic-title" name="@PostWrites.TitleField" type="text" required maxlength="@Posts.Post.TitleLimit" autocomplete="off"
+                               autofocus="@(Page.Gate is null && Focus == "new-topic-title")" readonly="@(Page.Gate is not null)" value="@Page.Title"
+                               aria-invalid="@(Page.TitleFailure is null ? "false" : "true")"
+                               aria-describedby="@(Page.TitleFailure is null ? null : "new-topic-title-failure")">
+                    </span>
+                    @if (Page.TitleFailure is { } titleFailure)
+                    {
+                        <p class="field-failure" id="new-topic-title-failure">@titleFailure</p>
+                    }
+                </div>
+                <div class="field post-body-field" data-island="@(Composing ? "article" : null)" data-props="@EditorProps()">
+                    <label class="field-label" for="new-topic-body">@(Page.Origin is not null ? "Your words (optional)" : Article ? "Article" : "Post")</label>
+                    <textarea class="post-form-body" id="new-topic-body" name="@PostWrites.BodyField" rows="12" required="@(Page.Origin is null)"
+                              autofocus="@(Page.Gate is null && Focus == "new-topic-body")" readonly="@(Page.Gate is not null)"
+                              aria-invalid="@(Page.BodyFailure is null ? "false" : "true")"
+                              aria-describedby="@(Page.BodyFailure is null ? null : "new-topic-body-failure")">@Page.Body</textarea>
+                    @if (Page.BodyFailure is { } bodyFailure)
+                    {
+                        <p class="field-failure" id="new-topic-body-failure">@bodyFailure</p>
+                    }
+                </div>
+                @if (Page.Gate is null)
+                {
+                    <div class="post-form-actions">
+                        @if (Page.Who is { } who)
+                        {
+                            <span class="post-form-as">Posting as <strong>@("@" + who.Handle)</strong></span>
+                        }
+                        <button type="submit" class="sign-in-submit post-form-submit" data-busy-label="@(Page.Origin is null ? "Posting…" : "Starting…")">@(Page.Origin is null ? "Post" : "Start the topic")</button>
+                    </div>
+                }
+            </form>
+}
+
+@code {
+    [Parameter, EditorRequired] public Render.NewTopicForm Model { get; set; } = default!;
+
+    private NewTopicPage Page => Model.Page;
+
+    /// <summary>What an article's form carries unseen: the TID minted for it and the Post it takes on a tangent from.</summary>
+    private RenderFragment Starting(Render.Form writing) => @<text><input type="hidden" name="@PostWrites.IdField" value="@writing.Value(PostWrites.IdField)">@OriginField</text>;
+
+    /// <summary>Where an article is written, and its button.</summary>
+    private RenderFragment Publishing => @<text>
+        <span class="post-form-as">Writing in <a href="@Page.TangentAddress">@Page.TangentName</a></span>
+        <button type="submit" class="sign-in-submit post-form-submit" data-busy-label="Publishing…">Publish</button>
+    </text>;
+
+
+
+    private bool Article => Page.Kind == PostWrites.Word(PostKind.Article);
+
+    /// <summary>The page's heading: taking a Post on a tangent, else a new article or topic.</summary>
+    private string Heading => Page.Origin is not null ? "Take this on a tangent" : Article ? "New article" : "New topic";
+
+    /// <summary>The Post taken on a tangent, in the form's hidden field.</summary>
+    private RenderFragment? OriginField => Page.Origin is { } origin
+        ? @<input type="hidden" name="@PostWrites.OriginField" value="@origin.Id">
+        : null;
+
+    /// <summary>Taking a Post on a tangent: the Post quoted, then the Tangents to start the Topic in, each a link to this
+    /// form there, this one marked, and the rest a page away.</summary>
+    private RenderFragment? Taking => Page.Origin is not { } origin ? null : @<div class="post-form-taking">
+        <Tangent.Render.Draw Part="@origin" />
+        @if (Page.Choices is { Count: > 0 } choices)
+        {
+            <nav class="post-form-choice" aria-labelledby="new-topic-choices">
+                <p class="field-label" id="new-topic-choices">Start it in</p>
+                <div class="post-form-options">
+                    @foreach (var choice in choices)
+                    {
+                        <a class="post-form-option" href="@choice.Address" data-tangent="@choice.Slug" aria-current="@(choice.Current ? "page" : null)">
+                            <span class="post-form-option-text">
+                                <span class="post-form-option-name">@choice.Name</span>
+                                <span class="post-form-option-detail">@(choice.Kind == PostWrites.Word(PostKind.Article) ? "Starts an article" : "Starts a topic")</span>
+                            </span>
+                        </a>
+                    }
+                </div>
+                @if (Page.First is not null || Page.More is not null)
+                {
+                    <p class="topic-pages">
+                        @if (Page.First is { } first)
+                        {
+                            <a href="@first">First Tangents</a>
+                        }
+                        @if (Page.More is { } more)
+                        {
+                            <a class="topic-pages-next" href="@more">More Tangents →</a>
+                        }
+                    </p>
+                }
+            </nav>
+        }
+    </div>;
+
+    /// <summary>Whether the composer island takes the form: for a participant who may start a Topic here.</summary>
+    private bool Composing => Page.Start is not null && Page.Who is not null;
+
+    /// <summary>The composer's props: whose drafts these are, the Tangent they are kept under, and the prefix of the
+    /// address that names a new Topic by its root's TID until its slug is known.</summary>
+    private string? ComposerProps() => Composing
+        ? System.Text.Json.JsonSerializer.Serialize(new
+        {
+            participant = Page.Who!.Id,
+            scope = Page.Origin is { } origin ? "origin:" + origin.Id : "tangent:" + Page.Tangent,
+            locate = Page.TangentAddress + "/",
+            noun = Article ? "article" : "topic"
+        })
+        : null;
+
+    /// <summary>The editor's props, for a participant who may start a Topic here: where the place's images live, where a
+    /// picture is brought in, whose words these are and where the suggestions of this Tangent are read.</summary>
+    private string? EditorProps() => Composing
+        ? System.Text.Json.JsonSerializer.Serialize(new
+        {
+            door = Page.Door,
+            bring = Page.Bring?.Action,
+            participant = Page.Who!.Id,
+            suggest = SuggestionsController.Address(Page.TangentAddress),
+            post = true
+        })
+        : null;
+
+    /// <summary>The field the page opens on: the first one a refusal concerns, else the title.</summary>
+    private string Focus => Page.TitleFailure is null && Page.BodyFailure is not null ? "new-topic-body" : "new-topic-title";
+
+    /// <summary>The frame the shell draws around the page: the place; the Tangent and the form as crumbs; and who reads,
+    /// or where a visitor signs in.</summary>
+    public static Frame Frame(NewTopicPage page)
+        => new(page.Place, page.Door,
+            page.Origin is { } origin
+                ? [new Crumb("Take this on a tangent")]
+                : [new Crumb(page.Kind == PostWrites.Word(PostKind.Article) ? "New article" : "New topic")],
+            page.Who, page.SignIn);
+}

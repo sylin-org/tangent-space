@@ -1,0 +1,14 @@
+@using System.Globalization
+@* A discussion's head: its title, when it started, and how many replies it has, none in words. *@
+<h1 class="topic-title">@Model.Title</h1>
+<p class="topic-meta">
+    <span>Started <time datetime="@Model.Started.ToUniversalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@Wording.When(Model.Started, Today)</time></span>
+    <span aria-hidden="true">·</span>
+    <span>@Wording.Count(Model.Replies, "reply", "replies", "No replies yet")</span>
+</p>
+
+@code {
+    [Parameter, EditorRequired] public Render.TopicTitle Model { get; set; } = default!;
+
+    [CascadingParameter(Name = Page.TodayValue)] public DateOnly Today { get; set; }
+}

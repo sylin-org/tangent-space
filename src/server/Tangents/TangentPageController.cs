@@ -100,17 +100,17 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
 
     /// <summary>One Topic as a list shows it, what is new in it marked for a signed-in reader by the one rule
     /// (<see cref="Unread.InTopic"/>), and none for a visitor.</summary>
-    public static TangentPage.Topic Topic(Post root, string tangentAddress, IReadOnlyDictionary<string, TangentPage.Author> people,
+    public static Render.TopicEntry Topic(Post root, string tangentAddress, IReadOnlyDictionary<string, Render.Person> people,
         IReadOnlyDictionary<string, Post> latest, Unread? unread, IReadOnlyDictionary<string, long> marks)
     {
         long? mark = marks.TryGetValue(root.Id, out var read) ? read : null;
         var (isNew, newPosts) = unread?.InTopic(root, mark) ?? (false, 0);
         var address = tangentAddress + "/" + Uri.EscapeDataString(root.Slug ?? root.Id);
-        TangentPage.Latest? reply = null;
+        Render.TopicEntry.Reply? reply = null;
         if (root.LatestReplyId is { } replyId && latest.TryGetValue(replyId, out var post))
-            reply = new TangentPage.Latest(post.Id, Person(people, post.AuthorId), TangentPage.Opening(post, people), post.CreatedAt,
+            reply = new Render.TopicEntry.Reply(post.Id, Person(people, post.AuthorId), TangentPage.Opening(post, people), post.CreatedAt,
                 unread is not null && unread.New(post, mark), TangentPage.EditedOf(post, people));
-        return new TangentPage.Topic(
+        return new Render.TopicEntry(
             root.Id,
             root.Slug ?? root.Id,
             root.Title ?? "",
@@ -130,8 +130,8 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
             root.CoverId is { } cover ? tangentAddress[..tangentAddress.LastIndexOf("/t/", StringComparison.Ordinal)] + Media.Reference(cover) : null);
     }
 
-    private static TangentPage.Author Person(IReadOnlyDictionary<string, TangentPage.Author> people, string id)
-        => people.TryGetValue(id, out var person) ? person : new TangentPage.Author(id, id, id, "person", null);
+    private static Render.Person Person(IReadOnlyDictionary<string, Render.Person> people, string id)
+        => people.TryGetValue(id, out var person) ? person : Render.Person.Unknown(id);
 
     /// <summary>The latest reply of each Topic on the page that has one, by its Id, in one keyed read.</summary>
     public static async Task<IReadOnlyDictionary<string, Post>> LatestReplies(IReadOnlyList<Post> topics, CancellationToken ct)
@@ -143,16 +143,16 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
 
     /// <summary>Everyone the page shows (the Topics' authors, their recent authors, the authors of their latest
     /// replies, whom those openings and replies mention, and who else edited them) in one keyed read, by participant Id.</summary>
-    public static async Task<IReadOnlyDictionary<string, TangentPage.Author>> People(IReadOnlyList<Post> topics, IEnumerable<Post> latest,
+    public static async Task<IReadOnlyDictionary<string, Render.Person>> People(IReadOnlyList<Post> topics, IEnumerable<Post> latest,
         CancellationToken ct)
     {
         var ids = topics.SelectMany(topic => topic.RecentAuthorIds.Take(Post.RecentAuthorLimit).Append(topic.AuthorId))
             .Concat(latest.Select(post => post.AuthorId))
             .Concat(topics.Concat(latest).SelectMany(post => post.MentionedIds))
             .Concat(topics.Concat(latest).Select(post => post.EditedBy).OfType<string>()).Distinct(StringComparer.Ordinal).ToList();
-        if (ids.Count == 0) return new Dictionary<string, TangentPage.Author>();
+        if (ids.Count == 0) return new Dictionary<string, Render.Person>();
         var rows = await Participant.Get(ids, ct);
-        return rows.OfType<Participant>().ToDictionary(row => row.Id, row => TangentPage.Author.Of(row), StringComparer.Ordinal);
+        return rows.OfType<Participant>().ToDictionary(row => row.Id, row => Render.Person.Of(row), StringComparer.Ordinal);
     }
 
 
@@ -160,12 +160,12 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
     private static string? Role(Capabilities capabilities) => Roles.Word(capabilities.RoleIds);
 
     /// <summary>The first <see cref="SwitcherLimit"/> Tangents the reader may view, this one always among them.</summary>
-    private async Task<IReadOnlyList<TangentPage.Listed>> Viewable(string? personId, Tangent current, CancellationToken ct)
+    private async Task<IReadOnlyList<Render.TangentEntry>> Viewable(string? personId, Tangent current, CancellationToken ct)
     {
         var listed = (await ViewableTangents.Read(personId, ViewableTangents.Views, null, SwitcherLimit, ct)).Tangents.ToList();
         if (listed.All(row => row.Id != current.Id)) listed.Add(current);
-        return listed.Select(row => new TangentPage.Listed(row.Id, row.Name, Word(row.DefaultKind), Address(row.Id),
-            row.Id == current.Id ? current.TopicCount : row.TopicCount, Tile: Tile.For(row, BaseAddress() + "/"))).ToList();
+        return listed.Select(row => new TangentEntry(row.Id, row.Name, Word(row.DefaultKind), Address(row.Id),
+            row.Id == current.Id ? current.TopicCount : row.TopicCount) { Tile = Tile.For(row, BaseAddress() + "/") }).ToList();
     }
 
     private string Address(string slug) => BaseAddress() + "/t/" + Uri.EscapeDataString(slug);

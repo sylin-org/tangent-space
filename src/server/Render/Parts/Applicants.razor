@@ -1,0 +1,33 @@
+@* Who waits to be admitted and who was declined, each a line: their name, linked to their profile, their handle, when they
+   applied and whether they were declined, and what the reader may decide — admit, and for one waiting, decline, confirmed in
+   the page; none in one sentence, and the pages either side a link away. *@
+@if (Model.Applications.Count == 0)
+{
+    <p class="post-form-note">@(Model.Continued ? "No older applications." : "No one is waiting to be admitted.")</p>
+}
+else
+{
+    <ul class="door-offers applications">
+        @foreach (var applicant in Model.Applications)
+        {
+            <li class="door-offer" @key="applicant.Id"><Draw Part="@applicant" /></li>
+        }
+    </ul>
+}
+@if (Model.Continued || Model.Next is not null)
+{
+    <nav class="topic-pages" aria-label="More applications">
+        @if (Model.Continued)
+        {
+            <a href="@Model.First">Newest applications</a>
+        }
+        @if (Model.Next is { } next)
+        {
+            <a class="topic-pages-next" href="@next">Older applications</a>
+        }
+    </nav>
+}
+
+@code {
+    [Parameter, EditorRequired] public Render.Applicants Model { get; set; } = default!;
+}

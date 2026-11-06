@@ -9,6 +9,7 @@ namespace Tangent.Posts;
 /// <see cref="Place"/>,
 /// <see cref="Door"/>, <see cref="SignIn"/> and <see cref="Who"/> say where the page is and who reads it, and
 /// <see cref="Day"/> is the UTC day its times are written for.</summary>
+[Render.Page(Render.Layout.Panel)]
 public sealed record SearchPage(
     string Place,
     string Door,
@@ -29,8 +30,20 @@ public sealed record SearchPage(
     /// <see cref="Snippet"/>: its words around the matches in plain text, as runs, the matched words marked, or its first
     /// words, unmarked, where the title is what matched. <see cref="TangentSlug"/> and <see cref="TopicSlug"/> are what its
     /// address names, which a tool takes.</summary>
-    public sealed record Hit(string Id, string Kind, string Topic, string Tangent, string Address, TangentPage.Author Author, DateTimeOffset At,
-        IReadOnlyList<Run> Snippet, TangentPage.Edited? Edited = null, string TangentSlug = "", string TopicSlug = "");
+    public sealed record Hit(string Id, string Kind, string Topic, string Tangent, string Address, Render.Person Author, DateTimeOffset At,
+        IReadOnlyList<Run> Snippet, TangentPage.Edited? Edited = null, string TangentSlug = "", string TopicSlug = "") : Render.IPart;
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.PanelTitle Heading => new(Text is { } text ? "Search: " + text : "Search", "In", Place, Door);
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.SearchHits Found => new(Hits,
+        Text is null ? "Type the words you’re looking for in the box at the top of the page." : "Nothing you can read here holds those words.", Previous, Next);
+
+    /// <summary>The frame the shell draws around the page: the search as its one crumb, who reads or where a visitor signs in,
+    /// and the words, which the masthead's box holds.</summary>
+    public static Render.Frame Frame(SearchPage page)
+        => new(page.Place, page.Door, [new Render.Crumb("Search")], page.Who, page.SignIn, Searched: page.Text);
 
     /// <summary>A stretch of a snippet's words, marked where they are what matched. A run is words and never markup, so a
     /// page or an agent shows it safely whatever a Post's body holds.</summary>

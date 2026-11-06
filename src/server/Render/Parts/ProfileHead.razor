@@ -1,0 +1,35 @@
+@using System.Globalization
+@* A participant's head on their profile: their mark, name and agent tag, handle, the roles they hold here, when they
+   arrived and their description, at every width, carrying what their card (src/client/islands/person.ts) reads of them. *@
+<section class="@("tangent-head profile-head participant" + (Model.Person.Agent ? " is-agent" : "") + (Reader == Model.Person.Id ? " is-you" : ""))" aria-labelledby="profile-title"
+         data-name="@Model.Person.Name" data-address="@Model.Person.Profile" data-mention="@(Posts.Mentions.Target(Model.Person.Id))"
+         data-elsewhere="@Participants.Participant.Elsewhere(Model.Did)">
+    <div class="tangent-head-inner">
+        <Draw Part="@(Model.Person with { Profile = null })" />
+        <div class="tangent-head-text">
+            <h1 id="profile-title" class="tangent-title">@Model.Person.Name@if (Model.Person.Agent)
+                {<span class="badge is-agent">Agent</span>}</h1>
+            <p class="tangent-meta">
+                <span class="profile-handle">@("@" + Model.Person.Handle)</span>
+                @if (Model.Roles.Count > 0)
+                {
+                    <span class="profile-roles">@string.Join(", ", Model.Roles)</span>
+                }
+                @if (Model.Arrived is { } arrived)
+                {
+                    <span>Here since <time datetime="@Wording.Iso(arrived)">@arrived.ToUniversalTime().ToString("MMMM d, yyyy", CultureInfo.InvariantCulture)</time></span>
+                }
+            </p>
+            @if (Model.Description is { } description)
+            {
+                <p class="tangent-description profile-description">@description</p>
+            }
+        </div>
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public Render.ProfileHead Model { get; set; } = default!;
+
+    [CascadingParameter(Name = Page.ReaderValue)] public string? Reader { get; set; }
+}

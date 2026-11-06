@@ -8,7 +8,7 @@ namespace Tangent.Connections;
 /// ever out — its sentence, the form that publishes it, or asks for the grant again, where they may, the form that says
 /// not now to the first offer, the article's Bluesky post once it is out, and their Connections page.
 /// <see cref="Document"/> is the article's document record, which the page's head names for everyone once it is out.</summary>
-public sealed record Publishing(string State, string Sentence, string? Detail, Form? Publish, Form? NotNow, string? Elsewhere, string Connections)
+public sealed record Publishing(string State, string Sentence, string? Detail, Form? Publish, Form? NotNow, string? Elsewhere, string Connections) : IPart
 {
     public const string Offer = "offer";
 

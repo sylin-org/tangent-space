@@ -1,0 +1,80 @@
+@* A page of a Tangent's Topics, latest activity first: discussions as rows of a table, articles as cards, the first leading
+   on the first page with the Tangent's own tile where it has no cover; where none are, one sentence and one next step; and
+   the way to older ones and back to the latest. *@
+@if (Model.Topics.Count == 0)
+{
+    <div class="topic-empty">
+        <p class="topic-empty-title">@(Model.Continued ? "Nothing further back." : Articles ? "No articles yet." : "No topics yet.")</p>
+        @if (!Model.Continued && Model.NewTopic is { } first)
+        {
+            <a class="tangent-new" href="@first">@Plus@(Articles ? "New article" : "New topic")</a>
+        }
+        else if (!Model.Continued && Model.SignIn is { } signIn)
+        {
+            <a class="topic-empty-link" href="@signIn">Sign in to start one</a>
+        }
+    </div>
+}
+else
+{
+    <div class="@(Articles ? "topic-list-head topic-list-head-ruled" : "topic-list-head")">
+        <h2 class="topic-list-title">@Title</h2>
+        <span class="topic-list-order">latest activity first</span>
+        @if (Model.NewTopic is { } start)
+        {
+            <a class="tangent-new" href="@start">@Plus@(Articles ? "New article" : "New topic")</a>
+        }
+    </div>
+    @if (Articles)
+    {
+        <div class="article-list">
+            @for (var index = 0; index < Model.Topics.Count; index++)
+            {
+                <Draw Part="@(Model.Topics[index] with { In = Model.Tangent })" As="@(index == 0 && !Model.Continued ? Shape.Lead : Shape.Card)" />
+            }
+        </div>
+    }
+    else
+    {
+        <div class="topic-table">
+            <div class="topic-table-heading" aria-hidden="true">
+                <span class="topic-table-topic">Topic</span>
+                <span class="topic-table-people">People</span>
+                <span class="topic-table-replies">Replies</span>
+                <span class="topic-table-latest">Latest</span>
+            </div>
+            <ul class="topic-rows list">
+                @foreach (var topic in Model.Topics)
+                {
+                    <li><Draw Part="@topic" /></li>
+                }
+            </ul>
+        </div>
+    }
+}
+@if (Model.Next is not null || Model.Continued)
+{
+    <nav class="topic-pages" aria-label="More @(Articles ? "articles" : "topics")">
+        @if (Model.Continued)
+        {
+            <a href="@Model.Tangent.Address">Back to the latest</a>
+        }
+        @if (Model.Next is { } next)
+        {
+            <a class="topic-pages-next" href="@next">Older @(Articles ? "articles" : "topics") →</a>
+        }
+    </nav>
+}
+
+@code {
+    [Parameter, EditorRequired] public Render.TangentTopics Model { get; set; } = default!;
+
+    private bool Articles => Model.Tangent.Kind == "article";
+
+    private string Title => Model.Continued
+        ? "Older " + (Articles ? "articles" : "topics")
+        : Wording.Count(Model.Tangent.TopicCount, Articles ? "article" : "topic", Articles ? "articles" : "topics", "");
+
+    private static RenderFragment Plus => builder => builder.AddMarkupContent(0,
+        "<svg width=\"15\" height=\"15\" viewBox=\"0 0 20 20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M10 4.5v11M4.5 10h11\"></path></svg>");
+}

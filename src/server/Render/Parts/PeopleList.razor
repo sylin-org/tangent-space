@@ -1,0 +1,65 @@
+@using Tangent.Participants
+@* The place's people as whoever may change them finds them: the box that finds them by handle, each person with their kind,
+   where they stand and their roles, and what the reader may change of them inline; none in one sentence; the pages either
+   side a link away. *@
+<form class="sign-in-form people-search read-people" method="get" action="@Model.Page.Search" role="search">
+    <div class="field">
+        <label class="field-label" for="people-handle">Find by handle</label>
+        <span class="field-input">
+            <input id="people-handle" name="@PeopleController.HandleQuery" type="search" value="@Model.Page.Handle"
+                   maxlength="253" autocomplete="off" spellcheck="false" placeholder="The start of a handle">
+        </span>
+    </div>
+    <button type="submit" class="button">Find</button>
+</form>
+@if (Model.Page.Failure is { } failure)
+{
+    <p class="sign-in-failure" id="people-failure" role="alert">@failure</p>
+}
+@if (Model.Page.People.Count == 0)
+{
+    <p class="post-form-note">@Empty()</p>
+}
+else
+{
+    <ul class="door-offers applications people">
+        @foreach (var person in Model.Page.People)
+        {
+            <li class="door-offer" @key="person.Id">
+                <p class="door-offer-line">
+                    <a href="@person.Profile">@person.Name</a> @("@" + person.Handle)
+                    <span class="topic-row-none">· @person.Kind · @Standing(person)@(person.Roles.Count > 0 ? " · " + string.Join(", ", person.Roles) : "")</span>
+                </p>
+                @if (Model.Page.Forms is { } forms)
+                {
+                    <Draw Part="@(new Render.PersonActions(person, forms))" />
+                }
+            </li>
+        }
+    </ul>
+}
+@if (Model.Page.Continued || Model.Page.Next is not null)
+{
+    <nav class="topic-pages" aria-label="More people">
+        @if (Model.Page.Continued)
+        {
+            <a href="@Model.Page.First">First page</a>
+        }
+        @if (Model.Page.Next is { } next)
+        {
+            <a class="topic-pages-next" href="@next">Next page</a>
+        }
+    </nav>
+}
+
+@code {
+    [Parameter, EditorRequired] public Render.PeopleList Model { get; set; } = default!;
+
+    /// <summary>A participant's standing in words, with when a timeout ends.</summary>
+    private static string Standing(PeoplePage.Listed person) => person.Until is { } until ? "timed out until " + Wording.Until(until) : person.Standing;
+
+    /// <summary>The one sentence for a page with no one on it.</summary>
+    private string Empty() => Model.Page.Handle.Length > 0
+        ? "No one here has a handle that starts with " + Model.Page.Handle + "."
+        : Model.Page.Continued ? "No one further." : "No one is here yet.";
+}

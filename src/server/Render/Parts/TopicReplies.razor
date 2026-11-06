@@ -1,0 +1,42 @@
+@using System.Globalization
+@* One window of a Topic's replies, in order: which it holds, by their place in the Topic; the way to the older window above
+   them and to the newer below; each reply a Post; with none, one sentence; the reading island for a signed-in reader, the
+   form that says the window is seen, and the live updater. *@
+<section class="topic-replies" aria-labelledby="topic-replies-title">
+    <div class="topic-replies-head">
+        <h2 id="topic-replies-title" class="topic-replies-title">Replies</h2>
+        @if (Model.From is { } from && Model.Through is { } through)
+        {
+            <span class="topic-replies-range">@(from == through ? "#" + from.ToString(CultureInfo.InvariantCulture) : "#" + from.ToString(CultureInfo.InvariantCulture) + "–" + through.ToString(CultureInfo.InvariantCulture))</span>
+        }
+    </div>
+    @if (Model.Older is { } older)
+    {
+        <nav class="topic-pages" aria-label="Older replies">
+            <a href="@older">← Older replies</a>
+        </nav>
+    }
+    @if (Model.Posts.Count == 0)
+    {
+        <p class="topic-replies-empty">@(Model.ReplyCount == 0 ? "No replies yet." : "Nothing further this way.")</p>
+    }
+    <Draw Part="@Model.Posts" />
+    @if (Model.Reading is { } reading && !Standalone)
+    {
+        <span hidden data-island="reading" data-props="@reading"></span>
+    }
+    <Draw Part="@Model.Seen" />
+    <Draw Part="@Model.Live" />
+    @if (Model.Newer is { } newer)
+    {
+        <nav class="topic-pages" aria-label="Newer replies">
+            <a class="topic-pages-next" href="@newer">Newer replies →</a>
+        </nav>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public Render.TopicReplies Model { get; set; } = default!;
+
+    [CascadingParameter(Name = nameof(Shell.Standalone))] public bool Standalone { get; set; }
+}

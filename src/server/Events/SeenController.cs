@@ -38,13 +38,13 @@ public sealed class SeenController(KoanWebBaseUrl baseUrl) : ControllerBase
     /// <summary>The form that says the door at <paramref name="baseAddress"/> is seen through <paramref name="through"/>,
     /// the sequence of the log it read through.</summary>
     public static Form DoorForm(string baseAddress, long through) => Form.Posting(baseAddress + Path,
-        new Form.Field(ThroughField, Holds.SeenThrough, through.ToString(CultureInfo.InvariantCulture)));
+        new Form.Field(ThroughField, Holds.SeenThrough, through.ToString(CultureInfo.InvariantCulture), Form.Input.Hidden)) with { Tool = "seen", Submit = "Mark all seen" };
 
     /// <summary>The form that says the Topic <paramref name="topicId"/> is seen through <paramref name="through"/>, the
     /// last sequence its page showed.</summary>
     public static Form TopicForm(string baseAddress, string topicId, long through) => Form.Posting(baseAddress + Path,
-        new Form.Field(ThroughField, Holds.SeenThrough, through.ToString(CultureInfo.InvariantCulture)),
-        new Form.Field(TopicField, Holds.SeenTopic, topicId));
+        new Form.Field(ThroughField, Holds.SeenThrough, through.ToString(CultureInfo.InvariantCulture), Form.Input.Hidden),
+        new Form.Field(TopicField, Holds.SeenTopic, topicId, Form.Input.Hidden)) with { Tool = "topic-seen seen", Submit = "Mark seen", Quiet = true, Island = "seen" };
 
     [HttpPost(Path)]
     [Tool(Name = "seen", Destructive = false, Idempotent = true, OpenWorld = false)]

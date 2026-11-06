@@ -12,6 +12,7 @@ namespace Tangent.Participants;
 /// reader holds in the place, and <see cref="Gate"/> why they may not decide, null when they may, when the list is empty
 /// whatever waits; <see cref="SignIn"/> is where a visitor signs in, coming back here. <see cref="Day"/> is the UTC day the
 /// times are written for. After a refusal the page says why above the list.</summary>
+[Render.Page(Render.Layout.Settings)]
 public sealed record ApplicationsPage(
     IReadOnlyList<SettingsSection> Sections,
     IReadOnlyList<ApplicationsPage.Applicant> Applications,
@@ -31,7 +32,41 @@ public sealed record ApplicationsPage(
 {
     /// <summary>One applicant: their id, the name to show, their handle, their profile's address, the state of their
     /// application (<c>waiting</c> or <c>declined</c>) and when they applied.</summary>
-    public sealed record Applicant(string Id, string Name, string Handle, string Profile, string State, DateTimeOffset AppliedAt);
+    public sealed record Applicant(string Id, string Name, string Handle, string Profile, string State, DateTimeOffset AppliedAt) : Render.IPart
+    {
+        /// <summary>The form that admits them, where the reader may.</summary>
+        [Newtonsoft.Json.JsonIgnore]
+        public Render.Form? Admit { get; init; }
+
+        /// <summary>The form that declines them, while they wait, where the reader may.</summary>
+        [Newtonsoft.Json.JsonIgnore]
+        public Render.Form? Decline { get; init; }
+    }
+
+    [Render.Slot(Render.Slot.Rail), Newtonsoft.Json.JsonIgnore]
+    public Render.SettingsRail Rail => new(Sections);
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.PanelTitle Heading => new(Space.TangentSpaceSettingsController.ApplicationsSection, "Settings of", Place, Door);
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.Notice? Line => Render.Notice.Of(Gate, Failure, SignIn);
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.Applicants? Listed => Gate is not null ? null : new(Applications.Select(applicant => applicant with
+    {
+        Admit = Admit is { } admit ? admit.Given(ApplicationsController.ParticipantField, applicant.Id) with { Tool = "admit", Submit = "Admit" } : null,
+        Decline = applicant.State == Waiting && Decline is { } decline
+            ? decline.Given(ApplicationsController.ParticipantField, applicant.Id) with
+            {
+                Tool = "decline", Submit = "Decline", Confirm = "They keep reading what a visitor reads, and you can still admit them later."
+            }
+            : null
+    }).ToList(), Continued, Next, First);
+
+    /// <summary>The frame the shell draws around the page: its settings as its one crumb, and who reads, or where a visitor
+    /// signs in.</summary>
+    public static Render.Frame Frame(ApplicationsPage page) => new(page.Place, page.Door, [new Render.Crumb("Settings")], page.Who, page.SignIn);
 
     public const string Waiting = "waiting";
 

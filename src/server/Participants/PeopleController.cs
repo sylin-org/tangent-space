@@ -86,13 +86,13 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
     [HttpGet(Path)]
     [Tool(Name = "read_people")]
     [Description("Find the participants admitted here, a page at a time, with what you may change of each, for whoever holds ManageStanding or ManageRoles. Follow with time_out, ban, lift, give_role or take_role where one's entry allows it.")]
+    [Needs(Bit.View)]
     public async Task<IActionResult> Get([FromQuery(Name = After), Description(Holds.After)] string? after, [FromQuery(Name = HandleQuery), Description(Holds.HandleStart)] string? handle,
         CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
+        var place = Here.Of(HttpContext).Around;
         if (ReadGate(place) is { } refused && PostWrites.WantsJson(Request)) return this.Refused(refused);
 
         People.Cursor? cursor = null;

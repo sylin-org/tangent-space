@@ -120,7 +120,7 @@
                             <li><a class="account-item" href="@(frame.Door.TrimEnd('/') + Participants.BringYourAgentController.Path)">@Icon(AgentIcon)Bring your agent</a></li>
                             <li><a class="account-item" href="@(frame.Door.TrimEnd('/') + Connections.ConnectionsController.Path)">@Icon(ConnectionsIcon)Connections</a></li>
                             <li>
-                                <Tangent.Participants.AnotherAccountForm Model="@Participants.AnotherAccount.For(who)" Id="account-another" SummaryClass="account-item another-account-toggle">@Icon(SwitchIcon)</Tangent.Participants.AnotherAccountForm>
+                                <Draw Part="@(Participants.AnotherAccount.For(who) with { Id = "account-another", SummaryClass = "account-item another-account-toggle", Icon = IconMarkup(SwitchIcon) })" />
                             </li>
                             <li><form method="post" action="@who.SignOut"><button class="account-item account-action">@Icon(SignOutIcon)Sign out</button></form></li>
                         </ul>
@@ -133,6 +133,8 @@
             }
         </div>
     </header>
+    @if (frame.Crumbs.Count > 0)
+    {
     <nav class="path" aria-label="You are here">
         <span class="path-elbow" aria-hidden="true"></span>
         <ol class="path-crumbs">
@@ -145,7 +147,7 @@
                     {
                         <details class="switcher menu tangent">
                             <summary class="switcher-button" aria-current="@(last ? "page" : null)" aria-label="@(crumb.Label + ", switch Tangent")">
-                                <TangentTile Tile="@switcher.Tile" />
+                                <Draw Part="@switcher.Current" As="Shape.Tile" />
                                 <span class="switcher-label">@crumb.Label</span>
                                 <svg class="switcher-chevron" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"></path></svg>
                             </summary>
@@ -154,19 +156,7 @@
                                 <ul class="switcher-items list">
                                     @foreach (var item in switcher.Tangents)
                                     {
-                                        <li>
-                                            <a class="@(item.Current ? "switcher-item row tangent is-current" : "switcher-item row tangent")" href="@item.Address" aria-current="@(item.Current ? "page" : null)">
-                                                <TangentTile Tile="@item.Tile" Size="menu" />
-                                                <span class="switcher-item-text">
-                                                    <span class="switcher-item-name">@item.Name</span>
-                                                    <span class="switcher-item-detail">@item.Detail</span>
-                                                </span>
-                                                @if (item.Current)
-                                                {
-                                                    <span class="switcher-check">@Icon(CheckIcon)<span class="visually-hidden">Current</span></span>
-                                                }
-                                            </a>
-                                        </li>
+                                        <li><Draw Part="@item" /></li>
                                     }
                                 </ul>
                                 <a class="switcher-all" href="@switcher.All">@Icon(AllIcon)All Tangents</a>
@@ -190,6 +180,7 @@
             }
         </ol>
     </nav>
+    }
     <CascadingValue Name="@nameof(Standalone)" Value="@Standalone" IsFixed="true">@ChildContent</CascadingValue>
     <footer class="footer bar">
         @if (PlaceWords.Html(Appearance.FooterPart, Appearance.Footer, Images) is { } footer)
@@ -259,13 +250,14 @@ else
     private const string AgentIcon = "<rect x=\"4\" y=\"7\" width=\"12\" height=\"9\" rx=\"2\"></rect><path d=\"M10 7V3.5\"></path><path d=\"M7.5 11.5h.01M12.5 11.5h.01\"></path>";
     private const string SwitchIcon = "<path d=\"M4 7h11.5\"></path><path d=\"M12.5 4l3 3-3 3\"></path><path d=\"M16 13H4.5\"></path><path d=\"M7.5 10l-3 3 3 3\"></path>";
     private const string ConnectionsIcon = "<path d=\"M8.5 11.5a3 3 0 0 0 4.2 0l2.6-2.6a3 3 0 0 0-4.2-4.2l-.9.9\"></path><path d=\"M11.5 8.5a3 3 0 0 0-4.2 0l-2.6 2.6a3 3 0 0 0 4.2 4.2l.9-.9\"></path>";
-    private const string CheckIcon = "<path d=\"M5 10.5l3.2 3.2L15 7\"></path>";
     private const string NewIcon = "<path d=\"M10 4.5v11M4.5 10h11\"></path>";
     private const string AllIcon = "<rect x=\"3.5\" y=\"3.5\" width=\"5\" height=\"5\" rx=\"1\"></rect><rect x=\"11.5\" y=\"3.5\" width=\"5\" height=\"5\" rx=\"1\"></rect><rect x=\"3.5\" y=\"11.5\" width=\"5\" height=\"5\" rx=\"1\"></rect><rect x=\"11.5\" y=\"11.5\" width=\"5\" height=\"5\" rx=\"1\"></rect>";
 
     /// <summary>A menu item's 16px icon, drawn in the text's colour and hidden from assistive technology.</summary>
-    private static RenderFragment Icon(string paths) => builder => builder.AddMarkupContent(0,
-        "<svg class=\"menu-icon\" width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\">" + paths + "</svg>");
+    private static RenderFragment Icon(string paths) => builder => builder.AddMarkupContent(0, IconMarkup(paths));
+
+    private static string IconMarkup(string paths)
+        => "<svg class=\"menu-icon\" width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\">" + paths + "</svg>";
 
     /// <summary>A participant's mark in the masthead: their avatar, or two letters of their handle on their own tint.</summary>
     private static RenderFragment Mark(Who who) => builder =>

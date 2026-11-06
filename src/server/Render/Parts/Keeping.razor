@@ -1,0 +1,11 @@
+@* Where a participant stands here, in one line, with what the reader may change of them inline. *@
+<section class="door-offers profile-standing" aria-label="Their standing here">
+    <div class="door-offer bar participant">
+        <p class="door-offer-line">@Model.Person.Name @(Model.Person.Until is { } until ? "is timed out here until " + Wording.Until(until) : "is " + Model.Person.Standing + " here").</p>
+        <Draw Part="@(new Render.PersonActions(Model.Person, Model.Forms))" />
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public Render.Keeping Model { get; set; } = default!;
+}

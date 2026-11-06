@@ -72,13 +72,33 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
     public const string FileField = "file";
 
     /// <summary>The form that changes the place's name and audience, under <paramref name="baseAddress"/>.</summary>
-    private static Form GeneralForm(string baseAddress) => Form.Posting(baseAddress + Path,
-        new Form.Field(NameField, Holds.PlaceName),
-        new Form.Field(AudienceField, Holds.PlaceAudience));
+    public static Form GeneralForm(string baseAddress) => Saving(Form.Posting(baseAddress + Path,
+        new Form.Field(NameField, Holds.PlaceName) { Label = "Name", Limit = TangentSpace.NameLimit, Required = true },
+        new Form.Field(AudienceField, Holds.PlaceAudience, As: Form.Input.Choice)
+        {
+            Label = "Who reads it",
+            Choices =
+            [
+                new(Tangents.TangentWrites.Word(Audience.Public), "Public", "Anyone reads it, signed in or not, as each Tangent’s audience allows."),
+                new(Tangents.TangentWrites.Word(Audience.Private), "Private", "Only its participants read it; a visitor finds the sign-in, and search engines index nothing.")
+            ]
+        }), "change-settings", baseAddress) with { Key = "space-settings" };
+
+    /// <summary>A settings form as its page draws it: named for its tool, saving with the way back to the door beside it.</summary>
+    private static Form Saving(Form form, string tool, string baseAddress)
+        => form with { Tool = tool, Submit = "Save", Busy = "Saving…", Island = "submitting", Cancel = new Onward("Back to the door", baseAddress + "/") };
 
     /// <summary>The form that sets how a newcomer arrives, under <paramref name="baseAddress"/>.</summary>
-    private static Form AdmissionForm(string baseAddress) => Form.Posting(baseAddress + AdmissionPath,
-        new Form.Field(AdmissionField, Holds.Admission));
+    public static Form AdmissionForm(string baseAddress) => Saving(Form.Posting(baseAddress + AdmissionPath,
+        new Form.Field(AdmissionField, Holds.Admission, As: Form.Input.Choice)
+        {
+            Label = "How a newcomer arrives",
+            Choices =
+            [
+                new(Word(Admission.Join), "Join at once", "Whoever signs in takes part at once: they start topics and reply."),
+                new(Word(Admission.Apply), "Apply and wait", "Whoever signs in applies, reads what a visitor may, and takes part once someone admits them.")
+            ]
+        }), "change-admission", baseAddress) with { Key = "space-admission" };
 
     /// <summary>The form that sets the place's appearance, under <paramref name="baseAddress"/>.</summary>
     private static Form AppearanceForm(string baseAddress) => Form.Posting(baseAddress + AppearancePath,
@@ -170,12 +190,12 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
     [HttpGet(Path)]
     [Tool(Name = "read_settings")]
     [Description("Read the place's name and audience, with the sections of its settings you may use. Call this before change_settings.")]
+    [Needs(Bit.View)]
     public async Task<IActionResult> Get(CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
+        var place = Here.Of(HttpContext).Around;
         return Elsewhere(place) ?? Ok(await Page(place, personId, ct));
     }
 
@@ -211,12 +231,12 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
     [HttpGet(AdmissionPath)]
     [Tool(Name = "read_admission")]
     [Description("Read how a newcomer arrives here. Call this before change_admission.")]
+    [Needs(Bit.View)]
     public async Task<IActionResult> GetAdmission(CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
+        var place = Here.Of(HttpContext).Around;
         return Elsewhere(place) ?? Ok(await AdmissionPage(place, personId, ct));
     }
 
@@ -224,12 +244,12 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "change_admission", Destructive = true, Idempotent = true, OpenWorld = false)]
     [Description("Set how a newcomer arrives, joining at once or applying and waiting, for whoever holds ManageSpace. Everyone already here stays as they are.")]
+    [Needs(Bit.View)]
     public async Task<IActionResult> ChangeAdmission(ChangeAdmissionInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
+        var place = Here.Of(HttpContext).Around;
 
         Admission? admission = null;
         var sent = input.Admission;
@@ -286,12 +306,12 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
     [HttpGet(AppearancePath)]
     [Tool(Name = "read_appearance")]
     [Description("Read the place's appearance — its base, its colours, its own CSS, its image and its words in Markdown: the description, the welcome under the door's head, the masthead and footer lines and the article header. Call this before change_appearance.")]
+    [Needs(Bit.View)]
     public async Task<IActionResult> GetAppearance(CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
+        var place = Here.Of(HttpContext).Around;
         return Elsewhere(place) ?? Ok(await AppearancePage(place, personId, ct));
     }
 
@@ -299,12 +319,12 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl) : Con
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "change_appearance", Destructive = true, Idempotent = true, OpenWorld = false)]
     [Description("Set how the place looks to every reader on every page, for whoever holds ManageSpace: the base layer's stylesheet, the colours, the place's own CSS, which every page but the settings carries over the rest, its image, and its words in Markdown. Sending a part its default returns it there: base tangent, palette base, anything else empty. What you leave out stays.")]
+    [Needs(Bit.View)]
     public async Task<IActionResult> ChangeAppearance(ChangeAppearanceInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
+        var place = Here.Of(HttpContext).Around;
 
         var outcome = await new ChangeTangentSpace(personId ?? "", Description: input.Description, Base: input.Base, Palette: input.Palette, Css: input.Css,
             Image: input.Image, Masthead: input.Masthead, Footer: input.Footer, Intro: input.Intro, ArticleHeader: input.ArticleHeader).Send();

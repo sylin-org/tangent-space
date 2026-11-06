@@ -1,0 +1,138 @@
+@using System.Globalization
+@* What is new to a signed-in reader since they were here: one sentence, then who admitted them, who lifted their timeout or
+   ban, who timed them out and until when, who declined their application, who let them into a Tangent or declined their
+   ask, and who gave them a role or took one, where someone did; their Posts someone else edited or removed, replies to
+   them, mentions of them, the Topics taken on a tangent from their Posts, the reports for whoever may view the moderators'
+   Tangent, the new articles and what is new in each Tangent, with the form that says all of it seen. With nothing new, that
+   in one sentence. A count the door could not finish reads "at least". *@
+@if (Model.Quiet)
+{
+    <div class="topic-empty">
+        <p class="topic-empty-title">Nothing new since you were here.</p>
+        <Draw Part="@Model.Seen" />
+    </div>
+}
+else
+{
+    <section class="door-news" aria-labelledby="door-news-title">
+        <div class="topic-list-head">
+            <h2 id="door-news-title" class="topic-list-title">Since you were here</h2>
+            <Draw Part="@Model.Seen" />
+        </div>
+        <p class="tangent-description">@Sentence</p>
+        @if (Model.Admitted is { } admitted)
+        {
+            <p class="tangent-description door-admitted"><Draw Part="@admitted.Who" As="Shape.Name" /> admitted you: you can start topics and reply here.</p>
+        }
+        @if (Model.Lifted is { } lifted)
+        {
+            <p class="tangent-description door-admitted"><Draw Part="@lifted.Who" As="Shape.Name" /> lifted your @(lifted.Was == "banned" ? "ban" : "timeout"): you’re back, and you can start topics and reply here again.</p>
+        }
+        @if (Model.TimedOut is { Until: { } ends } timedOut)
+        {
+            <p class="tangent-description door-admitted"><Draw Part="@timedOut.Who" As="Shape.Name" /> timed you out until <time datetime="@Wording.Iso(ends)">@Wording.Until(ends)</time>@(ends > DateTimeOffset.UtcNow ? "." : ". It has ended, and you can start topics and reply here again.")</p>
+        }
+        @if (Model.Declined is { } declined)
+        {
+            <p class="tangent-description door-admitted"><Draw Part="@declined.Who" As="Shape.Name" /> declined your application: you read here what a visitor reads.</p>
+        }
+        @foreach (var let in Model.Let ?? [])
+        {
+            <p class="tangent-description door-admitted">
+                @if (let.Given)
+                {
+                    <Draw Part="@let.Who" As="Shape.Name" />@(" let you into ")<a href="@let.Address">@let.Tangent</a>@(": you can read and post there.")
+                }
+                else
+                {
+                    <Draw Part="@let.Who" As="Shape.Name" />@(" declined your ask to join " + let.Tangent + ".")
+                }
+            </p>
+        }
+        @foreach (var change in Model.Roles ?? [])
+        {
+            <p class="tangent-description door-admitted"><Draw Part="@change.Who" As="Shape.Name" /> @Access.Roles.Changed(Spoken(change.Name), change.Given).</p>
+        }
+        @Group("Your posts someone else edited", Model.Edited, "edited your post")
+        @Group("Your posts someone else removed", Model.Removed, "removed your post")
+        @Group("Replies to you", Model.Replies)
+        @Group("Mentions of you", Model.Mentions)
+        @Group("Taken on a tangent from your posts", Model.Taken)
+        @Group("Reports", Model.Reports)
+        @Group("New articles", Model.Articles)
+        @if (Model.PerTangent.Count > 0)
+        {
+            <h3 class="rail-heading rail-heading-spaced">New in each Tangent</h3>
+            <ul class="rail-views list">
+                @foreach (var tangent in Model.PerTangent)
+                {
+                    <li><a href="@tangent.Address">@tangent.Name</a> <span class="badge is-new">@InTangent(tangent)</span></li>
+                }
+            </ul>
+        }
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public Space.Door.Since Model { get; set; } = default!;
+
+    /// <summary>One group of new Posts under its heading, with how many, each a row, its verb said where someone did something
+    /// to the reader's own.</summary>
+    private RenderFragment Group(string title, Space.Door.Group? group, string? did = null) => @<text>
+        @if (group is { Count: > 0 })
+        {
+            <h3 class="rail-heading rail-heading-spaced">@title · @((group.AtLeast ? "at least " : "") + group.Count.ToString(CultureInfo.InvariantCulture))</h3>
+            <ul class="topic-rows list">
+                @foreach (var post in group.Posts)
+                {
+                    <li @key="post.PostId"><Draw Part="@(did is null ? post : post with { Did = did })" /></li>
+                }
+            </ul>
+        }
+    </text>;
+
+    /// <summary>What is new in one Tangent: its Topics, or its articles in a Tangent of articles, and its replies.</summary>
+    private static string InTangent(Space.Door.InTangent tangent)
+    {
+        var parts = new List<string>();
+        if (tangent.Topics > 0)
+            parts.Add(tangent.Kind == "article"
+                ? Wording.Count(tangent.Topics, tangent.AtLeast, "article", "articles")
+                : Wording.Count(tangent.Topics, tangent.AtLeast, "topic", "topics"));
+        if (tangent.Replies > 0) parts.Add(Wording.Count(tangent.Replies, tangent.AtLeast, "reply", "replies"));
+        return string.Join(", ", parts);
+    }
+
+    /// <summary>A role's name as a sentence speaks it: its first letter in lower case, unless the name opens with capitals.</summary>
+    private static string Spoken(string name)
+        => name.Length > 1 && char.IsUpper(name[1]) ? name : name.Length > 0 ? char.ToLowerInvariant(name[0]) + name[1..] : name;
+
+    /// <summary>The news in one sentence: each group that holds something, in the order the door shows them, each new Post
+    /// counted once, in the first group that holds it.</summary>
+    private string Sentence
+    {
+        get
+        {
+            var news = Model;
+            var parts = new List<string>();
+            if (news.Admitted is not null) parts.Add("you were admitted");
+            if (news.Lifted is not null) parts.Add("you’re back");
+            if (news.TimedOut is not null) parts.Add("you were timed out");
+            if (news.Declined is not null) parts.Add("your application was declined");
+            if (news.Roles is { Count: > 0 }) parts.Add("your roles changed");
+            if (news.Let?.Any(let => let.Given) == true) parts.Add("you were let into a Tangent");
+            if (news.Let?.Any(let => !let.Given) == true) parts.Add("an ask to join was declined");
+            if (news.Edited is { Count: > 0 } edited) parts.Add(Wording.Count(edited.Count, edited.AtLeast, "post of yours edited", "posts of yours edited"));
+            if (news.Removed is { Count: > 0 } removed) parts.Add(Wording.Count(removed.Count, removed.AtLeast, "post of yours removed", "posts of yours removed"));
+            if (news.Replies.Count > 0) parts.Add(Wording.Count(news.Replies.Count, news.Replies.AtLeast, "reply", "replies") + " to you");
+            if (news.Mentions.Count > 0) parts.Add(Wording.Count(news.Mentions.Count, news.Mentions.AtLeast, "mention", "mentions") + " of you");
+            if (news.Taken is { Count: > 0 } taken) parts.Add(Wording.Count(taken.Count, taken.AtLeast, "topic", "topics") + " taken on a tangent from your posts");
+            if (news.Reports is { Count: > 0 } reports) parts.Add(Wording.Count(reports.Count, reports.AtLeast, "report", "reports"));
+            if (news.Applications is { } applications) parts.Add(Wording.Count(applications.Count, applications.AtLeast, "new application", "new applications"));
+            foreach (var tangent in news.PerTangent.Where(tangent => tangent.Others > 0))
+                parts.Add(Wording.Count(tangent.Others, tangent.AtLeast, "new post", "new posts") + " in " + tangent.Name);
+            if (news.Articles.Count > 0) parts.Add(Wording.Count(news.Articles.Count, news.Articles.AtLeast, "new article", "new articles"));
+            return "Since you were here: " + string.Join(", ", parts) + ".";
+        }
+    }
+}

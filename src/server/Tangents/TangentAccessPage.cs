@@ -12,6 +12,7 @@ namespace Tangent.Tangents;
 /// Tangent, takes <c>role</c> and <c>access</c>. <see cref="Can"/> is what the reader holds on the Tangent, and
 /// <see cref="Gate"/> why they may not change its access, null when they may, when no role is listed; <see cref="SignIn"/> is where a visitor
 /// signs in, coming back here. After a refusal the page says why above the list.</summary>
+[Render.Page(Render.Layout.Panel)]
 public sealed record TangentAccessPage(
     string Slug,
     string Name,
@@ -31,6 +32,10 @@ public sealed record TangentAccessPage(
     Who? Who,
     string? Failure = null)
 {
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.TangentAccessForm Body => new(this);
+
+
     /// <summary>One role as the access lists it: its word, its name, what it holds here, and the access the reader may set
     /// it to instead, none where they do not manage it.</summary>
     public sealed record Listed(string Word, string Name, string Access, IReadOnlyList<string> Offered);

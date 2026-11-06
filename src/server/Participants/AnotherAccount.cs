@@ -28,8 +28,20 @@ public static class AnotherAccount
     /// handle the participant holds now, the handle to keep in the field, why the last attempt was refused, the step that
     /// answers that refusal, and whether it opens drawn open.</summary>
     public sealed record Offer(string Action, string Return, string Failure, string Holding, string? Handle = null, string? Refused = null,
-        Form? SignInAgain = null, bool Open = false)
+        Form? SignInAgain = null, bool Open = false) : Render.IPart
     {
+        /// <summary>What sets this form's ids apart on the page it stands on.</summary>
+        [Newtonsoft.Json.JsonIgnore]
+        public string Id { get; init; } = "another";
+
+        /// <summary>The class of the line that opens the form, as the place holding it draws its lines.</summary>
+        [Newtonsoft.Json.JsonIgnore]
+        public string SummaryClass { get; init; } = "another-account-toggle";
+
+        /// <summary>The icon before the line that opens the form, where the place holding it draws one.</summary>
+        [Newtonsoft.Json.JsonIgnore]
+        public string? Icon { get; init; }
+
         /// <summary>The one line that says what stays: earlier Posts keep linking to the account they were written as.</summary>
         public string Note => "Your earlier Posts stay linked to @" + Holding + ".";
     }

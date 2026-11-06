@@ -1,0 +1,14 @@
+@* A panel's title: whose it is, linked, its heading, and the sentence under it. *@
+@if (Model.Place is { } place)
+{
+    <p class="post-form-where">@(Model.Within + " ")<a href="@Model.Address">@place</a></p>
+}
+<h1 class="sign-in-title">@Model.Title</h1>
+@if (Model.Lede is { } lede)
+{
+    <p class="sign-in-lede">@lede</p>
+}
+
+@code {
+    [Parameter, EditorRequired] public Render.PanelTitle Model { get; set; } = default!;
+}

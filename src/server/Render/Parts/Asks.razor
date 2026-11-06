@@ -1,0 +1,11 @@
+@* The asks to join one members-only Tangent the reader manages, in an Offer's line, with the way to its people. *@
+<div class="door-offer door-applications bar application is-waiting">
+    <p class="door-offer-line">@(Model.Count == 1 && !Model.AtLeast ? "Someone asks" : Model.Count + (Model.AtLeast ? "+" : "") + " people ask") to join @Model.Tangent.</p>
+    <div class="door-offer-answers">
+        <a class="tangent-new" href="@Model.Address">People</a>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Space.Door.Asking Model { get; set; } = default!;
+}

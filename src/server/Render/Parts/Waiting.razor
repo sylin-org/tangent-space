@@ -1,0 +1,13 @@
+@using System.Globalization
+@* How many applications wait for a decision, in an Offer's line, "at least" where the door could not finish counting, with
+   the way to them. *@
+<div class="door-offer door-applications bar application is-waiting">
+    <p class="door-offer-line">@((Model.AtLeast ? "At least " : "") + Model.Count.ToString(CultureInfo.InvariantCulture) + (Model.Count == 1 && !Model.AtLeast ? " application is waiting for a decision." : " applications are waiting for a decision."))</p>
+    <div class="door-offer-answers">
+        <a class="tangent-new" href="@Model.Address">Applications</a>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Space.Door.Waiting Model { get; set; } = default!;
+}

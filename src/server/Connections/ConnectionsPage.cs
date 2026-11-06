@@ -8,6 +8,7 @@ namespace Tangent.Connections;
 /// each with its state against the version the article is at and its Bluesky post once it is out — and the way to use
 /// another Bluesky account (<see cref="Another"/>). <see cref="Failure"/> says why a permission Bluesky was asked for was
 /// not given, present only on the page that answer comes back to.</summary>
+[Render.Page(Render.Layout.Panel)]
 public sealed record ConnectionsPage(
     string Place,
     string Door,
@@ -16,6 +17,10 @@ public sealed record ConnectionsPage(
     IReadOnlyList<ConnectionsPage.Article> Articles,
     Participants.AnotherAccount.Offer Another)
 {
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.ConnectionList Body => new(this);
+
+
     public sealed record Account(string Handle, string State, string Sentence, DateTimeOffset? Since, DateTimeOffset? RetryAt, Form? Grant,
         Form? OfferAgain);
 

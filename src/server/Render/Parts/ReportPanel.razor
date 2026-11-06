@@ -1,0 +1,81 @@
+@using Tangent.Posts
+@using global::Tangent.Render
+@* The report of one Post: one panel in the page, quoting the Post — who wrote it, when, and its words cut short, or
+   that it is removed — then the form: a sentence for the moderators, which the reader may leave out, and the report's Id in a hidden field, minted when the page was
+   rendered, so a form sent twice is one report. A reader who may not report it reads why above the form, whose field is
+   read-only and which has no button, and a visitor the way to sign in; a refusal of the reason shows under it, and any
+   other above the form; a Post of the moderators' Tangent is not reported, which the page says instead of the form. Once
+   the reader's report is received, the panel says so and the way back to the Post, and
+   nothing of where the report went. *@
+<p class="post-form-where">From <a href="@Page.Reported.TopicAddress">@Page.Reported.Topic</a> in <a href="@Page.Reported.TangentAddress">@Page.Reported.Tangent</a></p>
+<h1 id="report-heading" class="sign-in-title">@(Page.Received ? "Report received" : "Report this post")</h1>
+<Draw Part="@Page.Reported" />
+@if (Page.Received)
+{
+    <p class="report-received" role="status">The moderators have your report. Only they can read it.</p>
+    <p><a href="@Page.Reported.Address">Back to the post</a></p>
+}
+else
+{
+    @if (Page.Gate is { } gate)
+    {
+        <p class="sign-in-failure" id="report-failure" role="alert" data-gate="@gate">
+            @if (Page.SignIn is { } signIn)
+            {
+                @(Access.Capabilities.Sentence(gate) + " ")<a href="@signIn">Sign in</a>
+            }
+            else
+            {
+                @Access.Capabilities.Sentence(gate)
+            }
+        </p>
+    }
+    else if (Page.Failure is { } failure)
+    {
+        <p class="sign-in-failure" id="report-failure" role="alert">@failure</p>
+    }
+    @if (Page.Report is not null || Page.Gate is not null)
+    {
+    <form class="sign-in-form report" method="post" action="@Page.Report?.Action">
+        @if (Page.Report is { } report)
+        {
+            <input type="hidden" name="@PostWrites.IdField" value="@report.Value(PostWrites.IdField)">
+        }
+        <div class="field">
+            <label class="field-label" for="report-body">Anything the moderators should know? (optional)</label>
+            <textarea class="post-form-body post-report-body" id="report-body" name="@PostWrites.BodyField" rows="3"
+                      autofocus="@(Page.Gate is null)" readonly="@(Page.Gate is not null)"
+                      aria-invalid="@(Page.BodyFailure is null ? "false" : "true")"
+                      aria-describedby="@(Page.BodyFailure is null ? "report-note" : "report-body-failure report-note")">@Page.Body</textarea>
+            @if (Page.BodyFailure is { } bodyFailure)
+            {
+                <p class="field-failure" id="report-body-failure">@bodyFailure</p>
+            }
+            <p class="post-report-note" id="report-note">Only the moderators read it, and its author is never told. It removes nothing by itself.</p>
+        </div>
+        @if (Page.Gate is null)
+        {
+            <div class="post-form-actions">
+                @if (Page.Who is { } who)
+                {
+                    <span class="post-form-as">Reporting as <strong>@("@" + who.Handle)</strong></span>
+                }
+                <button type="submit" class="sign-in-submit post-form-submit" data-busy-label="Sending…">Send the report</button>
+            </div>
+        }
+    </form>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public Render.ReportPanel Model { get; set; } = default!;
+
+    private ReportPage Page => Model.Page;
+
+    /// <summary>The frame the shell draws around the page: the place; the Post's Tangent and Topic and the report as
+    /// crumbs; and who reads, or where a visitor signs in.</summary>
+    public static Frame Frame(ReportPage page)
+        => new(page.Place, page.Door,
+            [new Crumb("Report")],
+            page.Who, page.SignIn);
+}

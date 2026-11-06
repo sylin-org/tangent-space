@@ -1,0 +1,32 @@
+@using System.Globalization
+@* The place's head on its door: over its image where it wears one, the line that describes it, whose place it is, and what
+   it holds. Its name is the masthead's alone. *@
+<section class="@(Model.Image is null ? "tangent-head place" : "tangent-head place is-pictured")" aria-label="@Model.Name">
+    @if (Model.Image is { } image)
+    {
+        <img class="head-image" src="@image" alt="" referrerpolicy="no-referrer">
+    }
+    <div class="tangent-head-inner">
+        <div class="tangent-head-text">
+            @if (Model.Description is { } description)
+            {
+                <div class="tangent-description door-description post-body">@((MarkupString)description)</div>
+            }
+            @if (Model.Proprietor is { } proprietor)
+            {
+                <p class="tangent-description">The place of <Draw Part="@proprietor" As="Shape.Name" />, @("@" + proprietor.Handle)</p>
+            }
+            <p class="tangent-meta">
+                <span>@Bold(Model.Tangents, "Tangent", "Tangents")</span>
+                <span>@Bold(Model.Topics, "topic", "topics")</span>
+            </p>
+        </div>
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public Render.PlaceHead Model { get; set; } = default!;
+
+    private MarkupString Bold(int count, string one, string many)
+        => new((Model.AtLeast ? "at least " : "") + "<b>" + count.ToString(CultureInfo.InvariantCulture) + "</b> " + (count == 1 && !Model.AtLeast ? one : many));
+}

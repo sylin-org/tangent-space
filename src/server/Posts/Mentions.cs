@@ -106,15 +106,15 @@ public static partial class Mentions
 
     /// <summary>A Post's body as plain text on one line, each mention of a participant among <paramref name="people"/>
     /// <c>@</c> and their name now, and every other mention its own words.</summary>
-    public static string PlainText(Post post, IReadOnlyDictionary<string, TangentPage.Author> people)
+    public static string PlainText(Post post, IReadOnlyDictionary<string, Render.Person> people)
         => RenderedBodies.For(post).PlainText(Words(people));
 
     /// <summary>A stretch of a body cut anywhere as plain text on one line, read as <see cref="PlainText"/> reads a whole
     /// one. Parsed each time, a stretch being small; one too intricate to parse stays as it is.</summary>
-    public static string PlainFragment(string markdown, IReadOnlyDictionary<string, TangentPage.Author> people)
+    public static string PlainFragment(string markdown, IReadOnlyDictionary<string, Render.Person> people)
         => MarkdownHtml.Tractable(markdown) ? RenderedBodies.Render(markdown).PlainText(Words(people)) : markdown;
 
-    private static Func<string, string?> Words(IReadOnlyDictionary<string, TangentPage.Author> people)
+    private static Func<string, string?> Words(IReadOnlyDictionary<string, Render.Person> people)
         => target => Identity(target) is { } id && people.TryGetValue(id, out var person) ? "@" + person.Name : null;
 
     /// <summary>A Post's body at a version as plain text on one line with its mentions of participants left out, so it

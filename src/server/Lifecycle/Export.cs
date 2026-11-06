@@ -147,7 +147,7 @@ public sealed class Export
     /// <summary>A page of the Tangents, each with where it opens: at the root of a zip, and of an archive at <c>t/</c>, its
     /// address on the place, the root being its door.</summary>
     private Task Listing(IReadOnlyList<Tangents.Tangent> tangents, int page, bool more, CancellationToken ct) => Page((Retired ? "t/" : "") + PagePath(page), new TangentsPage(
-        tangents.Select(tangent => new TangentPage.Listed(tangent.Id, tangent.Name, PostWrites.Word(tangent.DefaultKind),
+        tangents.Select(tangent => new Render.TangentEntry(tangent.Id, tangent.Name, PostWrites.Word(tangent.DefaultKind),
             (Retired ? "" : "t/") + Uri.EscapeDataString(tangent.Id) + "/" + First + ".html", tangent.TopicCount)).ToList(),
         more ? PagePath(page + 1) + ".html" : null,
         page > 1,
@@ -182,7 +182,7 @@ public sealed class Export
             var read = await TopicList.Read(tangent.Id, cursor, ct);
             var topics = read.Topics.Where(root => root.CreatedAt <= _asOf).ToList();
             await Page($"t/{tangent.Id}/{PagePath(page)}", await Listed(tangent, audience, topics, page++, read.Next is not null, ct), "../..",
-                new Frame(_space.Name, "../../" + First + ".html", [new Crumb(_space.Name, "../../" + First + ".html"), new Crumb(tangent.Name)], Feeds: FeedsOf(tangent)), ct);
+                new Frame(_space.Name, "../../" + First + ".html", [new Crumb(tangent.Name)], Feeds: FeedsOf(tangent)), ct);
             cursor = read.Next;
         } while (cursor is not null);
     }
@@ -218,7 +218,7 @@ public sealed class Export
             page > 1,
             null,
             null,
-            [new TangentPage.Listed(tangent.Id, tangent.Name, PostWrites.Word(tangent.DefaultKind), First + ".html", tangent.TopicCount)],
+            [new Render.TangentEntry(tangent.Id, tangent.Name, PostWrites.Word(tangent.DefaultKind), First + ".html", tangent.TopicCount)],
             _space.Name,
             "../../" + First + ".html",
             null,
@@ -236,7 +236,7 @@ public sealed class Export
             var replies = await TopicWindow.Between(root.Id, (window - 1) * WindowSize, window * WindowSize, ct);
             var path = window == 1 ? First : window.ToString(CultureInfo.InvariantCulture);
             var page = await Window(tangent, root, replies, window, windows, takenFrom, ct);
-            await Page(folder + "/" + path, page, "../../..", TopicView.Frame(page) with { Door = "../../../" + First + ".html" }, ct);
+            await Page(folder + "/" + path, page, "../../..", TopicPage.Frame(page) with { Door = "../../../" + First + ".html", Crumbs = Frame.Trail(new Crumb(tangent.Name, "../" + First + ".html"), new Crumb(root.Title ?? ""), []) }, ct);
             if (!Retired) continue;
             if (window == 1) await Forward(folder + "/" + root.Id, "../" + First + ".html#" + root.Id, root.Title ?? "", ct);
             foreach (var reply in replies) await Forward(folder + "/" + reply.Id, "../" + path + ".html#" + reply.Id, root.Title ?? "", ct);
@@ -285,7 +285,7 @@ public sealed class Export
             TangentPage.ReadTime(root.Body));
     }
 
-    private TopicPage.Post Shown(Post post, Post root, IReadOnlyDictionary<string, TangentPage.Author> people,
+    private TopicPage.Post Shown(Post post, Post root, IReadOnlyDictionary<string, Render.Person> people,
         IReadOnlyDictionary<string, TopicPage.Mention> mentioned, IReadOnlyDictionary<string, TopicPage.Taken> taken,
         IReadOnlyDictionary<string, long> sequences)
     {
@@ -364,7 +364,7 @@ public sealed class Export
 
     /// <summary>The people as a page shows them: in a zip by their marks, since their avatars and their profiles are
     /// elsewhere; in an archive as on the live page, since their profiles are at the same addresses.</summary>
-    private IReadOnlyDictionary<string, TangentPage.Author> Marks(IReadOnlyDictionary<string, TangentPage.Author> people) => Retired
+    private IReadOnlyDictionary<string, Render.Person> Marks(IReadOnlyDictionary<string, Render.Person> people) => Retired
         ? people
         : people.ToDictionary(person => person.Key, person => person.Value with { Avatar = null, Profile = null }, StringComparer.Ordinal);
 

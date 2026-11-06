@@ -9,6 +9,7 @@ namespace Tangent.Posts;
 /// why the reader may not report it, null when they may; <see cref="SignIn"/>
 /// is where a visitor signs in, coming back here. After a refusal the form keeps the reason that was sent and says why,
 /// under the reason or above the form. Nothing here names the moderators' Topic a report starts.</summary>
+[Render.Page(Render.Layout.Panel)]
 public sealed record ReportPage(
     QuotedPost Reported,
     bool Received,
@@ -20,4 +21,8 @@ public sealed record ReportPage(
     Who? Who,
     string? Body = null,
     string? Failure = null,
-    string? BodyFailure = null);
+    string? BodyFailure = null)
+{
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.ReportPanel Shown => new(this);
+}

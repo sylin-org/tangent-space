@@ -1,0 +1,67 @@
+@using System.Globalization
+@* A Tangent, drawn as whatever lists it chooses. As a row: its tile, its name, its kind and how many Topics it holds, how
+   many of its Posts are new to the reader, and the mark of the Tangent the page is in. As a tile: its image, where it
+   wears one, or its first letter in display type on its tone's tint, over an edge in the tone. As a card, a members-only
+   Tangent the reader is outside of: what it is about, and the way in — join, ask, or where their ask stands — with the
+   way to withdraw a waiting ask. *@
+@if (As == Shape.Tile)
+{
+    @Tile
+}
+else if (As == Shape.Card)
+{
+    <div class="door-offer card tangent">
+        <p class="door-offer-line">
+            @Model.Name
+            <span class="topic-row-none">· Members only · @(Model.Kind == "article" ? "Articles" : "Discussions")</span>
+        </p>
+        @if (Model.Description is { Length: > 0 } about)
+        {
+            <p class="post-form-note">@about</p>
+        }
+        <div class="door-offer-answers">
+            @if (Model.Join is { } join)
+            {
+                <Draw Part="@join" />
+            }
+            else if (Model.Joining == "asked")
+            {
+                <p class="post-form-note">You asked to join; whoever manages it will decide, and your door will tell you.</p>
+            }
+            else
+            {
+                <p class="post-form-note">Your ask to join was declined.</p>
+            }
+            <Draw Part="@Model.Withdraw" />
+        </div>
+    </div>
+}
+else
+{
+    <a class="@(Model.Current ? "row tangent is-current" : "row tangent")" href="@Model.Address" aria-current="@(Model.Current ? "page" : null)">
+        @Tile
+        <span class="tangent-row-text">
+            <span class="tangent-row-name">@Model.Name</span>
+            <span class="tangent-row-detail">@Model.Detail</span>
+        </span>
+        @if (Model.New > 0)
+        {
+            <span class="badge is-new">@Model.New.ToString(CultureInfo.InvariantCulture) new</span>
+        }
+        @if (Model.Current)
+        {
+            <span class="tangent-row-check"><svg class="menu-icon" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 10.5l3.2 3.2L15 7"></path></svg><span class="visually-hidden">Current</span></span>
+        }
+    </a>
+}
+
+@code {
+    [Parameter, EditorRequired] public Render.TangentEntry Model { get; set; } = default!;
+
+    [Parameter] public Shape As { get; set; }
+
+    private RenderFragment Tile => @<span class="@("tile tangent tone-" + Model.Worn.Tone)" aria-hidden="true">@if (Model.Worn.Image is { } image)
+        {<img class="tangent-tile-image" src="@image" alt="" loading="lazy">}
+        else
+        {<span class="tangent-tile-letter">@Model.Worn.Initial</span>}<span class="tangent-tile-edge"></span></span>;
+}

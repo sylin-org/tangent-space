@@ -11,6 +11,7 @@ namespace Tangent.Tangents;
 /// reader holds in the place, and <see cref="Gate"/> why they may not create a Tangent, null when they may;
 /// <see cref="SignIn"/> is where a visitor signs in, coming back here. After a refusal the form keeps what was sent and
 /// says why: under the name, under the description, or above the form.</summary>
+[Render.Page(Render.Layout.Panel)]
 public sealed record NewTangentPage(
     Form? Create,
     IReadOnlyList<string> Can,
@@ -27,4 +28,8 @@ public sealed record NewTangentPage(
     Who? Who,
     string? Failure = null,
     string? NameFailure = null,
-    string? DescriptionFailure = null);
+    string? DescriptionFailure = null)
+{
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.NewTangentForm Body => new(this);
+}

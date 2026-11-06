@@ -1,0 +1,27 @@
+@* Who can read a Tangent: a globe for a public one, the closed ring for a private one. As a badge, beside a head's counts,
+   the icon and a few words; in a rail, under its heading, the word and a sentence. *@
+@if (As == Shape.Badge)
+{
+    @Icon(12)@(Model.Private ? "Private · not everyone can read" : "Public · anyone can read")
+}
+else
+{
+    <h2 class="rail-heading rail-heading-spaced">Who can read</h2>
+    <div class="rail-audience">
+        <span class="rail-audience-icon">@Icon(14)</span>
+        <span class="rail-audience-text">
+            <span class="rail-audience-name">@(Model.Private ? "Private" : "Public")</span>
+            <span class="rail-audience-note">@(Model.Private ? "Only participants it is open to can read this Tangent." : "Anyone can read this Tangent, signed in or not.")</span>
+        </span>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Render.AudienceNote Model { get; set; } = default!;
+
+    [Parameter] public Shape As { get; set; }
+
+    private RenderFragment Icon(int size) => builder => builder.AddMarkupContent(0, Model.Private
+        ? $"<svg width=\"{size}\" height=\"{size}\" viewBox=\"0 0 32 32\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.6\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M13 5.4A11 11 0 1 0 19 5.4\"></path><circle cx=\"16\" cy=\"17\" r=\"4\" fill=\"currentColor\" stroke=\"none\"></circle></svg>"
+        : $"<svg width=\"{size}\" height=\"{size}\" viewBox=\"0 0 20 20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" aria-hidden=\"true\"><circle cx=\"10\" cy=\"10\" r=\"7\"></circle><path d=\"M3 10h14\"></path><path d=\"M10 3c2.2 2 3.2 4.4 3.2 7s-1 5-3.2 7c-2.2-2-3.2-4.4-3.2-7s1-5 3.2-7z\"></path></svg>");
+}

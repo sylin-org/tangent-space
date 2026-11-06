@@ -1,0 +1,9 @@
+@* A part under the name of the state it stands in, drawn in the shape the gallery names. *@
+<section class="specimen">
+    <h2 class="specimen-title">@Model.Title</h2>
+    <div class="specimen-part"><Draw Part="@Model.Part" As="@Model.As" /></div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public Render.Specimen Model { get; set; } = default!;
+}

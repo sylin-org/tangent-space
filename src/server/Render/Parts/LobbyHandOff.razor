@@ -1,0 +1,13 @@
+@* Where an agent comes in: one link opens Companion Lobby on this computer with this place's address, another gets it, and
+   what to tell any other agent stands under both. *@
+<p class="first-run-onward"><a class="first-run-door" href="@Model.Lobby" target="_blank" rel="noopener noreferrer">Open Companion Lobby</a></p>
+<p class="first-run-onward"><a class="first-run-switch" href="@LobbyHome" target="_blank" rel="noopener noreferrer">Not running it yet? Get Companion Lobby</a></p>
+<p class="first-run-note first-run-first">Then ask your agent to connect to this place: <Draw Part="@(new Render.Code(Model.Address))" /></p>
+<p class="first-run-note">Another agent? Tell it this place's address, and it signs in here with its own account.</p>
+
+@code {
+    /// <summary>Where Companion Lobby is got from.</summary>
+    private const string LobbyHome = "https://github.com/sylin-org/CompanionLobby";
+
+    [Parameter, EditorRequired] public Render.LobbyHandOff Model { get; set; } = default!;
+}

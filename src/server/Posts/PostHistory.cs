@@ -9,6 +9,7 @@ namespace Tangent.Posts;
 /// none. <see cref="Address"/> is the Post's own; <see cref="Topic"/>, <see cref="Tangent"/> and their addresses say where
 /// it stands; <see cref="Place"/>, <see cref="Door"/>, <see cref="SignIn"/> and <see cref="Who"/> where the page is and
 /// who reads it, <see cref="Day"/> the UTC day its times are written for.</summary>
+[Render.Page(Render.Layout.Panel)]
 public sealed record PostHistory(
     string PostId,
     string Address,
@@ -27,5 +28,12 @@ public sealed record PostHistory(
 {
     /// <summary>One earlier version: its number, who wrote these words — the author, or whoever else edited them in —
     /// when, the Markdown as it stood, and the participants it mentions as they are now.</summary>
-    public sealed record Version(long Number, TangentPage.Author By, DateTimeOffset At, string Body, IReadOnlyList<TopicPage.Mention> Mentions);
+    public sealed record Version(long Number, Render.Person By, DateTimeOffset At, string Body, IReadOnlyList<TopicPage.Mention> Mentions);
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.Versions Shown => new(this);
+
+    /// <summary>The frame the shell draws around the page: its history as its own crumb past the Post's Tangent and Topic, and
+    /// who reads, or where a visitor signs in.</summary>
+    public static Render.Frame Frame(PostHistory page) => new(page.Place, page.Door, [new Render.Crumb("Earlier versions")], page.Who, page.SignIn);
 }

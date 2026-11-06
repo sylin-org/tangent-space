@@ -79,12 +79,12 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
     [HttpGet(Path)]
     [Tool(Name = "read_roles")]
     [Description("Read the roles in their order, the highest first, a page at a time, for whoever holds ManageRoles. Follow with create_role, change_role or delete_role where one's can allows it.")]
+    [Needs(Bit.View)]
     public async Task<IActionResult> Get([FromQuery(Name = PageQuery), Description(Holds.Number)] string? page, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
+        var place = Here.Of(HttpContext).Around;
         if (place.Gate(Bit.ManageRoles) is { } refused && PostWrites.WantsJson(Request)) return this.Refused(refused);
         var read = await Page(place, personId, Numbered(page), ct);
         return place.Gate(Bit.ManageRoles) is { } gate ? new ObjectResult(read) { StatusCode = Answers.Status(HttpContext, gate) } : Ok(read);

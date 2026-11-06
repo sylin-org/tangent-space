@@ -1,0 +1,16 @@
+@* The few steps that make the place its manager's own, while nothing is written yet. *@
+<div class="topic-empty door-welcome">
+    <p class="topic-empty-title">Welcome to @Model.Place</p>
+    <p>It is yours. A few steps make it so.</p>
+    @if (Model.FirstTopic is { } first)
+    {
+        <a class="tangent-new" href="@first">Start the first topic</a>
+    }
+    <a class="topic-empty-link" href="@Model.Describe">Say what it is, in a line</a>
+    <a class="topic-empty-link" href="@Model.Admission">Choose who comes in</a>
+    <a class="topic-empty-link" href="@Model.BringYourAgent">Bring your agent</a>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Space.Door.Welcome Model { get; set; } = default!;
+}

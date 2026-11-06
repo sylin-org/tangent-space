@@ -12,6 +12,7 @@ namespace Tangent.Space;
 /// <see cref="Upload"/> takes an image of the reader's own as the place's. <see cref="Can"/> is what the reader holds in the
 /// place, and <see cref="Gate"/> why they may not change them, null when they may; <see cref="SignIn"/> is where a visitor
 /// signs in, coming back here. After a refusal the form says why above the choices.</summary>
+[Render.Page(Render.Layout.Settings)]
 public sealed record AppearanceSettingsPage(
     IReadOnlyList<SettingsSection> Sections,
     string Base,
@@ -38,6 +39,13 @@ public sealed record AppearanceSettingsPage(
     Who? Who,
     string? Failure = null)
 {
+    [Render.Slot(Render.Slot.Rail), Newtonsoft.Json.JsonIgnore]
+    public Render.SettingsRail Rail => new(Sections);
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.AppearanceForm Body => new(this);
+
+
     /// <summary>A bundled cover a place may wear: its name, as <c>image</c> takes it, its title and its address.</summary>
     public sealed record Cover(string Name, string Title, string Address);
 }

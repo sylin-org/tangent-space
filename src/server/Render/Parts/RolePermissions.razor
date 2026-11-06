@@ -1,0 +1,37 @@
+@using Tangent.Access
+@* What a role grants, as one checkbox for each permission in plain words, in a form that creates or changes a role. The
+   field is sent empty first, so a form with nothing checked grants nothing; a permission the reader does not hold is
+   shown and cannot be changed, and one the role already grants is sent as it stands. *@
+<fieldset class="post-form-choice">
+    <legend class="field-label">What it grants</legend>
+    <input type="hidden" name="@RolesController.PermissionsField" value="">
+    <div class="post-form-options">
+        @foreach (var permission in Permissions)
+        {
+            var chosen = Chosen.Contains(permission.Bit, StringComparer.OrdinalIgnoreCase);
+            <label class="post-form-option">
+                <span class="post-form-option-text">
+                    <span class="post-form-option-name">@permission.Words</span>
+                </span>
+                <input type="checkbox" id="@(Prefix + "-" + permission.Bit)" name="@RolesController.PermissionsField" value="@permission.Bit"
+                       checked="@chosen" disabled="@(!permission.Held)">
+            </label>
+            @if (!permission.Held && chosen)
+            {
+                <input type="hidden" name="@RolesController.PermissionsField" value="@permission.Bit">
+            }
+        }
+    </div>
+</fieldset>
+
+@code {
+    /// <summary>What the checkboxes' ids begin with.</summary>
+    [Parameter, EditorRequired] public Render.RolePermissions Model { get; set; } = default!;
+
+    private string Prefix => Model.Prefix;
+
+    private IReadOnlyList<Access.RolesPage.Permission> Permissions => Model.Permissions;
+
+    /// <summary>The permissions checked, by the bits' names.</summary>
+    private IReadOnlyList<string> Chosen => Model.Chosen;
+}

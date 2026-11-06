@@ -54,11 +54,11 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
     [LlmsText.Pointer]
     [Tool(Name = "arrive")]
     [Description("Call this first when you come back, to see who you are here, what is new since you were here and what you may do, with links. Follow with read_tangent on a Tangent's slug, read_topic or read_post on what a new Post's address names, /t/{tangent}/{topic}/{post}, and seen with news.through once you have read it.")]
+    [Needs(Bit.View)]
     public async Task<IActionResult> Get(CancellationToken ct)
     {
         var personId = PersonId(User);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
+        var place = Here.Of(HttpContext).Around;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct)
             ?? throw new InvalidOperationException("The Tangent Space row is missing.");
         var appearance = HttpContext.Items[HtmlFormatter.Previewed] as Appearance ?? space.Appearance;
@@ -143,15 +143,15 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             door,
             space.ProprietorId is { } proprietor ? Person(people, proprietor) : null,
             place.Can,
-            news,
             listed
-                .Select(tangent => new Door.Listed(tangent.Id, tangent.Name, Word(tangent.DefaultKind), Address(tangent.Id), tangent.TopicCount,
-                    newIn?.GetValueOrDefault(tangent.Id) ?? 0))
+                .Select(tangent => new TangentEntry(tangent.Id, tangent.Name, Word(tangent.DefaultKind), Address(tangent.Id), tangent.TopicCount)
+                {
+                    New = newIn?.GetValueOrDefault(tangent.Id) ?? 0
+                })
                 .ToList(),
             page.Next is not null,
             featured.Select(root => Shown(root, tangents, people, freshIn)).ToList(),
             alive.Select(root => Shown(root, tangents, people, freshIn)).ToList(),
-            new Door.Crowd(writers.Count, window.Count >= LogWindow.Size, writers.Take(AroundLimit).Select(id => Person(people, id)).ToList()),
             reader is null ? baseAddress + SignInController.Path + "?return=" + back : null,
             reader is null ? null : new Door.Reader(reader.Id, Person(people, reader.Id).Name, Person(people, reader.Id).Handle,
                 Roles.Word(place.RoleIds), reader.Profile.Avatar, baseAddress + AuthConstants.Routes.Logout + "?return=" + back,
@@ -161,6 +161,8 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             Resume(baseAddress, through > 0 ? through : window.Count > 0 ? window[0].Seq : 0),
             place.Holds(Bit.ManageSpace) ? baseAddress + NewTangentController.Route : null)
         {
+            Around = new Door.Crowd(writers.Count, window.Count >= LogWindow.Size, writers.Take(AroundLimit).Select(id => Person(people, id)).ToList()),
+            News = news,
             Description = description,
             DescriptionHtml = PlaceWords.Html(PlaceWords.DescriptionPart, description, baseAddress + "/"),
             Intro = PlaceWords.Html(Appearance.IntroPart, appearance.Intro, baseAddress + "/"),
@@ -190,7 +192,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             open.FirstOrDefault() is { } first ? PostWrites.TangentAddress(baseAddress, first.Id) + "/" + TangentPageController.NewTopicSegment : null,
             baseAddress + TangentSpaceSettingsController.AppearancePath + "#space-appearance-" + TangentSpaceSettingsController.DescriptionField,
             baseAddress + TangentSpaceSettingsController.AdmissionPath,
-            baseAddress + BringYourAgentController.Path);
+            baseAddress + BringYourAgentController.Path) { Place = space.Name };
     }
 
     /// <summary>The shelves of the first <see cref="ShelfLimit"/> Tangents that hold a Topic those <paramref name="above"/>
@@ -198,7 +200,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
     /// topic list of each Tangent the door lists, so a Tangent whose every Topic the front page shows gets no shelf, then one keyed
     /// read of their latest replies and one of the people they name whom <paramref name="known"/> does not hold.</summary>
     private static async Task<List<Door.Shelf>> Shelves(IReadOnlyList<Tangents.Tangent> tangents, IReadOnlySet<string> above,
-        IReadOnlyDictionary<string, TangentPage.Author> known, string baseAddress, CancellationToken ct)
+        IReadOnlyDictionary<string, Render.Person> known, string baseAddress, CancellationToken ct)
     {
         var read = new List<(Tangents.Tangent Tangent, List<Post> Topics)>();
         foreach (var tangent in tangents.Where(tangent => tangent.TopicCount > 0))
@@ -212,7 +214,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
 
         var roots = read.SelectMany(shelf => shelf.Topics).ToList();
         var latest = await TangentPageController.LatestReplies(roots, ct);
-        var people = new Dictionary<string, TangentPage.Author>(known, StringComparer.Ordinal);
+        var people = new Dictionary<string, Render.Person>(known, StringComparer.Ordinal);
         foreach (var (id, person) in await People(baseAddress, roots
                      .SelectMany(root => root.RecentAuthorIds.Take(Post.RecentAuthorLimit).Append(root.AuthorId).Concat(root.MentionedIds))
                      .Concat(latest.Values.SelectMany(reply => reply.MentionedIds.Append(reply.AuthorId).Append(reply.EditedBy)))
@@ -305,7 +307,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
     /// articles.</summary>
     private Door.Since News(Unread unread, Unread.ForYou forYou, ForYouGroups groups, IReadOnlyList<Event> fresh, IReadOnlyList<Event> window,
         IReadOnlyDictionary<string, Post> posts, IReadOnlyDictionary<string, Tangents.Tangent> tangents,
-        IReadOnlyDictionary<string, TangentPage.Author> people, IReadOnlyDictionary<string, string> roleNames, long through, string baseAddress)
+        IReadOnlyDictionary<string, Render.Person> people, IReadOnlyDictionary<string, string> roleNames, long through, string baseAddress)
     {
         var partial = LogWindow.Partial(window, unread.Floor);
         Door.Group Group(IReadOnlyList<Event> events, bool atLeast) => this.Group(events, atLeast, posts, tangents, people);
@@ -359,7 +361,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
 
     /// <summary>One group of new Posts: how many, whether that is a lower bound, and the newest few.</summary>
     private Door.Group Group(IReadOnlyList<Event> events, bool atLeast, IReadOnlyDictionary<string, Post> posts,
-        IReadOnlyDictionary<string, Tangents.Tangent> tangents, IReadOnlyDictionary<string, TangentPage.Author> people)
+        IReadOnlyDictionary<string, Tangents.Tangent> tangents, IReadOnlyDictionary<string, Render.Person> people)
         => new(events.Count, atLeast, events.Take(ItemLimit).Select(e =>
         {
             var post = posts[e.PostId!];
@@ -371,11 +373,11 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
 
     /// <summary>A Topic on the front page, new to the reader by the one rule: as many of its Posts as the window holds
     /// new to them.</summary>
-    private Door.Shown Shown(Post root, IReadOnlyDictionary<string, Tangents.Tangent> tangents, IReadOnlyDictionary<string, TangentPage.Author> people,
+    private Door.Shown Shown(Post root, IReadOnlyDictionary<string, Tangents.Tangent> tangents, IReadOnlyDictionary<string, Render.Person> people,
         IReadOnlyDictionary<string, int> freshIn)
     {
         var unseen = freshIn.GetValueOrDefault(root.Id);
-        return new Door.Shown(root.TangentId, Name(tangents, root.TangentId), new TangentPage.Topic(
+        return new Door.Shown(root.TangentId, Name(tangents, root.TangentId), new TopicEntry(
             root.Id,
             root.Slug ?? root.Id,
             root.Title ?? "",
@@ -424,16 +426,16 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
     }
 
     /// <summary>Everyone the door shows, in one keyed read, by participant Id, each with their profile's address.</summary>
-    private static async Task<IReadOnlyDictionary<string, TangentPage.Author>> People(string baseAddress, IEnumerable<string?> ids,
+    private static async Task<IReadOnlyDictionary<string, Render.Person>> People(string baseAddress, IEnumerable<string?> ids,
         CancellationToken ct)
     {
         var wanted = ids.OfType<string>().Distinct(StringComparer.Ordinal).ToList();
-        if (wanted.Count == 0) return new Dictionary<string, TangentPage.Author>();
-        return (await Participant.Get(wanted, ct)).OfType<Participant>().ToDictionary(row => row.Id, row => TangentPage.Author.Of(row, baseAddress), StringComparer.Ordinal);
+        if (wanted.Count == 0) return new Dictionary<string, Render.Person>();
+        return (await Participant.Get(wanted, ct)).OfType<Participant>().ToDictionary(row => row.Id, row => Render.Person.Of(row, baseAddress), StringComparer.Ordinal);
     }
 
-    private static TangentPage.Author Person(IReadOnlyDictionary<string, TangentPage.Author> people, string id)
-        => people.TryGetValue(id, out var person) ? person : new TangentPage.Author(id, id, id, "person", null);
+    private static Render.Person Person(IReadOnlyDictionary<string, Render.Person> people, string id)
+        => people.TryGetValue(id, out var person) ? person : Render.Person.Unknown(id);
 
     private static string Name(IReadOnlyDictionary<string, Tangents.Tangent> tangents, string slug)
         => tangents.TryGetValue(slug, out var tangent) ? tangent.Name : slug;

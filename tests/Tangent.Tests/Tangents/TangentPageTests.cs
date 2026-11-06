@@ -310,7 +310,7 @@ public sealed class TangentPageTests
 
         var visitorHtml = await Html(tangentSpace.Client, "/t/" + Workshop);
         Assert.Contains($"<a class=\"masthead-sign-in\" href=\"{BaseUrl}/sign-in?return={Uri.EscapeDataString("/t/" + Workshop)}\">Sign in</a>", visitorHtml);
-        Assert.Contains("<span class=\"switcher-item-detail\">Discussions · 1 topic</span>", WebUtility.HtmlDecode(visitorHtml));
+        Assert.Contains("<span class=\"tangent-row-detail\">Discussions · 1 topic</span>", WebUtility.HtmlDecode(visitorHtml));
         Assert.DoesNotContain("The studio", visitorHtml);
         Assert.Contains("<span class=\"topic-row-latest-line\"><b>ada.example</b> The latest word.</span>", visitorHtml);
 
@@ -329,8 +329,8 @@ public sealed class TangentPageTests
     public void The_version_differs_across_midnight_utc_for_the_same_page_since_the_day_changes_how_its_times_read()
     {
         var at = new DateTimeOffset(2026, 10, 29, 15, 0, 0, TimeSpan.Zero);
-        var author = new TangentPage.Author("ada", "ada.example", "Ada", "person", null);
-        var topic = new TangentPage.Topic(Tids.Mint(), "a-question", "A question", "topic", $"{BaseUrl}/t/{Workshop}/a-question", author,
+        var author = new global::Tangent.Render.Person("ada", "ada.example", "Ada", "person", null);
+        var topic = new global::Tangent.Render.TopicEntry(Tids.Mint(), "a-question", "A question", "topic", $"{BaseUrl}/t/{Workshop}/a-question", author,
             "Words.", 1, 0, at, at, null, [author], false, 0);
         var today = new TangentPage(Workshop, "The workshop", "", "topic", "public", $"{BaseUrl}/t/{Workshop}", ["View"], [topic], null,
             false, null, null, [], "Tangent Space", BaseUrl + "/", null, new DateOnly(2026, 10, 29));
@@ -338,9 +338,9 @@ public sealed class TangentPageTests
 
         Assert.Equal(TangentPage.Version(today), TangentPage.Version(today with { }));
         Assert.NotEqual(TangentPage.Version(today), TangentPage.Version(tomorrow));
-        Assert.Equal("3:00 PM", Render.TopicRow.When(at, today.Day));
-        Assert.Equal("Oct 29", Render.TopicRow.When(at, tomorrow.Day));
-        Assert.Equal("Oct 29, 2026", Render.TopicRow.When(at, new DateOnly(2027, 1, 1)));
+        Assert.Equal("3:00 PM", Render.Wording.When(at, today.Day));
+        Assert.Equal("Oct 29", Render.Wording.When(at, tomorrow.Day));
+        Assert.Equal("Oct 29, 2026", Render.Wording.When(at, new DateOnly(2027, 1, 1)));
     }
 
     /// <summary>The place every proof starts from: established, with an administrator who sets up the public Tangent,

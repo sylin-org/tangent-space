@@ -7,6 +7,7 @@ using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
+using Tangent.Access;
 using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
@@ -100,7 +101,7 @@ public sealed class Archive
     /// <summary>The door a visitor reads.</summary>
     private async Task Door(CancellationToken ct)
     {
-        if (await As<DoorController>().Get(ct) is not OkObjectResult { Value: Door door })
+        if (await As<DoorController>(ct) is not { } door0 || await door0.Get(ct) is not OkObjectResult { Value: Door door })
             throw new InvalidOperationException("A visitor of a public place reads its door.");
         await _export.Page(Export.First, door with { Address = Export.First + ".html", Can = [], SignIn = null, Gate = null, Day = Export.Undated }, ".", null, ct);
     }
@@ -137,7 +138,7 @@ public sealed class Archive
         var page = 1;
         do
         {
-            if (await As<ProfileController>().Get(address, before, ct) is not OkObjectResult { Value: ProfilePage read }) return;
+            if (await As<ProfileController>(ct) is not { } profiles || await profiles.Get(address, before, ct) is not OkObjectResult { Value: ProfilePage read }) return;
             before = read.Older is { } older ? Uri.UnescapeDataString(older[(older.IndexOf('=') + 1)..]) : null;
             await _export.Page(folder + "/" + Export.PagePath(page), read with
             {
@@ -158,11 +159,16 @@ public sealed class Archive
 
     private static bool Nameable(string segment) => segment.IndexOfAny(Path.GetInvalidFileNameChars()) < 0;
 
-    /// <summary>A page's own handler, reading for no one in particular.</summary>
-    private TController As<TController>() where TController : ControllerBase
+    /// <summary>A page's own handler, reading for no one in particular, with the place as the Doorway finds it for a visitor;
+    /// none where a visitor may not read the place.</summary>
+    private async Task<TController?> As<TController>(CancellationToken ct) where TController : ControllerBase
     {
+        var (here, refused) = await Here.Find(null, null, null, null, ct);
+        if (refused is not null) return null;
+        var http = new DefaultHttpContext { RequestServices = _services };
+        http.Features.Set(here);
         var controller = ActivatorUtilities.CreateInstance<TController>(_services);
-        controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { RequestServices = _services } };
+        controller.ControllerContext = new ControllerContext { HttpContext = http };
         return controller;
     }
 

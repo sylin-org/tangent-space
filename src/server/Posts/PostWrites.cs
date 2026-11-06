@@ -125,7 +125,11 @@ public static class PostWrites
     /// the reason.</summary>
     public static Form ReportForm(string action, string minted) => Form.Posting(action,
         Form.Minted(IdField, minted),
-        new Form.Field(BodyField, Holds.Reason));
+        new Form.Field(BodyField, Holds.Reason, As: Form.Input.Area)
+        {
+            Label = "Anything the moderators should know? (optional)",
+            Note = "Only the moderators read it, and its author is never told. It removes nothing by itself."
+        }) with { Tool = "report", Submit = "Send the report", Key = "report-" + minted };
 
     public static string TangentAddress(string baseUrl, string tangent) => baseUrl + "/t/" + Uri.EscapeDataString(tangent);
 
