@@ -21,7 +21,7 @@ No standard defines themes for HTML. Several existing collections fit the work a
   - Bootstrap 5.3 exposes each Bootswatch theme's colours as variables.
   - [Material's colour utilities](https://github.com/material-foundation/material-color-utilities) derive a light and a dark scheme from one seed colour.
 - **[Bear Blog](https://docs.bearblog.dev/styling/)** shows the arrangement: fixed, documented markup, and owner CSS over it that may pull in a classless stylesheet.
-- **The first four tokens follow atproto.** They are already named as `site.standard.theme.basic` names them, and publishing them is planned ([FEATURES](../FEATURES.md)).
+- **The first four tokens follow atproto.** They are named as `site.standard.theme.basic` names them, and the place's publication carries them as its `basicTheme`.
 
 ## Decision
 

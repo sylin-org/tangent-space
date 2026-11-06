@@ -16,13 +16,15 @@ public sealed record Written(AtprotoRecord Document, AtprotoRecord Note);
 /// keyed by the Post's TID, its cover as a blob, its page's address as canonical, and the place as its <c>site</c> — the
 /// proprietor's <c>site.standard.publication</c> where they published it, the place's address otherwise; a Bluesky post
 /// under the same key that embeds the article's page, written once; and the place itself as the publication, under the
-/// proprietor's account. Every write is a put at a fixed key, so one sent again lands once, and a retraction deletes
-/// both records of the article.</summary>
-public sealed class AtprotoAdapter(IAtprotoRepository repository, KoanWebBaseUrl baseUrl)
+/// proprietor's account, with its mark as its icon and its first four tokens as its basic theme. Every write is a put at
+/// a fixed key, so one sent again lands once, and a retraction deletes both records of the article.</summary>
+public sealed class AtprotoAdapter(IAtprotoRepository repository, KoanWebBaseUrl baseUrl, IWebHostEnvironment host)
 {
     public const string Documents = "site.standard.document";
     public const string Publications = "site.standard.publication";
     public const string Notes = "app.bsky.feed.post";
+    public const string BasicTheme = "site.standard.theme.basic";
+    public const string Rgb = "site.standard.theme.color#rgb";
 
     /// <summary>The grant an author gives: their documents, their Bluesky posts and the images both carry.</summary>
     public static readonly IReadOnlyList<string> Scopes = ["atproto", "repo:" + Documents, "repo:" + Notes, "blob:image/*"];
@@ -32,6 +34,12 @@ public sealed class AtprotoAdapter(IAtprotoRepository repository, KoanWebBaseUrl
 
     /// <summary>The largest cover sent as a blob, within what a document and an embed accept.</summary>
     public const int CoverBytes = 950 * 1024;
+
+    /// <summary>The side of the publication's icon in pixels: square, as the lexicon asks, at twice the least it asks for.</summary>
+    public const int IconEdge = 512;
+
+    /// <summary>The largest icon sent as a blob, the lexicon's own bound.</summary>
+    public const int IconBytes = 1_000_000;
 
     /// <summary>The longest description a Bluesky embed carries.</summary>
     private const int DescriptionLength = 300;
@@ -93,20 +101,56 @@ public sealed class AtprotoAdapter(IAtprotoRepository repository, KoanWebBaseUrl
     }
 
     /// <summary>Puts the place as the proprietor's publication under the account <paramref name="did"/> they are bound to,
-    /// at the key it already has or a new one.</summary>
-    public Task<AtprotoRecord> Publish(TangentSpace space, string did, string key, CancellationToken ct)
+    /// at the key it already has or a new one: its address, its name, and, each where it has one, its description,
+    /// <paramref name="icon"/>, a blob in that account's repository, and its first four tokens as its basic theme.</summary>
+    public Task<AtprotoRecord> Publish(TangentSpace space, string did, string key, JsonObject? icon, CancellationToken ct)
     {
         var record = new JsonObject { ["$type"] = Publications, ["url"] = Base(), ["name"] = space.Name };
         if (space.Description.Length > 0) record["description"] = space.Description;
+        if (icon is not null) record["icon"] = icon.DeepClone();
+        if (Colours(space) is { } colours)
+            record["basicTheme"] = new JsonObject
+            {
+                ["$type"] = BasicTheme,
+                ["background"] = Colour(colours.Background),
+                ["foreground"] = Colour(colours.Foreground),
+                ["accent"] = Colour(colours.Accent),
+                ["accentForeground"] = Colour(colours.AccentForeground)
+            };
         return repository.Put(did, Publications, key, record, ct);
+    }
+
+    /// <summary>The place's <paramref name="mark"/>, where it is a picture, as the publication's icon in the repository of
+    /// <paramref name="did"/>: cut square from its middle, as every page draws it, at <see cref="IconEdge"/>, one frame of
+    /// PNG, which keeps a logo's transparency, as a blob of at most <see cref="IconBytes"/>; none for its letter, or where
+    /// the picture cannot be read or made that small.</summary>
+    public async Task<JsonObject?> Icon(string mark, string did, CancellationToken ct)
+    {
+        if (Media.IdIn(mark) is not { } id || await Media.Get(id, ct) is not { } media) return null;
+        await using var kept = await media.OpenRead(ct);
+        using var sent = new MemoryStream();
+        await kept.AsMedia().ResizeCover(IconEdge, IconEdge).Strip().FlattenTo("png").WriteToAsync(sent, ct);
+        return sent.Length > IconBytes ? null : await repository.Upload(did, sent.ToArray(), "image/png", ct);
     }
 
     /// <summary>Deletes the place's publication record from the account it is under.</summary>
     public Task Withdraw(Publication publication, CancellationToken ct)
         => repository.Delete(publication.Did, Publications, publication.Key, ct);
 
-    /// <summary>What the place's publication record says, to tell when it has changed.</summary>
-    public string Fingerprint(TangentSpace space) => Base() + "\n" + space.Name + "\n" + space.Description;
+    /// <summary>What the place's publication record says, to tell when it has changed: its address, name and description,
+    /// the mark its icon is made from and its first four tokens.</summary>
+    public string Fingerprint(TangentSpace space)
+        => string.Join("\n", Base(), space.Name, space.Description, space.Appearance.Mark, Colours(space)?.ToString() ?? "");
+
+    /// <summary>The place's first four tokens, from the stylesheets it serves; none under a base's own palette.</summary>
+    private FirstFour? Colours(TangentSpace space) => FirstFour.Of(space.Appearance, host.WebRootFileProvider);
+
+    /// <summary>A colour as <c>#rrggbb</c>, as <c>site.standard.theme.color#rgb</c> holds it.</summary>
+    private static JsonObject Colour(string hex)
+    {
+        var rgb = Convert.FromHexString(hex.AsSpan(1));
+        return new JsonObject { ["$type"] = Rgb, ["r"] = rgb[0], ["g"] = rgb[1], ["b"] = rgb[2] };
+    }
 
     private static JsonObject Note(string title, string description, string canonical, JsonObject? cover)
     {

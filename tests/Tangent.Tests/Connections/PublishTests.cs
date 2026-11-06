@@ -1,9 +1,11 @@
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Text.Json.Nodes;
 using Koan.Data.Core.Commands;
 using Koan.Web.Auth.Connector.Atproto.Protocol;
 using Microsoft.Extensions.DependencyInjection;
+using Tangent.Access;
 using Tangent.Posts;
 using Tangent.Space;
 using Xunit;
@@ -14,8 +16,8 @@ namespace Tangent.Connections;
 /// <summary>An author publishes a public article under their own account, and it follows them: their document and its
 /// Bluesky post land in their repository, a moderator's edit stays out of it until they choose it, their own edit puts
 /// the document again, and a removal deletes both, as deleting the article's Tangent does once their grant holds, their
-/// Connections saying the copy remains until it does; as the proprietor, their account holds the place as a publication
-/// until the place is private — against a repository double that holds the author's grant, never anyone's real
+/// Connections saying the copy remains until it does; as the proprietor, their account holds the place as a publication,
+/// its mark as its icon and its colours as its theme, until the place is private — against a repository double that holds the author's grant, never anyone's real
 /// account.</summary>
 public sealed class PublishTests
 {
@@ -214,6 +216,69 @@ public sealed class PublishTests
         await Until(async () => (await Receipt.Get(Receipt.Key(Ada, article.Id), Cancellation))?.Retracted == true);
     }
 
+    [Fact]
+    public async Task The_publication_carries_the_places_mark_as_its_icon_and_its_colours_as_its_basic_theme()
+    {
+        var repository = new Repository();
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(),
+            services => services.AddSingleton<IAtprotoRepository>(repository), Cancellation);
+        await Place(tangentSpace);
+        var leo = Persona.Id("leo4publishes");
+        await Given.AParticipant(tangentSpace, leo, [Roles.Administrator], ct: Cancellation);
+        var space = (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!;
+        space.ProprietorId = Ada;
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(Cancellation));
+        var article = await Started(Ada, "Mending with gold", "A cracked bowl tells you where it was weak.", Articles);
+        var page = TopicPath(article);
+        using var ada = await SignedIn(tangentSpace, Ada);
+        await Form(ada, page, page + "/" + PublishController.Segment, []);
+        var prefix = $"at://{Persona.Did(Ada)}/{AtprotoAdapter.Publications}/";
+        await Until(() => repository.Records.Keys.Any(key => key.StartsWith(prefix, StringComparison.Ordinal)));
+        var publication = repository.Records.Keys.Single(key => key.StartsWith(prefix, StringComparison.Ordinal));
+
+        // Its letter is no picture, so the place starts with no icon, and with Tangent's palette in gold as Paper draws it.
+        var record = repository.Records[publication];
+        Assert.Null(record["icon"]);
+        Assert.Equal("243,238,227 29,27,23 138,95,18 255,255,255", Theme(record));
+
+        // A picture as its mark and jade as its accent put it again, the picture cut square and sent as a PNG blob.
+        var mark = await Media.Keep(ArticleMediaTests.Jpeg(60), Cancellation);
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new ChangeTangentSpace(leo, Mark: Media.Reference(mark.Id), Palette: "jade").Send(Cancellation));
+        await Until(() => repository.Records[publication]["icon"] is not null);
+        record = repository.Records[publication];
+        var upload = Assert.Single(repository.Uploads);
+        Assert.Equal((Persona.Did(Ada), "image/png", AtprotoAdapter.IconEdge, AtprotoAdapter.IconEdge), (upload.Did, upload.MimeType, Width(upload.Content), Height(upload.Content)));
+        Assert.Equal(upload.Blob.ToJsonString(), record["icon"]!.ToJsonString());
+        Assert.Equal("243,238,227 29,27,23 47,107,94 255,255,255", Theme(record));
+
+        // A new name puts it again naming the same blob, and a base's own palette leaves its theme out; a new mark sends its picture.
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new ChangeTangentSpace(leo, Name: "Mended things", Base: "simple", Palette: "base").Send(Cancellation));
+        await Until(() => repository.Records[publication]["name"]!.GetValue<string>() == "Mended things");
+        record = repository.Records[publication];
+        Assert.Single(repository.Uploads);
+        Assert.Equal(upload.Blob.ToJsonString(), record["icon"]!.ToJsonString());
+        Assert.Null(Theme(record));
+
+        var another = await Media.Keep(ArticleMediaTests.Jpeg(61), Cancellation);
+        Assert.IsType<Outcome<TangentSpace>.Done>(await new ChangeTangentSpace(leo, Mark: Media.Reference(another.Id)).Send(Cancellation));
+        await Until(() => repository.Uploads.Count == 2 && repository.Records[publication]["icon"]!.ToJsonString() == repository.Uploads.Last().Blob.ToJsonString());
+    }
+
+    /// <summary>The record's basic theme as its background, foreground, accent and accent foreground, each as r,g,b and each
+    /// a <c>site.standard.theme.color#rgb</c>; null for none.</summary>
+    private static string? Theme(JsonObject record)
+    {
+        if (record["basicTheme"] is not JsonObject theme) return null;
+        Assert.Equal(AtprotoAdapter.BasicTheme, theme["$type"]!.GetValue<string>());
+        var colours = new[] { "background", "foreground", "accent", "accentForeground" }.Select(name => theme[name]!).ToList();
+        Assert.All(colours, colour => Assert.Equal(AtprotoAdapter.Rgb, colour["$type"]!.GetValue<string>()));
+        return string.Join(" ", colours.Select(colour => $"{colour["r"]},{colour["g"]},{colour["b"]}"));
+    }
+
+    private static int Width(byte[] png) => BinaryPrimitives.ReadInt32BigEndian(png.AsSpan(16, 4));
+
+    private static int Height(byte[] png) => BinaryPrimitives.ReadInt32BigEndian(png.AsSpan(20, 4));
+
     /// <summary>Waits until Ada's Connection has read the log through its head.</summary>
     private static async Task ReadThrough(TangentSpaceFixture tangentSpace)
     {
@@ -263,6 +328,21 @@ public sealed class PublishTests
         }
 
         public Task<JsonObject> Upload(string did, ReadOnlyMemory<byte> content, string mimeType, CancellationToken ct = default)
-            => Task.FromResult(new JsonObject { ["$type"] = "blob", ["mimeType"] = mimeType, ["size"] = content.Length });
+        {
+            var blob = new JsonObject
+            {
+                ["$type"] = "blob",
+                ["ref"] = new JsonObject { ["$link"] = "bafkrei" + Interlocked.Increment(ref _cids) },
+                ["mimeType"] = mimeType,
+                ["size"] = content.Length
+            };
+            Uploads.Enqueue(new Uploaded(did, mimeType, content.ToArray(), (JsonObject)blob.DeepClone()));
+            return Task.FromResult(blob);
+        }
+
+        /// <summary>Every blob sent, in the order it was sent.</summary>
+        public ConcurrentQueue<Uploaded> Uploads { get; } = [];
     }
+
+    internal sealed record Uploaded(string Did, string MimeType, byte[] Content, JsonObject Blob);
 }
