@@ -67,6 +67,22 @@ public static class Overwrites
         }
     }
 
+    /// <summary>The most overwrites one read of a Tangent's resource takes while they are removed.</summary>
+    public const int ReadSize = 50;
+
+    /// <summary>Removes every overwrite on a Tangent's resource — its audience, each role's access and each person's place
+    /// in it — reading them a page of <see cref="ReadSize"/> at a time, so a slug taken again starts with none.</summary>
+    public static async Task RemoveAll(RoleCollection roles, string tangentId, CancellationToken ct)
+    {
+        string? after = null;
+        do
+        {
+            var page = await roles.Overwrites(Resource(tangentId), after, ReadSize, ct);
+            foreach (var row in page.Items) await roles.RemoveOverwrite(row.ResourceId, row.SubjectKind, row.SubjectId, ct);
+            after = page.Next;
+        } while (after is not null);
+    }
+
     /// <summary>The access a role's overwrite on a Tangent gives it: <see cref="RoleAccess.Post"/> where it allows
     /// <see cref="Bit.View"/> and <see cref="Bit.Post"/>, <see cref="RoleAccess.Read"/> where it allows
     /// <see cref="Bit.View"/> alone, <see cref="RoleAccess.Default"/> otherwise and where there is none.</summary>

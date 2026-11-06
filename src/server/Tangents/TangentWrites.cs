@@ -7,7 +7,7 @@ using Tangent.Space;
 
 namespace Tangent.Tangents;
 
-/// <summary>What the routes that create a Tangent and change its settings share: their fields and the words each field
+/// <summary>What the routes that create a Tangent, change its settings and delete it share: their fields and the words each field
 /// takes, who may manage a Tangent, what a refusal concerns, and the answer a write that committed gives. A write comes
 /// as a form or as JSON and is answered in kind, as a Post's write is (<see cref="PostWrites"/>).</summary>
 public static class TangentWrites
@@ -23,6 +23,11 @@ public static class TangentWrites
     /// <summary>The settings page's segment under a Tangent's address; <see cref="Slug.Reserved"/> keeps it from every
     /// Topic.</summary>
     public const string SettingsSegment = "settings";
+
+    /// <summary>Where a Tangent is deleted, under its settings.</summary>
+    public const string DeleteSegment = "delete";
+
+    public const string TopicsField = "topics";
 
     public static readonly Reason KindRule = Reason.Invalid("A Tangent’s default kind is topic or article.");
     public static readonly Reason AudienceRule = Reason.Invalid("A Tangent’s audience is public or private.");
@@ -92,6 +97,13 @@ public static class TangentWrites
         return new Form(action, HttpMethods.Post, fields) { Tool = "change-tangent", Submit = "Save", Busy = "Saving…", Island = "submitting" };
     }
 
+    /// <summary>The form that deletes the Tangent <paramref name="slug"/> under <paramref name="baseAddress"/> with the
+    /// <paramref name="topics"/> it holds, which go with it.</summary>
+    public static Form DeleteForm(string baseAddress, string slug, int topics) => Form.Posting(
+            PostWrites.TangentAddress(baseAddress, slug) + "/" + SettingsSegment + "/" + DeleteSegment,
+            new Form.Field(TopicsField, Holds.DeletedTopics, topics.ToString(System.Globalization.CultureInfo.InvariantCulture), Form.Input.Hidden))
+        with { Tool = "delete-tangent", Submit = "Delete", Busy = "Deleting…" };
+
     public static string Word(Audience audience) => audience.ToString().ToLowerInvariant();
 
     public static string Word(Move move) => move.ToString().ToLowerInvariant();
@@ -142,6 +154,10 @@ public static class TangentWrites
         };
     }
 }
+
+/// <summary>A Tangent as it stood when it was deleted, for an agent: its slug, its name, how many Topics went with it,
+/// and where the Tangents that stand are listed.</summary>
+public sealed record DeletedTangent(string Slug, string Name, int Topics, string Tangents);
 
 /// <summary>A Tangent as a write leaves it, for an agent: its slug, name, description, default kind and audience, its
 /// <see cref="Order"/> for a sender who holds <c>ManageSpace</c> and so arranges the place's list, its page, its settings,

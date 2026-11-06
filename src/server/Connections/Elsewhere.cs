@@ -18,7 +18,8 @@ public sealed record Reference(string Kind, string Did, string Handle, string? N
 /// Koan job: started once the article goes out (<see cref="Syndication"/>), each run reads the public AppView
 /// (<see cref="AppView"/>) outside any hold and keeps what it found, then submits the next run — soon while someone has read the
 /// article lately (<see cref="Readers"/>, which a page read tells in memory and nothing else), later and later while no
-/// one has, at most <see cref="LongestWait"/>; once the article's copy is retracted it forgets what it heard and stops.
+/// one has, at most <see cref="LongestWait"/>; once the article's copy is retracted, or the article is gone with its
+/// Tangent, it forgets what it heard and stops.
 /// A failure keeps what it had and tries at the same pace.</summary>
 [JobIdempotent(nameof(Id))]
 public sealed class Elsewhere : Entity<Elsewhere>, IKoanJob<Elsewhere>
@@ -51,7 +52,7 @@ public sealed class Elsewhere : Entity<Elsewhere>, IKoanJob<Elsewhere>
     public static async Task Execute(Elsewhere elsewhere, JobContext context, CancellationToken ct)
     {
         var receipt = await Receipt.Get(Receipt.Key(elsewhere.AuthorId, elsewhere.Id), ct);
-        if (receipt is not { Note: { } note } || !receipt.IsLive())
+        if (receipt is not { Note: { } note } || !receipt.IsLive() || await Post.Get(elsewhere.Id, ct) is null)
         {
             elsewhere.Keep(Heard.Nothing);
             return;

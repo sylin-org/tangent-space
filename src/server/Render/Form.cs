@@ -211,7 +211,8 @@ public sealed record Form(string Action, string Method, IReadOnlyList<Form.Field
     [Newtonsoft.Json.JsonIgnore]
     public bool Open { get; init; }
 
-    /// <summary>What a destructive form says before it is sent: it confirms in the page, never in a dialog.</summary>
+    /// <summary>What a destructive form says before it is sent, a sentence with its links (<see cref="Sentence"/>): it
+    /// confirms in the page, never in a dialog.</summary>
     [Newtonsoft.Json.JsonIgnore]
     public string? Confirm { get; init; }
 

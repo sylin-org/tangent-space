@@ -1,3 +1,4 @@
+using Koan.Data.Abstractions;
 using Koan.Data.Abstractions.Annotations;
 using Koan.Data.Core.Model;
 using Tangent.Posts;
@@ -20,6 +21,9 @@ public sealed class Receipt : Entity<Receipt>
 
     public string PostId { get; set; } = "";
 
+    /// <summary>In <c>ix_receipt_tangents</c> before whether it was retracted, so the copies still out of one Tangent's
+    /// articles are one range (<see cref="Out"/>).</summary>
+    [Index(Name = "ix_receipt_tangents", Order = 0)]
     public string TangentId { get; set; } = "";
 
     /// <summary>The Post's version this delivered; zero while it waits to be published.</summary>
@@ -42,6 +46,7 @@ public sealed class Receipt : Entity<Receipt>
     /// <summary>Whether a later version replaced the one first published.</summary>
     public bool Updated { get; set; }
 
+    [Index(Name = "ix_receipt_tangents", Order = 1)]
     public bool Retracted { get; set; }
 
     /// <summary>Whether its copy, out under an account its participant is no longer bound to, stays there: that account's
@@ -57,6 +62,15 @@ public sealed class Receipt : Entity<Receipt>
 
     /// <summary>Whether the network holds a copy this receipt names.</summary>
     public bool IsLive() => Document is not null && !Retracted;
+
+    /// <summary>How many copies of the articles of the Tangent <paramref name="tangentId"/> are out, at most
+    /// <paramref name="limit"/>, and whether more are: one read of <c>ix_receipt_tangents</c>.</summary>
+    public static async Task<(int Count, bool AtLeast)> Out(string tangentId, int limit, CancellationToken ct)
+    {
+        var live = await Query(receipt => receipt.TangentId == tangentId && !receipt.Retracted && receipt.Document != null,
+            new QueryDefinition { Page = 1, PageSize = limit + 1 }, ct);
+        return (Math.Min(live.Count, limit), live.Count > limit);
+    }
 
     /// <summary>Whether the copy may carry <paramref name="post"/> as it stands: its words are its author's own, or they
     /// chose this version as theirs.</summary>

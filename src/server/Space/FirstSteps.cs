@@ -46,9 +46,9 @@ public sealed record FirstSteps(
     /// <summary>The line their Bluesky profile says, which <see cref="Line"/> makes the place's.</summary>
     public string? Said { get; init; }
 
-    /// <summary>A Tangent the place may be for: its name and what it holds, and either its address, where the place has it,
-    /// or the one press that creates it.</summary>
-    public sealed record Purpose(string Name, string Detail, string? Address, Form? Add);
+    /// <summary>A Tangent the place may be for: its name and what it holds, and either its address and the one press that
+    /// deletes it, empty as it is while the steps stand, where the place has it, or the one press that creates it.</summary>
+    public sealed record Purpose(string Name, string Detail, string? Address, Form? Add, Form? Delete = null);
 
     /// <summary>The Tangents first steps offer, in their order: the first Tangent first run makes, then the kinds of
     /// place the brief names.</summary>
@@ -87,7 +87,8 @@ public sealed record FirstSteps(
         {
             var slug = Slug.From(offered.Name, NewTangentController.Unnamed);
             return open.FirstOrDefault(tangent => tangent.Id == slug) is { } held
-                ? new Purpose(held.Name, offered.Detail, PostWrites.TangentAddress(baseAddress, held.Id), null)
+                ? new Purpose(held.Name, offered.Detail, PostWrites.TangentAddress(baseAddress, held.Id), null,
+                    Back(TangentWrites.DeleteForm(baseAddress, held.Id, held.TopicCount) with { Quiet = true }))
                 : new Purpose(offered.Name, offered.Detail, null, Back(Form.Posting(baseAddress + NewTangentController.Route,
                         Given("name", Holds.TangentName, offered.Name), Given("description", Holds.TangentDescription, offered.Description),
                         Given("kind", Holds.TangentKind, PostWrites.Word(offered.Kind)), Given("audience", Holds.TangentAudience, TangentWrites.Word(offered.Audience)))

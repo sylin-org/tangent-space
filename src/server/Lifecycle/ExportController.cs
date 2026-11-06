@@ -31,6 +31,9 @@ public sealed class ExportController(KoanWebBaseUrl baseUrl, IDataProtectionProv
 
     private const string Extension = ".zip";
 
+    /// <summary>Where the Tangent <paramref name="slug"/> downloads, under <paramref name="baseAddress"/>.</summary>
+    public static string ZipOf(string baseAddress, string slug) => baseAddress + Path + "/" + Uri.EscapeDataString(slug) + Extension;
+
     [HttpGet(Path)]
     [Needs(Bit.View)]
     public async Task<IActionResult> Get([FromQuery(Name = After)] string? after, CancellationToken ct)
@@ -55,7 +58,7 @@ public sealed class ExportController(KoanWebBaseUrl baseUrl, IDataProtectionProv
             TangentSpaceSettingsController.Sections(place, baseAddress, TangentSpaceSettingsController.ExportSection),
             gate is null ? address + Extension : null,
             page?.Tangents.Select(tangent => new ExportSettingsPage.Download(tangent.Id, tangent.Name, PostWrites.Word(tangent.DefaultKind), tangent.TopicCount,
-                address + "/" + Uri.EscapeDataString(tangent.Id) + Extension)).ToList() ?? [],
+                ZipOf(baseAddress, tangent.Id))).ToList() ?? [],
             page?.Next is { } next ? address + "?" + After + "=" + Uri.EscapeDataString(next.Seal(protection)) : null,
             cursor is not null,
             address,

@@ -7,6 +7,7 @@ A row is something the place does not do yet, said by what someone gets, and it 
 | Work | Koan | Size |
 | --- | --- | --- |
 | The protocol contract recorded from code in an ADR of its own: `IConnectionAdapter`, `IReferenceSource`, `IAsserter`; the three events as a filter over the log | — | S |
+| Every copy that can be retracted comes down however many an author published: a Connection compares only its 500 newest receipts (`Syndication.ReceiptLimit`), so an audience change, a removal or a deleted Tangent misses an older copy | — | S |
 | Webmention: send on `post.created`, receive at an endpoint; Bridgy Fed opt-in | — | S |
 | The Mastodon package: a status under the participant's own account; replies as references | — | M |
 

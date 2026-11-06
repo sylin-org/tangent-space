@@ -24,6 +24,10 @@
                         @if (purpose.Address is { } address)
                         {
                             <a class="first-steps-here" href="@address">Here</a>
+                            @if (purpose.Delete is { } delete)
+                            {
+                                <Draw Part="@delete" />
+                            }
                         }
                         else if (purpose.Add is { } add)
                         {

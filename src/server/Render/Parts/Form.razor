@@ -17,7 +17,7 @@
         <div class="@(As == Shape.Row || Model.Confirm is not null ? "post-remove-confirm" : "post-form-more-body")">
             @if (Model.Confirm is { } confirm)
             {
-                <p class="post-remove-note">@confirm</p>
+                <p class="post-remove-note"><Draw Part="@(new Render.Sentence(confirm))" As="Shape.Inline" /></p>
             }
             @Element
         </div>

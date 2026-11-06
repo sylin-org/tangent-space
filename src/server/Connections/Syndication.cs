@@ -13,11 +13,12 @@ namespace Tangent.Connections;
 /// <summary>A Connection's work, as its job runs it: the log past its cursor, a bounded page; the articles those rows
 /// name and every article its receipts name; and for each of its participant's articles, the version its receipt
 /// delivered against the Post's own. A public article that is ahead of its receipt is published or updated — one that
-/// arrived after the Connection began, or one they chose — and one that is removed or private is retracted. Only the
+/// arrived after the Connection began, or one they chose — and one that is removed or private is retracted, as is the copy
+/// of one gone with its Tangent, from its receipt alone. Only the
 /// author's own words go out as theirs: a version someone else edited waits until they choose it (<see cref="Receipt.Theirs"/>).
 /// An article that goes out starts hearing what the network says about it (<see cref="Elsewhere"/>).
 /// An article written as an account the participant is no longer bound to is only ever taken down, from the repository
-/// its receipt names, through that account's grant where it still holds (<see cref="Earlier"/>). The proprietor's
+/// its receipt names, through that account's grant where it still holds (<see cref="TakeDown"/>). The proprietor's
 /// Connection first puts the place as their publication where it is missing or has changed, and a Connection withdraws
 /// the publication it put, from the account it is under, once the place is private or someone else is its proprietor. Every
 /// write is a put at a fixed key, so a run repeated after a failure lands once. The network is read and written outside
@@ -61,9 +62,10 @@ public static class Syndication
                                       && row.PostId is not null && row.PostId == row.TopicId)
             .Select(row => row.PostId!);
         var ids = named.Concat(receipts.Keys).Distinct(StringComparer.Ordinal).ToList();
-        var articles = ids.Count == 0 ? [] : (await Post.Get(ids, ct)).OfType<Post>()
-            .Where(post => post.ParentId is null && post.Kind == PostKind.Article && post.AuthorId == connection.Id)
-            .ToList();
+        var found = ids.Count == 0 ? [] : (await Post.Get(ids, ct)).OfType<Post>().ToList();
+        var articles = found.Where(post => post.ParentId is null && post.Kind == PostKind.Article && post.AuthorId == connection.Id).ToList();
+        var standing = found.Select(post => post.Id).ToHashSet(StringComparer.Ordinal);
+        var gone = receipts.Values.Where(receipt => !standing.Contains(receipt.PostId)).ToList();
 
         try
         {
@@ -85,9 +87,14 @@ public static class Syndication
                 if (!audiences.TryGetValue(article.TangentId, out var open))
                     audiences[article.TangentId] = open = await Publishing.Open(space, article.TangentId, ct);
                 var receipt = receipts.GetValueOrDefault(article.Id);
-                if (article.AuthorDid == did) await Compare(connection, article, receipt, open && !article.Removed, publication, adapter, ct);
-                else await Earlier(connection, article, receipt, open && !article.Removed, adapter, ct);
+                if (open && !article.Removed)
+                {
+                    if (article.AuthorDid == did) await Deliver(connection, article, receipt, publication, adapter, ct);
+                }
+                else if (receipt is not null) await TakeDown(connection, receipt, did, adapter, ct);
             }
+
+            foreach (var receipt in gone) await TakeDown(connection, receipt, did, adapter, ct);
         }
         catch (Exception failure) when (failure is AtprotoRepositoryException or HttpRequestException or TimeoutException
                                         or OperationCanceledException && !ct.IsCancellationRequested)
@@ -113,47 +120,52 @@ public static class Syndication
         if (rows.Count == Page) context.Reschedule(TimeSpan.Zero);
     }
 
-    /// <summary>One article against its receipt: published or updated where it should be out and is behind, retracted
-    /// where it should not be out and is.</summary>
-    private static async Task Compare(Connection connection, Post article, Receipt? receipt, bool open, Publication? publication,
-        AtprotoAdapter adapter, CancellationToken ct)
+    /// <summary>A public article of the account the Connection is under against its receipt: published or updated where it
+    /// is behind.</summary>
+    private static async Task Deliver(Connection connection, Post article, Receipt? receipt, Publication? publication, AtprotoAdapter adapter,
+        CancellationToken ct)
     {
-        if (open)
-        {
-            var wanted = receipt is null ? article.LogSeq > connection.From : receipt.Retracted || receipt.Version < article.Version;
-            if (!wanted || !Receipt.Theirs(article, receipt)) return;
-            var written = await adapter.Deliver(article, receipt, publication, ct);
-            await Sent(new KeepReceipt(connection.Id, article.Id, article.TangentId, article.Version, written, DateTimeOffset.UtcNow), ct);
-            if (receipt?.IsLive() != true) await Elsewhere.Start(article, ct);
-            return;
-        }
-
-        if (receipt is null || receipt.Retracted) return;
-        if (receipt.IsLive()) await adapter.Retract(receipt, ct);
-        await Sent(new KeepReceipt(connection.Id, article.Id, article.TangentId, receipt.Version, null, DateTimeOffset.UtcNow), ct);
+        var wanted = receipt is null ? article.LogSeq > connection.From : receipt.Retracted || receipt.Version < article.Version;
+        if (!wanted || !Receipt.Theirs(article, receipt)) return;
+        var written = await adapter.Deliver(article, receipt, publication, ct);
+        await Sent(new KeepReceipt(connection.Id, article.Id, article.TangentId, article.Version, written, DateTimeOffset.UtcNow), ct);
+        if (receipt?.IsLive() != true) await Elsewhere.Start(article, ct);
     }
 
-    /// <summary>An article its author wrote as an account they are no longer bound to: its copy, where it should no longer
-    /// be out, is taken down from the repository its receipt names, through that account's grant; where that grant no
-    /// longer lets the place, the receipt says the copy stays there, and nothing tries again. Nothing goes out under the
-    /// earlier account, and nothing moves to the new one.</summary>
-    private static async Task Earlier(Connection connection, Post article, Receipt? receipt, bool open, AtprotoAdapter adapter, CancellationToken ct)
+    /// <summary>The copy a receipt names, where its article should not be out — private here, removed, or gone with its
+    /// Tangent — taken down from the receipt alone, in the repository its address names: that of the account the
+    /// Connection is under (<paramref name="did"/>), or that of an earlier account of its participant, through that
+    /// account's grant; where that grant no longer lets the place, the receipt says the copy stays there, and nothing tries
+    /// again. Nothing goes out under an earlier account, and nothing moves to the new one. A receipt of nothing out is
+    /// marked retracted.</summary>
+    private static async Task TakeDown(Connection connection, Receipt receipt, string did, AtprotoAdapter adapter, CancellationToken ct)
     {
-        if (open || receipt is null || !receipt.IsLive() || receipt.Stays) return;
-        var retracted = await adapter.MayChange(receipt.Repository()!, AtprotoAdapter.Scopes, ct);
-        if (retracted)
+        var repository = receipt.Repository();
+        if (receipt.Retracted || (receipt.Stays && repository != did)) return;
+        var retracted = !receipt.IsLive() || await Retracted(receipt, repository!, did, adapter, ct);
+        await Sent(new KeepReceipt(connection.Id, receipt.PostId, receipt.TangentId, receipt.Version, null, DateTimeOffset.UtcNow, Stays: !retracted), ct);
+    }
+
+    /// <summary>Whether the live copy a receipt names came down from <paramref name="repository"/>: at once under the
+    /// account the Connection is under, and under an earlier one only through its grant.</summary>
+    private static async Task<bool> Retracted(Receipt receipt, string repository, string did, AtprotoAdapter adapter, CancellationToken ct)
+    {
+        if (repository == did)
         {
-            try
-            {
-                await adapter.Retract(receipt, ct);
-            }
-            catch (AtprotoRepositoryException refused) when (refused.NeedsGrant)
-            {
-                retracted = false;
-            }
+            await adapter.Retract(receipt, ct);
+            return true;
         }
 
-        await Sent(new KeepReceipt(connection.Id, article.Id, article.TangentId, receipt.Version, null, DateTimeOffset.UtcNow, Stays: !retracted), ct);
+        if (!await adapter.MayChange(repository, AtprotoAdapter.Scopes, ct)) return false;
+        try
+        {
+            await adapter.Retract(receipt, ct);
+            return true;
+        }
+        catch (AtprotoRepositoryException refused) when (refused.NeedsGrant)
+        {
+            return false;
+        }
     }
 
     /// <summary>Withdraws the place's publication from the account it is under, through that account's grant where it is

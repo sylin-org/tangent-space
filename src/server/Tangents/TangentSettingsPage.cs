@@ -15,7 +15,11 @@ namespace Tangent.Tangents;
 /// (<see cref="TangentAccessPage"/>). <see cref="Can"/> is what the reader holds on the Tangent, and
 /// <see cref="Gate"/> why they may not change it, null when they may; <see cref="SignIn"/> is where a visitor signs in,
 /// coming back here. After a refusal the form keeps what was sent and says why: under the name, under the description,
-/// or above the form.</summary>
+/// or above the form. <see cref="Delete"/>, present only where the reader holds <c>ManageSpace</c> and this is not the
+/// moderators' Tangent, deletes it with the <see cref="Topics"/> it holds, which go with it; where it holds any, the page
+/// says how many copies of them are out on Bluesky (<see cref="OnBluesky"/>, a lower bound where
+/// <see cref="OnBlueskyAtLeast"/>), and where the Tangent downloads first (<see cref="Export"/>); after a refusal of the
+/// delete it says why (<see cref="DeleteFailure"/>).</summary>
 [Render.Page(Render.Layout.Panel)]
 public sealed record TangentSettingsPage(
     string Slug,
@@ -127,6 +131,51 @@ public sealed record TangentSettingsPage(
                     : [new(TangentWrites.Word(Move.Earlier), "Move earlier") { Locked = Before is null }, new(TangentWrites.Word(Move.Later), "Move later") { Locked = After is null }]
             }
         ]) { Tool = "change-tangent move-tangent", ReadOnly = Gate is not null || Change is null };
+
+    public Render.Form? Delete { get; init; }
+
+    public int Topics { get; init; }
+
+    public int? OnBluesky { get; init; }
+
+    public bool OnBlueskyAtLeast { get; init; }
+
+    public string? Export { get; init; }
+
+    public string? DeleteFailure { get; init; }
+
+    /// <summary>Deleting the Tangent, at the foot of the page: an empty one at one press, one that holds Topics behind what
+    /// goes with it, said in the page, opened again with the reason where a delete was refused.</summary>
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.Form? Deleting => Delete is not { } delete
+        ? null
+        : Topics == 0
+            ? delete with { Submit = "Delete this Tangent", Quiet = true, Failure = DeleteFailure }
+            : delete with { Opens = "Delete this Tangent", Open = DeleteFailure is not null, Failure = DeleteFailure, Confirm = Warning };
+
+    /// <summary>What deleting a Tangent that holds Topics takes along, in words: its Topics and their replies, for good; the
+    /// copies of them out on Bluesky, which come down wherever their authors' accounts still let the place; and where a
+    /// copy of it downloads first.</summary>
+    private string Warning
+    {
+        get
+        {
+            var (one, many, reply) = Kind == Posts.PostWrites.Word(Posts.PostKind.Article) ? ("article", "articles", "to") : ("topic", "topics", "in");
+            var goes = Topics == 1
+                ? $"Its one {one} and every reply {reply} it go for good, and no tombstone stays in its place."
+                : $"Its {Topics.ToString(System.Globalization.CultureInfo.InvariantCulture)} {many} and every reply {reply} them go for good, and no tombstone stays in their place.";
+            var outside = OnBluesky switch
+            {
+                null or 0 => null,
+                1 when Topics == 1 => "It is on Bluesky too, and is taken down there if its author’s account still lets this place.",
+                1 => "One of them is on Bluesky too, and is taken down there if its author’s account still lets this place.",
+                { } count => (OnBlueskyAtLeast ? "At least " : "") + count.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                             + " of them are on Bluesky too, and are taken down there wherever their authors’ accounts still let this place."
+            };
+            var kept = Export is { } export ? Render.Sentence.Link("Download it first", export) + " to keep a copy." : null;
+            return string.Join(' ', new[] { goes, outside, kept }.OfType<string>());
+        }
+    }
 
     /// <summary>The frame the shell draws around the page: its settings as its own crumb past the Tangent, and who reads, or
     /// where a visitor signs in.</summary>

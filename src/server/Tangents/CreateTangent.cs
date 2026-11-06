@@ -10,7 +10,7 @@ using Tangent.Space;
 namespace Tangent.Tangents;
 
 /// <summary>Sets up a Tangent with its audience, and appends <see cref="EventKind.TangentChanged"/> carrying that
-/// audience. The place exists for the actor, who holds <see cref="Bit.View"/> on it, or the command answers that no
+/// audience, whose sequence the Tangent keeps (<see cref="Tangent.LogSeq"/>). The place exists for the actor, who holds <see cref="Bit.View"/> on it, or the command answers that no
 /// place is here; the actor holds <see cref="Bit.ManageSpace"/>, or is refused with the gate word. Its audience, its
 /// <c>everyone</c> overwrite, is written with it, over whatever overwrite of <c>everyone</c> the slug holds. Idempotent by
 /// slug: the same slug with the same fields and audience answers with the existing Tangent; a different one is a
@@ -45,8 +45,8 @@ public sealed record CreateTangent(
 
         var tangent = Tangent.Create(Slug, Name, Description, DefaultKind, Order);
         await Overwrites.SetAudience(Collection(), Slug, Audience, ct);
+        tangent.LogSeq = (await Event.Append(EventKind.TangentChanged, At ?? DateTimeOffset.UtcNow, ct, tangentId: tangent.Id, actorId: ActorId, audience: Audience)).Seq;
         await tangent.Save(ct);
-        await Event.Append(EventKind.TangentChanged, At ?? DateTimeOffset.UtcNow, ct, tangentId: tangent.Id, actorId: ActorId, audience: Audience);
         return new Outcome<Tangent>.Done(tangent);
     }
 

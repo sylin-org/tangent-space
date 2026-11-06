@@ -13,9 +13,9 @@ namespace Tangent.Connections;
 
 /// <summary>An author publishes a public article under their own account, and it follows them: their document and its
 /// Bluesky post land in their repository, a moderator's edit stays out of it until they choose it, their own edit puts
-/// the document again, and a removal deletes both; as the proprietor, their account holds the place as a publication
-/// until the place is private — against a repository double that holds the author's grant, never anyone's real
-/// account.</summary>
+/// the document again, and a removal deletes both, as deleting the article's Tangent does; as the proprietor, their
+/// account holds the place as a publication until the place is private — against a repository double that holds the
+/// author's grant, never anyone's real account.</summary>
 public sealed class PublishTests
 {
     /// <summary>The longest a Connection's job takes to deliver what a write asked for.</summary>
@@ -115,6 +115,29 @@ public sealed class PublishTests
 
         Assert.DoesNotContain("It is being taken down", connections);
         Assert.DoesNotContain(later, repository.Records.Keys.Where(key => key.Contains(AtprotoAdapter.Documents, StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task An_articles_copy_comes_down_when_its_tangent_is_deleted()
+    {
+        var repository = new Repository();
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(),
+            services => services.AddSingleton<IAtprotoRepository>(repository), Cancellation);
+        await Place(tangentSpace);
+        var leo = Persona.Id("leo4publish");
+        await Given.AParticipant(tangentSpace, leo, [Access.Roles.Administrator], ct: Cancellation);
+        var article = await Started(Ada, "Mending with gold", "A cracked bowl tells you where it was weak.", Articles);
+        var page = TopicPath(article);
+        using var ada = await SignedIn(tangentSpace, Ada);
+        await Form(ada, page, page + "/" + PublishController.Segment, []);
+        var document = $"at://{Persona.Did(Ada)}/{AtprotoAdapter.Documents}/{article.Id}";
+        var note = $"at://{Persona.Did(Ada)}/{AtprotoAdapter.Notes}/{article.Id}";
+        await Until(() => repository.Records.ContainsKey(document));
+
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new Tangents.DeleteTangent(Articles, leo, Topics: 1).Send(Cancellation));
+
+        await Until(() => !repository.Records.ContainsKey(document) && !repository.Records.ContainsKey(note));
+        Assert.True((await Receipt.Get(Receipt.Key(Ada, article.Id), Cancellation))?.Retracted);
     }
 
     /// <summary>Waits until Ada's Connection has read the log through its head.</summary>

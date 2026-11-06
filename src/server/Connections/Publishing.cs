@@ -106,10 +106,12 @@ public sealed record Publishing(string State, string Sentence, string? Detail, F
     ];
 
     /// <summary>Whether a visitor reads the Tangent <paramref name="tangentId"/> of a place of <paramref name="space"/>: the
-    /// place is public and the Tangent's own audience, where it states one, is not private. Only such an article is
+    /// place is public, the Tangent's own audience, where it states one, is not private, and the Tangent stands, read after
+    /// its audience, so a Tangent deleted since its article was read is never taken for an open one. Only such an article is
     /// published.</summary>
     public static async Task<bool> Open(Space.TangentSpace space, string tangentId, CancellationToken ct)
-        => space.Audience == Space.Audience.Public && await Tangents.Overwrites.AudienceOf(tangentId, ct) != Space.Audience.Private;
+        => space.Audience == Space.Audience.Public && await Tangents.Overwrites.AudienceOf(tangentId, ct) != Space.Audience.Private
+           && await Tangents.Tangent.Get(tangentId, ct) is not null;
 
     /// <summary>Where a Bluesky post is read, from its <c>at://</c> address.</summary>
     public static string? Bluesky(string note)

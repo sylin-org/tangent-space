@@ -105,6 +105,16 @@ public sealed class Capabilities
     /// <summary>The verbs the participant holds here, by name: the value every resource carries.</summary>
     public IReadOnlyList<string> Can => Bits.Names(Held);
 
+    /// <summary>Where the Tangent's own rows of the log begin, from its row (<see cref="Tangents.Tangent.LogSeq"/>), as
+    /// <see cref="LoadEach"/> answers: a row of its slug before it belongs to a Tangent deleted before this one took the
+    /// slug. Past every row for a Tangent with no row of its own; zero for the place and wherever <see cref="LoadEach"/>
+    /// did not answer.</summary>
+    public long Since { get; private init; }
+
+    /// <summary>Whether the row of the log at <paramref name="seq"/> that names this Tangent is one of its own
+    /// (<see cref="Since"/>).</summary>
+    public bool Owns(long seq) => seq >= Since;
+
     public bool Holds(Bit verb) => (Held & verb) == verb;
 
     /// <summary>Null when the verb is held; otherwise the one reason it is not: <see cref="SignIn"/>,
@@ -304,18 +314,32 @@ public sealed class Capabilities
         return new Rows(reader.Participant, reader.Space, Resolve(reader.Participant, reader.Bag, reader.Space, tangentId, overwrites, now), now);
     }
 
-    /// <summary>What one participant holds on each of several Tangents, from the reads <see cref="LoadRows"/> makes once
-    /// and the overwrites of each from Koan's cache, by Tangent id.</summary>
+    /// <summary>What one participant holds on each of several Tangents, by Tangent id: one keyed read of their rows, the
+    /// reads <see cref="LoadRows"/> makes once, and the overwrites of each from Koan's cache, each answer saying where its
+    /// Tangent's own rows of the log begin (<see cref="Since"/>). Every caller names Tangents that other rows name — rows
+    /// of the log, asks, origins — so a Tangent with no row of its own exists for no one, administrators among them: it
+    /// holds nothing, and no row of the log is its own.</summary>
     public static async Task<IReadOnlyDictionary<string, Capabilities>> LoadEach(string? participantId, IReadOnlyList<string> tangentIds,
         CancellationToken ct)
     {
+        var ids = tangentIds.Distinct(StringComparer.Ordinal).ToList();
+        var each = new Dictionary<string, Capabilities>(StringComparer.Ordinal);
+        if (ids.Count == 0) return each;
+        var rows = await Tangents.Tangent.Get(ids, ct);
         var reader = await Reader(participantId, ct);
         var now = DateTimeOffset.UtcNow;
-        var each = new Dictionary<string, Capabilities>(StringComparer.Ordinal);
-        foreach (var id in tangentIds.Distinct(StringComparer.Ordinal))
+        for (var index = 0; index < ids.Count; index++)
         {
+            var id = ids[index];
+            if (rows[index] is not { } row)
+            {
+                each[id] = new Capabilities(Bit.None, false, Bits.Each.ToDictionary(bit => bit, _ => Absent), [], reader.Bag) { Since = long.MaxValue };
+                continue;
+            }
+
             var overwrites = await OverwritesOf(reader, id, ct);
-            each[id] = For(reader.Participant, reader.Space, Resolve(reader.Participant, reader.Bag, reader.Space, id, overwrites, now), now, null, null);
+            var held = For(reader.Participant, reader.Space, Resolve(reader.Participant, reader.Bag, reader.Space, id, overwrites, now), now, null, null);
+            each[id] = new Capabilities(held.Held, held.Exists, held._missing, held.RoleIds, held.Bag) { Since = row.LogSeq };
         }
 
         return each;

@@ -65,6 +65,11 @@ public sealed class Tangent : Entity<Tangent>
     /// <summary>How many Topics were started here, raised in the commit that starts one.</summary>
     public int TopicCount { get; set; }
 
+    /// <summary>The log's sequence of the <see cref="Events.EventKind.TangentChanged"/> that created it, written by the
+    /// command that creates it; zero where none was written. Its own rows of the log begin there: a row of its slug before it
+    /// belongs to a Tangent deleted before this one took the slug (<see cref="DeleteTangent"/>).</summary>
+    public long LogSeq { get; set; }
+
     /// <summary>A Tangent, or a refusal: the slug has the slug's shape and is not <see cref="NewSegment"/>, and the name
     /// and description are within their limits.</summary>
     public static Tangent Create(string slug, string name, string description, PostKind defaultKind, int order)

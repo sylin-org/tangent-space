@@ -76,6 +76,8 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
         var each = new Dictionary<string, Capabilities>(page.Each, StringComparer.Ordinal);
         foreach (var (id, on) in await Capabilities.LoadEach(personId, tangentIds, ct)) each[id] = on;
         bool Viewable(string? tangentId) => tangentId is not null && each.TryGetValue(tangentId, out var on) && on.Exists;
+        // A row of a Tangent's slug from before that Tangent took it is a deleted Tangent's, which reaches no one.
+        bool Reached(Event e) => Viewable(e.TangentId) && each[e.TangentId!].Owns(e.Seq);
         var tangents = await BySlug(page.Tangents, tangentIds.Where(Viewable).ToList(), ct);
         // The moderators' Tangent comes after every other, so past the first page of a long list; whoever may view it
         // finds it on the door whatever the place holds.
@@ -83,7 +85,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             ? [.. page.Tangents, reports]
             : page.Tangents;
 
-        var created = window.Where(e => e.Kind == EventKind.PostCreated && Viewable(e.TangentId) && e.PostId is not null && e.TopicId is not null).ToList();
+        var created = window.Where(e => e.Kind == EventKind.PostCreated && Reached(e) && e.PostId is not null && e.TopicId is not null).ToList();
         var posts = await Posts(created, forYou?.Posts, ct);
         var marks = unread is null ? new Dictionary<string, long>() : await unread.Marks(created.Select(e => e.TopicId!), ct);
         var fresh = unread is null ? [] : Fresh(created, unread, posts, marks);
@@ -108,7 +110,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
         {
             // Read through the newest event in a Tangent the reader may view, their own included, and what is for them; an
             // event in a Tangent they may not view moves nothing they can see.
-            var newestViewable = window.Where(e => Viewable(e.TangentId)).Select(e => e.Seq).DefaultIfEmpty(0).Max();
+            var newestViewable = window.Where(Reached).Select(e => e.Seq).DefaultIfEmpty(0).Max();
             through = new[] { unread.Floor, newestViewable, forYou.Through }.Max();
             news = News(unread, forYou, forYouGroups, fresh, window, posts, tangents, people, await RoleNames(forYouGroups.Roles, ct), through, baseAddress)
                 with { Let = await Tangents.Asking.Decided(forYouGroups.Let, people, baseAddress, ct) };

@@ -5,13 +5,15 @@ using Tangent.Access;
 namespace Tangent.Events;
 
 /// <summary>Which rows of the log reach one reader, by the rule the door reads by: a row in a Tangent reaches them where
-/// they may view that Tangent, and is absent otherwise; a row in no Tangent reaches them where it changed the place,
+/// they may view that Tangent and the row is one of its own (<see cref="Capabilities.Owns"/>), and is absent otherwise, so
+/// a deleted Tangent's rows reach no one, and none of them reaches the readers of a Tangent that takes its slug later; a
+/// let reaches the participant it names while its Tangent stands; a row in no Tangent reaches them where it changed the place,
 /// where it names them as its target, or where it is an application (<see cref="Application"/>) and they hold
 /// <see cref="Bit.ManageStanding"/> in the place, which <see cref="Decides"/> says. A report is a row in the moderators'
 /// Tangent, so it reaches whoever may view that Tangent, which <see cref="Reports"/> says. A poll asks once; a stream
 /// holds the answers for each Tangent it has met and asks again for all of them, the place's among them, when
 /// <see cref="Refresh"/> has passed since it last asked, or at once when a row it is
-/// about to send changed a standing, a role, a Tangent or the place, so a reader who loses <see cref="Bit.View"/>
+/// about to send changed a standing, a role, a Tangent or the place or deleted a Tangent, so a reader who loses <see cref="Bit.View"/>
 /// receives nothing more from that Tangent from the first row past the change that commits more than
 /// <see cref="Refresh"/> after it, and from the very next row where the change is itself in the log. Each ask is the bounded,
 /// lock-free read capability makes (<see cref="Capabilities.LoadEach"/>), for the Tangents the rows name and nothing
@@ -29,7 +31,7 @@ public sealed class Readable(string? participantId, TimeProvider? clock = null)
     /// begins.</summary>
     public const int ScanLimit = 200;
 
-    private readonly Dictionary<string, bool> _tangents = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Capabilities> _tangents = new(StringComparer.Ordinal);
     private DateTimeOffset _read = DateTimeOffset.MinValue;
     private bool _place = true;
     private bool _decides;
@@ -58,7 +60,7 @@ public sealed class Readable(string? participantId, TimeProvider? clock = null)
         var missing = rows.Select(row => row.TangentId).OfType<string>().Distinct(StringComparer.Ordinal)
             .Where(id => !_tangents.ContainsKey(id)).ToList();
         if (missing.Count == 0) return;
-        foreach (var (id, capabilities) in await Capabilities.LoadEach(participantId, missing, ct)) _tangents[id] = capabilities.Exists;
+        foreach (var (id, capabilities) in await Capabilities.LoadEach(participantId, missing, ct)) _tangents[id] = capabilities;
     }
 
     /// <summary>Whether the reader holds <see cref="Bit.ManageStanding"/> in the place, and so decides applications: what
@@ -85,17 +87,22 @@ public sealed class Readable(string? participantId, TimeProvider? clock = null)
         if (!_placeRead) await ReadPlace(ct);
         if (!_place || _moderators is not { } moderators) return false;
         if (!_tangents.ContainsKey(moderators))
-            foreach (var (id, capabilities) in await Capabilities.LoadEach(participantId, [moderators], ct)) _tangents[id] = capabilities.Exists;
-        return _tangents.GetValueOrDefault(moderators);
+            foreach (var (id, capabilities) in await Capabilities.LoadEach(participantId, [moderators], ct)) _tangents[id] = capabilities;
+        return _tangents.GetValueOrDefault(moderators)?.Exists == true;
     }
 
     /// <summary>Whether <paramref name="row"/> reaches the reader; <see cref="Prepare"/> has read what it needs.</summary>
     public bool Reaches(Event row) => row.Kind == EventKind.TangentLet
-        ? participantId is not null && row.TargetId == participantId
-        : row.TangentId is { } tangent
-        ? _tangents.GetValueOrDefault(tangent)
+        ? participantId is not null && row.TargetId == participantId && Owned(row) is not null
+        : row.TangentId is not null
+        ? Owned(row)?.Exists == true
         : _place && (row.Kind == EventKind.SpaceChanged || (participantId is not null && row.TargetId == participantId)
                      || (_decides && Application(row)));
+
+    /// <summary>What the reader holds on the Tangent <paramref name="row"/> names, where the row is one of its own; null
+    /// otherwise.</summary>
+    private Capabilities? Owned(Event row)
+        => row.TangentId is { } tangent && _tangents.TryGetValue(tangent, out var on) && on.Owns(row.Seq) ? on : null;
 
     /// <summary>Whether <paramref name="row"/> is an application: an arrival that left the newcomer applied.</summary>
     public static bool Application(Event row) => row is { Kind: EventKind.StandingChanged, Standing: Participants.Standing.Applied };
@@ -130,5 +137,5 @@ public sealed class Readable(string? participantId, TimeProvider? clock = null)
 
     /// <summary>Whether a row changes what someone may read.</summary>
     private static bool Changes(Event row)
-        => row.Kind is EventKind.StandingChanged or EventKind.RoleChanged or EventKind.TangentChanged or EventKind.SpaceChanged;
+        => row.Kind is EventKind.StandingChanged or EventKind.RoleChanged or EventKind.TangentChanged or EventKind.TangentDeleted or EventKind.SpaceChanged;
 }
