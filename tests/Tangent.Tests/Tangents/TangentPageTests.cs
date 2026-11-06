@@ -444,6 +444,39 @@ public sealed class TangentPageTests
     }
 
     [Fact]
+    public async Task An_articles_tangents_rail_offers_the_authors_who_started_the_most_and_the_one_its_list_is_narrowed_to()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        await Place(tangentSpace);
+        Assert.IsType<Outcome<Tangent>.Done>(await new CreateTangent("essays", "Essays", "", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
+        // More writers than the rail offers: the first ones each start two essays, the last two one each.
+        var writers = Enumerable.Range(0, TangentPageController.AuthorLimit + 2).Select(index => $"writer{index:D2}").ToList();
+        foreach (var (writer, index) in writers.Select((writer, index) => (writer, index)))
+        {
+            await Given.AParticipant(tangentSpace, writer, [Roles.Member], ct: Cancellation);
+            for (var essay = 0; essay < (index < TangentPageController.AuthorLimit ? 2 : 1); essay++)
+                Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "essays", $"Essay {essay} of {writer}", "Words.", writer, At: Start.AddMinutes(index)).Send(Cancellation));
+        }
+
+        var most = writers.Take(TangentPageController.AuthorLimit).Select(writer => (writer, writer + ".example", 2, $"{BaseUrl}/t/essays?author={writer}")).ToList();
+        using (var whole = await Json(tangentSpace.Client, "/t/essays"))
+            Assert.Equal(most, Choices(whole.RootElement.GetProperty("authors")));
+
+        // Narrowed to a writer past them, the rail offers them too, current, and the list says how many they started.
+        var last = writers[^1];
+        using (var narrowed = await Json(tangentSpace.Client, "/t/essays?author=" + last))
+        {
+            Assert.Equal([.. most, (last, last + ".example", 1, $"{BaseUrl}/t/essays?author={last}")], Choices(narrowed.RootElement.GetProperty("authors")));
+            Assert.Single(Ids(narrowed.RootElement));
+        }
+
+        var html = await Html(tangentSpace.Client, "/t/essays?author=" + last);
+        Assert.Contains("<a class=\"topic-view\" href=\"" + BaseUrl + "/t/essays?author=" + last + "\" aria-current=\"page\">" + last + ".example<span class=\"topic-view-count\">1</span></a>", html);
+        Assert.Contains("<h2 class=\"topic-list-title\">1 article by " + last + ".example</h2>", html);
+        Assert.DoesNotContain("?author=" + writers[^2] + "\"", html);
+    }
+
+    [Fact]
     public async Task A_tangent_whose_months_and_authors_do_not_add_up_to_its_topics_is_counted_again_at_start()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);

@@ -14,7 +14,8 @@ using static Tangent.Posts.Writing;
 namespace Tangent.Participants;
 
 /// <summary>The people here: whoever holds ManageStanding or ManageRoles finds the place's participants at
-/// <c>/settings/people</c>, a page at a time from a sealed cursor and by the start of a handle through the handle index;
+/// <c>/settings/people</c>, a page at a time from a sealed cursor, by the start of a handle through the handle index and
+/// by standing through the standing index;
 /// a moderator times a member out, who reads and posts nothing until it is lifted or passes, and bans one, for whom the
 /// place is absent on a page and on an open stream; an administrator gives and takes the moderator role; nobody acts on
 /// someone whose role is not below theirs, on themselves or on the operator; each change is one event that targets the
@@ -387,9 +388,14 @@ public sealed class PeopleTests
         Assert.Empty((await Send(mo.Client, HttpMethod.Get, path + "?handle=nobody", json: true)).Json.GetProperty("people").EnumerateArray());
         Assert.Contains("No one here has a handle that starts with nobody.", (await Send(mo.Client, HttpMethod.Get, path + "?handle=nobody")).Body);
 
-        // The range a start reads is one search of the handle index.
-        var plan = HandlePlan(tangentSpace.DatabasePath, "person2", "person3");
-        Assert.Contains(plan, detail => detail.StartsWith("SEARCH", StringComparison.Ordinal) && detail.Contains("USING INDEX ix_participant_handles", StringComparison.Ordinal));
+        // The range a start reads is one search of the handle index, and everyone, among the people as People.Among asks,
+        // is read in that index's order, never sorted.
+        var plans = Plans(tangentSpace.DatabasePath,
+            (handle, standing) => $"{AmongThePeople(standing)} AND {handle} >= 'person2' AND {handle} < 'person3'",
+            (_, standing) => AmongThePeople(standing));
+        Assert.Contains(plans[0], detail => detail.StartsWith("SEARCH", StringComparison.Ordinal) && detail.Contains("USING INDEX ix_participant_handles (", StringComparison.Ordinal));
+        Assert.Contains(plans[1], detail => detail.StartsWith("SCAN", StringComparison.Ordinal) && detail.Contains("USING INDEX ix_participant_handles", StringComparison.Ordinal));
+        Assert.All(plans, plan => Assert.DoesNotContain("USE TEMP B-TREE FOR ORDER BY", plan));
 
         // A member reads no one, and is refused with the gate: as a tool reads it, its problem.
         using var ada = await SignedIn(tangentSpace, Ada);
@@ -432,6 +438,14 @@ public sealed class PeopleTests
         Assert.Contains("aria-pressed=\"true\" disabled>Banned</button>", html);
         Assert.Contains("No one here is banned and has a handle that starts with ada.", html);
         Assert.Contains("<input type=\"hidden\" name=\"standing\" value=\"banned\" />", html);
+
+        // Who stands as one standing is one range of the standing index, in handle order, with the start of a handle or without.
+        var plans = Plans(tangentSpace.DatabasePath,
+            (_, standing) => $"({standing} = 'Banned')",
+            (handle, standing) => $"({standing} = 'Banned') AND {handle} >= 'ada' AND {handle} < 'adb'");
+        Assert.Contains(plans[0], detail => detail.StartsWith("SEARCH", StringComparison.Ordinal) && detail.Contains("USING INDEX ix_participant_standings (<expr>=?)", StringComparison.Ordinal));
+        Assert.Contains(plans[1], detail => detail.StartsWith("SEARCH", StringComparison.Ordinal) && detail.Contains("USING INDEX ix_participant_standings (<expr>=? AND <expr>>? AND <expr><?)", StringComparison.Ordinal));
+        Assert.All(plans, plan => Assert.DoesNotContain("USE TEMP B-TREE FOR ORDER BY", plan));
 
         // By role: Koan's members of it, each once, the role named on the page, with its standing kept.
         var moderators = await Send(leo.Client, HttpMethod.Get, path + "?role=moderator", json: true);
@@ -509,29 +523,59 @@ public sealed class PeopleTests
         Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + PeopleController.Path), (elsewhere.Status, elsewhere.Location));
     }
 
-    /// <summary>The plan SQLite gives the read of a range of handles as Koan's connector composes it: the handle read as
-    /// the index declares it, the range, its order and a limit.</summary>
-    private static List<string> HandlePlan(string database, string from, string to)
+    /// <summary>The plan SQLite gives each statement, as its detail lines, each composed as Koan's connector composes a read
+    /// of the people: from the table they are on, the handle and the standing read as <c>ix_participant_handles</c> and
+    /// <c>ix_participant_standings</c> declare them, a condition, the handle order and a limit.</summary>
+    private static List<List<string>> Plans(string database, params Func<string, string, string>[] conditions)
     {
         using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = database, Pooling = false, Mode = SqliteOpenMode.ReadOnly }.ToString());
         connection.Open();
-        using var find = connection.CreateCommand();
-        find.CommandText = "SELECT tbl_name, sql FROM sqlite_master WHERE type = 'index' AND name = 'ix_participant_handles'";
-        string table, handle;
-        using (var row = find.ExecuteReader())
+        var (table, handles) = Index(connection, "ix_participant_handles");
+        var (_, standings) = Index(connection, "ix_participant_standings");
+        Assert.Equal(handles[0], standings[1]);
+        var plans = new List<List<string>>();
+        foreach (var condition in conditions)
         {
-            Assert.True(row.Read(), "No index is named ix_participant_handles.");
-            table = row.GetString(0);
-            var sql = row.GetString(1);
-            var open = sql.IndexOf(" (", sql.IndexOf(" ON ", StringComparison.Ordinal), StringComparison.Ordinal) + 2;
-            handle = sql[open..^1].Trim();
+            using var explain = connection.CreateCommand();
+            explain.CommandText = $"EXPLAIN QUERY PLAN SELECT * FROM \"{table}\" WHERE {condition(handles[0], standings[0])} ORDER BY {handles[0]}, \"Id\" LIMIT {People.PageSize + 1}";
+            using var reader = explain.ExecuteReader();
+            var details = new List<string>();
+            while (reader.Read()) details.Add(reader.GetString(3));
+            plans.Add(details);
         }
 
-        using var explain = connection.CreateCommand();
-        explain.CommandText = $"EXPLAIN QUERY PLAN SELECT * FROM \"{table}\" WHERE {handle} >= '{from}' AND {handle} < '{to}' ORDER BY {handle} LIMIT {People.PageSize + 1}";
-        using var reader = explain.ExecuteReader();
-        var details = new List<string>();
-        while (reader.Read()) details.Add(reader.GetString(3));
-        return details;
+        return plans;
+    }
+
+    /// <summary><see cref="People.Among"/> as Koan's connector composes it on the standing read as the index declares it:
+    /// each inequality true for a missing value too.</summary>
+    private static string AmongThePeople(string standing)
+        => $"({standing} IS NULL OR {standing} <> 'Applied') AND ({standing} IS NULL OR {standing} <> 'Declined')";
+
+    /// <summary>The table an index is on and the expressions it is declared on, which are the dialect's reads of the
+    /// fields without the row's alias.</summary>
+    private static (string Table, List<string> Expressions) Index(SqliteConnection connection, string name)
+    {
+        using var find = connection.CreateCommand();
+        find.CommandText = "SELECT tbl_name, sql FROM sqlite_master WHERE type = 'index' AND name = $name";
+        find.Parameters.AddWithValue("$name", name);
+        using var row = find.ExecuteReader();
+        Assert.True(row.Read(), $"No index is named {name}.");
+        var (table, sql) = (row.GetString(0), row.GetString(1));
+        var list = sql[(sql.IndexOf(" (", sql.IndexOf(" ON ", StringComparison.Ordinal), StringComparison.Ordinal) + 2)..^1];
+        var expressions = new List<string>();
+        var (depth, quoted, from) = (0, '\0', 0);
+        for (var index = 0; index < list.Length; index++)
+        {
+            var character = list[index];
+            if (quoted != '\0') { if (character == quoted) quoted = '\0'; continue; }
+            if (character is '\'' or '"') quoted = character;
+            else if (character == '(') depth++;
+            else if (character == ')') depth--;
+            else if (character == ',' && depth == 0) { expressions.Add(list[from..index].Trim()); from = index + 1; }
+        }
+
+        expressions.Add(list[from..].Trim());
+        return (table, expressions);
     }
 }

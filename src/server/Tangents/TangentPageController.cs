@@ -16,8 +16,8 @@ namespace Tangent.Tangents;
 
 /// <summary>The Tangent page, one resource both ways: the Tangent, its <c>can</c>, and one bounded page of its Topics,
 /// whole or narrowed to a month or an author (<see cref="TopicList.Narrowing"/>), with what is new to the reader marked,
-/// and in an articles Tangent every month and author it narrows to, from the counts its row keeps, left to the formatter
-/// as HTML, a fragment or JSON. It needs
+/// and in an articles Tangent every month it narrows to and the <see cref="AuthorLimit"/> authors who started the most,
+/// from the counts its row keeps, left to the formatter as HTML, a fragment or JSON. It needs
 /// <see cref="Bit.View"/>, which the Doorway judges before anything else (<see cref="Access.Doorway"/>), so a reader without it
 /// receives its gate, and one for whom the Tangent is absent what an address with no Tangent receives. Every read is bounded
 /// and keyed: the Tangent and capability's rows, which the Doorway read, one read of Topics, their latest replies by Id, the people on the page and those the rail names, the reader's place mark and their marks on
@@ -42,11 +42,15 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
     /// <summary>The most Tangents the switcher lists; the rest are a link away (<see cref="TangentsController"/>).</summary>
     public const int SwitcherLimit = 50;
 
+    /// <summary>The most authors an articles Tangent's rail offers, those who started the most there; the list narrows to
+    /// anyone else at their own address all the same (<see cref="Author"/>).</summary>
+    public const int AuthorLimit = 10;
+
     [HttpGet("/t/{tangent}")]
     [HttpHead("/t/{tangent}")]
     [Tool(Name = "read_tangent")]
     [Needs(Bit.View)]
-    [Description("Read a Tangent: its Topics a page at a time, narrowed to a month or an author where you name one, what is new to you marked, and a Topic whose root was removed saying who removed it; an articles Tangent lists every month and author it narrows to, with how many each. Follow with read_topic on a Topic's slug, or start_topic to begin one.")]
+    [Description("Read a Tangent: its Topics a page at a time, narrowed to a month or an author where you name one, what is new to you marked, and a Topic whose root was removed saying who removed it; an articles Tangent lists every month it narrows to and the authors who started the most, with how many each, and narrows to any author by their id. Follow with read_topic on a Topic's slug, or start_topic to begin one.")]
     public async Task<IActionResult> Get([Description(Holds.Tangent)] string tangent, [FromQuery(Name = After), Description(Holds.After)] string? after,
         [FromQuery(Name = Month), Description(Holds.Month)] string? month, [FromQuery(Name = Author), Description(Holds.Author)] string? author,
         CancellationToken ct)
@@ -71,7 +75,8 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
         var reader = here.Rows.Participant;
         var latest = await LatestReplies(page.Topics, ct);
         var articles = row.DefaultKind == PostKind.Article;
-        IEnumerable<string> named = articles ? row.Authors.Keys : [];
+        var offered = articles ? Offered(row, by) : [];
+        IEnumerable<string> named = offered.Select(author => author.Key);
         var people = await People(page.Topics, latest.Values, ct, by is null ? named : named.Append(by));
         var unread = reader is null ? null : await Unread.Of(reader, ct);
         var marks = unread is null ? new Dictionary<string, long>() : await unread.Marks(page.Topics.Select(topic => topic.Id), ct);
@@ -117,7 +122,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
             within?.Key,
             by is null ? null : Person(people, by),
             articles ? Months(row, address) : null,
-            articles ? Authors(row, address, people) : null));
+            articles ? Authors(offered, address, people) : null));
     }
 
     /// <summary>Every month the Tangent's Topics started in, newest first, with how many, as its row keeps them.</summary>
@@ -128,10 +133,20 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
         .Select(month => new Render.TopicViews.Choice(month.Month!.Key, month.Month.Name, month.Count, TangentPage.ListAddress(address, month.Month.Key, null)))
         .ToList();
 
-    /// <summary>Everyone who started a Topic in the Tangent, most Topics first, then by name, with how many, as its row
-    /// keeps them.</summary>
-    private static IReadOnlyList<Render.TopicViews.Choice> Authors(Tangent row, string address, IReadOnlyDictionary<string, Render.Person> people)
-        => row.Authors
+    /// <summary>The authors the rail offers, with how many Topics each started, as the Tangent's row keeps them: the
+    /// <see cref="AuthorLimit"/> who started the most, by id where as many started the same, and the one the list is
+    /// narrowed to where they started one and are not among them.</summary>
+    private static IReadOnlyList<KeyValuePair<string, int>> Offered(Tangent row, string? by)
+    {
+        var most = row.Authors.OrderByDescending(author => author.Value).ThenBy(author => author.Key, StringComparer.Ordinal).Take(AuthorLimit).ToList();
+        if (by is not null && row.Authors.TryGetValue(by, out var count) && most.All(author => author.Key != by)) most.Add(new(by, count));
+        return most;
+    }
+
+    /// <summary>The authors the rail offers as its choices, most Topics first, then by name.</summary>
+    private static IReadOnlyList<Render.TopicViews.Choice> Authors(IEnumerable<KeyValuePair<string, int>> offered, string address,
+        IReadOnlyDictionary<string, Render.Person> people)
+        => offered
             .Select(author => new Render.TopicViews.Choice(author.Key, Person(people, author.Key).Name, author.Value, TangentPage.ListAddress(address, null, author.Key)))
             .OrderByDescending(author => author.Count).ThenBy(author => author.Name, StringComparer.CurrentCulture).ThenBy(author => author.Key, StringComparer.Ordinal)
             .ToList();

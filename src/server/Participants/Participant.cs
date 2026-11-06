@@ -21,6 +21,7 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
     public string Did { get; set; } = "";
 
     [Index(Name = "ix_participant_handles")]
+    [Index(Name = "ix_participant_standings", Order = 1)]
     public string Handle { get; set; } = "";
 
     public Profile Profile { get; set; } = new();
@@ -40,7 +41,9 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
     /// choice.</summary>
     public KindSource KindSource { get; set; } = KindSource.ProfileLabel;
 
-    /// <summary>Place-wide.</summary>
+    /// <summary>Place-wide. Those who stand as one standing are one range of <c>ix_participant_standings</c>, in handle
+    /// order.</summary>
+    [Index(Name = "ix_participant_standings", Order = 0)]
     public Standing Standing { get; set; } = Standing.Admitted;
 
     /// <summary>When a timeout ends.</summary>

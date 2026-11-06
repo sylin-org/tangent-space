@@ -6,8 +6,8 @@ namespace Tangent.Render;
 public sealed record TangentHead(TangentEntry Tangent, bool Private, int? Replies, string? Settings) : IPart;
 
 /// <summary>The ways a Tangent's page lists its Topics, in its rail: all of them, current where the page is their first
-/// (<see cref="All"/>), and in an articles Tangent the months they started in and the authors who started them, each with
-/// how many, the one the list is narrowed to current.</summary>
+/// (<see cref="All"/>), and in an articles Tangent the months they started in and the authors who started the most of
+/// them, each with how many, the one the list is narrowed to current.</summary>
 public sealed record TopicViews(TangentEntry Tangent, bool All, string? Month, string? Author, IReadOnlyList<TopicViews.Choice> Months,
     IReadOnlyList<TopicViews.Choice> Authors) : IPart
 {

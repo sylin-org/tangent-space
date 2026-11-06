@@ -17,8 +17,9 @@ namespace Tangent.Tangents;
 /// may create one. <see cref="Feeds"/> are the Tangent's feeds, present only where a visitor may read it. <see cref="Leave"/> is where a
 /// participant who joined a private Tangent leaves it, present only for them. <see cref="Month"/> and <see cref="Author"/>
 /// say what the page is narrowed to, a month's key and the participant, absent where it is not; in an articles Tangent,
-/// <see cref="Months"/> and <see cref="Authors"/> are every month its Topics started in and everyone who started one, with
-/// how many each, as the Tangent keeps them, and where the list narrowed to each is.</summary>
+/// <see cref="Months"/> and <see cref="Authors"/> are every month its Topics started in and the authors who started the
+/// most (<see cref="TangentPageController.AuthorLimit"/>), the one the list is narrowed to among them, with how many each,
+/// as the Tangent keeps them, and where the list narrowed to each is.</summary>
 [Render.Page(Render.Layout.Home)]
 public sealed partial record TangentPage(
     string Slug,

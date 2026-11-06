@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using System.Security.Cryptography;
 using Koan.Core.Hosting.App;
 using Koan.Data.Abstractions;
@@ -17,7 +18,8 @@ namespace Tangent.Participants;
 /// the participants admitted to the place — standing admitted, timed out or banned; an applicant stays among the
 /// <see cref="Applications"/> — people and agents alike, in handle order through <c>ix_participant_handles</c>,
 /// continued from a sealed <see cref="Cursor"/>, and narrowed to the handles that start with what the reader typed, one
-/// range of the same index, and to who stands timed out or banned; <see cref="Holding"/> is one page of them who hold a
+/// range of the same index, and to who stands timed out or banned, one range of <c>ix_participant_standings</c>, which
+/// holds each standing in handle order; <see cref="Holding"/> is one page of them who hold a
 /// role, in Koan's order of its members. <see cref="Refusal"/> is the one rule every change of standing or role answers to: the roles
 /// stand in Koan's one order (<see cref="Role.Position"/>) and the operator above every role, and a participant changes
 /// the standing or roles only of someone whose highest role stands below theirs (<see cref="RoleBag.Highest"/>), never
@@ -233,6 +235,12 @@ public static class People
         return false;
     }
 
+    /// <summary>Whether a row is among the people, as a read asks it: neither applied nor declined. No index serves the
+    /// question, so a read of everyone keeps to the index its order names rather than ranging over every standing of
+    /// <c>ix_participant_standings</c> and sorting the place.</summary>
+    public static readonly Expression<Func<Participant, bool>> Among
+        = participant => participant.Standing != Standing.Applied && participant.Standing != Standing.Declined;
+
     /// <summary>Whether <paramref name="participant"/> is among the people at <paramref name="now"/>, standing as
     /// <paramref name="standing"/> where it is given: admitted, timed out or banned, never an applicant.</summary>
     private static bool Stands(Participant participant, Standing? standing, DateTimeOffset now)
@@ -309,8 +317,9 @@ public static class People
 
     /// <summary>The page of participants after <paramref name="after"/>, or the first page, whose handles start with
     /// <paramref name="start"/> and who stand as <paramref name="standing"/> where each is given, a timeout only while it
-    /// lasts: one read through the handle index, limited to the page and one more, which says whether a next page exists.
-    /// A start holding a character no handle holds finds no one, and reads nothing.</summary>
+    /// lasts: one read in handle order, limited to the page and one more, which says whether a next page exists — through
+    /// <c>ix_participant_handles</c>, or for one standing through its range of <c>ix_participant_standings</c>. A start
+    /// holding a character no handle holds finds no one, and reads nothing.</summary>
     public static async Task<Page> Read(string? start, Cursor? after, CancellationToken ct, Standing? standing = null)
     {
         if (start is not null && !start.All(HandleCharacter)) return new Page([], null);
@@ -338,8 +347,7 @@ public static class People
             .WithSort<Participant>(sort => sort.OrderBy(participant => participant.Handle).ThenBy(participant => participant.Id));
         var rows = (await (standing is { } only
             ? Participant.Query(participant => participant.Standing == only, query, ct)
-            : Participant.Query(participant => participant.Standing == Standing.Admitted
-                || participant.Standing == Standing.TimedOut || participant.Standing == Standing.Banned, query, ct))).ToList();
+            : Participant.Query(Among, query, ct))).ToList();
         return rows.Count > PageSize
             ? new Page(rows.GetRange(0, PageSize), Cursor.After(rows[PageSize - 1]))
             : new Page(rows, null);

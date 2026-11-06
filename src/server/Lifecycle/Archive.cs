@@ -119,8 +119,7 @@ public sealed class Archive
                 Page = 1,
                 PageSize = PeopleRead
             }.WithSort<Participant>(sort => sort.OrderBy(participant => participant.Id));
-            var rows = await Participant.Query(participant => participant.Standing == Standing.Admitted
-                || participant.Standing == Standing.TimedOut || participant.Standing == Standing.Banned, query, ct);
+            var rows = await Participant.Query(People.Among, query, ct);
             foreach (var row in rows) await Profile(row, ct);
             if (rows.Count < PeopleRead) return;
             after = rows[^1].Id;
