@@ -24,8 +24,9 @@ namespace Tangent.Posts;
 /// one rule (<see cref="Unread"/>). Reading moves nothing: their page carries the form that moves their mark through
 /// what it shows (<see cref="SeenController"/>). It needs <see cref="Bit.View"/>, which the Doorway judges before anything else
 /// (<see cref="Access.Doorway"/>): a reader without it receives its gate, and one for whom the Tangent is absent — or an address no
-/// Topic or Post of this Topic answers — what an address with nothing at it receives. At <c>/t/{tangent}/{tid}</c>, where no Topic has
-/// that slug, the Doorway finds the root with that TID, and the page answers a redirect to its Topic's address. Every read is bounded
+/// Topic or Post of this Topic answers — what an address with nothing at it receives. At <c>/t/{tangent}/{tid}</c> and
+/// <c>/t/{tangent}/{tid}/{post}</c>, where no Topic has that slug, the Doorway finds the root with that TID, and the page answers a
+/// redirect to the same address under the Topic's slug. Every read is bounded
 /// and keyed: the Tangent, the rows capability is computed from, the root by slug and the anchor by Id, which the Doorway read once
 /// for the page; at most two ranges of the window index; the reader's
 /// place mark and their mark on the Topic; the people on the page; the participants its bodies mention; where the Topic was taken on a
@@ -72,11 +73,14 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Read
         var root = here.Root!;
         var rows = here.Rows;
         var place = here.Around;
-        // The segment named the root by its TID: the Topic's address is its slug's, so a sender who minted the TID finds the Topic
-        // it started without knowing its slug.
-        if (topic != (root.Slug ?? root.Id))
-            return Redirect(BaseAddress() + "/t/" + Uri.EscapeDataString(tangentRow.Id) + "/" + Uri.EscapeDataString(root.Slug ?? root.Id));
         var anchor = here.Post;
+        // The segment named the root by its TID: the Topic's address is its slug's, so a sender who minted the TID finds the Topic
+        // it started, and a reader of the log the Post it names, without knowing the slug.
+        if (topic != (root.Slug ?? root.Id))
+        {
+            var moved = PostWrites.TopicAddress(BaseAddress(), tangentRow.Id, root.Slug ?? root.Id);
+            return Redirect(anchor is null ? moved : moved + "/" + Uri.EscapeDataString(anchor.Id));
+        }
 
         if (before is not null && after is not null || anchor is not null && (before is not null || after is not null))
             return NotAWindow("A window is opened by one of its address's Post, before or after.");

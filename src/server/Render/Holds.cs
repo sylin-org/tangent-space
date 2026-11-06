@@ -9,7 +9,7 @@ public static class Holds
     private const string Stays = " Left out, it stays.";
 
     public const string Tangent = "The slug of a Tangent, as its address names it.";
-    public const string Topic = "The slug of a Topic of that Tangent, as its address names it.";
+    public const string Topic = "The slug of a Topic of that Tangent, as its address names it, or its id, as the log names it.";
     public const string Post = "The Id of a Post of that Topic, as its address names it.";
     public const string Handle = "A participant's handle, or their DID.";
 

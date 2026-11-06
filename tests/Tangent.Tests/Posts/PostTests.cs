@@ -1,4 +1,7 @@
+using System.Reflection;
 using Koan.Data.Core.Commands;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
 using Tangent.Events;
@@ -61,10 +64,26 @@ public sealed class PostTests
         var create = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, "New", "Where Topics start.", "leo").Send(Cancellation)).Result;
         var settings = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, "Settings!", "Where the Tangent is set.", "leo").Send(Cancellation)).Result;
         var plain = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, "New settings", "Neither.", "leo").Send(Cancellation)).Result;
+        var leave = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, "Leave", "Where a participant goes out.", "leo").Send(Cancellation)).Result;
 
-        Assert.Equal(("new-2", "settings-2", "new-settings"), (create.Slug, settings.Slug, plain.Slug));
-        Assert.Equal(3, (await Tangents.Tangent.Get(Workshop, Cancellation))!.TopicCount);
+        Assert.Equal(("new-2", "settings-2", "new-settings", "leave-2"), (create.Slug, settings.Slug, plain.Slug, leave.Slug));
+        Assert.Equal(4, (await Tangents.Tangent.Get(Workshop, Cancellation))!.TopicCount);
         Assert.Equal(0, (await Tangents.Tangent.Get("articles", Cancellation))!.TopicCount);
+    }
+
+    [Fact]
+    public void Every_segment_of_a_tangents_own_routes_that_could_be_a_slug_is_reserved_so_no_topic_answers_at_one()
+    {
+        var own = typeof(TangentModule).Assembly.GetTypes()
+            .Where(type => typeof(ControllerBase).IsAssignableFrom(type))
+            .SelectMany(type => type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
+            .SelectMany(action => action.GetCustomAttributes<HttpMethodAttribute>())
+            .Select(route => route.Template?.Split('/', StringSplitOptions.RemoveEmptyEntries) ?? [])
+            .Where(segments => segments is ["t", "{tangent}", _, ..] && Slug.IsValid(segments[2]))
+            .Select(segments => segments[2])
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.Equal(Slug.Reserved.Order(StringComparer.Ordinal), own.Order(StringComparer.Ordinal));
     }
 
     [Fact]

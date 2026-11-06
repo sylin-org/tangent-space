@@ -52,7 +52,7 @@ public sealed record Here(Tangents.Tangent? Tangent, Capabilities.Rows Rows, Pos
         if (!around.Exists) return (nothing, around.Gate(Bit.View));
         if (tangent is not null && row is null) return (nothing, Capabilities.Absent);
         Post? root = null;
-        if (topic is not null && (row is null || (root = await Topic(row.Id, topic, post is null, ct)) is null)) return (nothing, Capabilities.Absent);
+        if (topic is not null && (row is null || (root = await Topic(row.Id, topic, ct)) is null)) return (nothing, Capabilities.Absent);
         Post? named = null;
         if (post is not null)
         {
@@ -63,13 +63,14 @@ public sealed record Here(Tangents.Tangent? Tangent, Capabilities.Rows Rows, Pos
         return (new Here(row, rows, root, named), null);
     }
 
-    /// <summary>The Topic a segment names in a Tangent: by its slug, or, where none has it and no Post is named, by its root's TID, so a
-    /// sender who minted the TID finds the Topic it started. A slug is read first, so a slug that looks like a TID names its own Topic.</summary>
-    private static async Task<Post?> Topic(string tangentId, string topic, bool byTid, CancellationToken ct)
+    /// <summary>The Topic a segment names in a Tangent: by its slug, or, where none has it, by its root's TID, so a sender who minted
+    /// the TID finds the Topic it started and a reader of the log, which names a Topic by its id, finds the Topic and each of its Posts.
+    /// A slug is read first, so a slug that looks like a TID names its own Topic.</summary>
+    private static async Task<Post?> Topic(string tangentId, string topic, CancellationToken ct)
     {
         if (!Slug.IsValid(topic)) return null;
         if (await TopicWindow.Topic(tangentId, topic, ct) is { } root) return root;
-        return byTid && Tid.IsValid(topic) && await Post.Get(topic, ct) is { ParentId: null } started && started.TangentId == tangentId ? started : null;
+        return Tid.IsValid(topic) && await Post.Get(topic, ct) is { ParentId: null } started && started.TangentId == tangentId ? started : null;
     }
 }
 
