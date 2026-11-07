@@ -11,11 +11,20 @@ namespace Tangent.Access;
 
 /// <summary>What a route needs of its reader: one bit, on what its address names. A route that declares it is judged by
 /// <see cref="Doorway.Judge"/> once, before anything is bound, and its action reads what the judgement found (<see cref="Here.Of"/>).
-/// <see cref="Participant"/> asks a signed-in participant besides, as a report does; <see cref="Outside"/> lets in someone outside a
-/// members-only Tangent they may join or ask to join, as the Tangent's own address does; <see cref="Applicant"/> lets in an
-/// applicant a private place is closed to, as leaving does.</summary>
+/// <see cref="AnyOf"/> names another bit that lets the reader in as well, as either managing standing or managing roles lets
+/// them read the people; <see cref="Place"/> judges the bit on the place where the address names a Tangent, as deleting one
+/// does; <see cref="Participant"/> asks a signed-in participant besides, as a report does; <see cref="Outside"/> lets in someone
+/// outside a members-only Tangent they may join or ask to join, as the Tangent's own address does; <see cref="Applicant"/> lets
+/// in an applicant a private place is closed to, as leaving does.</summary>
 public sealed class NeedsAttribute(Bit bit) : AccessAttribute<Bit>(bit)
 {
+    /// <summary>Another bit that lets the reader in where they hold it; a refusal names the declared bit's gate.</summary>
+    public Bit AnyOf { get; init; }
+
+    /// <summary>Whether the bit is judged on the place, whatever the address names; the address is still found as it stands
+    /// for the reader, so a Tangent absent to them answers as missing.</summary>
+    public bool Place { get; init; }
+
     /// <summary>Whether only a signed-in participant may: a visitor is told to sign in whatever the bit says.</summary>
     public bool Participant { get; init; }
 
@@ -130,7 +139,9 @@ public sealed class Doorway : IAuthorizationProvider
     }
 
     /// <summary>The address as it stands for <paramref name="personId"/> (<see cref="Here.Find"/>), and then each bit
-    /// <paramref name="needs"/> names, on what the address names; <see cref="Bit.View"/> is the address's own, which finding it asked.
+    /// <paramref name="needs"/> names, or the other bit it takes (<see cref="NeedsAttribute.AnyOf"/>), on what the address names, or on
+    /// the place (<see cref="NeedsAttribute.Place"/>), read once where the address names a Tangent; <see cref="Bit.View"/> is the
+    /// address's own, which finding it asked.
     /// A Tangent absent to a participant outside it who may join or ask to join is found where <paramref name="needs"/> lets them in
     /// (<see cref="NeedsAttribute.Outside"/>), and a private place closed to an applicant where it lets them in
     /// (<see cref="NeedsAttribute.Applicant"/>).</summary>
@@ -147,7 +158,14 @@ public sealed class Doorway : IAuthorizationProvider
         if (refusal is not null) return (here, refusal);
         if (personId is null && needs.Any(need => need.Participant)) return (here, Capabilities.SignIn);
         var on = here.Capabilities;
-        return (here, needs.Where(need => need.Need != Bit.View).Select(need => on.Gate(need.Need)).FirstOrDefault(gate => gate is not null));
+        var place = needs.Any(need => need.Place) && here.Tangent is not null ? (await Capabilities.LoadRows(personId, null, ct)).For(null) : here.Around;
+        foreach (var need in needs.Where(need => need.Need != Bit.View))
+        {
+            var judged = need.Place ? place : on;
+            if (judged.Gate(need.Need) is { } gate && (need.AnyOf == Bit.None || judged.Gate(need.AnyOf) is not null)) return (here, gate);
+        }
+
+        return (here, null);
     }
 
     /// <summary>What a verb declares, reached through its class: the class's, then its own, every one holding.</summary>

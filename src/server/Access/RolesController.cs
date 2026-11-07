@@ -79,20 +79,17 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
     [HttpGet(Path)]
     [Tool(Name = "read_roles")]
     [Description("Read the roles in their order, the highest first, a page at a time, for whoever holds ManageRoles. Then call create_role, change_role or delete_role where one's can allows it.")]
-    [Needs(Bit.View)]
+    [Needs(Bit.ManageRoles)]
     public async Task<IActionResult> Get([FromQuery(Name = PageQuery), Description(Holds.Number)] string? page, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
-        var personId = PostWrites.PersonId(User);
-        var place = Here.Of(HttpContext).Around;
-        if (place.Gate(Bit.ManageRoles) is { } refused && PostWrites.WantsJson(Request)) return this.Refused(refused);
-        var read = await Page(place, personId, Numbered(page), ct);
-        return place.Gate(Bit.ManageRoles) is { } gate ? new ObjectResult(read) { StatusCode = Answers.Status(HttpContext, gate) } : Ok(read);
+        return Ok(await Page(Here.Of(HttpContext).Around, PostWrites.PersonId(User), Numbered(page), ct));
     }
 
     [HttpPost(Path)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "create_role", Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Needs(Bit.ManageRoles)]
     [Description("Create a role by naming it and choosing what it grants, for whoever holds ManageRoles; no one is in it yet. Sending it again makes a second role. Then call give_role.")]
     public Task<IActionResult> Create(CreateRoleInput input, CancellationToken ct) => Write(input.Name, input.Permissions,
         Granted(input.Permissions, out var bits) is { } refused
@@ -102,6 +99,7 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
     [HttpPost(ChangePath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "change_role", Destructive = true, Idempotent = false, OpenWorld = false)]
+    [Needs(Bit.ManageRoles)]
     [Description("Rename a role, change what it grants or move it one place, for whoever holds ManageRoles and manages the role. What it grants changes for everyone in it, and sending a move again moves it again.")]
     public Task<IActionResult> Change(ChangeRoleInput input, CancellationToken ct) => Write(input.Name, input.Permissions, Revising(input), created: false, ct);
 
@@ -117,6 +115,7 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
     [HttpPost(DeletePath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "delete_role", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Needs(Bit.ManageRoles)]
     [Description("Delete a role the place created, for whoever holds ManageRoles, manages it and holds what it grants. Everyone in it loses what it granted.")]
     public Task<IActionResult> Delete(DeleteRoleInput input, CancellationToken ct) => Write(null, null,
         Roles.KeyOf(input.Role) is { } key
@@ -139,9 +138,6 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
-
         if (built is Reason refused) return await Refused(personId, name, permissions, refused, created, ct);
         var sent = (ICommand<Role>)built;
         var outcome = await sent.Send();

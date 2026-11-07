@@ -136,22 +136,39 @@ public sealed class Appearance
     public bool Same(Appearance other) => Base == other.Base && Palette == other.Palette && Css == other.Css && Image == other.Image && Mark == other.Mark
                                           && Masthead == other.Masthead && Footer == other.Footer && Intro == other.Intro && ArticleHeader == other.ArticleHeader;
 
-    /// <summary>This appearance with what a write sends in place of what it holds, each judged; a part left null stays.
-    /// Refuses with the rule of the first part that is not one of its choices or past its bound.</summary>
+    /// <summary>This appearance with what a write sends in place of what it holds, each part kept as the row keeps it —
+    /// trimmed, Markdown with <c>\n</c> line endings — and judged with the row (<see cref="Broken"/>); a part left null stays.
+    /// A base or a palette sent as a word that names none is refused with its rule.</summary>
     public Appearance With(string? @base = null, string? palette = null, string? css = null, string? image = null, string? mark = null,
         string? masthead = null, string? footer = null, string? intro = null, string? articleHeader = null)
     {
         var next = Copy();
         if (@base is not null) next.Base = Parse<Base>(@base, Bases, BaseRule);
         if (palette is not null) next.Palette = Parse<Palette>(palette, Palettes, PaletteRule);
-        if (css is not null) next.Css = css.Length <= CssLimit ? css : throw new Refusal(CssRule);
-        if (image is not null) next.Image = Art.Judged(image) ?? throw new Refusal(ImageRule);
-        if (mark is not null) next.Mark = mark.Trim() is var kept && (kept.Length == 0 || Media.IdIn(kept) is not null) ? kept : throw new Refusal(MarkRule);
-        if (masthead is not null) next.Masthead = Words(masthead, LineLimit, MastheadRule);
-        if (footer is not null) next.Footer = Words(footer, LineLimit, FooterRule);
-        if (intro is not null) next.Intro = Words(intro, ProseLimit, IntroRule);
-        if (articleHeader is not null) next.ArticleHeader = Words(articleHeader, ProseLimit, ArticleHeaderRule);
+        if (css is not null) next.Css = css;
+        if (image is not null) next.Image = Art.Judged(image) ?? image;
+        if (mark is not null) next.Mark = mark.Trim();
+        if (masthead is not null) next.Masthead = Kept(masthead);
+        if (footer is not null) next.Footer = Kept(footer);
+        if (intro is not null) next.Intro = Kept(intro);
+        if (articleHeader is not null) next.ArticleHeader = Kept(articleHeader);
         return next;
+    }
+
+    /// <summary>The rule of the first part that is not one of its choices or past its bound, in the order the parts are
+    /// listed; null where every part holds its rule. What the place's row holds (<see cref="TangentSpace.Holds"/>).</summary>
+    public Reason? Broken()
+    {
+        if (!Enum.IsDefined(Base)) return BaseRule;
+        if (!Enum.IsDefined(Palette)) return PaletteRule;
+        if (Css.Length > CssLimit) return CssRule;
+        if (Art.Judged(Image) != Image) return ImageRule;
+        if (Mark.Length > 0 && (Mark != Mark.Trim() || Media.IdIn(Mark) is null)) return MarkRule;
+        if (!Fits(Masthead, LineLimit)) return MastheadRule;
+        if (!Fits(Footer, LineLimit)) return FooterRule;
+        if (!Fits(Intro, ProseLimit)) return IntroRule;
+        if (!Fits(ArticleHeader, ProseLimit)) return ArticleHeaderRule;
+        return null;
     }
 
     /// <summary>This appearance with what a preview sends, each part it cannot take left as it is saved.</summary>
@@ -166,7 +183,7 @@ public sealed class Appearance
         {
             try
             {
-                next = step(next);
+                if (step(next) is var taken && taken.Broken() is null) next = taken;
             }
             catch (Refusal)
             {
@@ -196,20 +213,22 @@ public sealed class Appearance
     private static T Parse<T>(string sent, IReadOnlyList<string> words, Reason rule) where T : struct, Enum
         => words.Contains(sent, StringComparer.Ordinal) ? Enum.Parse<T>(sent, ignoreCase: true) : throw new Refusal(rule);
 
-    /// <summary>Markdown as a part keeps it, trimmed with <c>\n</c> line endings, or a refusal with <paramref name="rule"/>
-    /// past its bound or where it would not render within a Post's bounds.</summary>
-    private static string Words(string sent, int limit, Reason rule)
+    /// <summary>Markdown as a part keeps it: trimmed, with <c>\n</c> line endings.</summary>
+    private static string Kept(string sent) => sent.Replace("\r\n", "\n", StringComparison.Ordinal).Trim();
+
+    /// <summary>Whether a part's Markdown is kept as <see cref="Kept"/> keeps it, within <paramref name="limit"/>, with no
+    /// NUL, and renders within a Post's bounds.</summary>
+    private static bool Fits(string words, int limit)
     {
-        var kept = sent.Replace("\r\n", "\n", StringComparison.Ordinal).Trim();
-        if (kept.Length == 0) return "";
-        if (kept.Length > limit || kept.Contains('\0') || !MarkdownHtml.Tractable(kept)) throw new Refusal(rule);
+        if (words.Length == 0) return true;
+        if (words != Kept(words) || words.Length > limit || words.Contains('\0') || !MarkdownHtml.Tractable(words)) return false;
         try
         {
-            return MarkdownHtml.Render(kept).Fits ? kept : throw new Refusal(rule);
+            return MarkdownHtml.Render(words).Fits;
         }
         catch (ArgumentException)
         {
-            throw new Refusal(rule);
+            return false;
         }
     }
 

@@ -106,7 +106,7 @@ public sealed class StartAndReplyTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
-        var hidden = Post.Root(Tids.Mint(), Studio, "Plans", "plans", PostKind.Topic, "Not for everyone.", Mo, DateTimeOffset.UtcNow);
+        var hidden = Given.ARoot(Tids.Mint(), Studio, "Plans", "plans", PostKind.Topic, "Not for everyone.", Mo, DateTimeOffset.UtcNow);
         Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(hidden).Send(Cancellation));
         var root = await Started(Ada, "Lanterns", "How do you hang yours?");
         var other = await Started(Bea, "Wicks", "Cotton or hemp?");

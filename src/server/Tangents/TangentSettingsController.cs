@@ -67,7 +67,7 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "change_tangent", Destructive = true, Idempotent = false, OpenWorld = false)]
     [Description("Change a Tangent's name, description, default kind, audience, accent or image, or move it among the Tangents, for whoever holds ManageTangent there or ManageSpace. What you send replaces what stood, and sending a move again moves it again.")]
-    [Needs(Bit.View)]
+    [Needs(Bit.ManageTangent)]
     public async Task<IActionResult> Change([FromRoute, Description(Holds.Tangent)] string tangent, ChangeTangentInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
@@ -111,15 +111,13 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
     [HttpPost(ImageRoute)]
     [RequestSizeLimit(NewMediaController.RequestLimit)]
     [RequestFormLimits(MultipartBodyLengthLimit = NewMediaController.RequestLimit)]
-    [Needs(Bit.View)]
+    [Needs(Bit.ManageTangent)]
     public async Task<IActionResult> TakeImage([FromRoute] string tangent, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
-        var personId = PostWrites.PersonId(User);
         var found = Here.Of(HttpContext);
+        var personId = found.PersonId!;
         var sent = new ChangeTangentInput();
-        if (personId is null || found.Capabilities.Gate(Bit.ManageTangent) is not null)
-            return await Refused(found, personId, sent, found.Capabilities.Gate(Bit.ManageTangent) ?? Capabilities.SignIn, ct);
 
         Media media;
         try
@@ -144,8 +142,8 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
     [HttpPost(DeleteRoute)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "delete_tangent", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Needs(Bit.ManageSpace, Place = true)]
     [Description("Delete a Tangent and everything in it, for whoever holds ManageSpace: its Topics and their replies go for good and no tombstone stays, and copies of its articles on Bluesky are taken down wherever their authors’ accounts still let this place. An empty Tangent goes as it is; one that holds Topics goes only when topics says how many, as read_tangent_settings counts them, and /settings/export/{tangent}.zip keeps a copy first. The moderators’ Tangent stays.")]
-    [Needs(Bit.View)]
     public async Task<IActionResult> Delete([FromRoute, Description(Holds.Tangent)] string tangent, DeleteTangentInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";

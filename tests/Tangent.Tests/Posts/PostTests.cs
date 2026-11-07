@@ -195,7 +195,7 @@ public sealed class PostTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Started(tangentSpace);
-        var removed = Post.Root(Tids.Mint(), Workshop, "Removed", "removed", PostKind.Topic, "Gone.", "leo", DateTimeOffset.UtcNow);
+        var removed = Given.ARoot(Tids.Mint(), Workshop, "Removed", "removed", PostKind.Topic, "Gone.", "leo", DateTimeOffset.UtcNow);
         removed.Removed = true;
         Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(removed).Send(Cancellation));
         var before = (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation));

@@ -65,7 +65,7 @@ public sealed class CapabilitiesTests
 
     private static Post Root(string authorId = Leo, bool removed = false)
     {
-        var root = Post.Root("3jzfcijpj2z2a", Workshop, "A Topic", "a-topic", PostKind.Topic, "Words.", authorId, Now);
+        var root = Given.ARoot("3jzfcijpj2z2a", Workshop, "A Topic", "a-topic", PostKind.Topic, "Words.", authorId, Now);
         root.Removed = removed;
         return root;
     }
@@ -286,7 +286,7 @@ public sealed class CapabilitiesTests
         closed.Close(Leo, Now);
         var closedAndRemoved = Root(Ada, removed: true);
         closedAndRemoved.Closed = true;
-        var reply = Post.Root("3jzfcijpj2z2b", Workshop, "A reply", "a-reply", PostKind.Topic, "More words.", Ada, Now);
+        var reply = Given.ARoot("3jzfcijpj2z2b", Workshop, "A reply", "a-reply", PostKind.Topic, "More words.", Ada, Now);
         reply.ParentId = closed.Id;
 
         var member = Capabilities.For(Participant(), Member(), PublicPlace, Workshop, [], Now, closed);

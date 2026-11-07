@@ -59,8 +59,8 @@ public sealed record StartTopic(
         if (existing is not null) return new Outcome<Post>.Refused(Post.IdTaken);
 
         var at = At ?? DateTimeOffset.UtcNow;
-        Post.CheckTitle(Title);
-        var root = Post.Root(Id, TangentId, Title, await UniqueSlug(TangentId, Slug.From(Title), Id, ct), kind, Body, AuthorId, at, origin?.Id);
+        var root = new Post { Id = Id, Title = Title, OriginId = origin?.Id };
+        root.StartIn(tangent, await UniqueSlug(TangentId, Slug.From(Title), Id, ct), Body, AuthorId, at);
         root.AuthorDid = await Participant.DidOf(AuthorId, ct);
         if (CoverId is not null)
         {
@@ -68,16 +68,7 @@ public sealed record StartTopic(
             root.Cover(CoverId);
         }
 
-        var created = await Event.Append(EventKind.PostCreated, at, ct,
-            tangentId: root.TangentId, topicId: root.TopicId, postId: root.Id, actorId: root.AuthorId,
-            targetId: origin is null || origin.AuthorId == root.AuthorId ? null : origin.AuthorId, version: root.Version);
-        root.Logged(created.Seq, root);
-        await root.Save(ct);
-        await MediaUse.Record(root, AuthorId, [], ct);
-        tangent.TopicCame(root);
-        await tangent.Save(ct);
-        await Follow.Wrote(root.AuthorId, root, await Seen.Wrote(root.AuthorId, root, root.Sequence, ct), ct);
-        await Mentions.Notify(root, root.AuthorId, [], at, ct);
+        await PostWriting.Wrote(root, root, tangent, origin is null || origin.AuthorId == root.AuthorId ? null : origin.AuthorId, at, ct);
         return new Outcome<Post>.Done(root);
     }
 

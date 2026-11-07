@@ -55,6 +55,11 @@ public sealed class TangentModule : KoanModule
         // The data folder is marked in use while the Tangent Space runs, so a restore refuses it.
         services.AddHostedService<RunningMark>();
 
+        // What every row of a Post, a Tangent and the place holds, judged wherever it is saved: a command, a seed, a snapshot.
+        Posts.Post.Lifecycle.BeforeUpsert(Posts.Post.Holds);
+        Tangents.Tangent.Lifecycle.BeforeUpsert(Tangents.Tangent.Holds);
+        TangentSpace.Lifecycle.BeforeUpsert(TangentSpace.Holds);
+
         // The Doorway judges every route that declares its bit, before anything is bound, and a 401 names the proof door.
         services.AddScoped<Koan.Web.Authorization.IAuthorizationProvider, Access.Doorway>();
         services.AddSingleton<Koan.Web.Authorization.IChallenge, Access.ProofChallenge>();

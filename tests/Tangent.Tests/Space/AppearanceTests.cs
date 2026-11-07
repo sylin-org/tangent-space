@@ -102,7 +102,7 @@ public sealed class AppearanceTests
         // The settings offer Ada no form, so her session's token comes from the workshop's page, which carries one.
         var form = await Form(ada, "/t/" + Workshop, Path, Colours("jade"));
         Assert.Equal(HttpStatusCode.Forbidden, form.Status);
-        Assert.Contains($"data-gate=\"{gate}\"", form.Body);
+        Assert.Contains($"class=\"refusal\" data-word=\"{gate}\"", form.Body);
         var json = await Json(ada, "/t/" + Workshop, Path, new { palette = "jade" });
         Assert.Equal((HttpStatusCode.Forbidden, gate), (json.Status, json.Word));
 

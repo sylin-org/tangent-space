@@ -51,21 +51,19 @@ public sealed class NewTangentController(KoanWebBaseUrl baseUrl) : ControllerBas
     [HttpPost(Route)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "create_tangent", Destructive = false, Idempotent = false, OpenWorld = false)]
+    [Needs(Bit.ManageSpace)]
     [Description("Create a Tangent by naming it, for whoever holds ManageSpace. Sending it again makes a second one. Then call start_topic.")]
     public async Task<IActionResult> Create(CreateTangentInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
-
+        var place = Here.Of(HttpContext).Around;
         var name = input.Name ?? "";
         var description = input.Description ?? "";
         var kind = TangentWrites.Choice(input.Kind, TangentWrites.Kinds, out var kindValid);
         if (!kindValid) return await Refused(place, personId, input, TangentWrites.KindRule, ct);
         var audience = TangentWrites.Choice(input.Audience, TangentWrites.Audiences, out var audienceValid);
         if (!audienceValid) return await Refused(place, personId, input, TangentWrites.AudienceRule, ct);
-        if (place.Gate(Bit.ManageSpace) is { } gate) return await Refused(place, personId, input, gate, ct);
 
         for (var attempt = 0; attempt < Attempts; attempt++)
         {

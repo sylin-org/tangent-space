@@ -86,7 +86,7 @@ public sealed class RefusalTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
-        var removed = Post.Root(Tids.Mint(), Workshop, "Said and done", "said-and-done", PostKind.Topic, "No more replies.", Mo, DateTimeOffset.UtcNow);
+        var removed = Given.ARoot(Tids.Mint(), Workshop, "Said and done", "said-and-done", PostKind.Topic, "No more replies.", Mo, DateTimeOffset.UtcNow);
         removed.Removed = true;
         Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(removed).Send(Cancellation));
         using var ada = await SignedIn(tangentSpace, Ada);
@@ -127,7 +127,7 @@ public sealed class RefusalTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
-        var hidden = Post.Root(Tids.Mint(), Studio, "Plans", "plans", PostKind.Topic, "Not for everyone.", Mo, DateTimeOffset.UtcNow);
+        var hidden = Given.ARoot(Tids.Mint(), Studio, "Plans", "plans", PostKind.Topic, "Not for everyone.", Mo, DateTimeOffset.UtcNow);
         Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(hidden).Send(Cancellation));
         using var ada = await SignedIn(tangentSpace, Ada);
         var before = await Counted();

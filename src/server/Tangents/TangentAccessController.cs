@@ -54,6 +54,8 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, RoleCollecti
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var found = Here.Of(HttpContext);
+        // Judged here, not declared: a person who may not change the Tangent, sent here from its settings, reads the page
+        // with the gate in place, where a declaration answers a refusal; JSON reads the same refusal.
         var gate = found.Capabilities.Gate(Bit.ManageTangent);
         if (gate is not null && PostWrites.WantsJson(Request)) return this.Refused(gate);
         var read = await Page(found, personId, RolesController.Numbered(page), ct);
@@ -64,7 +66,7 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, RoleCollecti
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "change_tangent_access", Destructive = true, Idempotent = true, OpenWorld = false)]
     [Description("Set what one role may do in a Tangent, for whoever may change the Tangent and manages the role. Everyone in the role reads or posts there as you set it, at once.")]
-    [Needs(Bit.View)]
+    [Needs(Bit.ManageTangent)]
     public async Task<IActionResult> Change([FromRoute, Description(Holds.Tangent)] string tangent, ChangeAccessInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";

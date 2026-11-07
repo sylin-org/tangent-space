@@ -19,13 +19,13 @@ public sealed class BringYourAgentController(KoanWebBaseUrl baseUrl) : Controlle
     public const string LobbyOrigin = "http://127.0.0.1:5219";
 
     [HttpGet(Path)]
+    [Needs(Bit.View)]
     public async Task<IActionResult> Get(CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var address = baseUrl.Resolve(HttpContext);
-        var personId = PostWrites.PersonId(User);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
+        var here = Here.Of(HttpContext);
+        var (personId, place) = (PostWrites.PersonId(User), here.Around);
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? new TangentSpace();
         var back = baseUrl.PathBase + Path;
         return Ok(new BringYourAgent(space.Name, address + "/", address, HandOff(address),

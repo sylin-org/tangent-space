@@ -19,7 +19,7 @@ public sealed class AddressTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
-        var hidden = Post.Root(Tids.Mint(), Studio, "Plans", "plans", PostKind.Topic, "Not for everyone.", Mo, DateTimeOffset.UtcNow);
+        var hidden = Given.ARoot(Tids.Mint(), Studio, "Plans", "plans", PostKind.Topic, "Not for everyone.", Mo, DateTimeOffset.UtcNow);
         Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(hidden).Send(Cancellation));
         using var ada = await SignedIn(tangentSpace, Ada);
         var before = await Counted();

@@ -126,7 +126,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
     [HttpGet(Path)]
     [Tool(Name = "read_people")]
     [Description("Find the participants admitted here, a page at a time, by the start of a handle, by standing or by a role they hold, with what you may change of each, for whoever holds ManageStanding or ManageRoles. Then call time_out, ban, lift, give_role or take_role where one's entry allows it.")]
-    [Needs(Bit.View)]
+    [Needs(Bit.ManageStanding, AnyOf = Bit.ManageRoles)]
     public async Task<IActionResult> Get([FromQuery(Name = After), Description(Holds.After)] string? after, [FromQuery(Name = HandleQuery), Description(Holds.HandleStart)] string? handle,
         [FromQuery(Name = StandingQuery), Description(Holds.PeopleStanding)] string? standing, [FromQuery(Name = RoleQuery), Description(Holds.PeopleRole)] string? role,
         CancellationToken ct)
@@ -134,8 +134,6 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = Here.Of(HttpContext).Around;
-        if (ReadGate(place) is { } refused && PostWrites.WantsJson(Request)) return this.Refused(refused);
-
         if (!People.TryStanding(standing, out var stands))
             return new Problem(StatusCodes.Status400BadRequest,
                 $"The {StandingQuery} parameter is {Wording.Joined(People.Narrowing.Select(People.Word).ToList(), "or")}, or left out for every standing.") { Title = "Not a standing" }.ToResult();
@@ -146,8 +144,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
             return new Problem(StatusCodes.Status400BadRequest,
                 $"The {After} parameter is the cursor a page of the people names as its next.") { Title = "Not a page of the people" }.ToResult();
 
-        var page = await Page(place, personId, narrowed, after, cursor, members, ct);
-        return ReadGate(place) is { } gate ? new ObjectResult(page) { StatusCode = Answers.Status(HttpContext, gate) } : Ok(page);
+        return Ok(await Page(place, personId, narrowed, after, cursor, members, ct));
     }
 
     /// <summary>What a page of the people is narrowed to: the start of a handle, a standing and a role's word, each null for
@@ -166,6 +163,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
     [HttpPost(TimeOutPath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "time_out", Destructive = true, Idempotent = false, OpenWorld = false)]
+    [Needs(Bit.ManageStanding)]
     [Description("Time a participant out for an hour, a day or a week, for whoever holds ManageStanding: they read and report, and post nothing, and they are told. lift ends it early.")]
     public Task<IActionResult> PostTimeOut(TimeOutInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) =>
         People.Length(input.For) is { } length
@@ -175,18 +173,21 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
     [HttpPost(BanPath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "ban", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Needs(Bit.ManageStanding)]
     [Description("Ban a participant, for whoever holds ManageStanding: the place disappears for them, every page and every stream, as an address with nothing at it answers. lift reverses it.")]
     public Task<IActionResult> PostBan(StandingInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) => new Ban(actor, participant), null, ct);
 
     [HttpPost(LiftPath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "lift", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Needs(Bit.ManageStanding)]
     [Description("Lift a participant's timeout or ban, so they take part again, for whoever holds ManageStanding.")]
     public Task<IActionResult> PostLift(StandingInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) => new Lift(actor, participant), null, ct);
 
     [HttpPost(GivePath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "give_role", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Needs(Bit.ManageRoles)]
     [Description("Give a participant a role listed in their give in read_people, for whoever holds ManageRoles and manages the role. They hold what it grants at once, power over others among it.")]
     public Task<IActionResult> PostGive(GiveRoleInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) =>
         Roles.KeyOf(input.Role) is { } role ? new ChangeRole(actor, participant, role, Give: true) : null,
@@ -195,6 +196,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
     [HttpPost(TakePath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "take_role", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Needs(Bit.ManageRoles)]
     [Description("Take from a participant a role listed in their take in read_people, for whoever holds ManageRoles and manages the role. They lose what it granted at once.")]
     public Task<IActionResult> PostTake(TakeRoleInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) =>
         Roles.KeyOf(input.Role) is { } role ? new ChangeRole(actor, participant, role, Give: false) : null,
@@ -292,11 +294,8 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
     private async Task<IActionResult> Change(string? named, string? back, Func<string, string, ICommand<Participant>?> command, Reason? unsent, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
-        var personId = PostWrites.PersonId(User);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
-
-        if (command(personId ?? "", named ?? "") is not { } sent) return await Refused(personId, unsent!, ct);
+        var personId = Here.Of(HttpContext).PersonId!;
+        if (command(personId, named ?? "") is not { } sent) return await Refused(personId, unsent!, ct);
         var outcome = await sent.Send();
         switch (outcome)
         {

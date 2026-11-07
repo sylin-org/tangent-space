@@ -293,6 +293,8 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Read
     {
         Response.Headers.CacheControl = "no-store";
         var here = Here.Of(HttpContext);
+        // Judged here, not declared: moving asks Moderate of the Tangent, which a removed root does not take away, where a
+        // declaration asks it of the Topic.
         if (here.Around.Gate(Bit.Moderate) is { } gate) return this.Refused(gate);
         if (here.Tangent!.Id == here.Rows.Space.ModeratorsTangentId) return this.Refused(MoveTopic.KeepsReports);
         return Ok(await Moving(here, null, ct));

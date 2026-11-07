@@ -94,7 +94,7 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
     [HttpGet(Path)]
     [Tool(Name = "read_applications")]
     [Description("Read who waits to be admitted and who was declined, or with state waiting those who wait alone, a page at a time, for whoever holds ManageStanding; where admission says apply, every application's page also lists who is invited. Then call admit or decline on an applicant's id, invite on a Bluesky handle, or withdraw_invitation on an invitation's account.")]
-    [Needs(Bit.View)]
+    [Needs(Bit.ManageStanding)]
     public async Task<IActionResult> Get([FromQuery(Name = After), Description(Holds.After)] string? after,
         [FromQuery(Name = StateQuery), Description(Holds.ApplicationsState)] string? state,
         [FromQuery(Name = InvitedQuery), Description(Holds.InvitationsAfter)] string? invited, CancellationToken ct)
@@ -102,8 +102,6 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
         var place = Here.Of(HttpContext).Around;
-        if (place.Gate(Bit.ManageStanding) is { } refused && PostWrites.WantsJson(Request)) return this.Refused(refused);
-
         if (!string.IsNullOrEmpty(state) && state != ApplicationsPage.Waiting)
             return new Problem(StatusCodes.Status400BadRequest,
                 $"The {StateQuery} parameter is {ApplicationsPage.Waiting}, or left out for every application.") { Title = "Not a state of the applications" }.ToResult();
@@ -119,8 +117,7 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
             return new Problem(StatusCodes.Status400BadRequest,
                 $"The {InvitedQuery} parameter is the cursor a page of the invitations names as its next.") { Title = "Not a page of the invitations" }.ToResult();
 
-        var page = await Page(place, personId, waiting, cursor, before, ct, invitedAfter);
-        return place.Gate(Bit.ManageStanding) is { } gate ? new ObjectResult(page) { StatusCode = Answers.Status(HttpContext, gate) } : Ok(page);
+        return Ok(await Page(place, personId, waiting, cursor, before, ct, invitedAfter));
     }
 
     /// <summary>The log's sequence a page of those that wait names as its next, or null where the text is not one.</summary>
@@ -130,12 +127,14 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
     [HttpPost(AdmitPath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "admit", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Needs(Bit.ManageStanding)]
     [Description("Admit an applicant from read_applications, who becomes a member, for whoever holds ManageStanding. It reverses a decline.")]
     public Task<IActionResult> Admit(DecideInput input, CancellationToken ct) => Decide(input, true, ct);
 
     [HttpPost(DeclinePath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "decline", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Needs(Bit.ManageStanding)]
     [Description("Decline an applicant from read_applications, who goes on reading what a visitor reads and is told, for whoever holds ManageStanding. A later admit reverses it.")]
     public Task<IActionResult> Decline(DecideInput input, CancellationToken ct) => Decide(input, false, ct);
 
@@ -228,14 +227,11 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
     private async Task<IActionResult> Decide(DecideInput input, bool admitting, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
-        var personId = PostWrites.PersonId(User);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
-
+        var personId = Here.Of(HttpContext).PersonId!;
         var applicantId = input.Participant ?? "";
         ICommand<Participant> command = admitting
-            ? new Participants.Admit(personId ?? "", applicantId)
-            : new Participants.Decline(personId ?? "", applicantId);
+            ? new Participants.Admit(personId, applicantId)
+            : new Participants.Decline(personId, applicantId);
         var outcome = await command.Send();
         switch (outcome)
         {

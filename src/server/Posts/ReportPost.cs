@@ -88,30 +88,18 @@ public sealed record ReportPost(
         Post written;
         if (earlier is not null)
         {
-            written = earlier.Reply(Id, Reason, ReporterId, earlier.Id, at);
+            written = new Post { Id = Id, ParentId = earlier.Id };
+            written.ReplyTo(earlier, Reason, ReporterId, at);
         }
         else
         {
             var title = Title(await ModeratorsTangent.MayView(reported.TangentId, rows.Space, ct) ? topic.Title ?? "" : said ? FirstWords(Reason.Sent) : Unsaid);
-            written = Post.Root(Id, into.Id, title, await StartTopic.UniqueSlug(into.Id, Slug.From(title), Id, ct), into.DefaultKind, Opening ?? Reason, ReporterId, at,
-                reported.Id);
-            into.TopicCame(written);
-            await into.Save(ct);
+            written = new Post { Id = Id, Title = title, OriginId = reported.Id };
+            written.StartIn(into, await StartTopic.UniqueSlug(into.Id, Slug.From(title), Id, ct), Opening ?? Reason, ReporterId, at);
         }
 
         written.AuthorDid = await Participants.Participant.DidOf(ReporterId, ct);
-
-        var root = earlier ?? written;
-        var created = await Event.Append(EventKind.PostCreated, at, ct,
-            tangentId: written.TangentId, topicId: written.TopicId, postId: written.Id, actorId: ReporterId, version: written.Version,
-            report: true);
-        written.Logged(created.Seq, root);
-        await written.Save(ct);
-        if (earlier is not null) await earlier.Save(ct);
-        await Seen.Wrote(ReporterId, root, written.Sequence, ct);
-        if (earlier is not null) await Follow.Moved(root, ReporterId, ct);
-        await MediaUse.Record(written, ReporterId, [], ct);
-        await Mentions.Notify(written, ReporterId, [], at, ct);
+        await PostWriting.Wrote(written, earlier ?? written, into, null, at, ct, report: true);
         return new Outcome<Post>.Done(written);
     }
 

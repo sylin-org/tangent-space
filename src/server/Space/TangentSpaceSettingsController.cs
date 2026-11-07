@@ -289,12 +289,11 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, IServ
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "change_admission", Destructive = true, Idempotent = true, OpenWorld = false)]
     [Description("Set how a newcomer arrives, joining at once or applying and waiting, for whoever holds ManageSpace. Everyone already here stays as they are.")]
-    [Needs(Bit.View)]
+    [Needs(Bit.ManageSpace)]
     public async Task<IActionResult> ChangeAdmission(ChangeAdmissionInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
-        var personId = PostWrites.PersonId(User);
-        var place = Here.Of(HttpContext).Around;
+        var personId = Here.Of(HttpContext).PersonId;
 
         Admission? admission = null;
         var sent = input.Admission;
@@ -364,25 +363,21 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, IServ
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "change_appearance", Destructive = true, Idempotent = true, OpenWorld = false)]
     [Description("Set how the place looks to every reader on every page, for whoever holds ManageSpace: the base layer's stylesheet, the colours, the place's own CSS, which every page but the settings carries over the rest, its image and its mark, either of them bluesky to bring in the banner or the picture your Bluesky account shows, and its words in Markdown. Sending a part its default returns it there: base tangent, palette base, anything else empty. What you leave out stays.")]
-    [Needs(Bit.View)]
+    [Needs(Bit.ManageSpace)]
     public async Task<IActionResult> ChangeAppearance(ChangeAppearanceInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
-        var personId = PostWrites.PersonId(User);
-        var place = Here.Of(HttpContext).Around;
+        var personId = Here.Of(HttpContext).PersonId!;
 
         var (image, mark) = (input.Image, input.Mark);
-        if (personId is not null && place.Gate(Bit.ManageSpace) is null)
+        try
         {
-            try
-            {
-                image = await Brought(image, personId, mark: false, ct);
-                mark = await Brought(mark, personId, mark: true, ct);
-            }
-            catch (Refusal refusal)
-            {
-                return await AppearanceRefused(personId, input, refusal.Reason, ct);
-            }
+            image = await Brought(image, personId, mark: false, ct);
+            mark = await Brought(mark, personId, mark: true, ct);
+        }
+        catch (Refusal refusal)
+        {
+            return await AppearanceRefused(personId, input, refusal.Reason, ct);
         }
 
         var outcome = await new ChangeTangentSpace(personId ?? "", Description: input.Description, Base: input.Base, Palette: input.Palette, Css: input.Css,
@@ -402,12 +397,14 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, IServ
     [HttpPost(ImagePath)]
     [RequestSizeLimit(NewMediaController.RequestLimit)]
     [RequestFormLimits(MultipartBodyLengthLimit = NewMediaController.RequestLimit)]
+    [Needs(Bit.ManageSpace)]
     public Task<IActionResult> TakeImage(CancellationToken ct) => Bring(mark: false, ct);
 
     /// <summary>An image of the reader's own, worn at once as the place's mark.</summary>
     [HttpPost(MarkPath)]
     [RequestSizeLimit(NewMediaController.RequestLimit)]
     [RequestFormLimits(MultipartBodyLengthLimit = NewMediaController.RequestLimit)]
+    [Needs(Bit.ManageSpace)]
     public Task<IActionResult> TakeMark(CancellationToken ct) => Bring(mark: true, ct);
 
     /// <summary>Brings the file sent in, kept as every image is (<see cref="Media.KeepFile"/>), and wears it as the place's image or its
@@ -415,10 +412,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, IServ
     private async Task<IActionResult> Bring(bool mark, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
-        var personId = PostWrites.PersonId(User);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
-        if (personId is null || place.Gate(Bit.ManageSpace) is not null) return Answers.Refused(HttpContext, place.Gate(Bit.ManageSpace) ?? Capabilities.SignIn);
+        var personId = Here.Of(HttpContext).PersonId!;
 
         var form = Request.HasFormContentType ? await Request.ReadFormAsync(ct) : null;
         string worn;

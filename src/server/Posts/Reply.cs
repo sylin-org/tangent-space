@@ -45,18 +45,10 @@ public sealed record Reply(
         if (parent?.TopicId != root.Id) return new Outcome<Post>.Refused(NoParent);
 
         var at = At ?? DateTimeOffset.UtcNow;
-        var reply = root.Reply(Id, Body, AuthorId, parent.Id, at);
+        var reply = new Post { Id = Id, ParentId = parent.Id };
+        reply.ReplyTo(root, Body, AuthorId, at);
         reply.AuthorDid = await Participant.DidOf(AuthorId, ct);
-        var created = await Event.Append(EventKind.PostCreated, at, ct,
-            tangentId: reply.TangentId, topicId: reply.TopicId, postId: reply.Id, actorId: reply.AuthorId,
-            targetId: parent.AuthorId == reply.AuthorId ? null : parent.AuthorId, version: reply.Version);
-        reply.Logged(created.Seq, root);
-        await reply.Save(ct);
-        await root.Save(ct);
-        await MediaUse.Record(reply, reply.AuthorId, [], ct);
-        await Follow.Wrote(reply.AuthorId, root, await Seen.Wrote(reply.AuthorId, root, reply.Sequence, ct), ct);
-        await Follow.Moved(root, reply.AuthorId, ct);
-        await Mentions.Notify(reply, reply.AuthorId, [], at, ct);
+        await PostWriting.Wrote(reply, root, null, parent.AuthorId == reply.AuthorId ? null : parent.AuthorId, at, ct);
         return new Outcome<Post>.Done(reply);
     }
 

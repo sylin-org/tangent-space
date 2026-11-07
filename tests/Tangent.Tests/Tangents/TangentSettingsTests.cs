@@ -52,9 +52,10 @@ public sealed class TangentSettingsTests
         var offered = await Send(ada.Client, HttpMethod.Get, "/t/workshop/settings");
         Assert.Contains($"data-gate=\"{gate}\"", offered.Body);
         Assert.DoesNotContain("type=\"submit\"", PageContent(offered.Body));
+        // The change declares ManageTangent, so the Doorway refuses it before anything is bound: the refusal's page, with its gate.
         var refused = await Form(ada, "/t/workshop", "/t/workshop/settings", Workshop("Ada's workshop"));
         Assert.Equal(HttpStatusCode.Forbidden, refused.Status);
-        Assert.Contains($"data-gate=\"{gate}\"", refused.Body);
+        Assert.Contains($"class=\"refusal\" data-word=\"{gate}\"", refused.Body);
         Assert.Equal("workshop", (await Tangent.Get("workshop", Cancellation))!.Name);
 
         var renamed = await Form(bea, "/t/workshop", "/t/workshop/settings", Workshop("Bea's workshop"));

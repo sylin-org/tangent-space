@@ -60,14 +60,12 @@ public sealed class EventsController(KoanWebBaseUrl baseUrl, EventStream stream,
     public static readonly TimeSpan Retry = TimeSpan.FromSeconds(3);
 
     [HttpGet(Path)]
+    [Needs(Bit.View)]
     public async Task<IActionResult> Get([FromQuery(Name = Since)] string? since, CancellationToken ct)
     {
         Response.Headers.CacheControl = "private, no-store";
         var personId = User.Identity?.IsAuthenticated == true ? User.FindFirst(ClaimTypes.NameIdentifier)?.Value : null;
-        var place = await Capabilities.Load(personId, null, null, ct);
         var streamed = Streamed(Request);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
-
         var named = Request.Headers[LastEventId].FirstOrDefault() is { Length: > 0 } last ? last : since;
         long from;
         if (named is null) from = await Readable.Newest(personId, await stream.Head(ct), ct);

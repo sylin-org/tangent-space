@@ -46,8 +46,8 @@ public sealed class PostBody
     public IReadOnlyList<string> Media { get; }
 
     /// <summary>Why the body may not be written, by what its parse found; null when nothing did. The rules a glance
-    /// decides — empty, a NUL, too many bytes — are <see cref="Post.CheckBody"/>'s, and a body they refuse is not
-    /// parsed.</summary>
+    /// decides — empty, a NUL, too many bytes — are the Post's own (<see cref="Post.CheckBody"/>, and as the row is saved
+    /// <see cref="Post.Holds"/>), and a body they refuse is not parsed.</summary>
     public Reason? Refusal { get; }
 
     public static implicit operator PostBody(string text) => Of(text);
@@ -94,8 +94,8 @@ public sealed class PostBody
             roles.Take(Mentions.Limit).ToList());
     }
 
-    /// <summary>Whether a body as sent passes the rules a glance decides (<see cref="Post.CheckBody"/>): not empty, no
-    /// NUL, at most <see cref="Post.BodyLimit"/> bytes.</summary>
+    /// <summary>Whether a body as sent passes the rules a glance decides (<see cref="Post.CheckBody"/>, <see cref="Post.Holds"/>):
+    /// not empty, no NUL, at most <see cref="Post.BodyLimit"/> bytes.</summary>
     private static bool Glanced(string? text)
         => !string.IsNullOrWhiteSpace(text) && !text.Contains('\0') && Encoding.UTF8.GetByteCount(text) <= Post.BodyLimit;
 

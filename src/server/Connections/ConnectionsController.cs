@@ -51,6 +51,7 @@ public sealed class ConnectionsController(KoanWebBaseUrl baseUrl, Nudge nudge, E
     {
         Response.Headers.CacheControl = "no-store";
         var address = baseUrl.Resolve(HttpContext);
+        // Judged here, not declared: a person not signed in is sent to sign in and brought back, where a declaration answers a refusal.
         if (PostWrites.PersonId(User) is not { } personId)
             return PostWrites.WantsJson(Request)
                 ? Answers.Refused(HttpContext, Capabilities.SignIn)

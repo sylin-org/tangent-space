@@ -39,7 +39,7 @@ public sealed class CommandGateTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Given.ATangent(tangentSpace, Workshop, ct: Cancellation);
         await Given.AParticipant(tangentSpace, "mo", [Roles.Moderator], ct: Cancellation);
-        var removed = Post.Root(Tids.Mint(), Workshop, "Removed", "removed", PostKind.Topic, "Gone.", "leo", DateTimeOffset.UtcNow);
+        var removed = Given.ARoot(Tids.Mint(), Workshop, "Removed", "removed", PostKind.Topic, "Gone.", "leo", DateTimeOffset.UtcNow);
         removed.Removed = true;
         Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(removed).Send(Cancellation));
 
