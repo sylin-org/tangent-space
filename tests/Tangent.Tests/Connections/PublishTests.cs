@@ -199,7 +199,7 @@ public sealed class PublishTests
         // Moved where it is private, its copy comes down; moved back out, it goes out again.
         Assert.IsType<Outcome<Post>.Done>(await new MoveTopic(article.Id, drafts, Mo).Send(Cancellation));
         await Until(() => !repository.Records.ContainsKey(document));
-        Assert.Equal(drafts, (await Receipt.Get(Receipt.Key(Ada, article.Id), Cancellation))?.TangentId);
+        await Until(async () => (await Receipt.Get(Receipt.Key(Ada, article.Id), Cancellation))?.TangentId == drafts);
         Assert.IsType<Outcome<Post>.Done>(await new MoveTopic(article.Id, notebook, Mo).Send(Cancellation));
         await Until(() => repository.Records.ContainsKey(document));
 
