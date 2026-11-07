@@ -105,7 +105,7 @@ public sealed class PostTests
         }
 
         var root = (await Post.Get(topicId, Cancellation))!;
-        Assert.Equal((last, "sam"), (root.LatestReplyId, root.LatestReplyAuthorId));
+        Assert.Equal(last, root.LatestReplyId);
         Assert.Equal(["sam", "kim", "leo", "mara"], root.RecentAuthorIds);
     }
 

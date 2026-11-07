@@ -26,7 +26,8 @@ public sealed record JoiningInput([Description(Holds.Joining)] string? Joining =
 /// overwrites on the Tangent's resource, continued by <c>after</c>, with the asks that wait (<see cref="Inside.AsksWait"/>)
 /// and, by <c>find</c>, the participants whose handles start with it, each with the choices the reader may send for them.
 /// Its <c>POST</c> takes <c>person</c> and <c>choice</c> and sends <see cref="LetIn"/>; <c>POST /t/{tangent}/settings/joining</c>
-/// takes <c>joining</c> and sends <see cref="ChangeJoining"/>, offered while the Tangent is private. A form is sent back to
+/// takes <c>joining</c> and sends <see cref="ChangeJoining"/>, its form offered while the Tangent is private, and its tool
+/// on a public one too, which keeps it for when it is private. A form is sent back to
 /// the people; a JSON request reads the page as it now stands.</summary>
 [Managing]
 public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollection roles) : ControllerBase
@@ -75,7 +76,7 @@ public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollecti
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Needs(Bit.ManageTangent)]
     [Tool(Name = "let_into_tangent", Destructive = true, Idempotent = true, OpenWorld = false)]
-    [Description("Let a participant into a private Tangent you manage, or out: out declines their waiting ask, or takes them out. Their door tells them when you decide an ask.")]
+    [Description("Let a participant into a private Tangent you manage, or out: out declines their waiting ask, or takes them out. Their door tells them when you let them in or decline their ask.")]
     public async Task<IActionResult> Let([FromRoute, Description(Holds.Tangent)] string tangent, LetInInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
@@ -89,7 +90,7 @@ public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollecti
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Needs(Bit.ManageTangent)]
     [Tool(Name = "change_tangent_joining", Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Set how someone outside a private Tangent you manage comes in: closed, join or ask.")]
+    [Description("Set how someone outside a private Tangent you manage comes in: closed, join or ask. A public Tangent keeps it for when it is private.")]
     public async Task<IActionResult> SetJoining([FromRoute, Description(Holds.Tangent)] string tangent, JoiningInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";

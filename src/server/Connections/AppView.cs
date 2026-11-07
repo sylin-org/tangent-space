@@ -16,7 +16,8 @@ public sealed record Heard(int Likes, int Reposts, int Quotes, int Replies, IRea
 /// deep and its quotes, from the public atproto service the profile reads use (<see cref="ProfileReaderOptions"/>),
 /// without a session, bounded in time and bytes. They run in the <see cref="Elsewhere"/> job, never in a request. What
 /// the article's author hid there stays out here — a reply its post's gate lists, a quote they detached — and so does
-/// what Bluesky labels to hide or take down.</summary>
+/// what Bluesky labels to hide or take down, and every post of an account that asks apps to show it to no one signed
+/// out, for every reader here alike.</summary>
 public sealed class AppView(HttpClient http, IOptions<ProfileReaderOptions> options)
 {
     /// <summary>The largest answer read.</summary>
@@ -30,6 +31,10 @@ public sealed class AppView(HttpClient http, IOptions<ProfileReaderOptions> opti
 
     /// <summary>The labels under which Bluesky shows a post to no one, nor any post of a labelled account.</summary>
     private static readonly HashSet<string> Hiding = new(["!hide", "!takedown"], StringComparer.Ordinal);
+
+    /// <summary>The labels under which an account's posts stay out here too: those that hide, and the one an account sets
+    /// on itself asking apps to show its posts to no one signed out, which a page here may be read as.</summary>
+    private static readonly HashSet<string> HidingAccount = new([.. Hiding, "!no-unauthenticated"], StringComparer.Ordinal);
 
     public async Task<Heard> Read(string note, CancellationToken ct)
     {
@@ -71,12 +76,12 @@ public sealed class AppView(HttpClient http, IOptions<ProfileReaderOptions> opti
     }
 
     /// <summary>A post view as a reference, attributed to its author and linked to where it is read; none where a label on
-    /// it or on its author hides it.</summary>
+    /// it or on its author hides it, or its author asks to be shown to no one signed out.</summary>
     private static Reference? Of(string kind, JsonElement post)
     {
         if (Text(post, "uri") is not { } uri || Publishing.Bluesky(uri) is not { } address
             || Field(post, "author") is not { ValueKind: JsonValueKind.Object } author || Text(author, "did") is not { } did
-            || ShownToNoOne(post) || ShownToNoOne(author)) return null;
+            || Labelled(post, Hiding) || Labelled(author, HidingAccount)) return null;
         var record = post.TryGetProperty("record", out var held) ? held : default;
         var text = Text(record, "text") ?? "";
         var at = DateTimeOffset.TryParse(Text(record, "createdAt") ?? Text(post, "indexedAt"), out var written) ? written : DateTimeOffset.UnixEpoch;
@@ -84,9 +89,9 @@ public sealed class AppView(HttpClient http, IOptions<ProfileReaderOptions> opti
             text.Length <= TextLength ? text : text[..(TextLength - 1)].TrimEnd() + "…", at, address);
     }
 
-    /// <summary>Whether a label on a post or an account, not negated, says Bluesky shows it to no one.</summary>
-    private static bool ShownToNoOne(JsonElement labelled)
-        => Items(Field(labelled, "labels")).Any(label => Hiding.Contains(Text(label, "val") ?? "") && Field(label, "neg").ValueKind != JsonValueKind.True);
+    /// <summary>Whether a label on a post or an account, not negated, is one of <paramref name="values"/>.</summary>
+    private static bool Labelled(JsonElement labelled, IReadOnlySet<string> values)
+        => Items(Field(labelled, "labels")).Any(label => values.Contains(Text(label, "val") ?? "") && Field(label, "neg").ValueKind != JsonValueKind.True);
 
     /// <summary>Whether the quote's embed of the post it quotes is detached, which that post's author does on Bluesky: in a
     /// record embed, or in the record of a record embed with media.</summary>

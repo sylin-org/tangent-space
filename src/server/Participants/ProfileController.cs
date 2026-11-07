@@ -22,9 +22,9 @@ namespace Tangent.Participants;
 /// takes a handle, matched as the participant's row keeps it, a participant's id, as a mention links to them, or the DID of
 /// the account they are bound to. Every read is bounded and keyed:
 /// capability's rows for the place; the participant by handle or Id; Koan's roles of theirs and their person's row; the
-/// Tangents the reader may view (<see cref="ViewableTangents.All"/>), every Tangent judged from Koan's compiled state, so
-/// as many as the place holds; one page of their Posts in those (<see cref="RecentPosts"/>); the roots of the replies
-/// among them; and the participants those Posts mention. For a reader who holds <see cref="Bit.ManageStanding"/>
+/// page of their Posts in the Tangents the reader may view, with the Tangents those Posts name and what the reader holds on
+/// each, read again past a Post the reader may not view (<see cref="RecentPosts"/>); the roots of the replies among them;
+/// and the participants those Posts mention. For a reader who holds <see cref="Bit.ManageStanding"/>
 /// or <see cref="Bit.ManageRoles"/>, it also reads the participant as the place's people list them, with what the reader
 /// may change of them and the forms that do, which post to <see cref="PeopleController"/> and come back here.</summary>
 public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection roles) : ControllerBase
@@ -49,9 +49,8 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
             return new Problem(StatusCodes.Status400BadRequest,
                 $"The {Before} parameter is the cursor a page of this profile names as its older.") { Title = "Not a page of these posts" }.ToResult();
 
-        var whole = await ViewableTangents.All(personId, ct);
-        var tangents = whole.Tangents.ToDictionary(tangent => tangent.Id, StringComparer.Ordinal);
-        var page = await RecentPosts.Read(subject.Id, tangents.Keys.ToHashSet(StringComparer.Ordinal), whole.Others, cursor, ct);
+        var tangents = new ViewableTangents.Met(personId);
+        var page = await RecentPosts.Read(subject.Id, tangents, cursor, ct);
         var roots = await Roots(page.Posts, ct);
         var people = await Named(page.Posts, ct);
         var held = (await roles.ForPerson(subject.Id, ct)).Where(role => role.Key != Roles.Everyone).Select(role => role.Name)
@@ -142,7 +141,7 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
         return (await Participant.Get(ids, ct)).OfType<Participant>().ToDictionary(row => row.Id, row => Render.Person.Of(row), StringComparer.Ordinal);
     }
 
-    private static ProfilePage.Written Written(Post post, IReadOnlyDictionary<string, Post> roots, IReadOnlyDictionary<string, Tangents.Tangent> tangents,
+    private static ProfilePage.Written Written(Post post, IReadOnlyDictionary<string, Post> roots, ViewableTangents.Met tangents,
         IReadOnlyDictionary<string, Render.Person> people, string baseAddress)
     {
         var root = post.ParentId is null ? post : roots.GetValueOrDefault(post.TopicId);

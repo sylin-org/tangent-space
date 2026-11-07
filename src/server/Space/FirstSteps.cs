@@ -19,8 +19,8 @@ namespace Tangent.Space;
 /// (<see cref="Line"/>); how it looks — its accent, its image, the banner and the picture their Bluesky account shows as its
 /// image and its mark; who reads it and how a newcomer arrives; where its site is pointed here, the pointers in the general
 /// settings (<see cref="Site"/>); their
-/// agent and the first Topic. <see cref="Close"/> ends them for good, and everything they offer stays in the
-/// settings.</summary>
+/// agent and the first Topic. <see cref="Close"/> ends them for good, and whatever they set, the settings change
+/// later.</summary>
 public sealed record FirstSteps(
     IReadOnlyList<FirstSteps.Purpose> Purposes,
     Form? Line,
@@ -183,7 +183,7 @@ public sealed class FirstStepsController(KoanWebBaseUrl baseUrl) : ControllerBas
     [HttpPost(ClosePath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "close_first_steps", Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Close the first steps on the door for good, for whoever holds ManageSpace. Everything they offer stays in the settings.")]
+    [Description("Close the first steps on the door for good, for whoever holds ManageSpace. Whatever they set, the settings change later.")]
     [Needs(Bit.ManageSpace)]
     public async Task<IActionResult> Close(CancellationToken ct)
     {

@@ -12,7 +12,8 @@ namespace Tangent.Posts;
 /// (<see cref="UndoRemoval"/>), the row becomes the
 /// tombstone (<see cref="Post.Remove"/>), and <see cref="EventKind.PostRemoved"/> is appended, targeting the author where
 /// someone else removed it, so they are told. A removed root makes
-/// its Topic's root a tombstone and leaves its replies as they are. Safe to repeat: removing a tombstone answers with
+/// its Topic's root a tombstone and keeps its replies, and the Topic takes no more until the removal is undone
+/// (<see cref="Capabilities.RootRemoved"/>). Safe to repeat: removing a tombstone answers with
 /// it, unchanged — removed by whoever removed it first — and writes nothing, for anyone who may remove the Post; anyone
 /// else is refused with the gate Capabilities names on the tombstone.</summary>
 public sealed record RemovePost(string PostId, string RemoverId, DateTimeOffset? At = null) : ICommand<Post>

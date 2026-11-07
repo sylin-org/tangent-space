@@ -337,9 +337,28 @@ public sealed class Capabilities
         CancellationToken ct)
     {
         var ids = tangentIds.Distinct(StringComparer.Ordinal).ToList();
-        var each = new Dictionary<string, Capabilities>(StringComparer.Ordinal);
-        if (ids.Count == 0) return each;
+        if (ids.Count == 0) return new Dictionary<string, Capabilities>(StringComparer.Ordinal);
         var rows = await Tangents.Tangent.Get(ids, ct);
+        return await Judge(participantId, ids, rows, ct);
+    }
+
+    /// <summary>What one participant holds on each of the Tangents whose rows a read already holds, by Tangent id, as
+    /// <see cref="LoadEach(string?, IReadOnlyList{string}, CancellationToken)"/> answers it with no read of the rows.</summary>
+    public static Task<IReadOnlyDictionary<string, Capabilities>> LoadEach(string? participantId, IReadOnlyList<Tangents.Tangent> tangents,
+        CancellationToken ct)
+    {
+        var rows = tangents.DistinctBy(row => row.Id, StringComparer.Ordinal).ToList();
+        return rows.Count == 0
+            ? Task.FromResult<IReadOnlyDictionary<string, Capabilities>>(new Dictionary<string, Capabilities>(StringComparer.Ordinal))
+            : Judge(participantId, rows.Select(row => row.Id).ToList(), rows, ct);
+    }
+
+    /// <summary>What one participant holds on each Tangent of <paramref name="ids"/>, from its row in
+    /// <paramref name="rows"/> at the same index, a missing row holding nothing.</summary>
+    private static async Task<IReadOnlyDictionary<string, Capabilities>> Judge(string? participantId, IReadOnlyList<string> ids,
+        IReadOnlyList<Tangents.Tangent?> rows, CancellationToken ct)
+    {
+        var each = new Dictionary<string, Capabilities>(StringComparer.Ordinal);
         var reader = await Reader(participantId, ct);
         var now = DateTimeOffset.UtcNow;
         for (var index = 0; index < ids.Count; index++)

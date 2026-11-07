@@ -7,14 +7,15 @@ namespace Tangent.Participants;
 /// marked current, and one bounded page of <see cref="Applications"/>, newest first, each waiting or declined, with
 /// <see cref="Next"/>, the address of the older ones, null on the last page, and <see cref="First"/>, the newest page's,
 /// for a page that <see cref="Continued"/> from a cursor. <see cref="State"/> is <c>waiting</c> where the page holds those
-/// that wait alone, empty where it holds every application, and <see cref="All"/> the address of every application.
+/// that wait alone, as the settings open it, empty where it holds every application, declined ones too, and
+/// <see cref="All"/> the address of every application.
 /// <see cref="Admit"/> and <see cref="Decline"/> are the forms that
 /// decide, each taking the applicant's id in <c>participant</c>, present only where the reader may decide; a waiting
 /// application is admitted or declined, a declined one only admitted. <see cref="Can"/> is what the
 /// reader holds in the place, and <see cref="Gate"/> why they may not decide, null when they may, when the list is empty
 /// whatever waits; <see cref="SignIn"/> is where a visitor signs in, coming back here. <see cref="Day"/> is the UTC day the
 /// times are written for. After a refusal the page says why above the list. Where admission says apply and the reader may
-/// decide, every application's page also holds <see cref="Invitations"/>, one bounded page of the accounts invited, newest
+/// decide, either page also holds <see cref="Invitations"/>, one bounded page of the accounts invited, newest
 /// first, with <see cref="InvitationsNext"/> the address of the older ones and <see cref="InvitationsFirst"/> the newest
 /// page's, for a page continued from a cursor; <see cref="Invite"/> invites a Bluesky handle and <see cref="Withdraw"/>
 /// withdraws an invitation by its account's DID.</summary>
@@ -65,12 +66,13 @@ public sealed record ApplicationsPage(
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
     public Render.Notice? Line => Render.Notice.Of(Gate, Failure, SignIn);
 
-    /// <summary>Every application or those that wait alone, one press each, the one the page holds pressed.</summary>
+    /// <summary>Those that wait alone, where the settings open the applications, or every application, declined ones too,
+    /// one press each, the one the page holds pressed.</summary>
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
     public Render.Form? States => Gate is not null ? null : Render.Form.Reading(All,
             new Render.Form.Field(ApplicationsController.StateQuery, "", State, Render.Form.Input.Switch)
             {
-                Choices = [new("", "Every application"), new(Waiting, "Waiting")]
+                Choices = [new(Waiting, "Waiting"), new("", "Every application")]
             })
         with { Tool = "applications-state read-applications", Key = "applications-state" };
 

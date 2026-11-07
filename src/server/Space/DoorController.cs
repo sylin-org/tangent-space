@@ -137,7 +137,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             ? await Applications.Waiting(0, long.MaxValue, Unread.CountLimit + 1, ct)
             : [];
 
-        var asking = reader is null ? [] : await Tangents.Asking.For(reader.Id, baseAddress, ct);
+        var asking = reader is null ? [] : await Tangents.Asking.For(listed, each, baseAddress, ct);
 
         var steps = FirstSteps.For(place, space, listed, page.Next is not null, reader, reader is null ? "" : Person(people, reader.Id).Name, baseAddress);
         if (steps is not null) Response.Headers.CacheControl = "no-cache, no-store";

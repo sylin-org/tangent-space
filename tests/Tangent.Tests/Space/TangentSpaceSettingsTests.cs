@@ -43,7 +43,7 @@ public sealed class TangentSpaceSettingsTests
         Assert.Equal("Field notes", page.Json.GetProperty("name").GetString());
         Assert.Contains(nameof(Bit.ManageSpace), page.Json.GetProperty("can").EnumerateArray().Select(verb => verb.GetString()));
         Assert.False(page.Json.TryGetProperty("gate", out _));
-        Assert.Equal([("General", settings, true), ("Admission", settings + "/admission", false), ("Applications", settings + "/applications", false),
+        Assert.Equal([("General", settings, true), ("Admission", settings + "/admission", false), ("Applications", settings + "/applications?state=waiting", false),
                 ("Appearance", settings + "/appearance", false), ("People", settings + "/people", false), ("Roles", settings + "/roles", false), ("Export", settings + "/export", false)],
             page.Json.GetProperty("sections").EnumerateArray().Select(section =>
                 (section.GetProperty("name").GetString(), section.GetProperty("address").GetString(), section.GetProperty("current").GetBoolean())));
@@ -169,7 +169,7 @@ public sealed class TangentSpaceSettingsTests
         var mod = Persona.Id("mo4place");
         await Given.AParticipant(tangentSpace, mod, [Roles.Member, Roles.Moderator], ct: Cancellation);
         using var mo = await SignedIn(tangentSpace, mod);
-        var applications = BaseUrl + ApplicationsController.Path;
+        var applications = ApplicationsController.WaitingAddress(BaseUrl);
 
         Assert.Equal((HttpStatusCode.SeeOther, applications), Sent(await Send(mo.Client, HttpMethod.Get, TangentSpaceSettingsController.Path)));
         Assert.Equal((HttpStatusCode.SeeOther, applications), Sent(await Send(mo.Client, HttpMethod.Get, TangentSpaceSettingsController.AdmissionPath)));

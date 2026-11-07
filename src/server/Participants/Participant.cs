@@ -52,9 +52,6 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
     /// <summary>When a timeout ends.</summary>
     public DateTimeOffset? StandingUntil { get; set; }
 
-    /// <summary>Why the standing is what it is, in the moderator's words.</summary>
-    public string? StandingNote { get; set; }
-
     /// <summary>When the participant applied, while their application is waiting or declined; null once they are
     /// admitted, and for everyone who joined. The applications list reads it newest first.</summary>
     [Index(Name = "ix_participant_applications")]

@@ -19,9 +19,9 @@ namespace Tangent.Posts;
 /// trimmed and cut to their bound, a page that names no number is the first, and a page past the last holds nothing, so it
 /// answers <c>200</c>. It needs <see cref="Bit.View"/> on the place, which the Doorway judges before anything else
 /// (<see cref="Access.Doorway"/>). Every read is bounded and keyed: capability's rows for the place, which the Doorway read; narrowed, the
-/// Tangent and what the reader holds there, and otherwise the Tangents the reader may view
-/// (<see cref="ViewableTangents.All"/>), as many as the place holds; one page of the index; then the roots of the replies
-/// and the participants those Posts name. What it answers depends on who reads and changes with every Post, so it is
+/// Tangent and what the reader holds there; the index's ranking through one past the page, with the Tangents its Posts name
+/// and what the reader holds on each, read again past a Post the reader may not view (<see cref="PostSearch.Run"/>); then the
+/// roots of the replies and the participants those Posts name. What it answers depends on who reads and changes with every Post, so it is
 /// never stored.</summary>
 public sealed class SearchController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
@@ -53,7 +53,8 @@ public sealed class SearchController(KoanWebBaseUrl baseUrl) : ControllerBase
 
         var baseAddress = baseUrl.Resolve(HttpContext);
         var text = PostSearch.Words(q);
-        var inside = await Narrowed(personId, within, ct);
+        var met = new ViewableTangents.Met(personId);
+        var inside = await Narrowed(met, within, ct);
         var address = baseAddress + SearchPage.Path;
         string Query(string? narrowed) => string.Concat(new[]
         {
@@ -80,39 +81,26 @@ public sealed class SearchController(KoanWebBaseUrl baseUrl) : ControllerBase
         if (text is null) return Ok(Answered([], null, null));
 
         var number = PostSearch.Number(page);
-        IReadOnlyDictionary<string, Tangents.Tangent> tangents;
-        PostSearch.Answer found;
-        if (inside is not null)
-        {
-            tangents = new Dictionary<string, Tangents.Tangent>(StringComparer.Ordinal) { [inside.Id] = inside };
-            found = await PostSearch.Run(text, new HashSet<string>(StringComparer.Ordinal) { inside.Id }, null, number, PageSize, ct);
-        }
-        else
-        {
-            var whole = await ViewableTangents.All(personId, ct);
-            tangents = whole.Tangents.ToDictionary(tangent => tangent.Id, StringComparer.Ordinal);
-            found = await PostSearch.Run(text, tangents.Keys.ToHashSet(StringComparer.Ordinal), whole.Others, number, PageSize, ct);
-        }
+        var found = await PostSearch.Run(text, met, inside?.Id, number, PageSize, ct);
 
         string PageAddress(int other) => address + query + (other > 1 ? "&" + Number + "=" + other.ToString(CultureInfo.InvariantCulture) : "");
         return Ok(Answered(
-            await Hits(found.Hits, tangents, baseAddress, ct),
+            await Hits(found.Hits, met, baseAddress, ct),
             found.More ? PageAddress(number + 1) : null,
             number > 1 ? PageAddress(number - 1) : null));
     }
 
     /// <summary>The Tangent <paramref name="within"/> names, where it is one the reader may view; null for none, so the
     /// search is the whole place: one keyed read of the Tangent and one of what the reader holds there.</summary>
-    private static async Task<Tangents.Tangent?> Narrowed(string? personId, string? within, CancellationToken ct)
+    private static async Task<Tangents.Tangent?> Narrowed(ViewableTangents.Met met, string? within, CancellationToken ct)
     {
         var slug = within?.Trim();
-        if (string.IsNullOrEmpty(slug) || !Slug.IsValid(slug) || await Tangents.Tangent.Get(slug, ct) is not { } tangent) return null;
-        return ViewableTangents.Views(await Capabilities.Load(personId, tangent.Id, null, ct)) ? tangent : null;
+        return !string.IsNullOrEmpty(slug) && Slug.IsValid(slug) && await met.Views(slug, ct) ? met[slug] : null;
     }
 
     /// <summary>Each hit as the page shows it, from one keyed read of the roots of the replies among them and one of the
     /// participants they name: who wrote them, who else edited them, and whom they mention.</summary>
-    private static async Task<IReadOnlyList<SearchPage.Hit>> Hits(IReadOnlyList<PostSearch.Hit> hits, IReadOnlyDictionary<string, Tangents.Tangent> tangents,
+    private static async Task<IReadOnlyList<SearchPage.Hit>> Hits(IReadOnlyList<PostSearch.Hit> hits, ViewableTangents.Met tangents,
         string baseAddress, CancellationToken ct)
     {
         if (hits.Count == 0) return [];

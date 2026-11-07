@@ -128,9 +128,6 @@ public sealed class TangentSpace : Entity<TangentSpace>
     /// <summary>Whether the place's manager closed its first steps on the door (<see cref="FirstSteps"/>).</summary>
     public bool FirstStepsClosed { get; set; }
 
-    /// <summary>Whether a newly admitted participant's Posts wait for approval.</summary>
-    public bool NewAccountsAfterApproval { get; set; }
-
     public Appearance Appearance { get; set; } = new();
 
     /// <summary>Renames and describes the place, sets how a newcomer arrives, who reads it and its appearance, judged as

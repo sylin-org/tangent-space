@@ -150,8 +150,8 @@ public sealed record Form(string Action, string Method, IReadOnlyList<Form.Field
     /// <summary>The one <see cref="Unread"/> every form carries.</summary>
     public Unread Token => new("unread");
 
-    /// <summary>The name of the form's tool, with hyphens, which its class carries, so a form, its route and its tool share
-    /// one name.</summary>
+    /// <summary>The form's name, with hyphens, which its class carries: the tool it sends, so a form, its route and its tool
+    /// share one name, or, where its route is no tool, a word of its own, as <c>sign-out</c> and <c>not-now</c>.</summary>
     [Newtonsoft.Json.JsonIgnore]
     public string? Tool { get; init; }
 

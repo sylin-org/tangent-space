@@ -25,20 +25,21 @@ public sealed record WithdrawInput([Description(Holds.Invitation)] string? Accou
 /// <see cref="Bit.ManageStanding"/>. Its <c>GET</c> is one bounded page of them (<see cref="Applications.Read"/>), one
 /// resource both ways (<see cref="ApplicationsPage"/>), continued from the cursor in <c>after</c>, and, with
 /// <c>state=waiting</c>, those that wait alone (<see cref="Applications.ReadWaiting"/>), continued from the sequence in
-/// <c>after</c>; a cursor that is not one, or another state, is refused with <c>400</c>, and a reader who may not
+/// <c>after</c>, which is where the settings open the section (<see cref="WaitingAddress"/>); a cursor that is not one, or another state, is refused with <c>400</c>, and a reader who may not
 /// decide is refused with the gate, <c>401</c> to sign in and <c>403</c> otherwise: a page reads it with no applicant,
 /// and a JSON request as its problem. Its two
 /// <c>POST</c>s take the applicant's id in <c>participant</c>, as a form or a JSON object: <c>admit</c> sends
 /// <see cref="Admit"/>; <c>decline</c> sends <see cref="Decline"/>. A form is sent back to
 /// the applications, those that wait where it carries <c>state=waiting</c>; a JSON request reads the decision (<see cref="DecidedApplication"/>); a refusal reads the page again
 /// with the reason above the list, or a problem. A reader for whom the place does not exist receives what an address with
-/// nothing there receives. Where admission says apply, every application's page also holds one bounded page of the
-/// invitations (<see cref="Invitations.Read"/>), continued from the cursor in <c>invited</c>, and two more <c>POST</c>s
-/// for whoever holds <see cref="Bit.ManageStanding"/>: <c>invite</c> takes a Bluesky handle in <c>handle</c>, reads whose
-/// account it names from its public profile, in the request and outside any command (<see cref="ProfileReader.Find"/>),
-/// and sends <see cref="Participants.Invite"/>; <c>withdraw</c> takes the account's DID in <c>account</c> and sends
-/// <see cref="WithdrawInvitation"/>. A form is sent back to the applications, and a refusal of a handle reads the page again
-/// with the reason under the field and the handle kept; a JSON request reads where the invitation stands.</summary>
+/// nothing there receives. Where admission says apply, either page also holds one bounded page of the invitations
+/// (<see cref="Invitations.Read"/>), continued from the cursor in <c>invited</c>, and two more <c>POST</c>s for whoever
+/// holds <see cref="Bit.ManageStanding"/>: <c>invite</c> takes a Bluesky handle in <c>handle</c>, reads whose account it
+/// names from its public profile, in the request and outside any command (<see cref="ProfileReader.Find"/>), and sends
+/// <see cref="Participants.Invite"/>; <c>withdraw</c> takes the account's DID in <c>account</c> and sends
+/// <see cref="WithdrawInvitation"/>. A form is sent back to the applications that wait, where the section opens, and a
+/// refusal of a handle reads that page again with the reason under the field and the handle kept; a JSON request reads
+/// where the invitation stands.</summary>
 [Managing]
 public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
@@ -164,7 +165,7 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
         switch (outcome)
         {
             case Outcome<Participants.Invite.Result>.Done { Result: var result }:
-                if (!PostWrites.WantsJson(Request)) return Back(false);
+                if (!PostWrites.WantsJson(Request)) return Back(true);
                 var place = await Capabilities.Load(personId, null, null, ct);
                 return Ok(new InvitedAccount(found.Did, handle, found.DisplayName ?? handle, result.Admitted is null ? "invited" : "admitted",
                     BaseAddress() + Path, place.Can));
@@ -184,11 +185,11 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User) ?? "";
-        if (input.Account is not { } account || !Participant.IsDid(account)) return await Refused(personId, NotAnInvitation, false, ct);
+        if (input.Account is not { } account || !Participant.IsDid(account)) return await Refused(personId, NotAnInvitation, true, ct);
         var outcome = await new WithdrawInvitation(personId, account).Send();
-        if (outcome is Outcome<string>.Refused { Reason: var reason }) return await Refused(personId, reason, false, ct);
+        if (outcome is Outcome<string>.Refused { Reason: var reason }) return await Refused(personId, reason, true, ct);
         if (outcome is not Outcome<string>.Done) return Answers.NotDone(HttpContext, outcome);
-        return PostWrites.WantsJson(Request) ? Ok(new WithdrawnInvitation(account, BaseAddress() + Path)) : Back(false);
+        return PostWrites.WantsJson(Request) ? Ok(new WithdrawnInvitation(account, BaseAddress() + Path)) : Back(true);
     }
 
     /// <summary>A handle as atproto writes one, from what was typed: without spaces or a leading @, in lower case, at most
@@ -210,7 +211,7 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
     {
         if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
         var place = await Capabilities.Load(personId, null, null, ct);
-        var page = await Page(place, personId, false, null, null, ct);
+        var page = await Page(place, personId, true, null, null, ct);
         page = page.Invite is { } invite
             ? page with { Invite = invite.Changing(HandleField, field => field with { Value = typed, Failure = reason.Text }) }
             : page with { Failure = reason.Kind == ReasonKind.Gated ? null : reason.Text };
@@ -278,9 +279,9 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
     }
 
     /// <summary>One page of the applications, of those that wait alone where <paramref name="waiting"/>, continued from
-    /// <paramref name="cursor"/> or, among those that wait, from before <paramref name="before"/>; on every application's
-    /// page, where admission says apply and the reader may decide, one page of the invitations too, continued from
-    /// <paramref name="invited"/>, with the forms that invite and withdraw.</summary>
+    /// <paramref name="cursor"/> or, among those that wait, from before <paramref name="before"/>; where admission says apply
+    /// and the reader may decide, one page of the invitations too, continued from <paramref name="invited"/>, with the forms
+    /// that invite and withdraw.</summary>
     private async Task<ApplicationsPage> Page(Capabilities place, string? personId, bool waiting, Applications.Cursor? cursor, long? before,
         CancellationToken ct, Invitations.Cursor? invited = null)
     {
@@ -302,7 +303,7 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
         }
 
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
-        var inviting = gate is null && !waiting && space.Admission == Admission.Apply;
+        var inviting = gate is null && space.Admission == Admission.Apply;
         var invitations = inviting ? await Invitations.Read(invited, ct) : null;
         var inviters = invitations is null ? new Dictionary<string, Render.Person>() : await Inviters(invitations.Invited, baseAddress, ct);
         return new ApplicationsPage(
@@ -332,7 +333,7 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
             Invitations = invitations?.Invited.Select(invitation => new ApplicationsPage.Invitee(invitation.Id, invitation.Handle,
                 invitation.Name ?? invitation.Handle, invitation.Avatar, invitation.InvitedAt,
                 inviters.GetValueOrDefault(invitation.InvitedBy) ?? Render.Person.Left(invitation.InvitedBy))).ToList(),
-            InvitationsNext = invitations?.Next is { } older ? applications + "?" + InvitedQuery + "=" + Uri.EscapeDataString(older.ToString()) : null,
+            InvitationsNext = invitations?.Next is { } older ? applications + (waiting ? "&" : "?") + InvitedQuery + "=" + Uri.EscapeDataString(older.ToString()) : null,
             InvitationsFirst = inviting && invited is not null ? applications : null,
             Invite = inviting
                 ? Form.Posting(baseAddress + InvitePath, new Form.Field(HandleField, Holds.InviteHandle)

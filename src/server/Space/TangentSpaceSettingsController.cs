@@ -188,7 +188,8 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, IServ
 
     /// <summary>The sections of the settings the reader of <paramref name="place"/> may use, under
     /// <paramref name="baseAddress"/>, with <paramref name="current"/> marked: general, admission and appearance for whoever
-    /// holds <see cref="Bit.ManageSpace"/>; the applications for whoever holds <see cref="Bit.ManageStanding"/>; the people for
+    /// holds <see cref="Bit.ManageSpace"/>; the applications for whoever holds <see cref="Bit.ManageStanding"/>, opening on
+    /// those that wait, every application one press from them; the people for
     /// whoever holds it or <see cref="Bit.ManageRoles"/>; the roles for whoever holds <see cref="Bit.ManageRoles"/>; and
     /// export for whoever holds <see cref="Bit.ManageSpace"/>.
     /// A reader who may use none has none.</summary>
@@ -201,7 +202,7 @@ public sealed class TangentSpaceSettingsController(KoanWebBaseUrl baseUrl, IServ
             sections.Add(new SettingsSection(AdmissionSection, baseAddress + AdmissionPath, current == AdmissionSection));
         }
         if (place.Holds(Bit.ManageStanding))
-            sections.Add(new SettingsSection(ApplicationsSection, baseAddress + ApplicationsController.Path, current == ApplicationsSection));
+            sections.Add(new SettingsSection(ApplicationsSection, ApplicationsController.WaitingAddress(baseAddress), current == ApplicationsSection));
         if (place.Holds(Bit.ManageSpace))
             sections.Add(new SettingsSection(AppearanceSection, baseAddress + AppearancePath, current == AppearanceSection));
         if (PeopleController.ReadGate(place) is null)

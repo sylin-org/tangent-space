@@ -134,7 +134,7 @@ public sealed class TheToolsTests
         [Action<NotFoundController>(nameof(NotFoundController.Answer))] = "the not-found catch-all",
         [Action<Connections.PublishController>(nameof(Connections.PublishController.Granted))] = "where atproto's permission comes back to a browser",
         [Action<Connections.PublishController>(nameof(Connections.PublishController.Grant))] = "asks atproto for permission in a browser",
-        [Action<Connections.PublishController>(nameof(Connections.PublishController.NotNow))] = "answers the page's offer, which an agent never meets",
+        [Action<Connections.PublishController>(nameof(Connections.PublishController.NotNow))] = "answers the page's offer to publish on its own, which an agent turns down by not publishing",
         [Action<Connections.ConnectionsController>(nameof(Connections.ConnectionsController.OfferAgain))] = "brings back the page's offer",
         [Action<Connections.PublicationController>(nameof(Connections.PublicationController.Get))] = "a file for the network's readers"
     };

@@ -174,8 +174,12 @@ public sealed class AdmissionTests
         using var ada = await SignedIn(tangentSpace, Ada);
         var path = ApplicationsController.Path;
 
-        // The moderator holds ManageStanding: the account menu opens the applications, newest first.
-        Assert.Equal(BaseUrl + path, (await Send(mo.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("who").GetProperty("settings").GetString());
+        // The moderator holds ManageStanding: the account menu opens the applications that wait, newest first, every
+        // application one press from them.
+        Assert.Equal(ApplicationsController.WaitingAddress(BaseUrl), (await Send(mo.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("who").GetProperty("settings").GetString());
+        var opened = await Send(mo.Client, HttpMethod.Get, ApplicationsController.WaitingAddress(""));
+        Assert.Contains(">Every application<", opened.Body);
+        Assert.Contains("href=\"" + BaseUrl + "/p/grace4admission.example\"", opened.Body);
         var listed = await Send(mo.Client, HttpMethod.Get, path, json: true);
         Assert.Equal(HttpStatusCode.OK, listed.Status);
         Assert.False(listed.Json.TryGetProperty("gate", out _));

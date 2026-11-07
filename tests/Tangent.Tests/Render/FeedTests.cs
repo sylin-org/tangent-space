@@ -134,6 +134,9 @@ public sealed class FeedTests
         await Overwrites.SetAccess(roles, Back, Roles.Member, RoleAccess.Post, Cancellation);
         var inside = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Back, "Said in the back", "Secret words.", "ada", Start).Send(Cancellation)).Result;
         await Started("Said in the open", "Open words.", Start.AddMinutes(1), PostKind.Article);
+        // More articles than a feed's window, all newer and all in the back room, which the place's feed reads past.
+        for (var index = 0; index < Feed.Limit + 1; index++)
+            Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Back, "Back room " + index, "Secret words.", "ada", Start.AddMinutes(2 + index)).Send(Cancellation));
 
         using var member = new Browser(tangentSpace);
         (await member.SignIn("reader", Reader, Cancellation)).Dispose();

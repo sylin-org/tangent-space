@@ -222,23 +222,26 @@ public sealed class ProfileTests
         Assert.Contains(Ids(asLeo)[^1], asLeo.GetProperty("older").GetString()!);
     }
 
-    /// <summary>Your own approvals page: past one page of them, the rest are a link away, and nothing is left out.</summary>
+    /// <summary>A page reads past the Posts its reader may not view, holds a page of those they may, and continues from the
+    /// last it holds, never from one it read past.</summary>
     [Fact]
-    public async Task A_page_keeps_only_viewable_posts_and_continues_from_the_last_it_keeps()
+    public async Task A_page_reads_past_posts_its_reader_may_not_view_and_continues_from_the_last_it_keeps()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
-        await Started(Leo, "Older", "Body.");
+        await Given.AParticipant(tangentSpace, Ada, [Roles.Member], ct: Cancellation);
+        var oldest = await Started(Leo, "Older", "Body.");
         for (var index = 0; index < RecentPosts.PageSize + 5; index++) await Started(Leo, "Studio " + index, "Body.", Studio);
-        var newest = await Started(Leo, "Newest", "Body.");
-        var viewable = new HashSet<string>([Workshop], StringComparer.Ordinal);
+        var newer = new List<string>();
+        for (var index = 0; index < RecentPosts.PageSize; index++) newer.Add((await Started(Leo, "Newer " + index, "Body.")).Id);
+        newer.Reverse();
 
-        var first = await RecentPosts.Read(Leo, viewable, [], null, Cancellation);
-        Assert.Equal([newest.Id], first.Posts.Select(post => post.Id));
-        Assert.Equal(newest.Id, first.Next?.Id);
-        var second = await RecentPosts.Read(Leo, viewable, [], first.Next, Cancellation);
-        Assert.Empty(second.Posts);
+        var first = await RecentPosts.Read(Leo, new Tangents.ViewableTangents.Met(Ada), null, Cancellation);
+        Assert.Equal(newer, first.Posts.Select(post => post.Id));
+        Assert.Equal(newer[^1], first.Next?.Id);
+        var second = await RecentPosts.Read(Leo, new Tangents.ViewableTangents.Met(Ada), first.Next, Cancellation);
+        Assert.Equal([oldest.Id], second.Posts.Select(post => post.Id));
         Assert.Null(second.Next);
     }
 

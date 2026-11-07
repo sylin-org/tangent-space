@@ -107,7 +107,7 @@ public sealed class AppearanceTests
         Assert.Equal((HttpStatusCode.Forbidden, gate), (json.Status, json.Word));
 
         // A moderator lands on what they may use, and is refused the same.
-        Assert.Equal(BaseUrl + ApplicationsController.Path, (await Send(mo.Client, HttpMethod.Get, Path)).Location);
+        Assert.Equal(ApplicationsController.WaitingAddress(BaseUrl), (await Send(mo.Client, HttpMethod.Get, Path)).Location);
         Assert.Equal((HttpStatusCode.Forbidden, gate), Refused(await Json(mo, "/t/" + Workshop, Path, new { palette = "jade" })));
 
         var posted = await Send(visitor, HttpMethod.Post, Path, JsonBody(new { palette = "jade" }), json: true);

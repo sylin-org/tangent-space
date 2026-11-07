@@ -5,8 +5,8 @@ namespace Tangent.Posts;
 
 /// <summary>A Post's earlier versions, the same for a person and an agent: each version the audit partition kept before
 /// an edit (<see cref="AuditPartition"/>), newest first, at most <see cref="PostHistoryController.Limit"/>, with who wrote
-/// it and when; <see cref="More"/> says older ones stand beyond those. A removed Post's words went with it, and it has
-/// none. <see cref="Address"/> is the Post's own; <see cref="Topic"/>, <see cref="Tangent"/> and their addresses say where
+/// it and when; <see cref="More"/> says older ones stand beyond those. A removed Post shows none: its words are kept in its
+/// snapshot only for its removal to be undone. <see cref="Address"/> is the Post's own; <see cref="Topic"/>, <see cref="Tangent"/> and their addresses say where
 /// it stands; <see cref="Place"/>, <see cref="Door"/>, <see cref="SignIn"/> and <see cref="Who"/> where the page is and
 /// who reads it, <see cref="Day"/> the UTC day its times are written for.</summary>
 [Render.Page(Render.Layout.Panel)]

@@ -8,7 +8,7 @@ namespace Tangent.Offers;
 /// place's operator and the origin was never decided (<see cref="Decision"/>), the place's address is still local, and
 /// the address is the origin offered. Koan's accept sends it through <see cref="Space.PlaceAddress.Use"/>, and holds the
 /// origin only once it commits.</summary>
-public sealed record UseOffer(string Origin, string PosterId, string Address, DateTimeOffset? At = null) : ICommand<Offer>
+public sealed record UseOffer(string Origin, string PosterId, string Address) : ICommand<Offer>
 {
     public static readonly Reason NotOffered = Reason.Conflict("This is not the address the offer offers.");
 
@@ -19,7 +19,7 @@ public sealed record UseOffer(string Origin, string PosterId, string Address, Da
         if (!string.Equals(Origin, Address, StringComparison.OrdinalIgnoreCase)) return new Outcome<Offer>.Refused(NotOffered);
 
         if (space.TakeAddress(Address)) await space.Save(ct);
-        var accepted = await Offer.Decided(OfferKind.Address, Origin, OfferState.Accepted, At ?? DateTimeOffset.UtcNow).Save(ct);
+        var accepted = await Offer.Decided(OfferKind.Address, Origin, OfferState.Accepted).Save(ct);
         return new Outcome<Offer>.Done(accepted);
     }
 }

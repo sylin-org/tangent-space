@@ -1,20 +1,25 @@
 using System.Globalization;
+using Koan.Data.Abstractions.Lexical;
 using Koan.Data.Core;
 using Koan.Data.Core.Lexical;
+using Tangent.Tangents;
 
 namespace Tangent.Posts;
 
 /// <summary>The Posts whose title or body hold the words of a text, best first, among those a reader may view: every word
 /// is optional, a Post holding more of them comes first, and the word the text ends in also matches as the start of a
-/// word, since the text may still be being typed. Koan's lexical index does the finding, and the store is told the
-/// Tangents the reader may view, or the others where they are fewer, or the one Tangent a search is narrowed to, and to
-/// leave out removed Posts, before it ranks and pages, so no page, length or score says anything of a Post the reader may
-/// not view. A partial word the store stems away finds nothing until it is whole. It never refuses: the text is trimmed and cut to <see cref="TextLimit"/>
+/// word, since the text may still be being typed. Koan's lexical index does the finding, told to leave out removed Posts
+/// and, for a search narrowed to one Tangent, every other Tangent, before it ranks and pages. Its ranking is read in order,
+/// a batch at a time, the first through one Post past the page asked for, and each batch keeps the Posts in Tangents the
+/// reader may view, each Tangent judged once as a batch names it (<see cref="ViewableTangents.Met"/>), so a page holds
+/// what the reader may view in the order the index ranks it, and no page, length or score says anything of a Post the
+/// reader may not view. The reading stops once the page is full and one more is kept, or at the deepest page Koan reads
+/// (<see cref="LexicalQuery.MaximumOffset"/>), so a page costs the matches ranked before that one, those the reader may
+/// not view among them. A partial word the store stems away finds nothing until it is whole. It never refuses: the text is trimmed and cut to <see cref="TextLimit"/>
 /// characters, and text with no letter or digit finds nothing; a page holds between one and <see cref="PageLimit"/> Posts,
 /// its number from one to <see cref="PageNumberLimit"/>, and a page past the last holds none. A snippet holds
 /// <see cref="SnippetWords"/> words around the matched words, each between <see cref="Open"/> and <see cref="Close"/>.
-/// Reads only: one search, asking for one Post past the page, says whether a next page holds anything; nothing is counted,
-/// and it takes no lock.</summary>
+/// Reads only: nothing is counted, and it takes no lock.</summary>
 public static class PostSearch
 {
     public const int TextLimit = 200;
@@ -53,37 +58,44 @@ public static class PostSearch
     public static int Number(string? page)
         => int.TryParse(page, NumberStyles.None, CultureInfo.InvariantCulture, out var number) ? Math.Clamp(number, 1, PageNumberLimit) : 1;
 
-    /// <summary>Page <paramref name="page"/> (from 1) of <paramref name="size"/> Posts for <paramref name="text"/> in
-    /// <paramref name="viewable"/>, the Tangents the reader may view, and in none of <paramref name="others"/>, every other
-    /// Tangent, or, where <paramref name="others"/> is null, in <paramref name="viewable"/> alone, as a search narrowed to one
-    /// Tangent asks, each held within its bounds. Whatever the store answers, the page keeps only Posts in
-    /// <paramref name="viewable"/>, so a Tangent that changed while the sets were read never shows; such a page can be short. No
-    /// Tangent viewable reads nothing.</summary>
-    public static async Task<Answer> Run(string? text, IReadOnlySet<string> viewable, IReadOnlyCollection<string>? others, int page = 1, int size = 20,
+    /// <summary>Page <paramref name="page"/> (from 1) of <paramref name="size"/> Posts for <paramref name="text"/> in the
+    /// Tangents <paramref name="met"/> says its reader may view, or, where <paramref name="within"/> names one, in that Tangent
+    /// alone, each held within its bounds. A Post that changed Tangent or was removed while the batches were read is judged
+    /// as its row reads, or left out.</summary>
+    public static async Task<Answer> Run(string? text, ViewableTangents.Met met, string? within, int page = 1, int size = 20,
         CancellationToken ct = default)
     {
         page = Math.Clamp(page, 1, PageNumberLimit);
         size = Math.Clamp(size, 1, PageLimit);
-        if (Words(text) is not { } words || !words.Any(char.IsLetterOrDigit) || viewable.Count == 0) return Answer.None;
+        if (Words(text) is not { } words || !words.Any(char.IsLetterOrDigit)) return Answer.None;
 
-        var matches = await Post.Lexical.Search(words, query => Readable(query.Page(page, size).OneMore().Snippet(SnippetWords, Open, Close).AsTyped(),
-            viewable, others), ct);
-        var more = matches.Count > size;
-        if (matches.Count == 0) return Answer.None;
-        var shown = matches.Take(size).ToList();
-        var posts = await Post.Get(shown.Select(match => match.Id), ct);
-        var byId = posts.Where(post => post is not null && viewable.Contains(post.TangentId)).ToDictionary(post => post!.Id, post => post!);
-        return new Answer(shown.Where(match => byId.ContainsKey(match.Id))
-            .Select(match => new Hit(byId[match.Id], match.Score, match.Snippet)).ToList(), more && page < PageNumberLimit);
+        var batch = Math.Min(LexicalQuery.MaximumSize, page * size + 1);
+        var skip = (page - 1) * size;
+        var kept = new List<Hit>();
+        var read = new HashSet<string>(StringComparer.Ordinal);
+        for (var number = 1; (number - 1) * batch <= LexicalQuery.MaximumOffset; number++)
+        {
+            var matches = await Post.Lexical.Search(words, query => Readable(query.Page(number, batch).Snippet(SnippetWords, Open, Close).AsTyped(), within), ct);
+            var fresh = matches.Where(match => read.Add(match.Id)).ToList();
+            var rows = (await Post.Get(fresh.Select(match => match.Id), ct)).OfType<Post>()
+                .Where(post => !post.Removed && (within is null || post.TangentId == within)).ToList();
+            var viewable = (await met.Keep(rows, post => post.TangentId, ct)).ToDictionary(post => post.Id, StringComparer.Ordinal);
+            foreach (var match in fresh)
+            {
+                if (!viewable.TryGetValue(match.Id, out var post)) continue;
+                if (skip > 0) { skip--; continue; }
+                if (kept.Count == size) return new Answer(kept, page < PageNumberLimit);
+                kept.Add(new Hit(post, match.Score, match.Snippet));
+            }
+
+            if (matches.Count < batch) break;
+        }
+
+        return new Answer(kept, false);
     }
 
-    /// <summary>The Posts the reader may be shown: none removed, in the smaller of the two sets the caller names, to keep or
-    /// to leave out, in nothing more where none is left out, and in those to keep where the caller names none to leave out.</summary>
-    private static LexicalSearchQuery<Post> Readable(LexicalSearchQuery<Post> query, IReadOnlySet<string> viewable, IReadOnlyCollection<string>? others)
-    {
-        if (others is { Count: 0 }) return query.Within(post => !post.Removed);
-        return others is null || viewable.Count <= others.Count
-            ? query.Within(post => !post.Removed && viewable.Contains(post.TangentId))
-            : query.Within(post => !post.Removed && !others.Contains(post.TangentId));
-    }
+    /// <summary>The Posts the store ranks: none removed, and only those of <paramref name="within"/> where it names a
+    /// Tangent.</summary>
+    private static LexicalSearchQuery<Post> Readable(LexicalSearchQuery<Post> query, string? within)
+        => within is null ? query.Within(post => !post.Removed) : query.Within(post => !post.Removed && post.TangentId == within);
 }

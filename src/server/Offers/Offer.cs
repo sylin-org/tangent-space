@@ -32,15 +32,13 @@ public sealed class Offer : Entity<Offer>
     /// <summary>A kind as the Id and the wire write it.</summary>
     public static string Word(OfferKind kind) => kind.ToString().ToLowerInvariant();
 
-    /// <summary>The Offer of <paramref name="kind"/> on <paramref name="subject"/>, decided <paramref name="state"/> at
-    /// <paramref name="at"/>.</summary>
-    public static Offer Decided(OfferKind kind, string subject, OfferState state, DateTimeOffset at) => new()
+    /// <summary>The Offer of <paramref name="kind"/> on <paramref name="subject"/>, decided <paramref name="state"/>.</summary>
+    public static Offer Decided(OfferKind kind, string subject, OfferState state) => new()
     {
         Id = IdFor(kind, subject),
         Kind = kind,
         Subject = subject,
-        State = state,
-        DecidedAt = at
+        State = state
     };
 
     public OfferKind Kind { get; set; }
@@ -49,6 +47,4 @@ public sealed class Offer : Entity<Offer>
     public string Subject { get; set; } = "";
 
     public OfferState State { get; set; }
-
-    public DateTimeOffset DecidedAt { get; set; }
 }

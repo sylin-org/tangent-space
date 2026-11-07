@@ -65,8 +65,12 @@ public sealed class InviteTests
 
         var invited = await Form(mo, Path, ApplicationsController.InvitePath, new Dictionary<string, string> { [ApplicationsController.HandleField] = " @Grace.example" });
 
-        Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + Path), (invited.Status, invited.Location));
+        // The invitation comes back to the applications that wait, where the section opens, which list it too.
+        Assert.Equal((HttpStatusCode.SeeOther, ApplicationsController.WaitingAddress(BaseUrl)), (invited.Status, invited.Location));
         Assert.Contains("grace.example", stub.Requests);
+        var waiting = (await Send(mo.Client, HttpMethod.Get, ApplicationsController.WaitingAddress(""), json: true)).Json;
+        Assert.Equal([ApplicationsController.HandleField], FieldNames(waiting.GetProperty("invite")));
+        Assert.Equal(Grace, waiting.GetProperty("invitations")[0].GetProperty("account").GetString());
         var listed = (await Send(mo.Client, HttpMethod.Get, Path, json: true)).Json.GetProperty("invitations");
         Assert.Equal((Grace, "grace.example", ProfileStub.DisplayName), (listed[0].GetProperty("account").GetString(), listed[0].GetProperty("handle").GetString(),
             listed[0].GetProperty("name").GetString()));

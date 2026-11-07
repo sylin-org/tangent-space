@@ -43,11 +43,8 @@ public sealed class PostSearchTests
         Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), topicId, body, "ada").Send(Cancellation)).Result;
 
     /// <summary>A search as a visitor reads it, who may view the public workshop.</summary>
-    private static async Task<PostSearch.Answer> Run(string? text, int page = 1, int size = 20)
-    {
-        var whole = await ViewableTangents.All(null, Cancellation);
-        return await PostSearch.Run(text, whole.Tangents.Select(tangent => tangent.Id).ToHashSet(StringComparer.Ordinal), whole.Others, page, size, Cancellation);
-    }
+    private static Task<PostSearch.Answer> Run(string? text, int page = 1, int size = 20)
+        => PostSearch.Run(text, new ViewableTangents.Met(null), null, page, size, Cancellation);
 
     private static async Task<IReadOnlyList<PostSearch.Hit>> Found(string text, int page = 1, int size = 20) => (await Run(text, page, size)).Hits;
 

@@ -85,7 +85,7 @@ public sealed class Archive
             await archive.Door(ct);
             await archive._export.Tangents(ct);
             await archive._export.Feed(Feeds.ArticlesPath.TrimStart('/'),
-                await Feeds.OfArticles(await ViewableTangents.All(null, ct), space, baseAddress, ct), ct);
+                await Feeds.OfArticles(space, baseAddress, ct), ct);
             await archive.Profiles(ct);
             files.Finish();
         }

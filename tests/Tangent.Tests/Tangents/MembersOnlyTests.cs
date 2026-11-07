@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Koan.Data.Core;
 using Koan.Data.Core.Commands;
 using Tangent.Access;
 using Tangent.Participants;
@@ -120,6 +121,32 @@ public sealed class MembersOnlyTests
         Assert.Equal(joined.Reason, missing.Reason);
         Assert.Equal(missing.Reason, join.Reason);
         Assert.True(Inside.In(await Inside.Own(Studio, "ban", Cancellation)));
+    }
+
+    /// <summary>Whoever manages several members-only Tangents reads on their door how many ask in each, however many newer
+    /// asks wait in another: a Tangent past a page of asks says at least that many, and one with a single older ask still
+    /// says it.</summary>
+    [Fact]
+    public async Task The_door_counts_the_asks_of_each_tangent_its_reader_manages_saying_at_least_past_a_page()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        await Given.AParticipant(tangentSpace, Leo, [Roles.Member, Roles.Administrator], ct: Cancellation);
+        const string kiln = "kiln";
+        await Given.ATangent(tangentSpace, kiln, Audience.Private, ct: Cancellation);
+        foreach (var slug in new[] { Studio, kiln })
+            Assert.IsType<Outcome<Tangent>.Done>(await new ChangeJoining(slug, Leo, Joining.Ask).Send(Cancellation));
+        var at = DateTimeOffset.UtcNow.AddHours(-2);
+        await new Ask { Id = Ask.Key(kiln, "early"), TangentId = kiln, PersonId = "early", AskedAt = at }.Save(Cancellation);
+        for (var index = 0; index <= Ask.ReadSize; index++)
+            await new Ask { Id = Ask.Key(Studio, "asker" + index), TangentId = Studio, PersonId = "asker" + index, AskedAt = at.AddMinutes(index + 1) }.Save(Cancellation);
+        using var leo = await SignedIn(tangentSpace, Leo);
+
+        var asks = (await Send(leo.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("asks").EnumerateArray()
+            .ToDictionary(row => row.GetProperty("address").GetString()!, row => (row.GetProperty("count").GetInt32(), row.GetProperty("atLeast").GetBoolean()));
+        Assert.Equal((Ask.ReadSize, true), asks[TangentPeopleController.PeopleAddress(BaseUrl, Studio)]);
+        Assert.Equal((1, false), asks[TangentPeopleController.PeopleAddress(BaseUrl, kiln)]);
+        Assert.Contains($"At least {Ask.ReadSize} people ask to join", (await Send(leo.Client, HttpMethod.Get, "/")).Body);
     }
 
     private static JsonElement Listed(JsonElement page, string slug)

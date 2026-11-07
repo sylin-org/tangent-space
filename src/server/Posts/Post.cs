@@ -163,10 +163,8 @@ public sealed class Post : Entity<Post>
     [Index(Name = "ix_post_topics", Order = 2)]
     public DateTimeOffset LastActivityAt { get; set; }
 
-    /// <summary>The Topic's latest reply and its author; null until the first reply. Root only.</summary>
+    /// <summary>The Topic's latest reply; null until the first reply. Root only.</summary>
     public string? LatestReplyId { get; set; }
-
-    public string? LatestReplyAuthorId { get; set; }
 
     /// <summary>The Topic's most recent authors, newest first, each once, at most <see cref="RecentAuthorLimit"/>.
     /// Root only.</summary>
@@ -255,7 +253,6 @@ public sealed class Post : Entity<Post>
         ReplyCount = checked(ReplyCount + 1);
         LastActivityAt = at;
         LatestReplyId = id;
-        LatestReplyAuthorId = authorId;
         RecentAuthorIds = [authorId, .. RecentAuthorIds.Where(author => author != authorId).Take(RecentAuthorLimit - 1)];
         return new Post
         {

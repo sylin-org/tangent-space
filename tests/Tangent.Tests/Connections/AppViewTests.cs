@@ -7,8 +7,9 @@ using Xunit;
 namespace Tangent.Connections;
 
 /// <summary>What the author hid on Bluesky stays out from under their article here: a reply its post's gate lists, a
-/// quote they detached, and whatever Bluesky labels to hide or take down, the post or its account — read from the public
-/// AppView's answers as it gives them, against a stand-in that answers them.</summary>
+/// quote they detached, and whatever Bluesky labels to hide or take down, the post or its account; so does every post of
+/// an account that asks apps to show it to no one signed out — read from the public AppView's answers as it gives them,
+/// against a stand-in that answers them.</summary>
 public sealed class AppViewTests
 {
     private static CancellationToken Cancellation => TestContext.Current.CancellationToken;
@@ -16,7 +17,7 @@ public sealed class AppViewTests
     private const string Note = "at://did:plc:ada4example/app.bsky.feed.post/3m4note";
 
     [Fact]
-    public async Task A_reply_the_author_hid_a_quote_they_detached_and_a_post_labelled_hidden_or_taken_down_stay_out()
+    public async Task A_reply_the_author_hid_a_quote_they_detached_a_post_labelled_hidden_or_taken_down_and_an_account_asking_not_to_be_shown_signed_out_stay_out()
     {
         var appView = new AppView(new HttpClient(new Recorded()),
             Options.Create(new ProfileReaderOptions { BaseAddress = new Uri("https://appview.example/") }));
@@ -83,6 +84,12 @@ public sealed class AppViewTests
                    "record":{"$type":"app.bsky.feed.post","text":"Do you use urushi or the epoxy kits?","createdAt":"2026-11-01T11:40:00.000Z"},
                    "indexedAt":"2026-11-01T11:40:01.000Z",
                    "labels":[{"src":"did:plc:ar7c4by46qjdydhdevvrndac","uri":"at://did:plc:june4example/app.bsky.feed.post/3m4june","val":"!hide","neg":true,"cts":"2026-11-01T11:50:00.000Z"}]}},
+                {"$type":"app.bsky.feed.defs#threadViewPost","replies":[],
+                 "post":{"uri":"at://did:plc:noor4example/app.bsky.feed.post/3m4noor","cid":"bafyreinoor",
+                   "author":{"did":"did:plc:noor4example","handle":"noor.example","displayName":"Noor",
+                     "labels":[{"src":"did:plc:noor4example","uri":"at://did:plc:noor4example/app.bsky.actor.profile/self","cid":"bafyreiprofile","val":"!no-unauthenticated","cts":"2026-10-01T08:00:00.000Z"}]},
+                   "record":{"$type":"app.bsky.feed.post","text":"Only for people signed in.","createdAt":"2026-11-01T11:45:00.000Z"},
+                   "indexedAt":"2026-11-01T11:45:01.000Z","labels":[]}},
                 {"$type":"app.bsky.feed.defs#blockedPost","uri":"at://did:plc:kai4example/app.bsky.feed.post/3m4kai","blocked":true,
                  "author":{"did":"did:plc:kai4example"}}]},
              "threadgate":{"uri":"at://did:plc:ada4example/app.bsky.feed.threadgate/3m4note","cid":"bafyreigate",
@@ -114,6 +121,13 @@ public sealed class AppViewTests
                  "record":{"record":{"$type":"app.bsky.embed.record#viewDetached","uri":"at://did:plc:ada4example/app.bsky.feed.post/3m4note","detached":true}},
                  "media":{"$type":"app.bsky.embed.images#view","images":[]}},
                "indexedAt":"2026-11-01T13:20:01.000Z","labels":[]},
+              {"uri":"at://did:plc:noor4example/app.bsky.feed.post/3m4quote","cid":"bafyreinoorquote",
+               "author":{"did":"did:plc:noor4example","handle":"noor.example","displayName":"Noor",
+                 "labels":[{"src":"did:plc:noor4example","uri":"at://did:plc:noor4example/app.bsky.actor.profile/self","cid":"bafyreiprofile","val":"!no-unauthenticated","cts":"2026-10-01T08:00:00.000Z"}]},
+               "record":{"$type":"app.bsky.feed.post","text":"Quoted for people signed in.","createdAt":"2026-11-01T13:25:00.000Z"},
+               "embed":{"$type":"app.bsky.embed.record#view","record":{"$type":"app.bsky.embed.record#viewRecord",
+                 "uri":"at://did:plc:ada4example/app.bsky.feed.post/3m4note","cid":"bafyreinote"}},
+               "indexedAt":"2026-11-01T13:25:01.000Z","labels":[]},
               {"uri":"at://did:plc:spam4example/app.bsky.feed.post/3m4ad","cid":"bafyreiad",
                "author":{"did":"did:plc:spam4example","handle":"spam.example","labels":[]},
                "record":{"$type":"app.bsky.feed.post","text":"Gold, cheap.","createdAt":"2026-11-01T13:30:00.000Z"},

@@ -69,7 +69,7 @@ public sealed class OfferTests
             await using (var kept = await TangentSpaceFixture.StartAsync(Reached.Unconfigured(("Tangent:DataFolder", dataFolder)), ct: Cancellation))
             {
                 await APlaceWithNews(kept, OnAPort);
-                var used = Offer.Decided(OfferKind.Address, OnAPort, OfferState.Accepted, DateTimeOffset.UtcNow);
+                var used = Offer.Decided(OfferKind.Address, OnAPort, OfferState.Accepted);
                 Assert.IsType<Outcome<Offer>.Done>(await new Store<Offer>(used).Send(Cancellation));
             }
 
@@ -274,7 +274,7 @@ public sealed class OfferTests
 
         Assert.Equal(Public, baseUrl.Current);
         Assert.Equal(space.Version, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Version);
-        Assert.Equal(accepted.DecidedAt, (await Offer.Get(id, Cancellation))!.DecidedAt);
+        Assert.Equal((OfferState.Accepted, Public), ((await Offer.Get(id, Cancellation))!.State, (await Offer.Get(id, Cancellation))!.Subject));
         Assert.Equal(events, await Event.Log.Highest(Cancellation));
     }
 
