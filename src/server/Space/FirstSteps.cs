@@ -123,7 +123,7 @@ public sealed record FirstSteps(
                 [new(TangentSpaceSettingsController.Word(Admission.Join), "Join at once"), new(TangentSpaceSettingsController.Word(Admission.Apply), "Apply, and you admit them")]))
                 with { Tool = "change-admission", Key = "first-steps-arrival" }),
             baseAddress + TangentSpaceSettingsController.Path + "#" + Pointing.Anchor,
-            open.FirstOrDefault() is { } first ? PostWrites.TangentAddress(baseAddress, first.Id) + "/" + TangentPageController.NewTopicSegment : null,
+            open.FirstOrDefault() is { } first ? PostWrites.TangentAddress(baseAddress, first.Id) + "/" + TopicsController.NewTopicSegment : null,
             Form.Posting(baseAddress + FirstStepsController.ClosePath) with { Tool = "close-first-steps", Submit = "Done", Busy = "Closing…", Quiet = true })
         {
             Greeted = Greeting(shown),

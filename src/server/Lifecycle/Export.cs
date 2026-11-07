@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Koan.Data.Abstractions;
 using Koan.Data.Abstractions.Filtering;
+using Koan.Data.Core.Querying;
 using Koan.Data.Core.Sorting;
 using Koan.Media.Web.Routing;
 using Microsoft.AspNetCore.Components.Web;
@@ -175,7 +176,7 @@ public sealed class Export
         var audience = _space.Audience == Audience.Private || await Overwrites.AudienceOf(tangent.Id, ct) == Audience.Private
             ? Audience.Private
             : Audience.Public;
-        TopicList.Cursor? cursor = null;
+        KeysetKey? cursor = null;
         var page = 1;
         do
         {
@@ -202,8 +203,8 @@ public sealed class Export
 
     private async Task<TangentPage> Listed(Tangents.Tangent tangent, Audience audience, IReadOnlyList<Post> topics, int page, bool more, CancellationToken ct)
     {
-        var latest = await TangentPageController.LatestReplies(topics, ct);
-        var people = Marks(await TangentPageController.People(topics, latest.Values, ct));
+        var latest = await TopicList.LatestReplies(topics, ct);
+        var people = Marks(await TopicList.People(topics, latest.Values, ct));
         return new TangentPage(
             tangent.Id,
             tangent.Name,
@@ -212,7 +213,7 @@ public sealed class Export
             audience.ToString().ToLowerInvariant(),
             First + ".html",
             [],
-            topics.Select(root => TangentPageController.Topic(root, _base + "/t/" + Uri.EscapeDataString(tangent.Id), people, latest, null, new Dictionary<string, long>())
+            topics.Select(root => TopicList.Entry(root, _base + "/t/" + Uri.EscapeDataString(tangent.Id), people, latest, null, new Dictionary<string, long>())
                 with { Address = Uri.EscapeDataString(root.Slug ?? root.Id) + "/" + First + ".html" }).ToList(),
             more ? PagePath(page + 1) + ".html" : null,
             page > 1,

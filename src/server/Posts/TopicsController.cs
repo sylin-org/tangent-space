@@ -1,11 +1,13 @@
 using System.ComponentModel;
 using System.Globalization;
 using Koan.Data.Core.Commands;
+using Koan.Data.Core.Querying;
 using Koan.Web.Attributes;
 using Koan.Web.Auth.Infrastructure;
 using Koan.Web.Controllers;
 using Koan.Web.Hooks;
 using Koan.Web.Hosting;
+using Koan.Web.Queries;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
@@ -33,12 +35,16 @@ public sealed record Window(
     [Description(Holds.WindowBefore)] string? Before = null,
     [Description(Holds.WindowAfter)] string? After = null);
 
-/// <summary>The Topics of a Tangent, on Koan's entity endpoint over their roots: <c>/t/{tangent}/new</c>, the form that starts one,
+/// <summary>The Topics of a Tangent, on Koan's entity endpoint over their roots: <c>/t/{tangent}</c>, the Tangent's page
+/// (<c>read_tangent</c>, <see cref="TangentPage"/>), one bounded page of its Topics in the Tangent's own sort, continued from a sealed
+/// keyset key (<see cref="TopicList"/>), and its card for a participant outside a members-only Tangent they may join
+/// (<see cref="TangentOutside"/>); the list is an action of its own beside the entity's, since a declared collection continues through
+/// one order fixed where its routes are and a Tangent's sort is its own; <c>/t/{tangent}/new</c>, the form that starts one,
 /// one resource both ways (<see cref="NewTopicPage"/>), with a TID minted into it; <c>POST /t/{tangent}</c>, which starts one
 /// (<c>start_topic</c>); and <c>/t/{tangent}/{topic}</c>, the Topic (<c>read_topic</c>, <see cref="TopicPage"/>). It serves only
 /// these, and no partition. The address's Topic is its slug, its root's TID or an address it moved from, as the Doorway found it
 /// (<see cref="KeyOf"/>), and the Doorway judges each before anything is bound: the form and the start need
-/// <see cref="Bit.Topic"/>, the read <see cref="Bit.View"/>. A start writes the Post's id, title and body, and takes an article's
+/// <see cref="Bit.Topic"/>, the reads <see cref="Bit.View"/>. A start writes the Post's id, title and body, and takes an article's
 /// cover and the Post it takes on a tangent beside them (<see cref="Starting"/>); its body is judged before the hold, and in the
 /// hold its own hook reads the Tangent again, answers a start sent again with the Topic it started, refuses an id another Post holds
 /// (<see cref="Post.IdTaken"/>) and an origin its author may not view (<see cref="Post.NoOrigin"/>) or that was removed, and writes the
@@ -52,8 +58,26 @@ public sealed record Window(
 public sealed class TopicsController(KoanWebBaseUrl baseUrl, IDataProtectionProvider protection, Connections.Readers readers)
     : EntityController<Post>, IModelHook<Post>, IEmitHook<Post>
 {
-    /// <summary>The query parameter that carries the cursor of the page of Tangents to choose from.</summary>
+    /// <summary>The query parameter that carries the sealed key a list continues from: the Tangent's Topics, or the Tangents the
+    /// start form offers.</summary>
     public const string After = "after";
+
+    /// <summary>The query parameter that narrows the list to a month, by its key (<see cref="TopicList.Month.Key"/>).</summary>
+    public const string Month = "month";
+
+    /// <summary>The query parameter that narrows the list to the Topics a participant started, by their id.</summary>
+    public const string Author = "author";
+
+    /// <summary>The segment under a Tangent's address where a Topic is started; <see cref="Slug.Reserved"/> keeps it
+    /// from every Topic.</summary>
+    public const string NewTopicSegment = "new";
+
+    /// <summary>The most Tangents the switcher lists; the rest are a link away (<see cref="TangentsController"/>).</summary>
+    public const int SwitcherLimit = 50;
+
+    /// <summary>The most authors an articles Tangent's rail offers, those who started the most there; the list narrows to
+    /// anyone else at their own address all the same (<see cref="Author"/>).</summary>
+    public const int AuthorLimit = 10;
 
     /// <summary>The body of the start this request writes, judged before its hold.</summary>
     private PostBody? _body;
@@ -61,7 +85,109 @@ public sealed class TopicsController(KoanWebBaseUrl baseUrl, IDataProtectionProv
     /// <summary>What this request answers with, composed from the row once its write committed or its read found it.</summary>
     private Func<Post, Task<object>>? _answer;
 
-    [HttpGet(TangentPageController.NewTopicSegment)]
+    /// <summary>The Tangent page, one resource both ways: the Tangent, its <c>can</c>, and one bounded page of its Topics, whole or
+    /// narrowed to a month or an author (<see cref="TopicList.Narrowing"/>), the whole list's first page led by the Topic its moderators
+    /// pinned (<see cref="TopicList.Pinned"/>), with what is new to the reader, a pinned Topic and a closed one marked, and in an articles
+    /// Tangent every month it narrows to and the <see cref="AuthorLimit"/> authors who started the most, from the counts its row keeps,
+    /// left to the formatter as HTML, a fragment or JSON. A page continues from the sealed key the page before it named as its next, which
+    /// opens for this Tangent's list alone; one that does not open is refused naming <c>after</c>. A reader without <see cref="Bit.View"/>
+    /// receives its gate, and one for whom the Tangent is absent what an address with no Tangent receives; a participant outside a
+    /// members-only Tangent they may join or ask to join reads its card instead, and nothing of what it holds. Every read is bounded and
+    /// keyed: the Tangent and capability's rows, which the Doorway read, the pinned Topic's root by Id on a page of the whole list, one
+    /// keyset page of Topics, their latest replies by Id, the people on the page and those the rail names, the reader's place mark and
+    /// their marks on those Topics (<see cref="Unread"/>), the first <see cref="SwitcherLimit"/> Tangents the reader may view for the
+    /// switcher (<see cref="ViewableTangents"/>), and, for a signed-in reader, what they hold in the place, which says whether the
+    /// switcher offers a new Tangent, and whether they quieted it, with the form that quiets it or lets it count again
+    /// (<see cref="QuietController"/>).</summary>
+    [HttpGet("")]
+    [HttpHead("")]
+    [Tool(Name = "read_tangent")]
+    [Needs(Bit.View, Outside = true)]
+    [Description("Read a Tangent: its Topics a page at a time, narrowed to a month or an author where you name one, the one its moderators pinned first on the first page of them all, what is new to you, pinned or closed marked, and a Topic whose root was removed saying who removed it; an articles Tangent lists every month it narrows to and the authors who started the most, with how many each, and narrows to any author by their id; quiet says whether you quieted it. Then call read_topic on a Topic's slug, start_topic to begin one, search with in and its slug to find words in it alone, or quiet_tangent. A members-only Tangent you may join or ask to join answers its card instead, with joining; then call join_tangent.")]
+    public async Task<IActionResult> List([Description(Holds.Tangent)] string tangent, [FromQuery(Name = After), Description(Holds.After)] string? after,
+        [FromQuery(Name = Month), Description(Holds.Month)] string? month, [FromQuery(Name = Author), Description(Holds.Author)] string? author,
+        CancellationToken ct)
+    {
+        var here = Here.Of(HttpContext);
+        var personId = here.PersonId;
+        var row = here.Tangent!;
+        var capabilities = here.Capabilities;
+        if (here.Outside is { } outside) return await Outside(here, row, outside, ct);
+
+        var sort = TopicList.For(row);
+        KeysetKey? from = null;
+        if (!string.IsNullOrEmpty(after) && (from = TopicList.Open(protection, row.Id, sort, after)) is null) return this.Refused(SealedCursor.Refusal(After));
+
+        TopicList.Month? within = null;
+        if (month is not null && (within = TopicList.Month.Parse(month)) is null)
+            return new Problem(StatusCodes.Status400BadRequest,
+                $"The {Month} parameter is a month as its year and number, such as 2026-10.") { Title = "Not a month" }.ToResult();
+        var by = string.IsNullOrWhiteSpace(author) ? null : author.Trim();
+
+        // The whole list leaves its pinned Topic out of every page and leads its first with it; a narrowed one reads in its
+        // own order, marking the pinned Topic where it falls.
+        var narrowing = new TopicList.Narrowing(within, by);
+        var pinned = narrowing.Narrowed ? null : await TopicList.Pinned(row, ct);
+        var page = await TopicList.Read(row.Id, from, ct, to: narrowing, sort: sort, leaving: pinned?.Id);
+        IReadOnlyList<Post> topics = pinned is not null && from is null ? [pinned, .. page.Topics] : page.Topics;
+        var pinnedId = narrowing.Narrowed ? row.PinnedId : pinned?.Id;
+        var reader = here.Rows.Participant;
+        var latest = await TopicList.LatestReplies(topics, ct);
+        var articles = row.DefaultKind == PostKind.Article;
+        var offered = articles ? Offered(row, by) : [];
+        IEnumerable<string> named = offered.Select(choice => choice.Key);
+        var people = await TopicList.People(topics, latest.Values, ct, by is null ? named : named.Append(by));
+        var unread = reader is null ? null : await Unread.Of(reader, ct);
+        var marks = unread is null ? new Dictionary<string, long>() : await unread.Marks(topics.Select(topic => topic.Id), ct);
+        var space = here.Rows.Space;
+        var audience = space.Audience == Audience.Private || await Overwrites.AudienceOf(row.Id, ct) == Audience.Private
+            ? Audience.Private
+            : Audience.Public;
+
+        var baseAddress = baseUrl.Resolve(HttpContext);
+        var address = PostWrites.TangentAddress(baseAddress, row.Id);
+        var back = Uri.EscapeDataString(baseUrl.PathBase + "/t/" + row.Id);
+        // A signed-in reader's page is never stored, so a browser's Back after sign-out redisplays nothing of it.
+        if (reader is not null) Response.Headers.CacheControl = "no-cache, no-store";
+        var place = reader is null ? null : await Capabilities.Load(personId, null, null, ct);
+        var creates = place is not null && place.Holds(Bit.ManageSpace);
+        return Ok(new TangentPage(
+            row.Id,
+            row.Name,
+            row.Description,
+            PostWrites.Word(row.DefaultKind),
+            audience.ToString().ToLowerInvariant(),
+            address,
+            capabilities.Can,
+            topics.Select(topic => TopicList.Entry(topic, address, people, latest, unread, marks) with { Pinned = topic.Id == pinnedId && !topic.Removed }).ToList(),
+            page.Next is { } next ? TangentPage.ListAddress(address, within?.Key, by, TopicList.Seal(protection, row.Id, sort, next)) : null,
+            from is not null,
+            capabilities.Holds(Bit.Topic) ? address + "/" + NewTopicSegment : null,
+            reader is null ? baseAddress + SignInController.Path + "?return=" + back : null,
+            await Viewable(personId, row, baseAddress, ct),
+            space.Name,
+            baseAddress + "/",
+            reader is null ? null : Render.Who.Of(Render.Person.Of(reader, baseAddress), Roles.Word(capabilities.RoleIds),
+                baseAddress + AuthConstants.Routes.Logout + "?return=" + back, place is null ? null : TangentSpaceSettingsController.Entry(place, baseAddress),
+                await unread!.BadgeNow(baseAddress + "/", ct)),
+            DateOnly.FromDateTime(DateTime.UtcNow),
+            capabilities.Holds(Bit.ManageTangent) ? address + "/" + TangentWrites.SettingsSegment : null,
+            creates ? baseAddress + NewTangentController.Route : null,
+            audience == Audience.Public ? Feeds.TangentLinks(baseAddress, row.Id, row.Name, space.Name) : null,
+            reader is not null && Inside.In(await Inside.Own(row.Id, reader.Id, ct))
+                ? Render.Form.Posting(address + "/" + JoinController.LeaveSegment)
+                : null,
+            within?.Key,
+            by is null ? null : TopicList.Person(people, by),
+            articles ? Months(row, address) : null,
+            articles ? Authors(offered, address, people) : null)
+        {
+            Quiet = reader?.Quiet.Contains(row.Id),
+            Quieting = reader is null ? null : QuietController.QuietForm(address, reader.Quiet.Contains(row.Id))
+        });
+    }
+
+    [HttpGet(NewTopicSegment)]
     [Needs(Bit.Topic)]
     [Input<Taking>]
     public override Task<IActionResult> GetNew(CancellationToken ct)
@@ -210,7 +336,7 @@ public sealed class TopicsController(KoanWebBaseUrl baseUrl, IDataProtectionProv
         var capabilities = found.Capabilities;
         var baseAddress = baseUrl.Resolve(HttpContext);
         var address = PostWrites.TangentAddress(baseAddress, row.Id);
-        var here = baseUrl.PathBase + "/t/" + row.Id + "/" + TangentPageController.NewTopicSegment;
+        var here = baseUrl.PathBase + "/t/" + row.Id + "/" + NewTopicSegment;
         var space = found.Rows.Space;
         var gate = capabilities.Gate(Bit.Topic)?.Word;
         QuotedPost? quoted = null;
@@ -240,7 +366,7 @@ public sealed class TopicsController(KoanWebBaseUrl baseUrl, IDataProtectionProv
         if (quoted is null) return page;
 
         // The Tangents the reader may start it in, this one first on the first page, each a link to this form there.
-        var form = "/" + TangentPageController.NewTopicSegment + "?" + PostWrites.OriginField + "=" + Uri.EscapeDataString(quoted.Id);
+        var form = "/" + NewTopicSegment + "?" + PostWrites.OriginField + "=" + Uri.EscapeDataString(quoted.Id);
         var listed = await Origins.Destinations(personId, after, Origins.DestinationLimit, ct);
         var tangents = listed.Tangents.Where(other => other.Id != row.Id).ToList();
         if (after is null) tangents.Insert(0, row);
@@ -263,6 +389,51 @@ public sealed class TopicsController(KoanWebBaseUrl baseUrl, IDataProtectionProv
         var rows = await Capabilities.LoadRows(personId, origin.TangentId, ct);
         if (!rows.For(origin, origin.ParentId is null ? null : root).Exists) return null;
         return await QuotedPost.Of(origin, root, tangent, baseAddress, ct);
+    }
+
+    /// <summary>Every month the Tangent's Topics started in, newest first, with how many, as its row keeps them.</summary>
+    private static IReadOnlyList<Render.TopicViews.Choice> Months(Tangents.Tangent row, string address) => row.Months
+        .Select(month => (Month: TopicList.Month.Parse(month.Key), Count: month.Value))
+        .Where(month => month.Month is not null)
+        .OrderByDescending(month => month.Month!.Start)
+        .Select(month => new Render.TopicViews.Choice(month.Month!.Key, month.Month.Name, month.Count, TangentPage.ListAddress(address, month.Month.Key, null)))
+        .ToList();
+
+    /// <summary>The authors the rail offers, with how many Topics each started, as the Tangent's row keeps them: the
+    /// <see cref="AuthorLimit"/> who started the most, by id where as many started the same, and the one the list is
+    /// narrowed to where they started one and are not among them.</summary>
+    private static IReadOnlyList<KeyValuePair<string, int>> Offered(Tangents.Tangent row, string? by)
+    {
+        var most = row.Authors.OrderByDescending(author => author.Value).ThenBy(author => author.Key, StringComparer.Ordinal).Take(AuthorLimit).ToList();
+        if (by is not null && row.Authors.TryGetValue(by, out var count) && most.All(author => author.Key != by)) most.Add(new(by, count));
+        return most;
+    }
+
+    /// <summary>The authors the rail offers as its choices, most Topics first, then by name.</summary>
+    private static IReadOnlyList<Render.TopicViews.Choice> Authors(IEnumerable<KeyValuePair<string, int>> offered, string address,
+        IReadOnlyDictionary<string, Render.Person> people)
+        => offered
+            .Select(author => new Render.TopicViews.Choice(author.Key, TopicList.Person(people, author.Key).Name, author.Value, TangentPage.ListAddress(address, null, author.Key)))
+            .OrderByDescending(author => author.Count).ThenBy(author => author.Name, StringComparer.CurrentCulture).ThenBy(author => author.Key, StringComparer.Ordinal)
+            .ToList();
+
+    /// <summary>The members-only Tangent as a participant outside it reads it: its card, with the way in, in the place's
+    /// frame. Never stored, since it names its reader.</summary>
+    private async Task<IActionResult> Outside(Here here, Tangents.Tangent row, Outsider outside, CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-cache, no-store";
+        var baseAddress = baseUrl.Resolve(HttpContext);
+        var back = baseUrl.PathBase + "/t/" + row.Id;
+        return Ok(new TangentOutside(TangentsController.Outside(row, baseAddress, outside.Asked), here.Rows.Space.Name, baseAddress + "/",
+            await PostWrites.Reader(here.PersonId, here.Capabilities, baseAddress, back, ct)));
+    }
+
+    /// <summary>The first <see cref="SwitcherLimit"/> Tangents the reader may view, this one always among them.</summary>
+    private static async Task<IReadOnlyList<Render.TangentEntry>> Viewable(string? personId, Tangents.Tangent current, string baseAddress, CancellationToken ct)
+    {
+        var listed = (await ViewableTangents.Read(personId, ViewableTangents.Views, null, SwitcherLimit, ct)).Tangents.ToList();
+        if (listed.All(row => row.Id != current.Id)) listed.Add(current);
+        return listed.Select(row => TangentEntry.Of(row.Id == current.Id ? current : row, PostWrites.TangentAddress(baseAddress, row.Id), baseAddress + "/")).ToList();
     }
 
     /// <summary>Where a read of a Topic's address answers before its page: a redirect to the Topic's own address, under its Tangent
@@ -348,7 +519,7 @@ public sealed class TopicsController(KoanWebBaseUrl baseUrl, IDataProtectionProv
             : place.Holds(Bit.Topic) ? tangentRow.Id
             : (await Origins.Destinations(personId, null, 1, ct)).Tangents.FirstOrDefault()?.Id;
         var takeOn = takeInto is null ? null
-            : PostWrites.TangentAddress(baseAddress, takeInto) + "/" + TangentPageController.NewTopicSegment + "?" + PostWrites.OriginField + "=";
+            : PostWrites.TangentAddress(baseAddress, takeInto) + "/" + NewTopicSegment + "?" + PostWrites.OriginField + "=";
         // A signed-in reader's page is never stored, so a browser's Back after sign-out redisplays nothing of it. The page shows the
         // root and the window's replies through its last, the root alone when it holds none. The seen form is offered only for a
         // window that continues from what the reader has seen — its first reply at most one past their checkpoint, or past the root it
@@ -386,7 +557,7 @@ public sealed class TopicsController(KoanWebBaseUrl baseUrl, IDataProtectionProv
             window.Older is { } older ? address + "?" + TopicPageController.Before + "=" + older.ToString(CultureInfo.InvariantCulture) : null,
             window.Newer is { } newer ? address + "?" + TopicPageController.After + "=" + newer.ToString(CultureInfo.InvariantCulture) : null,
             anchor?.Id,
-            place.Holds(Bit.Topic) ? tangentAddress + "/" + TangentPageController.NewTopicSegment : null,
+            place.Holds(Bit.Topic) ? tangentAddress + "/" + NewTopicSegment : null,
             space.Name,
             baseAddress + "/",
             reader is null ? baseAddress + SignInController.Path + "?return=" + back : null,

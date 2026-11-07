@@ -136,6 +136,54 @@ public sealed class TangentPageTests
     }
 
     [Fact]
+    public async Task A_topic_started_between_two_pages_leads_the_list_and_the_second_page_continues_from_the_first_without_a_repeat_and_an_altered_or_foreign_cursor_is_refused_naming_after()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        await Place(tangentSpace);
+        Assert.IsType<Outcome<Tangent>.Done>(await new CreateTangent("garden", "The garden", "Where things grow.", PostKind.Topic, 2, Audience.Public, "leo").Send(Cancellation));
+        var all = new List<Post>();
+        for (var index = 0; index < TopicList.PageSize + 5; index++)
+            all.Add(await Started("Topic " + index, Start.AddMinutes(index)));
+        var expected = all.OrderByDescending(topic => topic.LastActivityAt).ThenByDescending(topic => topic.Id, StringComparer.Ordinal)
+            .Select(topic => topic.Id).ToList();
+
+        string next;
+        List<string> first;
+        using (var page = await Json(tangentSpace.Client, "/t/" + Workshop))
+        {
+            first = Ids(page.RootElement);
+            next = new Uri(page.RootElement.GetProperty("next").GetString()!).PathAndQuery;
+        }
+
+        // Started ahead of the cursor, it moves no Topic of the next page onto the one already read.
+        var between = await Started("Started between the pages", Start.AddDays(1));
+        using (var page = await Json(tangentSpace.Client, next))
+        {
+            var second = Ids(page.RootElement);
+            Assert.Empty(first.Intersect(second));
+            Assert.DoesNotContain(between.Id, second);
+            Assert.Equal(expected, first.Concat(second).ToList());
+            Assert.False(page.RootElement.TryGetProperty("next", out _));
+            Assert.True(page.RootElement.GetProperty("continued").GetBoolean());
+        }
+
+        using (var page = await Json(tangentSpace.Client, "/t/" + Workshop))
+            Assert.Equal(between.Id, Ids(page.RootElement)[0]);
+
+        var after = Uri.UnescapeDataString(next[(next.IndexOf("after=", StringComparison.Ordinal) + "after=".Length)..]);
+        var altered = after[..^2] + (after[^2] == 'A' ? 'B' : 'A') + after[^1];
+        foreach (var address in new[] { $"/t/{Workshop}?after={Uri.EscapeDataString(altered)}", $"/t/garden?after={Uri.EscapeDataString(after)}" })
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, address);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            using var response = await tangentSpace.Client.SendAsync(request, Cancellation);
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Cancellation));
+            Assert.True(problem.RootElement.GetProperty("errors").TryGetProperty("after", out _));
+        }
+    }
+
+    [Fact]
     public async Task A_signed_in_reader_sees_new_topics_marked_one_never_opened_with_no_count_a_mark_at_the_last_sequence_unmarks_one_a_later_reply_counts_it_and_a_visitor_sees_no_marks()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
@@ -510,15 +558,15 @@ public sealed class TangentPageTests
         await Place(tangentSpace);
         Assert.IsType<Outcome<Tangent>.Done>(await new CreateTangent("essays", "Essays", "", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
         // More writers than the rail offers: the first ones each start two essays, the last two one each.
-        var writers = Enumerable.Range(0, TangentPageController.AuthorLimit + 2).Select(index => $"writer{index:D2}").ToList();
+        var writers = Enumerable.Range(0, TopicsController.AuthorLimit + 2).Select(index => $"writer{index:D2}").ToList();
         foreach (var (writer, index) in writers.Select((writer, index) => (writer, index)))
         {
             await Given.AParticipant(tangentSpace, writer, [Roles.Member], ct: Cancellation);
-            for (var essay = 0; essay < (index < TangentPageController.AuthorLimit ? 2 : 1); essay++)
+            for (var essay = 0; essay < (index < TopicsController.AuthorLimit ? 2 : 1); essay++)
                 Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), "essays", $"Essay {essay} of {writer}", "Words.", writer, At: Start.AddMinutes(index)).Send(Cancellation));
         }
 
-        var most = writers.Take(TangentPageController.AuthorLimit).Select(writer => (writer, writer + ".example", 2, $"{BaseUrl}/t/essays?author={writer}")).ToList();
+        var most = writers.Take(TopicsController.AuthorLimit).Select(writer => (writer, writer + ".example", 2, $"{BaseUrl}/t/essays?author={writer}")).ToList();
         using (var whole = await Json(tangentSpace.Client, "/t/essays"))
             Assert.Equal(most, Choices(whole.RootElement.GetProperty("authors")));
 
