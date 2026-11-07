@@ -172,4 +172,31 @@ public sealed class LeaveTests
         Assert.Null(await Participant.Get(Bea, Cancellation));
         Assert.Null(await KoanPerson.Get(Bea, Cancellation));
     }
+
+    [Fact]
+    public async Task A_timed_out_participant_stays_until_the_timeout_ends_and_leaves_once_it_has()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        var bea = (await Participant.Get(Bea, Cancellation))!;
+        bea.Standing = Standing.TimedOut;
+        bea.StandingUntil = DateTimeOffset.UtcNow.AddHours(1);
+        Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(bea).Send(Cancellation));
+        using var signedIn = await SignedIn(tangentSpace, Bea);
+        var profile = "/p/" + Persona.Handle(Bea);
+
+        // While the timeout runs, the profile offers no way out and a leave sent anyway is refused with its end.
+        Assert.DoesNotContain("Leave this Tangent Space", (await Send(signedIn.Client, HttpMethod.Get, profile)).Body);
+        var refused = await Json(signedIn, profile, PeopleController.LeavePath, new { });
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.TimedOut.Word), (refused.Status, refused.Word));
+        Assert.NotNull(await Participant.Get(Bea, Cancellation));
+
+        // Once it has ended, they leave.
+        bea = (await Participant.Get(Bea, Cancellation))!;
+        bea.StandingUntil = DateTimeOffset.UtcNow.AddMinutes(-1);
+        Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(bea).Send(Cancellation));
+        Assert.Contains("Leave this Tangent Space", (await Send(signedIn.Client, HttpMethod.Get, profile)).Body);
+        Assert.IsType<Outcome<LeavePlace.Gone>.Done>(await new LeavePlace(Bea).Send(Cancellation));
+        Assert.Null(await Participant.Get(Bea, Cancellation));
+    }
 }

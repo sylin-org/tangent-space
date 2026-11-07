@@ -28,13 +28,24 @@ public sealed record LeavePlace(string PersonId) : ICommand<LeavePlace.Gone>
     /// <summary>The most rows one read of leaving takes.</summary>
     public const int Page = 200;
 
+    /// <summary>The refusal a timed-out participant meets until <paramref name="until"/>: leaving and arriving again would end
+    /// the timeout their moderators set.</summary>
+    public static Reason TimedOut(DateTimeOffset until)
+        => Reason.Gated(Capabilities.TimedOut.Word, $"You’re timed out until {Render.Wording.Until(until)}: you can leave once it ends.");
+
     /// <summary>Why <paramref name="participant"/> may not leave <paramref name="space"/> at <paramref name="now"/>, or null
-    /// where they may: the operator stays with the place, and a banned participant finds it absent, as a ban answers
-    /// everywhere. Anyone else leaves, an applicant waiting or declined among them, which ends their application.</summary>
+    /// where they may: the operator stays with the place, a timed-out participant stays until the timeout ends
+    /// (<see cref="TimedOut"/>), and a banned participant finds it absent, as a ban answers everywhere. Anyone else leaves,
+    /// an applicant waiting or declined among them, which ends their application.</summary>
     public static Reason? Refusal(Participant participant, TangentSpace? space, DateTimeOffset now)
     {
         if (space?.OperatorId == participant.Id) return Operator;
-        return participant.StandingAt(now) == Standing.Banned ? Capabilities.Absent : null;
+        return participant.StandingAt(now) switch
+        {
+            Standing.Banned => Capabilities.Absent,
+            Standing.TimedOut => TimedOut(participant.StandingUntil ?? now),
+            _ => null
+        };
     }
 
     public async Task<Outcome<Gone>> Run(CancellationToken ct)
