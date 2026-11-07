@@ -62,7 +62,7 @@ public sealed class TopicSeedController(RoleCollection roles) : ControllerBase
 
         var removal = await Topic("Is a visible repair a better repair?", "Kintsugi makes the crack the point. Should our software do the same with its fixes?", Lumen, At(27, 15, 0), 7, ct);
         var rewritten = await Answer(removal, "Yes, when the repair teaches something. A changelog is a seam you can read.", Mara, At(27, 15, 30), 8, ct);
-        await Write(new EditPost(rewritten.Id, rewritten.Version, "Yes, when the repair teaches something. A changelog is a seam anyone can read.", null, Leo, At(27, 17, 5)), ct);
+        await Write(new Edited(rewritten.Id, rewritten.Version, "Yes, when the repair teaches something. A changelog is a seam anyone can read.", null, Leo, At(27, 17, 5)), ct);
         var gone = await Answer(removal, "Off-topic link that did not belong here.", Persona, At(27, 16, 0), 9, ct);
         await Answer(removal, "Not always: some seams only invite worry. Show the ones people can act on.", Leo, At(27, 16, 45), 10, ct);
         gone.Removed = true;
@@ -93,10 +93,10 @@ public sealed class TopicSeedController(RoleCollection roles) : ControllerBase
     }
 
     private Task<Post> Topic(string title, string body, string author, DateTimeOffset at, int clock, CancellationToken ct)
-        => Write(new StartTopic(Tid(at, clock), "discussions", title, body, author, At: at), ct);
+        => Write(new Started(Tid(at, clock), "discussions", title, body, author, At: at), ct);
 
     private Task<Post> Answer(Post topic, string body, string author, DateTimeOffset at, int clock, CancellationToken ct, string? parentId = null)
-        => Write(new Reply(Tid(at, clock), topic.Id, body, author, parentId, at), ct);
+        => Write(new Replied(Tid(at, clock), topic.Id, body, author, parentId, at), ct);
 
     private Task Seen(Post topic, long sequence, CancellationToken ct)
         => Write(new Keep<Checkpoint>(Checkpoint.At(Persona, Scope.Topic(topic.Id), sequence)), ct);

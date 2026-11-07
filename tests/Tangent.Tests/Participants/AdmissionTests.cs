@@ -34,7 +34,7 @@ public sealed class AdmissionTests
     /// <summary>Starts a Topic in <paramref name="tangent"/> as JSON, with the session's token from the Tangent's page, which
     /// carries a form for every signed-in reader, so an applicant the new-topic page offers no form still sends one.</summary>
     private static Task<Answered> StartIn(Browser browser, string tangent, string title)
-        => Json(browser, "/t/" + tangent, "/t/" + tangent + "/new", new { id = Tids.Mint(), title, body = "Hello, everyone." });
+        => Json(browser, "/t/" + tangent + "/new", "/t/" + tangent, new { id = Tids.Mint(), title, body = "Hello, everyone." });
 
     [Fact]
     public async Task On_a_join_place_a_newcomer_who_signs_in_is_a_member_and_starts_a_topic_in_general()

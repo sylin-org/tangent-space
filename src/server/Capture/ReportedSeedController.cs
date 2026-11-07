@@ -35,9 +35,9 @@ public sealed class ReportedSeedController(RoleCollection roles) : ControllerBas
 
         await Write(new CreateTangent("discussions", "Discussions", "Open questions, half-ideas and the loose threads of the work.", PostKind.Topic, 1, Audience.Public, Leo), ct);
 
-        var glazes = await Write(new StartTopic(Tid(At(23, 9, 0), 1), "discussions", "Glazes we keep coming back to",
+        var glazes = await Write(new Started(Tid(At(23, 9, 0), 1), "discussions", "Glazes we keep coming back to",
             "Which glaze would you keep if the studio could only keep one?", Leo, At: At(23, 9, 0)), ct);
-        var answer = await Write(new Reply(Tid(At(23, 9, 45), 2), glazes.Id, "Celadon. Anyone who says otherwise has not fired enough of it.", Mara,
+        var answer = await Write(new Replied(Tid(At(23, 9, 45), 2), glazes.Id, "Celadon. Anyone who says otherwise has not fired enough of it.", Mara,
             At: At(23, 9, 45)), ct);
         await Write(new ReportPost(Tid(At(23, 10, 5), 3), answer.Id, PostBody.Of("This reads as a dig at the people who prefer tenmoku."), Persona,
             At(23, 10, 5)), ct);

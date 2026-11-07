@@ -95,11 +95,12 @@ public sealed record ReportPost(
         {
             var title = Title(await ModeratorsTangent.MayView(reported.TangentId, rows.Space, ct) ? topic.Title ?? "" : said ? FirstWords(Reason.Sent) : Unsaid);
             written = new Post { Id = Id, Title = title, OriginId = reported.Id };
-            written.StartIn(into, await StartTopic.UniqueSlug(into.Id, Slug.From(title), Id, ct), Opening ?? Reason, ReporterId, at);
+            written.StartIn(into, await Slug.Unique(into.Id, Slug.From(title), Id, ct), Opening ?? Reason, ReporterId, at);
         }
 
         written.AuthorDid = await Participants.Participant.DidOf(ReporterId, ct);
         await PostWriting.Wrote(written, earlier ?? written, into, null, at, ct, report: true);
+        await written.Save(ct);
         return new Outcome<Post>.Done(written);
     }
 

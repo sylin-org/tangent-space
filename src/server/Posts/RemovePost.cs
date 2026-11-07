@@ -18,7 +18,7 @@ namespace Tangent.Posts;
 /// else is refused with the gate Capabilities names on the tombstone.</summary>
 public sealed record RemovePost(string PostId, string RemoverId, DateTimeOffset? At = null) : ICommand<Post>
 {
-    public static readonly Reason NoPost = EditPost.NoPost;
+    public static readonly Reason NoPost = Post.NoPost;
 
     public async Task<Outcome<Post>> Run(CancellationToken ct)
     {

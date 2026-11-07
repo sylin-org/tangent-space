@@ -253,7 +253,7 @@ public sealed class TangentSpaceSettingsTests
 
         var asJson = await Send(visitor, HttpMethod.Get, "/t/" + Workshop, json: true);
         Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (asJson.Status, asJson.Word));
-        var posted = await Send(visitor, HttpMethod.Post, "/t/" + Workshop + "/new", JsonBody(new { title = "Hello" }), json: true);
+        var posted = await Send(visitor, HttpMethod.Post, "/t/" + Workshop, JsonBody(new { title = "Hello" }), json: true);
         Assert.Equal((HttpStatusCode.Unauthorized, Capabilities.SignIn.Word), (posted.Status, posted.Word));
         Assert.Equal(HttpStatusCode.OK, (await Page(visitor, "/sign-in")).Status);
         Assert.Equal(HttpStatusCode.OK, (await Send(visitor, HttpMethod.Get, "/tangent.json", json: true)).Status);

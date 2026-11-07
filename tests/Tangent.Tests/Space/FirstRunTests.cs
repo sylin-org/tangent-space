@@ -462,7 +462,7 @@ public sealed class FirstRunTests
             Assert.Equal([FirstTangent.Slug],
                 json.RootElement.GetProperty("tangents").EnumerateArray().Select(tangent => tangent.GetProperty("slug").GetString()).ToList());
         await roles.Add(Roles.Member, Ada, Cancellation);
-        var started = await Posts.Writing.Json(ada, "/t/general/new", "/t/general/new",
+        var started = await Posts.Writing.Json(ada, "/t/general/new", "/t/general",
             new { id = Posts.Tids.Mint(), title = "Hello", body = "The first words here." });
         Assert.Equal(HttpStatusCode.Created, started.Status);
         Assert.Equal(1, (await Tangents.Tangent.Get(FirstTangent.Slug, Cancellation))!.TopicCount);

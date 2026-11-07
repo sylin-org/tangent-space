@@ -28,19 +28,19 @@ public sealed class Post : Entity<Post>
 
     public const int TitleLimit = 200;
 
-    public static readonly Reason NeedsTid = Reason.Invalid("A Post's Id is a TID.");
-    public static readonly Reason NeedsBody = Reason.Invalid("A Post's body holds at least one visible character.");
-    public static readonly Reason BodyTooLong = Reason.Invalid("A Post's body holds at most 64 KiB of UTF-8.");
-    public static readonly Reason BodyHasNul = Reason.Invalid("A Post's body holds no NUL character.");
-    public static readonly Reason BodyRendersTooLong = Reason.Invalid("A Post's body renders to at most 512 KiB of HTML, its elements nested no deeper than the renderer allows.");
-    public static readonly Reason TooManyMentions = Reason.Invalid("A Post's body mentions at most 32 identities.");
-    public static readonly Reason BodyNotJudged = Reason.Invalid("This body was not judged before it was sent; send it again.");
-    public static readonly Reason BodyTooIntricate = Reason.Invalid("A Post's body holds too many unclosed links, brackets or emphasis marks to render quickly.");
-    public static readonly Reason TooManyImages = Reason.Invalid("A Post's body holds at most 64 images of this place.");
-    public static readonly Reason NoCover = Reason.Invalid("This cover isn't an image you can use here.");
-    public static readonly Reason CoverOnArticle = Reason.Invalid("Only an article has a cover.");
-    public static readonly Reason NeedsTitle = Reason.Invalid("A Topic's title holds at least one visible character.");
-    public static readonly Reason TitleTooLong = Reason.Invalid("A Topic's title holds at most 200 characters.");
+    public static readonly Reason NeedsTid = Reason.Invalid(PostWrites.IdField, "A Post's Id is a TID.");
+    public static readonly Reason NeedsBody = Reason.Invalid(PostWrites.BodyField, "A Post's body holds at least one visible character.");
+    public static readonly Reason BodyTooLong = Reason.Invalid(PostWrites.BodyField, "A Post's body holds at most 64 KiB of UTF-8.");
+    public static readonly Reason BodyHasNul = Reason.Invalid(PostWrites.BodyField, "A Post's body holds no NUL character.");
+    public static readonly Reason BodyRendersTooLong = Reason.Invalid(PostWrites.BodyField, "A Post's body renders to at most 512 KiB of HTML, its elements nested no deeper than the renderer allows.");
+    public static readonly Reason TooManyMentions = Reason.Invalid(PostWrites.BodyField, "A Post's body mentions at most 32 identities.");
+    public static readonly Reason BodyNotJudged = Reason.Invalid(PostWrites.BodyField, "This body was not judged before it was sent; send it again.");
+    public static readonly Reason BodyTooIntricate = Reason.Invalid(PostWrites.BodyField, "A Post's body holds too many unclosed links, brackets or emphasis marks to render quickly.");
+    public static readonly Reason TooManyImages = Reason.Invalid(PostWrites.BodyField, "A Post's body holds at most 64 images of this place.");
+    public static readonly Reason NoCover = Reason.Invalid(PostWrites.CoverField, "This cover isn't an image you can use here.");
+    public static readonly Reason CoverOnArticle = Reason.Invalid(PostWrites.CoverField, "Only an article has a cover.");
+    public static readonly Reason NeedsTitle = Reason.Invalid(PostWrites.TitleField, "A Topic's title holds at least one visible character.");
+    public static readonly Reason TitleTooLong = Reason.Invalid(PostWrites.TitleField, "A Topic's title holds at most 200 characters.");
     public static readonly Reason NeedsTangent = Reason.Invalid("A Topic starts in a Tangent.");
     public static readonly Reason NeedsAuthor = Reason.Invalid("A Post has an author.");
     public static readonly Reason NotARoot = Reason.Invalid("A reply goes to a Topic.");
@@ -49,10 +49,25 @@ public sealed class Post : Entity<Post>
     public static readonly Reason PostRemoved = Access.Capabilities.Removed;
     public static readonly Reason NeedsRemover = Reason.Invalid("A removal names who removes.");
     public static readonly Reason NotRemoved = Reason.Invalid("Only a removed post comes back.");
+    public static readonly Reason NoPost = Reason.Absent("No Post has this Id.");
+    public static readonly Reason NoTopic = Reason.Absent("No Topic has this Id.");
+    public static readonly Reason NoParent = Reason.Invalid(PostWrites.ParentField, "The parent is not a Post of this Topic.");
+    public static readonly Reason NoOrigin = Reason.Absent("No Post has the origin's Id.");
+
+    /// <summary>The refusal of an edit made from another version, word <c>stale</c>: the version the Post is at now, which a new
+    /// edit starts from.</summary>
+    public static Reason Stale(long current) => Reason.Conflict(StaleWord,
+        "The Post is at version " + current.ToString(System.Globalization.CultureInfo.InvariantCulture) + " now, not the version this edit was made from.");
+
+    public const string StaleWord = "stale";
 
     /// <summary>The one answer for an Id a Post already holds that is not this request's, word <c>id-taken</c>: a retry
     /// learns its Post was written, and nothing says where, whose or what that Post is.</summary>
     public static readonly Reason IdTaken = Reason.Conflict("id-taken", "A Post already has this id; if it is yours, it was written. Mint another id to post anything new.");
+
+    /// <summary>The TID the client minted for it.</summary>
+    [System.ComponentModel.Description(Render.Holds.Id)]
+    public override string Id { get => base.Id; set => base.Id = value; }
 
     /// <summary>The Tangent the Topic is in; on every row.</summary>
     [Index(Name = "ix_post_topics", Order = 0)]
@@ -93,6 +108,7 @@ public sealed class Post : Entity<Post>
 
     /// <summary>Root only. Found by its words.</summary>
     [Lexical]
+    [System.ComponentModel.Description(Render.Holds.Title)]
     public string? Title { get; set; }
 
     /// <summary>An article's lead image. Root only.</summary>
@@ -101,6 +117,7 @@ public sealed class Post : Entity<Post>
     /// <summary>Markdown, rendered to safe HTML where it is shown (<see cref="MarkdownHtml"/>); a mention is a link to
     /// <c>/p/</c> and a participant's id (<see cref="Mentions"/>). Found by its words.</summary>
     [Lexical]
+    [System.ComponentModel.Description(Render.Holds.Body)]
     public string Body { get; set; } = "";
 
     /// <summary>The <see cref="Media"/> the body's images name, each once, in the order of their first image, at most
@@ -120,6 +137,7 @@ public sealed class Post : Entity<Post>
     public string SentHash { get; set; } = "";
 
     /// <summary>Raised by every edit.</summary>
+    [System.ComponentModel.Description(Render.Holds.EditVersion)]
     public long Version { get; set; } = 1;
 
     /// <summary>The Post's place in its Topic: zero on the root, then one higher per reply.</summary>
@@ -366,7 +384,7 @@ public sealed class Post : Entity<Post>
     /// Answers whether anything changed: a closed Topic stays as it was closed. Every word stays, and its version with them.</summary>
     public bool Close(string closedBy, DateTimeOffset at)
     {
-        if (ParentId is not null) throw new Refusal(Posts.Reply.NoTopic);
+        if (ParentId is not null) throw new Refusal(NoTopic);
         if (Removed) throw new Refusal(PostRemoved);
         if (Closed) return false;
         (Closed, ClosedBy, ClosedAt) = (true, closedBy, at);
@@ -376,7 +394,7 @@ public sealed class Post : Entity<Post>
     /// <summary>Opens this Topic to replies again, or a refusal: this Post is a root. Answers whether anything changed.</summary>
     public bool Reopen()
     {
-        if (ParentId is not null) throw new Refusal(Posts.Reply.NoTopic);
+        if (ParentId is not null) throw new Refusal(NoTopic);
         if (!Closed) return false;
         (Closed, ClosedBy, ClosedAt) = (false, null, null);
         return true;

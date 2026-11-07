@@ -61,10 +61,10 @@ public sealed class ProfileSeedController(RoleCollection roles) : ControllerBase
     }
 
     private Task<Post> Topic(string tangent, string title, string body, string author, DateTimeOffset at, int clock, CancellationToken ct)
-        => Write(new StartTopic(Tid(at, clock), tangent, title, body, author, At: at), ct);
+        => Write(new Started(Tid(at, clock), tangent, title, body, author, At: at), ct);
 
     private Task<Post> Answer(Post topic, string body, string author, DateTimeOffset at, int clock, CancellationToken ct)
-        => Write(new Reply(Tid(at, clock), topic.Id, body, author, At: at), ct);
+        => Write(new Replied(Tid(at, clock), topic.Id, body, author, At: at), ct);
 
     private async Task<T> Write<T>(ICommand<T> command, CancellationToken ct) => await command.Send() switch
     {

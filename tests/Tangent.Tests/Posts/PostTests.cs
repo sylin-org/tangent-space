@@ -4,13 +4,15 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
+using Tangent.Capture;
 using Tangent.Events;
 using Xunit;
 
 namespace Tangent.Posts;
 
-/// <summary>Topics started and replies made by command: the root as the Topic's state, slugs, sequences, the log rows
-/// appended with them, refusals that write nothing, and idempotency by Id.</summary>
+/// <summary>Topics started and replies made past the door, as the seeds write them (<see cref="PostWriting"/>): the root as the
+/// Topic's state, slugs, sequences, the log rows appended with them, and refusals that write nothing. What the door and a write's
+/// own hook add, a replay and an id taken among them, is proved over HTTP (<see cref="EntityWritesTests"/>).</summary>
 public sealed class PostTests
 {
     private static CancellationToken Cancellation => TestContext.Current.CancellationToken;
@@ -35,9 +37,9 @@ public sealed class PostTests
         var secondId = Tids.Mint();
         var elsewhereId = Tids.Mint();
 
-        var first = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(firstId, Workshop, "  Hello, Wörld! ", "A first word.", "leo").Send(Cancellation)).Result;
-        var second = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(secondId, Workshop, "Hello world", "The same title again.", "leo").Send(Cancellation)).Result;
-        var elsewhere = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(elsewhereId, "articles", "Hello world", "The title in another Tangent.", "leo").Send(Cancellation)).Result;
+        var first = Assert.IsType<Outcome<Post>.Done>(await new Started(firstId, Workshop, "  Hello, Wörld! ", "A first word.", "leo").Send(Cancellation)).Result;
+        var second = Assert.IsType<Outcome<Post>.Done>(await new Started(secondId, Workshop, "Hello world", "The same title again.", "leo").Send(Cancellation)).Result;
+        var elsewhere = Assert.IsType<Outcome<Post>.Done>(await new Started(elsewhereId, "articles", "Hello world", "The title in another Tangent.", "leo").Send(Cancellation)).Result;
 
         Assert.Equal((firstId, firstId, null, Workshop, "hello-world", "Hello, Wörld!", PostKind.Topic), (first.Id, first.TopicId, first.ParentId, first.TangentId, first.Slug, first.Title, first.Kind));
         Assert.Equal((0L, 0L, 0, 1L), (first.Sequence, first.LastSequence, first.ReplyCount, first.Version));
@@ -61,10 +63,10 @@ public sealed class PostTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Started(tangentSpace);
 
-        var create = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, "New", "Where Topics start.", "leo").Send(Cancellation)).Result;
-        var settings = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, "Settings!", "Where the Tangent is set.", "leo").Send(Cancellation)).Result;
-        var plain = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, "New settings", "Neither.", "leo").Send(Cancellation)).Result;
-        var leave = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, "Leave", "Where a participant goes out.", "leo").Send(Cancellation)).Result;
+        var create = Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), Workshop, "New", "Where Topics start.", "leo").Send(Cancellation)).Result;
+        var settings = Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), Workshop, "Settings!", "Where the Tangent is set.", "leo").Send(Cancellation)).Result;
+        var plain = Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), Workshop, "New settings", "Neither.", "leo").Send(Cancellation)).Result;
+        var leave = Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), Workshop, "Leave", "Where a participant goes out.", "leo").Send(Cancellation)).Result;
 
         Assert.Equal(("new-2", "settings-2", "new-settings", "leave-2"), (create.Slug, settings.Slug, plain.Slug, leave.Slug));
         Assert.Equal(4, (await Tangents.Tangent.Get(Workshop, Cancellation))!.TopicCount);
@@ -76,9 +78,11 @@ public sealed class PostTests
     {
         var own = typeof(TangentModule).Assembly.GetTypes()
             .Where(type => typeof(ControllerBase).IsAssignableFrom(type))
-            .SelectMany(type => type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
-            .SelectMany(action => action.GetCustomAttributes<HttpMethodAttribute>())
-            .Select(route => route.Template?.Split('/', StringSplitOptions.RemoveEmptyEntries) ?? [])
+            .SelectMany(type => type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                .SelectMany(action => action.GetCustomAttributes<HttpMethodAttribute>())
+                .Select(route => route.Template is { } template && template.StartsWith('/') ? template
+                    : (type.GetCustomAttribute<RouteAttribute>()?.Template ?? "") + "/" + route.Template))
+            .Select(route => route.Split('/', StringSplitOptions.RemoveEmptyEntries))
             .Where(segments => segments is ["t", "{tangent}", _, ..] && Slug.IsValid(segments[2]))
             .Select(segments => segments[2])
             .ToHashSet(StringComparer.Ordinal);
@@ -93,7 +97,7 @@ public sealed class PostTests
         await Started(tangentSpace);
         foreach (var id in new[] { "mara", "sam", "kim" }) await Given.AParticipant(tangentSpace, id, [Roles.Member], ct: Cancellation);
         var topicId = Tids.Mint();
-        var started = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(topicId, Workshop, "Who is here", "Say hello.", "leo").Send(Cancellation)).Result;
+        var started = Assert.IsType<Outcome<Post>.Done>(await new Started(topicId, Workshop, "Who is here", "Say hello.", "leo").Send(Cancellation)).Result;
         Assert.Equal(["leo"], started.RecentAuthorIds);
         Assert.Null(started.LatestReplyId);
 
@@ -101,7 +105,7 @@ public sealed class PostTests
         foreach (var author in new[] { "ada", "mara", "leo", "sam", "kim", "sam" })
         {
             last = Tids.Mint();
-            Assert.IsType<Outcome<Post>.Done>(await new Reply(last, topicId, "Hello from " + author + ".", author).Send(Cancellation));
+            Assert.IsType<Outcome<Post>.Done>(await new Replied(last, topicId, "Hello from " + author + ".", author).Send(Cancellation));
         }
 
         var root = (await Post.Get(topicId, Cancellation))!;
@@ -118,17 +122,17 @@ public sealed class PostTests
         var slugs = new List<string>();
         string lastId = "";
 
-        for (var topic = 1; topic <= StartTopic.SuffixBound + 1; topic++)
+        for (var topic = 1; topic <= Slug.SuffixBound + 1; topic++)
         {
             lastId = Tids.Mint();
-            slugs.Add(Assert.IsType<Outcome<Post>.Done>(await new StartTopic(lastId, Workshop, title, "Again.", "leo").Send(Cancellation)).Result.Slug!);
+            slugs.Add(Assert.IsType<Outcome<Post>.Done>(await new Started(lastId, Workshop, title, "Again.", "leo").Send(Cancellation)).Result.Slug!);
         }
 
         Assert.Equal(new string('a', Slug.Limit), slugs[0]);
         Assert.Equal(new string('a', Slug.Limit - 2) + "-2", slugs[1]);
-        Assert.Equal(new string('a', Slug.Limit - 3) + "-50", slugs[StartTopic.SuffixBound - 1]);
-        Assert.Equal(new string('a', Slug.Limit - 1 - Tid.Length) + "-" + lastId, slugs[StartTopic.SuffixBound]);
-        Assert.Equal(StartTopic.SuffixBound + 1, slugs.Distinct().Count());
+        Assert.Equal(new string('a', Slug.Limit - 3) + "-50", slugs[Slug.SuffixBound - 1]);
+        Assert.Equal(new string('a', Slug.Limit - 1 - Tid.Length) + "-" + lastId, slugs[Slug.SuffixBound]);
+        Assert.Equal(Slug.SuffixBound + 1, slugs.Distinct().Count());
         Assert.All(slugs, slug => Assert.InRange(slug.Length, 1, Slug.Limit));
     }
 
@@ -140,12 +144,12 @@ public sealed class PostTests
         var topicId = Tids.Mint();
         var startedAt = new DateTimeOffset(2026, 10, 29, 9, 0, 0, TimeSpan.Zero);
         var repliedAt = startedAt.AddMinutes(5);
-        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(topicId, "articles", "A question", "What is this?", "leo", startedAt).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Started(topicId, "articles", "A question", "What is this?", "leo", startedAt).Send(Cancellation));
         var firstId = Tids.Mint();
         var secondId = Tids.Mint();
 
-        var first = Assert.IsType<Outcome<Post>.Done>(await new Reply(firstId, topicId, "An answer.", "ada", At: repliedAt).Send(Cancellation)).Result;
-        var second = Assert.IsType<Outcome<Post>.Done>(await new Reply(secondId, topicId, "Another.", "leo", ParentId: firstId, At: repliedAt.AddMinutes(1)).Send(Cancellation)).Result;
+        var first = Assert.IsType<Outcome<Post>.Done>(await new Replied(firstId, topicId, "An answer.", "ada", At: repliedAt).Send(Cancellation)).Result;
+        var second = Assert.IsType<Outcome<Post>.Done>(await new Replied(secondId, topicId, "Another.", "leo", ParentId: firstId, At: repliedAt.AddMinutes(1)).Send(Cancellation)).Result;
 
         Assert.Equal(("articles", topicId, topicId, 1L, "ada", repliedAt), (first.TangentId, first.TopicId, first.ParentId, first.Sequence, first.AuthorId, first.CreatedAt));
         Assert.Equal((topicId, firstId, 2L), (second.TopicId, second.ParentId, second.Sequence));
@@ -172,20 +176,20 @@ public sealed class PostTests
         var topicId = Tids.Mint();
         var otherTopicId = Tids.Mint();
         var otherReplyId = Tids.Mint();
-        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(topicId, Workshop, "Here", "This one.", "leo").Send(Cancellation));
-        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(otherTopicId, Workshop, "There", "That one.", "leo").Send(Cancellation));
-        Assert.IsType<Outcome<Post>.Done>(await new Reply(otherReplyId, otherTopicId, "Over there.", "ada").Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Started(topicId, Workshop, "Here", "This one.", "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Started(otherTopicId, Workshop, "There", "That one.", "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Replied(otherReplyId, otherTopicId, "Over there.", "ada").Send(Cancellation));
         var before = (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation));
 
-        var noParent = await new Reply(Tids.Mint(), topicId, "To whom?", "ada", ParentId: "nope").Send(Cancellation);
-        var missingParent = await new Reply(Tids.Mint(), topicId, "To whom?", "ada", ParentId: Tids.Mint()).Send(Cancellation);
-        var parentElsewhere = await new Reply(Tids.Mint(), topicId, "To whom?", "ada", ParentId: otherReplyId).Send(Cancellation);
-        var rootElsewhere = await new Reply(Tids.Mint(), topicId, "To whom?", "ada", ParentId: otherTopicId).Send(Cancellation);
+        var noParent = await new Replied(Tids.Mint(), topicId, "To whom?", "ada", ParentId: "nope").Send(Cancellation);
+        var missingParent = await new Replied(Tids.Mint(), topicId, "To whom?", "ada", ParentId: Tids.Mint()).Send(Cancellation);
+        var parentElsewhere = await new Replied(Tids.Mint(), topicId, "To whom?", "ada", ParentId: otherReplyId).Send(Cancellation);
+        var rootElsewhere = await new Replied(Tids.Mint(), topicId, "To whom?", "ada", ParentId: otherTopicId).Send(Cancellation);
 
-        Assert.Equal(Reply.NoParent, Assert.IsType<Outcome<Post>.Refused>(noParent).Reason);
-        Assert.Equal(Reply.NoParent, Assert.IsType<Outcome<Post>.Refused>(missingParent).Reason);
-        Assert.Equal(Reply.NoParent, Assert.IsType<Outcome<Post>.Refused>(parentElsewhere).Reason);
-        Assert.Equal(Reply.NoParent, Assert.IsType<Outcome<Post>.Refused>(rootElsewhere).Reason);
+        Assert.Equal(Post.NoParent, Assert.IsType<Outcome<Post>.Refused>(noParent).Reason);
+        Assert.Equal(Post.NoParent, Assert.IsType<Outcome<Post>.Refused>(missingParent).Reason);
+        Assert.Equal(Post.NoParent, Assert.IsType<Outcome<Post>.Refused>(parentElsewhere).Reason);
+        Assert.Equal(Post.NoParent, Assert.IsType<Outcome<Post>.Refused>(rootElsewhere).Reason);
         Assert.Equal(before, (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation)));
         Assert.Equal((0L, 0), ((await Post.Get(topicId, Cancellation))!.LastSequence, (await Post.Get(topicId, Cancellation))!.ReplyCount));
     }
@@ -200,61 +204,13 @@ public sealed class PostTests
         Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(removed).Send(Cancellation));
         var before = (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation));
 
-        var onRemoved = await new Reply(Tids.Mint(), removed.Id, "Still?", "ada").Send(Cancellation);
-        var onNothing = await new Reply(Tids.Mint(), Tids.Mint(), "Anyone?", "ada").Send(Cancellation);
+        var onRemoved = await new Replied(Tids.Mint(), removed.Id, "Still?", "ada").Send(Cancellation);
+        var onNothing = await new Replied(Tids.Mint(), Tids.Mint(), "Anyone?", "ada").Send(Cancellation);
 
         Assert.Equal(Capabilities.RootRemoved, Assert.IsType<Outcome<Post>.Refused>(onRemoved).Reason);
-        Assert.Equal(Reply.NoTopic, Assert.IsType<Outcome<Post>.Refused>(onNothing).Reason);
+        Assert.Equal(Post.NoTopic, Assert.IsType<Outcome<Post>.Refused>(onNothing).Reason);
         Assert.Equal(before, (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation)));
         Assert.Equal((0L, 0), ((await Post.Get(removed.Id, Cancellation))!.LastSequence, (await Post.Get(removed.Id, Cancellation))!.ReplyCount));
-    }
-
-    [Fact]
-    public async Task A_post_command_whose_id_exists_answers_with_the_existing_row_for_the_same_request_a_conflict_for_a_different_one_in_the_same_place_and_one_refusal_for_an_id_held_elsewhere_and_none_writes()
-    {
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
-        await Started(tangentSpace);
-        var topicId = Tids.Mint();
-        var otherTopicId = Tids.Mint();
-        var replyId = Tids.Mint();
-        var topic = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(topicId, Workshop, "Once", "Said once.", "leo").Send(Cancellation)).Result;
-        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(otherTopicId, Workshop, "Elsewhere", "Said elsewhere.", "leo").Send(Cancellation));
-        var reply = Assert.IsType<Outcome<Post>.Done>(await new Reply(replyId, topicId, "Heard.", "ada").Send(Cancellation)).Result;
-        var before = (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation));
-
-        var topicAgain = await new StartTopic(topicId, Workshop, " Once ", "Said once.", "leo", At: DateTimeOffset.UtcNow.AddDays(1)).Send(Cancellation);
-        var topicDiffers = new[]
-        {
-            await new StartTopic(topicId, Workshop, "Once", "Said twice.", "leo").Send(Cancellation),
-            await new StartTopic(topicId, Workshop, "Twice", "Said once.", "leo").Send(Cancellation),
-            await new StartTopic(topicId, Workshop, "Once", "Said once.", "ada").Send(Cancellation),
-            await new StartTopic(replyId, Workshop, "Once", "Heard.", "ada").Send(Cancellation)
-        };
-        var replyAgain = await new Reply(replyId, topicId, "Heard.", "ada", ParentId: topicId, At: DateTimeOffset.UtcNow.AddDays(1)).Send(Cancellation);
-        var replyDiffers = new[]
-        {
-            await new Reply(replyId, topicId, "Unheard.", "ada").Send(Cancellation),
-            await new Reply(replyId, topicId, "Heard.", "leo").Send(Cancellation),
-            await new Reply(replyId, topicId, "Heard.", "ada", ParentId: otherTopicId).Send(Cancellation),
-            await new Reply(topicId, topicId, "Said once.", "leo").Send(Cancellation)
-        };
-        // An id a Post of another Tangent or another Topic holds: one refusal, which names nothing of that Post.
-        var heldElsewhere = new[]
-        {
-            await new StartTopic(topicId, "articles", "Once", "Said once.", "leo").Send(Cancellation),
-            await new Reply(replyId, otherTopicId, "Heard.", "ada").Send(Cancellation)
-        };
-
-        Assert.Equal((topic.Id, topic.Slug, topic.Body), Select(Assert.IsType<Outcome<Post>.Done>(topicAgain).Result));
-        Assert.All(topicDiffers, differs => Assert.Equal(Post.IdTaken, Assert.IsType<Outcome<Post>.Refused>(differs).Reason));
-        Assert.Equal((reply.Id, reply.Slug, reply.Body), Select(Assert.IsType<Outcome<Post>.Done>(replyAgain).Result));
-        Assert.All(replyDiffers, differs => Assert.Equal(Post.IdTaken, Assert.IsType<Outcome<Post>.Refused>(differs).Reason));
-        Assert.All(heldElsewhere, refused => Assert.Equal(Post.IdTaken, Assert.IsType<Outcome<Post>.Refused>(refused).Reason));
-        Assert.Equal(before, (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation)));
-        Assert.Equal("Said once.", (await Post.Get(topicId, Cancellation))?.Body);
-        Assert.Equal((1L, 1), ((await Post.Get(topicId, Cancellation))!.LastSequence, (await Post.Get(topicId, Cancellation))!.ReplyCount));
-
-        static (string, string?, string) Select(Post post) => (post.Id, post.Slug, post.Body);
     }
 
     [Fact]
@@ -263,14 +219,14 @@ public sealed class PostTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Started(tangentSpace);
         var topicId = Tids.Mint();
-        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(topicId, Workshop, "Limits", "Within them.", "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Started(topicId, Workshop, "Limits", "Within them.", "leo").Send(Cancellation));
 
-        var tooLong = await new StartTopic(Tids.Mint(), Workshop, "Long", new string('x', Post.BodyLimit + 1), "leo").Send(Cancellation);
-        var multibyte = await new StartTopic(Tids.Mint(), Workshop, "Long", new string('é', Post.BodyLimit / 2 + 1), "leo").Send(Cancellation);
-        var atTheLimit = await new StartTopic(Tids.Mint(), Workshop, "Just", new string('x', Post.BodyLimit), "leo").Send(Cancellation);
-        var withNul = await new Reply(Tids.Mint(), topicId, "Before\0after", "leo").Send(Cancellation);
-        var empty = await new Reply(Tids.Mint(), topicId, "", "leo").Send(Cancellation);
-        var blank = await new Reply(Tids.Mint(), topicId, " \n\t", "leo").Send(Cancellation);
+        var tooLong = await new Started(Tids.Mint(), Workshop, "Long", new string('x', Post.BodyLimit + 1), "leo").Send(Cancellation);
+        var multibyte = await new Started(Tids.Mint(), Workshop, "Long", new string('é', Post.BodyLimit / 2 + 1), "leo").Send(Cancellation);
+        var atTheLimit = await new Started(Tids.Mint(), Workshop, "Just", new string('x', Post.BodyLimit), "leo").Send(Cancellation);
+        var withNul = await new Replied(Tids.Mint(), topicId, "Before\0after", "leo").Send(Cancellation);
+        var empty = await new Replied(Tids.Mint(), topicId, "", "leo").Send(Cancellation);
+        var blank = await new Replied(Tids.Mint(), topicId, " \n\t", "leo").Send(Cancellation);
 
         Assert.Equal(Post.BodyTooLong, Assert.IsType<Outcome<Post>.Refused>(tooLong).Reason);
         Assert.Equal(Post.BodyTooLong, Assert.IsType<Outcome<Post>.Refused>(multibyte).Reason);
@@ -288,7 +244,7 @@ public sealed class PostTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Started(tangentSpace);
 
-        var refused = await new StartTopic("not-a-tid", Workshop, "Shape", "Any.", "leo").Send(Cancellation);
+        var refused = await new Started("not-a-tid", Workshop, "Shape", "Any.", "leo").Send(Cancellation);
 
         Assert.Equal(Post.NeedsTid, Assert.IsType<Outcome<Post>.Refused>(refused).Reason);
         Assert.Equal(0, await Post.Count.Exact(Cancellation));

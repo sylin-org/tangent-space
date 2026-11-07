@@ -14,9 +14,9 @@ public sealed record PinTopic(string TopicId, string ActorId, bool Pin = true) :
 {
     public async Task<Outcome<Tangent>> Run(CancellationToken ct)
     {
-        if (await Post.Get(TopicId, ct) is not { ParentId: null } root) return new Outcome<Tangent>.Refused(Reply.NoTopic);
+        if (await Post.Get(TopicId, ct) is not { ParentId: null } root) return new Outcome<Tangent>.Refused(Post.NoTopic);
         var capabilities = await Capabilities.Load(ActorId, root.TangentId, root, ct);
-        if (!capabilities.Exists || await Tangent.Get(root.TangentId, ct) is not { } tangent) return new Outcome<Tangent>.Refused(Reply.NoTopic);
+        if (!capabilities.Exists || await Tangent.Get(root.TangentId, ct) is not { } tangent) return new Outcome<Tangent>.Refused(Post.NoTopic);
         if (capabilities.Gate(Bit.Moderate) is { } gate) return new Outcome<Tangent>.Refused(gate);
         if (Pin ? tangent.Pin(root.Id) : tangent.Unpin(root.Id)) await tangent.Save(ct);
         return new Outcome<Tangent>.Done(tangent);

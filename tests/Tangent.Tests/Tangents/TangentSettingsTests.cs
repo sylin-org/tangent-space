@@ -4,6 +4,7 @@ using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
+using Tangent.Capture;
 using Tangent.Events;
 using Tangent.Posts;
 using Tangent.Space;
@@ -342,7 +343,7 @@ public sealed class TangentSettingsTests
         Assert.IsType<Outcome<MediaUse>.Done>(await new BringMedia(image.Id, Leo).Send(Cancellation));
         var root = await Started(Leo, "Plans", "![A plan](/media/" + image.Id + ")", Studio);
         var reply = await Replied(root, Leo, "First draft.");
-        Assert.IsType<Outcome<Post>.Done>(await new EditPost(reply.Id, 1, PostBody.Of("Second draft."), null, Leo).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Edited(reply.Id, 1, PostBody.Of("Second draft."), null, Leo).Send(Cancellation));
         Assert.IsType<Outcome<Tangent>.Done>(await new ChangeTangent(Studio, Leo, Image: "/media/" + image.Id).Send(Cancellation));
         await Inside.LetIn(roles, Studio, Bea, Cancellation);
         Assert.IsType<Outcome<Ask>.Done>(await new Store<Ask>(new Ask { Id = Ask.Key(Studio, Ada), TangentId = Studio, PersonId = Ada, AskedAt = DateTimeOffset.UtcNow }).Send(Cancellation));

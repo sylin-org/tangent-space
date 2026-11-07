@@ -6,6 +6,7 @@ using Koan.Data.Core.Commands;
 using Koan.Web.Auth.Connector.Atproto.Protocol;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
+using Tangent.Capture;
 using Tangent.Posts;
 using Tangent.Space;
 using Xunit;
@@ -54,12 +55,12 @@ public sealed class PublishTests
         var publication = repository.Records.Keys.Single(key => key.StartsWith($"at://{Persona.Did(Ada)}/{AtprotoAdapter.Publications}/", StringComparison.Ordinal));
         Assert.Equal(publication, (await Send(Agent(tangentSpace), HttpMethod.Get, PublicationController.Path)).Body);
 
-        Assert.IsType<Outcome<Post>.Done>(await new EditPost(article.Id, 1, PostBody.Of("A cracked bowl, mended by a moderator."), "Mending with brass", Mo).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Edited(article.Id, 1, PostBody.Of("A cracked bowl, mended by a moderator."), "Mending with brass", Mo).Send(Cancellation));
         await ReadThrough(tangentSpace);
         Assert.Equal("Mending with gold", repository.Records[document]["title"]!.GetValue<string>());
         Assert.Contains("Publish this version as yours?", (await Send(ada.Client, HttpMethod.Get, page)).Body);
 
-        Assert.IsType<Outcome<Post>.Done>(await new EditPost(article.Id, 2, PostBody.Of("A cracked bowl tells you where it held."), "Mending with lacquer", Ada).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Edited(article.Id, 2, PostBody.Of("A cracked bowl tells you where it held."), "Mending with lacquer", Ada).Send(Cancellation));
         await Until(() => repository.Records.TryGetValue(document, out var edited) && edited["title"]!.GetValue<string>() == "Mending with lacquer");
         Assert.Contains("Updated", (await Send(ada.Client, HttpMethod.Get, ConnectionsController.Path)).Body);
 

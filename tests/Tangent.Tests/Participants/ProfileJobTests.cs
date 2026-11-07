@@ -110,7 +110,7 @@ public sealed class ProfileJobTests
                 break;
             default:
                 var edit = Posts.Writing.PostPath(root, root) + "/edit";
-                var edited = await Posts.Writing.Json(session, edit, edit, new { title = "Lanterns", body = "How do you hang yours, and where?", version = 1 });
+                var edited = await Posts.Writing.Patch(session, edit, Posts.Writing.PostPath(root, root), new { title = "Lanterns", body = "How do you hang yours, and where?", version = 1 });
                 Assert.Equal(HttpStatusCode.OK, edited.Status);
                 break;
         }

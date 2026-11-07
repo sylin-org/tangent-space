@@ -85,7 +85,8 @@ public sealed class TwoDoorsTests
         Assert.Equal((Ada, "By the tool."), (byTool.GetProperty("authorId").GetString(), byTool.GetProperty("body").GetString()));
         Assert.Equal(byHttp.GetProperty("sequence").GetInt64() + 1, byTool.GetProperty("sequence").GetInt64());
         Assert.Equal(byHttp.GetProperty("address").GetString(), http.Location);
-        Assert.Equal(byTool.GetProperty("address").GetString(), tool.Location);
+        // A tool reads where the reply went as the address's path under the place, as the door's own Location says it.
+        Assert.Equal(byTool.GetProperty("address").GetString(), new Uri(new Uri(BaseUrl), tool.Location).ToString());
     }
 
     [Fact]
@@ -158,27 +159,30 @@ public sealed class TwoDoorsTests
     }
 
     [Fact]
-    public async Task A_forged_author_binds_to_nothing_on_any_door()
+    public async Task A_forged_author_is_refused_naming_the_field_on_every_door_and_a_reply_is_its_senders()
     {
         await using var tangentSpace = await Starting();
         using var doors = await Open(tangentSpace);
         var root = doors.Root;
-        var forged = new { tangent = root.TangentId, topic = root.Slug, body = "Mine.", author = Mo, authorId = Mo };
+        var before = await Counted();
 
-        var http = await doors.Posted(TopicPath(root), new { body = "Mine by HTTP.", author = Mo, authorId = Mo });
-        var tool = await doors.AdaTools.Call("reply", forged);
+        var http = await doors.Posted(TopicPath(root), new { body = "Mine by HTTP.", authorId = Mo });
+        var tool = await doors.AdaTools.Call("reply", new { tangent = root.TangentId, topic = root.Slug, body = "Mine.", authorId = Mo });
         var page = TopicPath(root);
-        var form = await Form(doors.AdaBrowser, page, page, new Dictionary<string, string> { ["body"] = "Mine by form.", ["author"] = Mo, ["authorId"] = Mo });
+        var form = await Form(doors.AdaBrowser, page, page, new Dictionary<string, string> { ["body"] = "Mine by form.", ["authorId"] = Mo });
 
-        Assert.Equal(Ada, http.Json.GetProperty("authorId").GetString());
-        Assert.Equal(Ada, tool.Structured!.Value.GetProperty("authorId").GetString());
-        Assert.Equal(HttpStatusCode.SeeOther, form.Status);
+        Assert.Equal((HttpStatusCode.BadRequest, "invalid"), (http.Status, http.Kind));
+        Assert.True(http.Json.GetProperty("errors").TryGetProperty("authorId", out _), http.Body);
+        Assert.True(tool.Failed);
+        Assert.Equal(HttpStatusCode.BadRequest, form.Status);
+        Assert.Equal(before, await Counted());
+        var plain = await doors.Posted(TopicPath(root), new { body = "Mine, plainly." });
+        Assert.Equal((HttpStatusCode.Created, Ada), (plain.Status, plain.Json.GetProperty("authorId").GetString()));
         Assert.Empty(await Post.Query(post => post.AuthorId == Mo, Cancellation));
-        Assert.Equal(3, (await Post.Query(post => post.AuthorId == Ada, Cancellation)).Count);
     }
 
     [Fact]
-    public async Task A_field_of_a_form_or_a_call_never_names_the_address_and_a_post_is_taken_on_a_tangent_by_its_origin_on_every_door()
+    public async Task A_field_of_a_form_or_a_call_never_names_the_address_it_is_refused_and_a_post_is_taken_on_a_tangent_by_its_origin_on_every_door()
     {
         await using var tangentSpace = await Starting();
         using var doors = await Open(tangentSpace);
@@ -187,8 +191,8 @@ public sealed class TwoDoorsTests
         await Given.ATangent(doors.TangentSpace, "elsewhere", ct: Cancellation);
 
         var form = await Form(doors.AdaBrowser, page, page, new Dictionary<string, string> { ["body"] = "Stays here.", ["tangent"] = "elsewhere", ["topic"] = "nothing" });
-        Assert.Equal(HttpStatusCode.SeeOther, form.Status);
-        Assert.Equal(root.Id, Assert.Single(await Post.Query(post => post.Body == "Stays here.", Cancellation)).TopicId);
+        Assert.Equal(HttpStatusCode.BadRequest, form.Status);
+        Assert.Empty(await Post.Query(post => post.Body == "Stays here.", Cancellation));
 
         // The Topic page's "take this on a tangent" opens the new-topic form with the Post quoted, the Tangents to start
         // it in as links, and a title offered from its first words.
@@ -200,7 +204,7 @@ public sealed class TwoDoorsTests
         Assert.Contains("href=\"" + TangentSpaceFixture.DefaultBaseUrl + "/t/elsewhere/new?origin=" + root.Id + "\"", opened.Body);
         Assert.Contains("value=\"How do you hang yours?\"", opened.Body);
 
-        var elsewhere = "/t/elsewhere/new";
+        var elsewhere = "/t/elsewhere";
         var byForm = await Form(doors.AdaBrowser, page, elsewhere, new Dictionary<string, string> { ["origin"] = root.Id, ["title"] = "By form" });
         var byJson = await doors.Posted(elsewhere, new { origin = root.Id, title = "By JSON" });
         var byTool = await doors.AdaTools.Call("start_topic", new { tangent = "elsewhere", origin = root.Id, title = "By the tool" });
@@ -220,7 +224,7 @@ public sealed class TwoDoorsTests
         var root = await Started(Ada, "Hooks", "Brass or iron?");
         var before = await Counted();
 
-        var http = await doors.Posted(PostPath(root, root) + "/edit", new { body = "New words.", version = "not a number" });
+        var http = await Send(doors.AdaBrowser.Client, HttpMethod.Patch, PostPath(root, root), JsonBody(new { body = "New words.", version = "not a number" }), json: true);
         var tool = await doors.AdaTools.Call("edit", new { tangent = root.TangentId, topic = root.Slug, post = root.Id, body = "New words.", version = "not a number" });
         Assert.Equal(HttpStatusCode.BadRequest, http.Status);
         Assert.Equal("application/problem+json", http.MediaType);
@@ -230,7 +234,7 @@ public sealed class TwoDoorsTests
         Assert.Contains("version", tool.Text);
 
         // Left out, the rule says what it wants.
-        var unnamed = await doors.Posted(PostPath(root, root) + "/edit", new { body = "New words." });
+        var unnamed = await Send(doors.AdaBrowser.Client, HttpMethod.Patch, PostPath(root, root), JsonBody(new { body = "New words." }), json: true);
         var named = await doors.AdaTools.Call("edit", new { tangent = root.TangentId, topic = root.Slug, post = root.Id, body = "New words." });
         Assert.Equal(PostWrites.VersionRule.Text, unnamed.Json.GetProperty("detail").GetString());
         SameRefusal(unnamed, named);
@@ -240,7 +244,7 @@ public sealed class TwoDoorsTests
         var malformed = await Send(doors.AdaBrowser.Client, HttpMethod.Post, TopicPath(root), array, json: true);
         using var elsewhere = new StringContent("[]", System.Text.Encoding.UTF8, "application/json");
         var nowhere = await Send(doors.AdaBrowser.Client, HttpMethod.Post, "/t/nowhere/nothing", elsewhere, json: true);
-        Assert.Equal((HttpStatusCode.BadRequest, "invalid"), (malformed.Status, malformed.Kind));
+        Assert.Equal((HttpStatusCode.BadRequest, "application/problem+json"), (malformed.Status, malformed.MediaType));
         Assert.Equal((HttpStatusCode.NotFound, "absent"), (nowhere.Status, nowhere.Kind));
         Assert.Equal(before, await Counted());
     }

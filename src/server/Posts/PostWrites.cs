@@ -15,7 +15,7 @@ namespace Tangent.Posts;
 /// tool's call, to the same address and the same typed input, and is answered in kind: a form is sent on to the Post's
 /// address (<c>303</c>) or, refused, reads its page again with the reason inline; a JSON request reads the Post with its
 /// <c>can</c>, or a problem carrying its word, and the field a value broke where its rule concerns one
-/// (<see cref="Refused"/>). Refusals answer by their kind, in Koan's one mapping (<see cref="Answers"/>). A
+/// (<see cref="Concerning(Reason)"/>). Refusals answer by their kind, in Koan's one mapping (<see cref="Answers"/>). A
 /// write answers to its sender's session cookie; one a page of another site sent is refused before it reaches
 /// here.</summary>
 public static class PostWrites
@@ -116,18 +116,18 @@ public static class PostWrites
     public static Form MediaForm(string tangentAddress) => Form.Posting(tangentAddress + "/" + NewMediaController.Segment,
         new Form.Field(NewMediaController.FileField, Holds.BroughtImage));
 
-    /// <summary>The form that edits a Post at <paramref name="action"/> from the <paramref name="version"/> its editor read:
-    /// the version, the title on a Topic's <paramref name="root"/>, and the body, which may be empty on a root taken on a
-    /// tangent.</summary>
-    public static Form EditForm(string action, long version, bool root, bool bodyOptional, string? cover = null, bool article = false)
+    /// <summary>The form that edits the Post at <paramref name="postAddress"/>, a change of it, from the <paramref name="version"/>
+    /// its editor read: the version, the title on a Topic's <paramref name="root"/>, and the body, which may be empty on a root
+    /// taken on a tangent.</summary>
+    public static Form EditForm(string postAddress, long version, bool root, bool bodyOptional, string? cover = null, bool article = false)
     {
         var body = new Form.Field(BodyField, Holds.EditBody + (bodyOptional ? Holds.EditBodyOptional : ""));
         var from = new Form.Field(VersionField, Holds.EditVersion, version.ToString(CultureInfo.InvariantCulture));
         if (article)
-            return Form.Posting(action, from, new Form.Field(TitleField, Holds.EditTitle), body, new Form.Field(CoverField, Holds.EditCover, cover ?? ""));
+            return Form.Patching(postAddress, from, new Form.Field(TitleField, Holds.EditTitle), body, new Form.Field(CoverField, Holds.EditCover, cover ?? ""));
         return root
-            ? Form.Posting(action, from, new Form.Field(TitleField, Holds.EditTitle), body)
-            : Form.Posting(action, from, body);
+            ? Form.Patching(postAddress, from, new Form.Field(TitleField, Holds.EditTitle), body)
+            : Form.Patching(postAddress, from, body);
     }
 
     /// <summary>The form that removes <paramref name="post"/> at <paramref name="action"/>, which carries no field, confirmed
@@ -164,50 +164,67 @@ public static class PostWrites
     public static string TopicAddress(string baseUrl, string tangent, string topic)
         => TangentAddress(baseUrl, tangent) + "/" + Uri.EscapeDataString(topic);
 
+    /// <summary>A Post's address as a path under the base URL, as a write that committed answers at it.</summary>
+    public static string Path(string tangent, string topic, string post)
+        => "/t/" + Uri.EscapeDataString(tangent) + "/" + Uri.EscapeDataString(topic) + "/" + Uri.EscapeDataString(post);
+
+    /// <summary>Once a write a participant made committed, their profile, from the row the Doorway loaded, is read again where it is
+    /// older than its lifetime (<see cref="ProfileCapture.SubmitWhenStale"/>), so the name and picture their words show follow their
+    /// Bluesky account while they stay signed in.</summary>
+    public static async Task Captured(HttpContext http, CancellationToken ct)
+    {
+        if (http.Features.Get<Here>()?.Rows.Participant is { } writer)
+            await ProfileCapture.SubmitWhenStale(writer, http.RequestServices.GetRequiredService<ILogger<Participant>>(), ct);
+    }
+
     /// <summary>A Post's address, which the Topic answers opened around it: <c>/t/{tangent}/{topic}/{post}</c>.</summary>
     public static string Address(string baseUrl, string tangent, string topic, string post)
         => TopicAddress(baseUrl, tangent, topic) + "/" + Uri.EscapeDataString(post);
 
-    /// <summary>Where a form shows a refusal: its kind says a gate; the title's and body's rules name their field; anything
+    /// <summary>Where a form shows a refusal: its kind says a gate; a rule of the title or the body names its field; anything
     /// else is about what was sent as a whole.</summary>
-    public static About Concerning(Reason reason) => reason.Kind == ReasonKind.Gated ? About.Gate : FieldOf(reason) switch
+    public static About Concerning(Reason reason) => Concerning(reason.Kind == ReasonKind.Gated, reason.Field);
+
+    /// <summary>Where a form shows the refusal a write answered, as <see cref="Concerning(Reason)"/> says it of its reason.</summary>
+    public static About Concerning(Problem problem) => Concerning(problem.Kind == "gated", problem.Errors?.Keys.FirstOrDefault());
+
+    private static About Concerning(bool gated, string? field) => gated ? About.Gate : field switch
     {
         TitleField => About.Title,
         BodyField => About.Body,
         _ => About.Sent
     };
 
-    /// <summary>The field of what was sent that <paramref name="reason"/> concerns, as a write's form names it: the one the
-    /// reason names, else the title's, the body's, the Id's, the cover's or the parent's for their rules; null for a
-    /// reason about what was sent as a whole.</summary>
-    public static string? FieldOf(Reason reason) => reason.Field
-        ?? (TitleRules.Contains(reason) ? TitleField
-            : BodyRules.Contains(reason) ? BodyField
-            : reason == Post.NeedsTid ? IdField
-            : reason == Post.NoCover || reason == Post.CoverOnArticle ? CoverField
-            : reason == Reply.NoParent ? ParentField
-            : null);
-
-    /// <summary>A write's refusal as a JSON request reads it: the problem of its reason, with an invalid value's sentence
-    /// under the field it concerns (<see cref="FieldOf"/>) in <c>errors</c>.</summary>
-    public static IActionResult Refused(HttpContext http, Reason reason)
-        => Answers.Refused(http, reason is { Kind: ReasonKind.Invalid, Field: null } && FieldOf(reason) is { } field ? Reason.Invalid(field, reason.Text) : reason);
-
-    private static readonly Reason[] TitleRules = [Post.NeedsTitle, Post.TitleTooLong];
-
-    private static readonly Reason[] BodyRules =
-        [Post.NeedsBody, Post.BodyTooLong, Post.BodyHasNul, Post.BodyRendersTooLong, Post.TooManyMentions, Post.TooManyImages, Post.BodyTooIntricate];
+    /// <summary>The value a write sent as <paramref name="field"/>, as a form's field or a member of one JSON object, read again
+    /// from the request its endpoint kept readable; null where it sent none or an empty one.</summary>
+    public static async Task<string?> Sent(HttpRequest request, string field, CancellationToken ct)
+    {
+        if (request.HasFormContentType) return (await request.ReadFormAsync(ct))[field].ToString() is { Length: > 0 } given ? given : null;
+        if (!request.Body.CanSeek) return null;
+        request.Body.Position = 0;
+        using var reader = new StreamReader(request.Body, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        var raw = await reader.ReadToEndAsync(ct);
+        request.Body.Position = 0;
+        try
+        {
+            return Newtonsoft.Json.Linq.JToken.Parse(raw) is Newtonsoft.Json.Linq.JObject sent
+                   && sent.GetValue(field, StringComparison.OrdinalIgnoreCase) is Newtonsoft.Json.Linq.JValue { Type: Newtonsoft.Json.Linq.JTokenType.String } value
+                   && value.ToString() is { Length: > 0 } text ? text : null;
+        }
+        catch (Newtonsoft.Json.JsonException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>A write that committed: a form is sent on to the Post's address; a JSON request reads the Post with the
     /// sender's <c>can</c> on it — a reply's judged by its Topic's <paramref name="root"/> — created (<c>201</c>) or
-    /// changed (<c>200</c>), with that address as its <c>Location</c>. The writer's profile, from the row the Doorway
-    /// loaded, is read again where it is older than its lifetime (<see cref="ProfileCapture.SubmitWhenStale"/>), so the
-    /// name and picture their words show follow their Bluesky account while they stay signed in.</summary>
+    /// changed (<c>200</c>), with that address as its <c>Location</c>; and the writer's profile is caught up
+    /// (<see cref="Captured"/>).</summary>
     public static async Task<IActionResult> Written(HttpContext http, Post post, Post root, string address, string? personId, bool created,
         CancellationToken ct)
     {
-        if (http.Features.Get<Here>()?.Rows.Participant is { } writer)
-            await ProfileCapture.SubmitWhenStale(writer, http.RequestServices.GetRequiredService<ILogger<Participant>>(), ct);
+        await Captured(http, ct);
         http.Response.Headers.CacheControl = "no-store";
         http.Response.Headers.Location = address;
         if (!WantsJson(http.Request)) return new StatusCodeResult(StatusCodes.Status303SeeOther);

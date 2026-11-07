@@ -3,6 +3,7 @@ using System.Text.Json;
 using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Tangent.Access;
+using Tangent.Capture;
 using Tangent.Space;
 using Tangent.Tangents;
 using Xunit;
@@ -24,8 +25,8 @@ public sealed class ReadingTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Place(tangentSpace);
-        var topic = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, "A question", "The first words.", "ada", Start).Send(Cancellation)).Result;
-        Assert.IsType<Outcome<Post>.Done>(await new EditPost(topic.Id, topic.Version, "The second words.", null, "leo", Start.AddHours(1)).Send(Cancellation));
+        var topic = Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), Workshop, "A question", "The first words.", "ada", Start).Send(Cancellation)).Result;
+        Assert.IsType<Outcome<Post>.Done>(await new Edited(topic.Id, topic.Version, "The second words.", null, "leo", Start.AddHours(1)).Send(Cancellation));
 
         var page = await Read(tangentSpace.Client, $"/t/{Workshop}/{topic.Slug}", "text/html");
         Assert.Contains("class=\"post-history\"", page);
@@ -46,7 +47,7 @@ public sealed class ReadingTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Place(tangentSpace);
-        var article = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Articles, "Mending", "Opening.\n\n## The seam\n\nWords.\n\n### Habits\n\nMore.\n\n## The seam\n\nAgain.", "ada", Start).Send(Cancellation)).Result;
+        var article = Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), Articles, "Mending", "Opening.\n\n## The seam\n\nWords.\n\n### Habits\n\nMore.\n\n## The seam\n\nAgain.", "ada", Start).Send(Cancellation)).Result;
 
         var page = await Read(tangentSpace.Client, $"/t/{Articles}/{article.Slug}", "text/html");
         Assert.Contains("In this article", page);

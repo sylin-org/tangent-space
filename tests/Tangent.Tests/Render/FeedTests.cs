@@ -5,6 +5,7 @@ using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
+using Tangent.Capture;
 using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
@@ -103,7 +104,7 @@ public sealed class FeedTests
         await Place(tangentSpace);
         var all = new List<Post>();
         for (var index = 0; index < Feed.Limit + 3; index++) all.Add(await Started("Topic " + index, "Words.", Start.AddMinutes(index)));
-        Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), all[0].Id, "A reply.", "ada", At: Start.AddDays(1)).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Replied(Tids.Mint(), all[0].Id, "A reply.", "ada", At: Start.AddDays(1)).Send(Cancellation));
 
         var entries = (await Atomic(tangentSpace.Client, $"/t/{Workshop}/feed.atom")).Elements(Atom + "entry").ToList();
         Assert.Equal(Enumerable.Range(0, Feed.Limit).Select(offset => "Topic " + (Feed.Limit + 2 - offset)), entries.Select(entry => entry.Element(Atom + "title")!.Value));
@@ -132,11 +133,11 @@ public sealed class FeedTests
         await Overwrites.SetAudience(roles, Back, Audience.Private, Cancellation);
         Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new Store<Tangents.Tangent>(Tangents.Tangent.Create(Back, "The back room", "", PostKind.Article, 3)).Send(Cancellation));
         await Overwrites.SetAccess(roles, Back, Roles.Member, RoleAccess.Post, Cancellation);
-        var inside = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Back, "Said in the back", "Secret words.", "ada", Start).Send(Cancellation)).Result;
+        var inside = Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), Back, "Said in the back", "Secret words.", "ada", Start).Send(Cancellation)).Result;
         await Started("Said in the open", "Open words.", Start.AddMinutes(1), PostKind.Article);
         // More articles than a feed's window, all newer and all in the back room, which the place's feed reads past.
         for (var index = 0; index < Feed.Limit + 1; index++)
-            Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Back, "Back room " + index, "Secret words.", "ada", Start.AddMinutes(2 + index)).Send(Cancellation));
+            Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), Back, "Back room " + index, "Secret words.", "ada", Start.AddMinutes(2 + index)).Send(Cancellation));
 
         using var member = new Browser(tangentSpace);
         (await member.SignIn("reader", Reader, Cancellation)).Dispose();
@@ -176,7 +177,7 @@ public sealed class FeedTests
             await Overwrites.SetAudience(roles, slug, Audience.Private, Cancellation);
             Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new Store<Tangents.Tangent>(Tangents.Tangent.Create(slug, slug, "", PostKind.Article, 3)).Send(Cancellation));
             for (var index = 0; index < articles; index++)
-                Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), slug, slug + " " + index, "Secret words.", "leo", at = at.AddMinutes(1)).Send(Cancellation));
+                Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), slug, slug + " " + index, "Secret words.", "leo", at = at.AddMinutes(1)).Send(Cancellation));
         }
 
         await Started("Said in the open", "Open words.", at, PostKind.Article);
@@ -253,7 +254,7 @@ public sealed class FeedTests
 
         using var held = await tangentSpace.Client.GetAsync($"/t/{Workshop}/feed.atom", Cancellation);
         var edited = Start.AddHours(1);
-        Assert.IsType<Outcome<Post>.Done>(await new EditPost(topic.Id, topic.Version, "The second words.", null, "leo", edited).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Edited(topic.Id, topic.Version, "The second words.", null, "leo", edited).Send(Cancellation));
 
         using var changed = new HttpRequestMessage(HttpMethod.Get, $"/t/{Workshop}/feed.atom");
         changed.Headers.IfNoneMatch.Add(held.Headers.ETag!);
@@ -330,7 +331,7 @@ public sealed class FeedTests
     /// <summary>A Topic started by Ada at <paramref name="at"/>: in the workshop, or, for an article, in the articles
     /// Tangent, whose default kind it takes.</summary>
     private static async Task<Post> Started(string title, string body, DateTimeOffset at, PostKind kind = PostKind.Topic)
-        => Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), kind == PostKind.Article ? Articles : Workshop, title, body, "ada", at).Send(Cancellation)).Result;
+        => Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), kind == PostKind.Article ? Articles : Workshop, title, body, "ada", at).Send(Cancellation)).Result;
 
     private static async Task<XElement> Atomic(HttpClient client, string path)
         => XDocument.Parse(await client.GetStringAsync(path, Cancellation)).Root!;

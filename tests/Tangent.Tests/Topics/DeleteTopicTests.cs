@@ -3,6 +3,7 @@ using System.Text.Json;
 using Koan.Data.Core;
 using Koan.Data.Core.Commands;
 using Tangent.Access;
+using Tangent.Capture;
 using Tangent.Events;
 using Tangent.Space;
 using Tangent.Tangents;
@@ -28,7 +29,7 @@ public sealed class DeleteTopicTests
         var stays = await Started(Ada, "Kilns", "Gas or wood?");
         var root = await Started(Ada, "Cheap watches", "Buy one now at the link.");
         var reply = await Replied(root, Bea, "Here is mine. ![Watch](/media/" + image.Id + ")");
-        Assert.IsType<Outcome<Post>.Done>(await new EditPost(reply.Id, 1, PostBody.Of("Mine, edited. ![Watch](/media/" + image.Id + ")"), null, Bea).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Edited(reply.Id, 1, PostBody.Of("Mine, edited. ![Watch](/media/" + image.Id + ")"), null, Bea).Send(Cancellation));
         Assert.IsType<Outcome<Post>.Done>(await new RemovePost(root.Id, Mo).Send(Cancellation));
         var before = (await Tangents.Tangent.Get(Workshop, Cancellation))!;
         var snapshots = await Snapshots();

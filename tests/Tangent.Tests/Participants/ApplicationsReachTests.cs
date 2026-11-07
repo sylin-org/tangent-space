@@ -132,7 +132,7 @@ public sealed class ApplicationsReachTests
         Assert.Equal(applicant.WaitingSeq!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture), through);
 
         var seen = await Form(mo, "/", SeenController.Path, new Dictionary<string, string> { [SeenController.ThroughField] = through });
-        Assert.Equal((HttpStatusCode.SeeOther, "/"), (seen.Status, seen.Location));
+        Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + "/"), (seen.Status, seen.Location));
         Assert.Contains("<a class=\"masthead-unseen\" href=\"" + BaseUrl + "/\" hidden", (await Send(mo.Client, HttpMethod.Get, "/")).Body);
 
         // Seen, it counts no more, and the door still says it waits.

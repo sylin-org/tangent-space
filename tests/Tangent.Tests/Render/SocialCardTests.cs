@@ -4,6 +4,7 @@ using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
+using Tangent.Capture;
 using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
@@ -39,7 +40,7 @@ public sealed partial class SocialCardTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Established(tangentSpace);
         var topic = await Started("A first question", "The **first** words of it.");
-        var reply = Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), topic.Id, "Words of the reply.", "ada", At: Start.AddMinutes(1)).Send(Cancellation)).Result;
+        var reply = Assert.IsType<Outcome<Post>.Done>(await new Replied(Tids.Mint(), topic.Id, "Words of the reply.", "ada", At: Start.AddMinutes(1)).Send(Cancellation)).Result;
         var address = $"{BaseUrl}/t/{Workshop}/{topic.Slug}";
 
         foreach (var path in new[] { $"/t/{Workshop}/{topic.Slug}", $"/t/{Workshop}/{topic.Slug}/{reply.Id}" })
@@ -63,7 +64,7 @@ public sealed partial class SocialCardTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Established(tangentSpace);
         Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent("articles", "Articles", "Pieces.", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
-        var article = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "articles", "A published piece", string.Concat(Enumerable.Repeat("word ", 100)), "ada", Start).Send(Cancellation)).Result;
+        var article = Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), "articles", "A published piece", string.Concat(Enumerable.Repeat("word ", 100)), "ada", Start).Send(Cancellation)).Result;
 
         var html = await Page(tangentSpace.Client, $"/t/articles/{article.Slug}");
 
@@ -100,7 +101,7 @@ public sealed partial class SocialCardTests
         await Overwrites.SetAudience(roles, Back, Audience.Private, Cancellation);
         Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new Store<Tangents.Tangent>(Tangents.Tangent.Create(Back, "The back room", "Kept close.", PostKind.Topic, 2)).Send(Cancellation));
         await Overwrites.SetAccess(roles, Back, Roles.Member, RoleAccess.Post, Cancellation);
-        var inside = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Back, "Said in the back", "Secret words.", "ada", Start).Send(Cancellation)).Result;
+        var inside = Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), Back, "Said in the back", "Secret words.", "ada", Start).Send(Cancellation)).Result;
         using var member = new Browser(tangentSpace);
         (await member.SignIn("reader", Reader, Cancellation)).Dispose();
 
@@ -206,7 +207,7 @@ public sealed partial class SocialCardTests
     }
 
     private static async Task<Post> Started(string title, string body)
-        => Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, title, body, "ada", Start).Send(Cancellation)).Result;
+        => Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), Workshop, title, body, "ada", Start).Send(Cancellation)).Result;
 
     private static async Task<(HttpStatusCode Status, string Html)> Answer(HttpClient client, string path)
     {

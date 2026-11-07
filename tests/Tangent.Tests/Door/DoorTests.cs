@@ -6,6 +6,7 @@ using Koan.Data.Core.Commands;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
+using Tangent.Capture;
 using Tangent.Events;
 using Tangent.Participants;
 using Tangent.Posts;
@@ -63,7 +64,7 @@ public sealed class DoorTests(ITestOutputHelper output)
         var since = await Mark(Reader);
 
         var reply = await Replied(mine, "ada");
-        var other = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, "Ada asks", $"A question for [@reader](/p/{Reader}).", "ada").Send(Cancellation)).Result;
+        var other = Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), Workshop, "Ada asks", $"A question for [@reader](/p/{Reader}).", "ada").Send(Cancellation)).Result;
         var article = await Started(Articles, "On lanterns", "leo");
         // The reader's own reply is never news to them, and it leaves the reply before it, which they have not read, new.
         var own = await Replied(mine, Reader, body: "My own words in reply.");
@@ -530,10 +531,10 @@ public sealed class DoorTests(ITestOutputHelper output)
     }
 
     private static async Task<Post> Started(string tangent, string title, string author)
-        => Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), tangent, title, "The opening words of " + title + ".", author).Send(Cancellation)).Result;
+        => Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), tangent, title, "The opening words of " + title + ".", author).Send(Cancellation)).Result;
 
     private static async Task<Post> Replied(Post topic, string author, string? parent = null, string body = "A reply.")
-        => Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), topic.Id, body, author, parent).Send(Cancellation)).Result;
+        => Assert.IsType<Outcome<Post>.Done>(await new Replied(Tids.Mint(), topic.Id, body, author, parent).Send(Cancellation)).Result;
 
     /// <summary>Puts the participant's place checkpoint at the log's last sequence and answers with it.</summary>
     private static async Task<long> Mark(string participantId)

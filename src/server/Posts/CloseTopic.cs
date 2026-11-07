@@ -13,9 +13,9 @@ public sealed record CloseTopic(string TopicId, string ActorId, bool Close = tru
 {
     public async Task<Outcome<Post>> Run(CancellationToken ct)
     {
-        if (await Post.Get(TopicId, ct) is not { ParentId: null } root) return new Outcome<Post>.Refused(Reply.NoTopic);
+        if (await Post.Get(TopicId, ct) is not { ParentId: null } root) return new Outcome<Post>.Refused(Post.NoTopic);
         var capabilities = await Capabilities.Load(ActorId, root.TangentId, root, ct);
-        if (!capabilities.Exists) return new Outcome<Post>.Refused(Reply.NoTopic);
+        if (!capabilities.Exists) return new Outcome<Post>.Refused(Post.NoTopic);
         if (capabilities.Gate(Bit.Moderate) is { } gate) return new Outcome<Post>.Refused(gate);
         if (Close ? root.Close(ActorId, At ?? DateTimeOffset.UtcNow) : root.Reopen()) await root.Save(ct);
         return new Outcome<Post>.Done(root);

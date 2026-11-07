@@ -21,7 +21,7 @@ public sealed class RefusalPageTests
     private const string Masthead = "class=\"masthead bar place\"";
 
     [Fact]
-    public async Task A_value_that_cannot_bind_reads_in_the_places_frame_with_its_field_and_json_reads_a_problem()
+    public async Task A_value_that_cannot_bind_reads_its_form_again_in_the_places_frame_with_why_and_json_reads_a_problem()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
@@ -29,22 +29,24 @@ public sealed class RefusalPageTests
         using var ada = await SignedIn(tangentSpace, Ada);
         var edit = PostPath(root, root) + "/edit";
 
-        var page = await Form(ada, edit, edit, new Dictionary<string, string> { ["body"] = "New words.", ["version"] = "not-a-number" });
+        var page = await Change(ada, edit, PostPath(root, root), new Dictionary<string, string> { ["body"] = "New words.", ["version"] = "not-a-number" });
 
         Assert.Equal((HttpStatusCode.BadRequest, "text/html"), (page.Status, page.MediaType));
         Assert.Contains(Masthead, page.Body);
         Assert.Contains("href=\"" + BaseUrl + "/\"", page.Body);
         Assert.Contains("Field notes", page.Body);
-        Assert.Contains("Not accepted", page.Body);
-        Assert.Contains("Version: ", page.Body);
+        // The edit's form again, with why above it.
+        Assert.Contains("class=\"sign-in-form edit\"", page.Body);
+        Assert.Contains("version", page.Body[page.Body.IndexOf("sign-in-failure", StringComparison.Ordinal)..]);
+        Assert.Contains("cannot take this value.", page.Body);
         Assert.Contains("<footer class=\"footer bar\"", page.Body);
 
-        var json = await Json(ada, edit, edit, new { body = "New words.", version = "not-a-number" });
+        var json = await Patch(ada, edit, PostPath(root, root), new { body = "New words.", version = "not-a-number" });
         Assert.Equal((HttpStatusCode.BadRequest, "application/problem+json"), (json.Status, json.MediaType));
     }
 
     [Fact]
-    public async Task A_form_past_its_limit_and_the_places_own_refusals_read_in_the_same_frame()
+    public async Task A_write_past_its_limit_and_the_places_own_refusals_read_in_the_same_frame()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
@@ -52,10 +54,8 @@ public sealed class RefusalPageTests
         using var ada = await SignedIn(tangentSpace, Ada);
         using var visitor = Agent(tangentSpace);
 
-        var fields = new Dictionary<string, string>();
-        fields["body"] = new string('x', (int)PostWrites.RequestLimit * 2);
         // The body waits for the server's go-ahead, so the refusal is read before an unread body closes the connection.
-        using var oversized = new HttpRequestMessage(HttpMethod.Post, TopicPath(root)) { Content = FormBody(fields) };
+        using var oversized = new HttpRequestMessage(HttpMethod.Post, TopicPath(root)) { Content = JsonBody(new { body = new string('x', (int)PostWrites.RequestLimit * 2) }) };
         oversized.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
         oversized.Headers.ExpectContinue = true;
         using var refused = await ada.Client.SendAsync(oversized, Cancellation);

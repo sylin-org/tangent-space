@@ -34,7 +34,3 @@ public sealed record WrittenPost(
             post.Body, post.Version, post.Sequence, post.AuthorId, post.CreatedAt, post.Removed, post.RemovedBy, post.RemovedAt, post.EditedBy, post.EditedAt, can, post.CoverId);
     }
 }
-
-/// <summary>What an edit made from another version answers a JSON request: RFC 9457's members, and the Post as it
-/// stands now, whose text and version a new edit starts from.</summary>
-public sealed record StaleEdit(int Status, string Title, string Detail, WrittenPost Current);

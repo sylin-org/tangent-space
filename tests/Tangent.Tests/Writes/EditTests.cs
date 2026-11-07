@@ -3,6 +3,7 @@ using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
+using Tangent.Capture;
 using Tangent.Events;
 using Tangent.Space;
 using Tangent.Tangents;
@@ -11,9 +12,10 @@ using static Tangent.Posts.Writing;
 
 namespace Tangent.Posts;
 
-/// <summary>Editing a Post: the author edits their own, a moderator anyone's; each edit is one commit holding the pre-edit
-/// snapshot in Koan's audit partition, the raised version and <c>post.edited</c>; an edit made from another version is
-/// a conflict that carries the current text and writes nothing.</summary>
+/// <summary>Editing a Post, a change of it at its address: the author edits their own, a moderator anyone's; each edit is one
+/// commit holding the pre-edit snapshot in Koan's audit partition, the raised version and <c>post.edited</c>; an edit made from
+/// another version is refused as stale, naming the version the Post is at, its form read again with the current text, and writes
+/// nothing.</summary>
 public sealed class EditTests
 {
     [Fact]
@@ -29,7 +31,8 @@ public sealed class EditTests
         var page = await Send(ada.Client, HttpMethod.Get, PostPath(root, root) + "/edit");
         Assert.Equal(HttpStatusCode.OK, page.Status);
         Assert.Contains("<input type=\"hidden\" name=\"version\" value=\"1\" />", page.Body);
-        var byForm = await Form(ada, PostPath(root, root) + "/edit", PostPath(root, root) + "/edit",
+        Assert.Contains("<input type=\"hidden\" name=\"_method\" value=\"PATCH\" />", page.Body);
+        var byForm = await Change(ada, PostPath(root, root) + "/edit", PostPath(root, root),
             new Dictionary<string, string> { ["title"] = "Lanterns, again", ["body"] = "How do you hang yours, and where?", ["version"] = "1" });
 
         Assert.Equal((HttpStatusCode.SeeOther, AddressOf(root, root)), (byForm.Status, byForm.Location));
@@ -42,7 +45,7 @@ public sealed class EditTests
         var editedEvent = Assert.Single(await Event.Query(e => e.Kind == EventKind.PostEdited, Cancellation));
         Assert.Equal((root.Id, root.Id, Workshop, Ada, 2L), (editedEvent.PostId, editedEvent.TopicId, editedEvent.TangentId, editedEvent.ActorId, editedEvent.Version));
 
-        var byJson = await Json(mo, PostPath(root, reply) + "/edit", PostPath(root, reply) + "/edit",
+        var byJson = await Patch(mo, PostPath(root, reply) + "/edit", PostPath(root, reply),
             new { body = "From the porch beam, on a hook.", version = 1 });
 
         Assert.Equal((HttpStatusCode.OK, AddressOf(root, reply)), (byJson.Status, byJson.Location));
@@ -66,41 +69,40 @@ public sealed class EditTests
         var reply = await Replied(root, Ada, "From the porch beam.");
         var elsewhere = await Started(Ada, "On wicks", "A short piece.", Articles);
 
-        var edited = await new EditPost(root.Id, 1, "How do you hang yours? (moderated)", null, Bea).Send(Cancellation);
+        using var bea = await SignedIn(tangentSpace, Bea);
+
+        var edited = await Patch(bea, PostPath(root, root), PostPath(root, root), new { body = "How do you hang yours? (moderated)", version = 1 });
         var removed = await new RemovePost(reply.Id, Bea).Send(Cancellation);
-        var notThere = await new EditPost(elsewhere.Id, 1, "Not mine to change.", null, Bea).Send(Cancellation);
+        var notThere = await Patch(bea, PostPath(elsewhere, elsewhere), PostPath(elsewhere, elsewhere), new { body = "Not mine to change.", version = 1 });
         var notThereEither = await new RemovePost(elsewhere.Id, Bea).Send(Cancellation);
 
-        Assert.Equal(2L, Assert.IsType<Outcome<Post>.Done>(edited).Result.Version);
+        Assert.Equal((HttpStatusCode.OK, 2L, Bea), (edited.Status, edited.Json.GetProperty("version").GetInt64(), edited.Json.GetProperty("editedBy").GetString()));
         Assert.Equal((true, Bea), (Assert.IsType<Outcome<Post>.Done>(removed).Result.Removed, Assert.IsType<Outcome<Post>.Done>(removed).Result.RemovedBy));
         Assert.Equal("How do you hang yours?", (await AuditPartition.At<Post>(root.Id, 1, Cancellation))?.Body);
         Assert.Equal("From the porch beam.", (await AuditPartition.At<Post>(reply.Id, 1, Cancellation))?.Body);
-        Assert.Equal(Capabilities.NotYours, Assert.IsType<Outcome<Post>.Refused>(notThere).Reason);
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NotYours.Word), (notThere.Status, notThere.Word));
         Assert.Equal(Capabilities.NotYours, Assert.IsType<Outcome<Post>.Refused>(notThereEither).Reason);
         Assert.Equal(("A short piece.", 1L, false), ((await Post.Get(elsewhere.Id, Cancellation))?.Body, (await Post.Get(elsewhere.Id, Cancellation))?.Version,
             (await Post.Get(elsewhere.Id, Cancellation))?.Removed));
     }
 
     [Fact]
-    public async Task An_edit_from_a_stale_version_is_a_conflict_carrying_the_current_text_as_json_and_on_the_form_and_writes_nothing_while_a_repeat_writes_nothing_and_answers_the_post()
+    public async Task An_edit_from_a_stale_version_is_refused_as_stale_naming_the_current_version_its_form_holding_the_current_text_and_writes_nothing_while_a_repeat_writes_nothing_and_answers_the_post()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
         var root = await Started(Ada, "Lanterns", "How do you hang yours?");
-        Assert.IsType<Outcome<Post>.Done>(await new EditPost(root.Id, 1, "Hung from the beam, says the moderator.", null, Mo).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Edited(root.Id, 1, "Hung from the beam, says the moderator.", null, Mo).Send(Cancellation));
         var before = (await Counted(), await Snapshots());
         using var ada = await SignedIn(tangentSpace, Ada);
         var edit = PostPath(root, root) + "/edit";
 
-        var asJson = await Json(ada, edit, edit, new { title = "Lanterns", body = "Mine hang from the porch.", version = 1 });
-        var onForm = await Form(ada, edit, edit, new Dictionary<string, string> { ["title"] = "Lanterns", ["body"] = "Mine hang from the porch.", ["version"] = "1" });
-        var repeat = await new EditPost(root.Id, 1, "Hung from the beam, says the moderator.", null, Mo).Send(Cancellation);
+        var asJson = await Patch(ada, edit, PostPath(root, root), new { title = "Lanterns", body = "Mine hang from the porch.", version = 1 });
+        var onForm = await Change(ada, edit, PostPath(root, root), new Dictionary<string, string> { ["title"] = "Lanterns", ["body"] = "Mine hang from the porch.", ["version"] = "1" });
+        var repeat = await new Edited(root.Id, 1, "Hung from the beam, says the moderator.", null, Mo).Send(Cancellation);
 
-        Assert.Equal((HttpStatusCode.Conflict, "application/problem+json"), (asJson.Status, asJson.MediaType));
-        var current = asJson.Json.GetProperty("current");
-        Assert.Equal(("Hung from the beam, says the moderator.", "Lanterns", 2L),
-            (current.GetProperty("body").GetString(), current.GetProperty("title").GetString(), current.GetProperty("version").GetInt64()));
-        Assert.Equal(EditPost.Stale(2).Text, asJson.Json.GetProperty("detail").GetString());
+        Assert.Equal((HttpStatusCode.Conflict, "application/problem+json", Post.StaleWord), (asJson.Status, asJson.MediaType, asJson.Word));
+        Assert.Equal(Post.Stale(2).Text, asJson.Json.GetProperty("detail").GetString());
         Assert.Equal(HttpStatusCode.Conflict, onForm.Status);
         Assert.Contains(">Hung from the beam, says the moderator.</textarea>", onForm.Body);
         Assert.Contains("<input type=\"hidden\" name=\"version\" value=\"2\" />", onForm.Body);

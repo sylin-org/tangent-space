@@ -2,6 +2,7 @@ using System.Net;
 using Koan.Data.Core.Commands;
 using Koan.Web.Auth.Connector.Atproto.Protocol;
 using Microsoft.Extensions.DependencyInjection;
+using Tangent.Capture;
 using Tangent.Posts;
 using Tangent.Tools;
 using Xunit;
@@ -52,7 +53,7 @@ public sealed class ControlTests
         Assert.Equal(HttpStatusCode.OK, here.Status);
         Assert.Contains("Publish this on Bluesky again?", here.Body);
         Assert.DoesNotContain("Take it down from Bluesky", here.Body);
-        Assert.IsType<Outcome<Post>.Done>(await new EditPost(article.Id, 1, PostBody.Of("A cracked bowl tells you where it held."), "Mending with lacquer", Ada).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Edited(article.Id, 1, PostBody.Of("A cracked bowl tells you where it held."), "Mending with lacquer", Ada).Send(Cancellation));
         await ReadThrough(tangentSpace);
         Assert.DoesNotContain(document, repository.Records.Keys);
         var listed = Assert.Single((await Send(ada.Client, HttpMethod.Get, ConnectionsController.Path, json: true)).Json.GetProperty("articles").EnumerateArray().ToList());
@@ -91,7 +92,7 @@ public sealed class ControlTests
         Assert.False(stopped.Failed, stopped.Text);
         Assert.Equal("chosen", stopped.Structured?.GetProperty("bluesky").GetProperty("state").GetString());
         var leaf = await Started(Ada, "Gold leaf, not gold paint", "Leaf sits on the lacquer.", Articles);
-        Assert.IsType<Outcome<Post>.Done>(await new EditPost(gold.Id, 1, PostBody.Of("A cracked bowl tells you where it held."), "Mending with lacquer", Ada).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Edited(gold.Id, 1, PostBody.Of("A cracked bowl tells you where it held."), "Mending with lacquer", Ada).Send(Cancellation));
         await Until(() => repository.Records.TryGetValue(Address(AtprotoAdapter.Documents, gold), out var edited) && edited["title"]!.GetValue<string>() == "Mending with lacquer");
         await ReadThrough(tangentSpace);
         Assert.DoesNotContain(Address(AtprotoAdapter.Documents, leaf), repository.Records.Keys);
@@ -109,7 +110,7 @@ public sealed class ControlTests
         Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + ConnectionsController.Path), (resumed.Status, resumed.Location));
         var kiln = await Started(Ada, "Firing the kiln", "Slow up, slower down.", Articles);
         await Until(() => repository.Records.ContainsKey(Address(AtprotoAdapter.Documents, kiln)));
-        Assert.IsType<Outcome<Post>.Done>(await new EditPost(leaf.Id, 1, PostBody.Of("Leaf sits on the lacquer; paint on the surface."), null, Ada).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Edited(leaf.Id, 1, PostBody.Of("Leaf sits on the lacquer; paint on the surface."), null, Ada).Send(Cancellation));
         await ReadThrough(tangentSpace);
         Assert.DoesNotContain(Address(AtprotoAdapter.Documents, leaf), repository.Records.Keys);
         Assert.Contains("Stop publishing new articles", (await Send(ada.Client, HttpMethod.Get, ConnectionsController.Path)).Body);

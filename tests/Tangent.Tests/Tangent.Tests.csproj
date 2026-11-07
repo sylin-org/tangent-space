@@ -16,4 +16,8 @@
     <ProjectReference Include="../../src/server/Tangent.Server.csproj" />
     <ProjectReference Include="$(KoanSourceRoot)/src/Connectors/Web/Auth/Test/Koan.Web.Auth.Connector.Test.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- The Posts a proof starts from are seeded as the capture's seeds write them. -->
+    <Compile Include="../../src/server/Capture/Written.cs" Link="Seeds/Written.cs" />
+  </ItemGroup>
 </Project>

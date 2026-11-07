@@ -7,10 +7,13 @@ using static Tangent.Posts.Writing;
 namespace Tangent.Posts;
 
 /// <summary>Starting a Topic and replying, by form and by JSON, to the same addresses: a form is sent on to the Post's
-/// address, JSON reads the Post at its <c>Location</c>; the TID is the idempotency key; and a Topic that names no kind
-/// takes its Tangent's.</summary>
+/// address, JSON reads the Post at its <c>Location</c>; the TID is the idempotency key; and a Topic takes its Tangent's kind,
+/// which no write names.</summary>
 public sealed class StartAndReplyTests
 {
+    /// <summary>Where a Topic of the workshop starts: the Tangent's own address.</summary>
+    private const string Start = "/t/" + Workshop;
+
     [Fact]
     public async Task A_topic_and_a_reply_by_form_are_sent_on_to_the_posts_address_and_by_json_answer_201_with_location_and_the_post()
     {
@@ -22,7 +25,7 @@ public sealed class StartAndReplyTests
 
         var page = await Send(ada.Client, HttpMethod.Get, form);
         var minted = MintedId(page.Body);
-        var started = await Form(ada, form, form, new Dictionary<string, string> { ["id"] = minted, ["title"] = "Lanterns at dusk", ["body"] = "Who lights theirs first?" });
+        var started = await Form(ada, form, Start, new Dictionary<string, string> { ["id"] = minted, ["title"] = "Lanterns at dusk", ["body"] = "Who lights theirs first?" });
 
         Assert.Equal(HttpStatusCode.OK, page.Status);
         Assert.True(Tid.IsValid(minted));
@@ -46,7 +49,7 @@ public sealed class StartAndReplyTests
         Assert.Contains("I do, at six.", landed.Body);
 
         var topicId = Tids.Mint();
-        var asJson = await Json(ada, form, form, new { id = topicId, title = "Wicks", body = "Cotton or hemp?" });
+        var asJson = await Json(ada, form, Start, new { id = topicId, title = "Wicks", body = "Cotton or hemp?" });
 
         Assert.Equal((HttpStatusCode.Created, BaseUrl + "/t/workshop/wicks/" + topicId, "application/json"), (asJson.Status, asJson.Location, asJson.MediaType));
         Assert.Equal((topicId, BaseUrl + "/t/workshop/wicks/" + topicId, Workshop, topicId, "wicks", "topic", "Wicks", "Cotton or hemp?", 1L, Ada),
@@ -76,11 +79,11 @@ public sealed class StartAndReplyTests
         var minted = MintedId((await Send(ada.Client, HttpMethod.Get, form)).Body);
         var fields = new Dictionary<string, string> { ["id"] = minted, ["title"] = "Twice", ["body"] = "Sent once, then again." };
 
-        var first = await Form(ada, form, form, new Dictionary<string, string>(fields));
-        var second = await Form(ada, form, form, new Dictionary<string, string>(fields));
+        var first = await Form(ada, form, Start, new Dictionary<string, string>(fields));
+        var second = await Form(ada, form, Start, new Dictionary<string, string>(fields));
         var afterRepeat = await Counted();
-        var otherWords = await Form(ada, form, form, new Dictionary<string, string>(fields) { ["body"] = "Other words." });
-        var otherJson = await Json(ada, form, form, new { id = minted, title = "Twice", body = "Other words." });
+        var otherWords = await Form(ada, form, Start, new Dictionary<string, string>(fields) { ["body"] = "Other words." });
+        var otherJson = await Json(ada, form, Start, new { id = minted, title = "Twice", body = "Other words." });
         var replyId = Tids.Mint();
         var reply = await Json(ada, form, "/t/workshop/twice", new { id = replyId, body = "And a reply." });
         var replyAgain = await Json(ada, form, "/t/workshop/twice", new { id = replyId, body = "And a reply." });
@@ -119,11 +122,11 @@ public sealed class StartAndReplyTests
         var answers = new[]
         {
             await Json(ada, form, TopicPath(root), new { id = hidden.Id, body = "A reply." }),
-            await Json(ada, form, form, new { id = hidden.Id, title = "A topic", body = "Words." }),
+            await Json(ada, form, Start, new { id = hidden.Id, title = "A topic", body = "Words." }),
             await Json(ada, form, TopicPath(root), new { id = elsewhere.Id, body = "A reply." }),
-            await Json(ada, form, "/t/" + Articles + "/new", new { id = root.Id, title = "Lanterns", body = "How do you hang yours?" })
+            await Json(ada, form, "/t/" + Articles, new { id = root.Id, title = "Lanterns", body = "How do you hang yours?" })
         };
-        var onForm = await Form(ada, form, form, new Dictionary<string, string> { ["id"] = hidden.Id, ["title"] = "A topic", ["body"] = "Words." });
+        var onForm = await Form(ada, form, Start, new Dictionary<string, string> { ["id"] = hidden.Id, ["title"] = "A topic", ["body"] = "Words." });
         var replay = await Json(ada, form, TopicPath(root), new { id = mine.Id, body = "From the porch beam." });
         var visibleConflict = await Json(ada, form, TopicPath(root), new { id = mine.Id, body = "Other words." });
 
@@ -139,7 +142,7 @@ public sealed class StartAndReplyTests
     }
 
     [Fact]
-    public async Task A_topic_takes_its_tangents_kind_so_one_in_an_articles_tangent_is_an_article_whatever_kind_is_sent()
+    public async Task A_topic_takes_its_tangents_kind_so_one_in_an_articles_tangent_is_an_article_and_a_kind_sent_is_refused_naming_it()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
@@ -147,15 +150,15 @@ public sealed class StartAndReplyTests
         const string articles = "/t/" + Articles + "/new";
 
         var page = await Send(ada.Client, HttpMethod.Get, articles, json: true);
-        var article = await Json(ada, articles, articles, new { id = Tids.Mint(), title = "On wicks", body = "A short piece." });
-        var named = await Json(ada, articles, articles, new { id = Tids.Mint(), title = "A question", body = "Not a piece.", kind = "topic" });
-        var workshop = await Json(ada, articles, "/t/" + Workshop + "/new", new { id = Tids.Mint(), title = "In the workshop", body = "Plain." });
+        var article = await Json(ada, articles, "/t/" + Articles, new { id = Tids.Mint(), title = "On wicks", body = "A short piece." });
+        var named = await Json(ada, articles, "/t/" + Articles, new { id = Tids.Mint(), title = "A question", body = "Not a piece.", kind = "topic" });
+        var workshop = await Json(ada, articles, "/t/" + Workshop, new { id = Tids.Mint(), title = "In the workshop", body = "Plain." });
 
         Assert.Equal(("article", true), (page.Json.GetProperty("kind").GetString(), Tid.IsValid(Valued(page.Json.GetProperty("start"), PostWrites.IdField))));
         Assert.DoesNotContain(page.Json.GetProperty("start").GetProperty("fields").EnumerateArray(), field => field.GetProperty("name").GetString() == "kind");
         Assert.Equal("article", article.Json.GetProperty("kind").GetString());
         Assert.Equal(PostKind.Article, (await Post.Get(article.Json.GetProperty("id").GetString()!, Cancellation))?.Kind);
-        Assert.Equal((HttpStatusCode.Created, "article"), (named.Status, named.Json.GetProperty("kind").GetString()));
+        Assert.Equal((HttpStatusCode.BadRequest, true), (named.Status, named.Json.GetProperty("errors").TryGetProperty("kind", out _)));
         Assert.Equal("topic", workshop.Json.GetProperty("kind").GetString());
     }
 }

@@ -61,7 +61,7 @@ public sealed class FormTests
         var page = await Send(ada.Client, HttpMethod.Get, newTopic[BaseUrl.Length..], json: true);
         Assert.Equal(HttpStatusCode.OK, page.Status);
         var start = page.Json.GetProperty("start");
-        Assert.Equal((BaseUrl + "/t/" + Workshop + "/new", "POST"), (start.GetProperty("action").GetString(), start.GetProperty("method").GetString()));
+        Assert.Equal((BaseUrl + "/t/" + Workshop, "POST"), (start.GetProperty("action").GetString(), start.GetProperty("method").GetString()));
         Assert.Equal([PostWrites.IdField, "title", PostWrites.BodyField], FieldNames(start));
         var minted = Valued(start, PostWrites.IdField);
         Assert.True(Tid.IsValid(minted));

@@ -38,9 +38,9 @@ public sealed record DeleteTopic(string TopicId, string ActorId, int Replies = 0
 
     public async Task<Outcome<Post>> Run(CancellationToken ct)
     {
-        if (await Post.Get(TopicId, ct) is not { ParentId: null } root) return new Outcome<Post>.Refused(Reply.NoTopic);
+        if (await Post.Get(TopicId, ct) is not { ParentId: null } root) return new Outcome<Post>.Refused(Post.NoTopic);
         var around = await Capabilities.Load(ActorId, root.TangentId, null, ct);
-        if (!around.Exists || await Tangents.Tangent.Get(root.TangentId, ct) is not { } tangent) return new Outcome<Post>.Refused(Reply.NoTopic);
+        if (!around.Exists || await Tangents.Tangent.Get(root.TangentId, ct) is not { } tangent) return new Outcome<Post>.Refused(Post.NoTopic);
         if (around.Gate(Bit.Moderate) is { } gate) return new Outcome<Post>.Refused(gate);
         if ((await TangentSpace.Get(TangentSpace.SingleRow, ct))?.ModeratorsTangentId == root.TangentId) return new Outcome<Post>.Refused(ReportStays);
         if (root.ReplyCount != Replies) return new Outcome<Post>.Refused(HoldsReplies(root.ReplyCount));

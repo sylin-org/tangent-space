@@ -6,7 +6,7 @@ namespace Tangent.Events;
 /// <summary>A participant's position in one scope: in the place, the last sequence of the log they said they had seen;
 /// in a Topic, the last of that Topic's own sequence. Keyed by participant and scope. A position moves forward only, by
 /// <see cref="Seen"/> and by its participant's own write in a Topic they had read to its end
-/// (<see cref="Posts.StartTopic"/>, <see cref="Posts.Reply"/>); what is new to them is <see cref="Unread"/>'s.</summary>
+/// (<see cref="Posts.PostWriting.Start"/>, <see cref="Posts.PostWriting.Reply"/>); what is new to them is <see cref="Unread"/>'s.</summary>
 public sealed class Checkpoint : Entity<Checkpoint>
 {
     public static string Key(string participantId, Scope scope) => participantId + "/" + scope;

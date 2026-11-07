@@ -22,7 +22,13 @@ public static class Holds
     public const string TopicBody = "Its opening Post" + Markdown;
     public const string Cover = "The Id of the image that leads the article, as bringing an image in answers it; left out, the article has none.";
 
-    public const string EditVersion = "The version of the Post the edit was made from: one made from another changes nothing and answers with the Post as it stands.";
+    /// <summary>What a Post's title holds, as starting a Topic and editing one write it.</summary>
+    public const string Title = "The Topic's title, at most 200 characters, on its opening Post; an edit that leaves it out keeps it.";
+
+    /// <summary>What a Post's words hold, as starting a Topic, replying and editing write them.</summary>
+    public const string Body = "The Post's words" + Markdown;
+
+    public const string EditVersion = "The version of the Post the edit was made from: one made from another is refused as stale, naming the version the Post is at now.";
     public const string EditBody = "The Post's words, which replace what it says now" + Markdown;
     public const string EditBodyOptional = " Empty, the Post it was taken on a tangent from speaks for it.";
     public const string EditTitle = "The Topic's title, at most 200 characters." + Stays;

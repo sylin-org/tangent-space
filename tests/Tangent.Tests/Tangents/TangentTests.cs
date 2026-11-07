@@ -5,6 +5,7 @@ using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
+using Tangent.Capture;
 using Tangent.Events;
 using Tangent.Participants;
 using Tangent.Posts;
@@ -123,7 +124,7 @@ public sealed class TangentTests(ITestOutputHelper output)
         var created = await new BeforeItsCommit<Tangent>(
             new CreateTangent("studio", "The studio", "Behind the door.", PostKind.Topic, 2, Audience.Private, "leo"),
             () => Read("between")).Send(Cancellation);
-        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "studio", "Behind the door", "Not for everyone.", "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), "studio", "Behind the door", "Not for everyone.", "leo").Send(Cancellation));
         await Read("after");
         await stop.CancelAsync();
         await asking;

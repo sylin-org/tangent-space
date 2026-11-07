@@ -6,6 +6,7 @@ using Koan.Data.Core.Commands;
 using Koan.Web.Attributes;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
+using Tangent.Capture;
 using Tangent.Events;
 using Tangent.Lifecycle;
 using Tangent.Offers;
@@ -40,15 +41,15 @@ public sealed class TheToolsTests
         ["read_tangents"] = Action<TangentsController>(nameof(TangentsController.Get)),
         ["read_tangent"] = Action<TangentPageController>(nameof(TangentPageController.Get)),
         ["quiet_tangent"] = Action<TangentPageController>(nameof(TangentPageController.Quiet)),
-        ["read_topic"] = Action<TopicPageController>(nameof(TopicPageController.Topic)),
-        ["read_post"] = Action<TopicPageController>(nameof(TopicPageController.AtPost)),
+        ["read_topic"] = Action<TopicsController>(nameof(TopicsController.GetById)),
+        ["read_post"] = Action<PostsController>(nameof(PostsController.GetById)),
         ["follow_topic"] = Action<TopicPageController>(nameof(TopicPageController.Follow)),
         ["read_history"] = Action<PostHistoryController>(nameof(PostHistoryController.History)),
         ["search"] = Action<SearchController>(nameof(SearchController.Get)),
         ["read_profile"] = Action<ProfileController>(nameof(ProfileController.Get)),
-        ["reply"] = Action<ReplyController>(nameof(ReplyController.Write)),
-        ["start_topic"] = Action<NewTopicController>(nameof(NewTopicController.Start)),
-        ["edit"] = Action<EditPostController>(nameof(EditPostController.Edit)),
+        ["reply"] = Action<PostsController>(nameof(PostsController.Upsert)),
+        ["start_topic"] = Action<TopicsController>(nameof(TopicsController.Upsert)),
+        ["edit"] = Action<PostsController>(nameof(PostsController.Patch)),
         ["remove"] = Action<EditPostController>(nameof(EditPostController.Remove)),
         ["undo_removal"] = Action<EditPostController>(nameof(EditPostController.UndoRemoval)),
         ["move_topic"] = Action<TopicPageController>(nameof(TopicPageController.Move)),
@@ -106,7 +107,7 @@ public sealed class TheToolsTests
     /// <summary>Every public action that is not a tool, with why.</summary>
     private static readonly IReadOnlyDictionary<MethodInfo, string> NotTools = new Dictionary<MethodInfo, string>
     {
-        [Action<NewTopicController>(nameof(NewTopicController.Get))] = "only shows a form",
+        [Action<TopicsController>(nameof(TopicsController.GetNew))] = "only shows a form",
         [Action<EditPostController>(nameof(EditPostController.Get))] = "only shows a form",
         [Action<TopicPageController>(nameof(TopicPageController.MovePage))] = "only shows a form",
         [Action<ReportController>(nameof(ReportController.Get))] = "only shows a form",
@@ -251,6 +252,7 @@ public sealed class TheToolsTests
         void Says(string holds, int limit) => Assert.Contains(" " + limit + " characters", holds);
         Says(Holds.TopicTitle, Post.TitleLimit);
         Says(Holds.EditTitle, Post.TitleLimit);
+        Says(Holds.Title, Post.TitleLimit);
         Says(Holds.TangentName, Tangents.Tangent.NameLimit);
         Says(Holds.ChangedTangentName, Tangents.Tangent.NameLimit);
         Says(Holds.TangentDescription, Tangents.Tangent.DescriptionLimit);
@@ -293,9 +295,10 @@ public sealed class TheToolsTests
         Assert.Contains("parent is the id of the Post you answer", says);
         Assert.Contains("the same Post", says);
         var fields = reply.GetProperty("inputSchema").GetProperty("properties");
-        Assert.Equal(Holds.ReplyBody, fields.GetProperty("body").GetProperty("description").GetString());
+        Assert.Equal(Holds.Body, fields.GetProperty("body").GetProperty("description").GetString());
         Assert.Equal(Holds.Id, fields.GetProperty("id").GetProperty("description").GetString());
-        Assert.Equal(Holds.Topic, fields.GetProperty("topic").GetProperty("description").GetString());
+        Assert.Equal(Holds.Parent, fields.GetProperty("parent").GetProperty("description").GetString());
+        Assert.True(fields.TryGetProperty("topic", out _));
         // An address names the Tangent and the Topic at once, so neither is required on its own.
         Assert.Contains("in place of tangent, topic", fields.GetProperty("address").GetProperty("description").GetString());
         Assert.False(reply.GetProperty("inputSchema").TryGetProperty("required", out _));
@@ -356,7 +359,7 @@ public sealed class TheToolsTests
 
         // arrive, then what an address names, read by its parts and by itself, a reply sent to it, and seen once it is read.
         var replied = (await Post.Get(replyId, Cancellation))!;
-        Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), replied.TopicId, "So you say.", Bea, replyId).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Replied(Tids.Mint(), replied.TopicId, "So you say.", Bea, replyId).Send(Cancellation));
         var door = await Worked(mine, "arrive", new { });
         var news = door.GetProperty("news");
         var pointed = news.GetProperty("replies").GetProperty("posts")[0].GetProperty("address").GetString()!;

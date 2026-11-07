@@ -7,6 +7,7 @@ using Koan.Data.Core.Commands;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Tangent.Access;
+using Tangent.Capture;
 using Tangent.Events;
 using Tangent.Participants;
 using Tangent.Posts;
@@ -82,7 +83,7 @@ public sealed class TangentPageTests
             Assert.False(root.TryGetProperty("next", out _));
         }
 
-        Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), older.Id, "A reply.", "ada", At: Start.AddMinutes(4)).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Replied(Tids.Mint(), older.Id, "A reply.", "ada", At: Start.AddMinutes(4)).Send(Cancellation));
 
         using (var json = await Json(tangentSpace.Client, "/t/" + Workshop))
         {
@@ -142,7 +143,7 @@ public sealed class TangentPageTests
         await Given.AParticipant(tangentSpace, Reader, [Roles.Member], ct: Cancellation);
         var seen = await Started("Seen already", Start);
         var unseen = await Started("Never opened", Start.AddMinutes(1));
-        Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), seen.Id, "First reply.", "ada", At: Start.AddMinutes(2)).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Replied(Tids.Mint(), seen.Id, "First reply.", "ada", At: Start.AddMinutes(2)).Send(Cancellation));
         using var browser = new Browser(tangentSpace);
         (await browser.SignIn("reader", Reader, Cancellation)).Dispose();
 
@@ -163,7 +164,7 @@ public sealed class TangentPageTests
             Assert.Equal((true, (long?)null), marks[unseen.Id]);
         }
 
-        Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), seen.Id, "Second reply.", "ada", At: Start.AddMinutes(3)).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Replied(Tids.Mint(), seen.Id, "Second reply.", "ada", At: Start.AddMinutes(3)).Send(Cancellation));
 
         using (var json = await Json(browser.Client, "/t/" + Workshop))
             Assert.Equal((true, (long?)1), Marks(json.RootElement)[seen.Id]);
@@ -281,7 +282,7 @@ public sealed class TangentPageTests
         Assert.Equal(first.ETag, second.ETag);
         Assert.Equal(HttpStatusCode.NotModified, (await Tag(tangentSpace.Client, first.ETag)).Status);
 
-        Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), topic.Id, "An answer.", "ada", At: Start.AddMinutes(1)).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Replied(Tids.Mint(), topic.Id, "An answer.", "ada", At: Start.AddMinutes(1)).Send(Cancellation));
 
         var after = await Tag(tangentSpace.Client, first.ETag);
         Assert.Equal(HttpStatusCode.OK, after.Status);
@@ -297,8 +298,8 @@ public sealed class TangentPageTests
         await Given.AParticipant(tangentSpace, Reader, [Roles.Member], ct: Cancellation);
         var topic = await Started("A question", Start);
         var reply = Tids.Mint();
-        Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), topic.Id, "First.", "leo", At: Start.AddMinutes(1)).Send(Cancellation));
-        Assert.IsType<Outcome<Post>.Done>(await new Reply(reply, topic.Id, "The **latest** word.", "ada", At: Start.AddMinutes(2)).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Replied(Tids.Mint(), topic.Id, "First.", "leo", At: Start.AddMinutes(1)).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Replied(reply, topic.Id, "The **latest** word.", "ada", At: Start.AddMinutes(2)).Send(Cancellation));
 
         using (var json = await Json(tangentSpace.Client, "/t/" + Workshop))
         {
@@ -355,8 +356,8 @@ public sealed class TangentPageTests
 
         // In a Tangent of articles the newest is removed: the next leads, and the removed one follows as a card.
         Assert.IsType<Outcome<Tangent>.Done>(await new CreateTangent("essays", "Essays", "", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
-        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "essays", "An older essay", "Words that stay.", "ada", At: Start.AddMinutes(3)).Send(Cancellation));
-        var newer = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "essays", "A newer essay", "Words that go.", "ada", At: Start.AddMinutes(4)).Send(Cancellation)).Result;
+        Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), "essays", "An older essay", "Words that stay.", "ada", At: Start.AddMinutes(3)).Send(Cancellation));
+        var newer = Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), "essays", "A newer essay", "Words that go.", "ada", At: Start.AddMinutes(4)).Send(Cancellation)).Result;
         Assert.IsType<Outcome<Post>.Done>(await new RemovePost(newer.Id, "ada", Start.AddMinutes(5)).Send(Cancellation));
 
         var essays = await Html(tangentSpace.Client, "/t/essays");
@@ -379,11 +380,11 @@ public sealed class TangentPageTests
         // Leo's two September essays lie past the first page, behind more October essays of Ada's than a page holds.
         var september = new List<string>();
         foreach (var day in new[] { 10, 12 })
-            september.Add(Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "essays", "September " + day, "Words of September.", "leo",
+            september.Add(Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), "essays", "September " + day, "Words of September.", "leo",
                 At: new DateTimeOffset(2026, 9, day, 9, 0, 0, TimeSpan.Zero)).Send(Cancellation)).Result.Id);
         var october = new List<string>();
         for (var index = 0; index < TopicList.PageSize + 1; index++)
-            october.Add(Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "essays", "October " + index, "Words of October.", "ada",
+            october.Add(Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), "essays", "October " + index, "Words of October.", "ada",
                 At: new DateTimeOffset(2026, 10, 1, 9, index, 0, TimeSpan.Zero)).Send(Cancellation)).Result.Id);
 
         using (var whole = await Json(tangentSpace.Client, "/t/essays"))
@@ -449,9 +450,9 @@ public sealed class TangentPageTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Place(tangentSpace);
         Assert.IsType<Outcome<Tangent>.Done>(await new CreateTangent("essays", "Essays", "", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
-        var older = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "essays", "The older essay", "Words of old.", "leo", At: Start).Send(Cancellation)).Result;
-        var newer = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "essays", "The newer essay", "Words of new.", "leo", At: Start.AddMinutes(1)).Send(Cancellation)).Result;
-        Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), older.Id, "A late reply.", "ada", At: Start.AddMinutes(2)).Send(Cancellation));
+        var older = Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), "essays", "The older essay", "Words of old.", "leo", At: Start).Send(Cancellation)).Result;
+        var newer = Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), "essays", "The newer essay", "Words of new.", "leo", At: Start.AddMinutes(1)).Send(Cancellation)).Result;
+        Assert.IsType<Outcome<Post>.Done>(await new Replied(Tids.Mint(), older.Id, "A late reply.", "ada", At: Start.AddMinutes(2)).Send(Cancellation));
 
         foreach (var path in new[] { "/t/essays", "/t/essays?author=leo", "/t/essays?month=2026-09" })
         {
@@ -467,7 +468,7 @@ public sealed class TangentPageTests
 
         var asked = await Started("Asked first", Start);
         var answered = await Started("Asked next", Start.AddMinutes(1));
-        Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), asked.Id, "An answer.", "leo", At: Start.AddMinutes(2)).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Replied(Tids.Mint(), asked.Id, "An answer.", "leo", At: Start.AddMinutes(2)).Send(Cancellation));
         using (var discussions = await Json(tangentSpace.Client, "/t/" + Workshop))
             Assert.Equal([asked.Id, answered.Id], Ids(discussions.RootElement));
         Assert.Contains("<span class=\"topic-list-order\">latest activity first</span>", await Html(tangentSpace.Client, "/t/" + Workshop));
@@ -481,11 +482,11 @@ public sealed class TangentPageTests
         Assert.IsType<Outcome<Tangent>.Done>(await new CreateTangent("essays", "Essays", "", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
         var started = new List<string>();
         for (var index = 0; index < TopicList.PageSize + 1; index++)
-            started.Add(Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "essays", "Essay " + index, "Words.", "leo",
+            started.Add(Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), "essays", "Essay " + index, "Words.", "leo",
                 At: Start.AddMinutes(index)).Send(Cancellation)).Result.Id);
         // The oldest articles gain the newest replies, so by latest activity they would come first.
         for (var index = 0; index < 3; index++)
-            Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), started[index], "Late.", "ada", At: Start.AddHours(2 + index)).Send(Cancellation));
+            Assert.IsType<Outcome<Post>.Done>(await new Replied(Tids.Mint(), started[index], "Late.", "ada", At: Start.AddHours(2 + index)).Send(Cancellation));
 
         var read = new List<string>();
         var pages = 0;
@@ -514,7 +515,7 @@ public sealed class TangentPageTests
         {
             await Given.AParticipant(tangentSpace, writer, [Roles.Member], ct: Cancellation);
             for (var essay = 0; essay < (index < TangentPageController.AuthorLimit ? 2 : 1); essay++)
-                Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "essays", $"Essay {essay} of {writer}", "Words.", writer, At: Start.AddMinutes(index)).Send(Cancellation));
+                Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), "essays", $"Essay {essay} of {writer}", "Words.", writer, At: Start.AddMinutes(index)).Send(Cancellation));
         }
 
         var most = writers.Take(TangentPageController.AuthorLimit).Select(writer => (writer, writer + ".example", 2, $"{BaseUrl}/t/essays?author={writer}")).ToList();
@@ -542,7 +543,7 @@ public sealed class TangentPageTests
         await Place(tangentSpace);
         await Started("One", new DateTimeOffset(2026, 9, 30, 23, 59, 0, TimeSpan.Zero));
         await Started("Two", new DateTimeOffset(2026, 10, 1, 0, 0, 0, TimeSpan.Zero));
-        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, "Three", "Words.", "leo", At: Start).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), Workshop, "Three", "Words.", "leo", At: Start).Send(Cancellation));
         var counted = (await Tangent.Get(Workshop, Cancellation))!;
         Assert.True(counted.Tallied());
         var months = counted.Months.OrderBy(month => month.Key).ToList();
@@ -588,7 +589,7 @@ public sealed class TangentPageTests
     }
 
     private static async Task<Post> Started(string title, DateTimeOffset at)
-        => Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, title, "The *words* of the [opening](https://example.com) Post.", "ada", At: at).Send(Cancellation)).Result;
+        => Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), Workshop, title, "The *words* of the [opening](https://example.com) Post.", "ada", At: at).Send(Cancellation)).Result;
 
     private static List<string> Ids(JsonElement page)
         => page.GetProperty("topics").EnumerateArray().Select(topic => topic.GetProperty("id").GetString()!).ToList();

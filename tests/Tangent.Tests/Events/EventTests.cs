@@ -1,6 +1,7 @@
 using Koan.Data.Core.Commands;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
+using Tangent.Capture;
 using Tangent.Posts;
 using Xunit;
 
@@ -19,14 +20,14 @@ public sealed class EventTests
         await Given.ATangent(first, "the-workshop", ct: Cancellation);
         await Given.AParticipant(first, "leo", [Roles.Member], ct: Cancellation);
         await Given.AParticipant(first, "ada", [Roles.Member], ct: Cancellation);
-        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(topicId, "the-workshop", "Before", "First.", "leo").Send(Cancellation));
-        Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), topicId, "Second.", "ada").Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Started(topicId, "the-workshop", "Before", "First.", "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Replied(Tids.Mint(), topicId, "Second.", "ada").Send(Cancellation));
         Assert.Equal(2, await Event.Log.Highest(Cancellation));
         await first.StopAsync(Cancellation);
 
         // The second fixture's folder is deleted before the first's, which holds the data folder they share.
         await using var second = await TangentSpaceFixture.StartAsync(new Dictionary<string, string?> { ["Tangent:DataFolder"] = first.DataFolder }, ct: Cancellation);
-        var after = await new Reply(Tids.Mint(), topicId, "Third.", "leo").Send(Cancellation);
+        var after = await new Replied(Tids.Mint(), topicId, "Third.", "leo").Send(Cancellation);
 
         Assert.Equal(first.DataFolder, second.DataFolder);
         Assert.Equal(2L, Assert.IsType<Outcome<Post>.Done>(after).Result.Sequence);

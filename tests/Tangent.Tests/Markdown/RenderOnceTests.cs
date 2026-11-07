@@ -1,6 +1,7 @@
 using System.Net;
 using Koan.Data.Core.Commands;
 using Tangent.Access;
+using Tangent.Capture;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -26,10 +27,10 @@ public sealed class RenderOnceTests
 
         // Building each command judges its body: one parse apiece. Sending them parses nothing more.
         var rootId = Tids.Mint();
-        var start = new StartTopic(rootId, Workshop, "Long reads", body, Ada);
+        var start = new Started(rootId, Workshop, "Long reads", body, Ada);
         var built = MarkdownHtml.Parses;
         var root = Assert.IsType<Outcome<Post>.Done>(await start.Send(Cancellation)).Result;
-        var replies = new List<Reply> { new(Tids.Mint(), rootId, body + "One.", Bea), new(Tids.Mint(), rootId, body + "Two.", Mo) };
+        var replies = new List<Replied> { new(Tids.Mint(), rootId, body + "One.", Bea), new(Tids.Mint(), rootId, body + "Two.", Mo) };
         built = MarkdownHtml.Parses;
         foreach (var reply in replies) Assert.IsType<Outcome<Post>.Done>(await reply.Send(Cancellation));
         Assert.Equal(built, MarkdownHtml.Parses);
@@ -47,7 +48,7 @@ public sealed class RenderOnceTests
         Assert.Equal(before + 3, MarkdownHtml.Parses);
 
         // An edit makes a new version: built once, sent without a parse, read once.
-        var edit = new EditPost(root.Id, root.Version, body + "Edited.", null, Ada);
+        var edit = new Edited(root.Id, root.Version, body + "Edited.", null, Ada);
         built = MarkdownHtml.Parses;
         Assert.IsType<Outcome<Post>.Done>(await edit.Send(Cancellation));
         Assert.Equal(built, MarkdownHtml.Parses);
@@ -70,10 +71,10 @@ public sealed class RenderOnceTests
         // A visitor may start, reply and edit nothing; Bea may not edit Ada's Post. Each is answered with its gate, and
         // nothing parses the body.
         var parses = MarkdownHtml.Parses;
-        var started = await Send(visitor, HttpMethod.Post, "/t/" + Workshop + "/new", JsonBody(new { id = Tids.Mint(), title = "Heavy", body = heavy }), json: true);
+        var started = await Send(visitor, HttpMethod.Post, "/t/" + Workshop, JsonBody(new { id = Tids.Mint(), title = "Heavy", body = heavy }), json: true);
         var replied = await Send(visitor, HttpMethod.Post, TopicPath(root), JsonBody(new { id = Tids.Mint(), body = heavy }), json: true);
-        var edited = await Send(visitor, HttpMethod.Post, PostPath(root, root) + "/edit", JsonBody(new { body = heavy, version = 1 }), json: true);
-        var notYours = await Send(bea.Client, HttpMethod.Post, PostPath(root, root) + "/edit", JsonBody(new { body = heavy, version = 1 }), json: true);
+        var edited = await Send(visitor, HttpMethod.Patch, PostPath(root, root), JsonBody(new { body = heavy, version = 1 }), json: true);
+        var notYours = await Send(bea.Client, HttpMethod.Patch, PostPath(root, root), JsonBody(new { body = heavy, version = 1 }), json: true);
         Assert.Equal(parses, MarkdownHtml.Parses);
 
         Assert.Equal([Capabilities.SignIn.Word, Capabilities.SignIn.Word, Capabilities.SignIn.Word, Capabilities.NotYours.Word],

@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Text;
+using Koan.Data.Abstractions;
+using Koan.Data.Core;
 
 namespace Tangent.Posts;
 
@@ -8,6 +10,9 @@ namespace Tangent.Posts;
 public static class Slug
 {
     public const int Limit = 64;
+
+    /// <summary>How many numbered suffixes are tried before a Topic's own Id becomes the suffix.</summary>
+    public const int SuffixBound = 50;
 
     /// <summary>The segments under a Tangent's address that are its own, never a Topic's slug: where a Topic is started,
     /// the Tangent's settings, where an image is brought in, where a writer's suggestions are read, where a participant
@@ -69,5 +74,21 @@ public static class Slug
         }
 
         return true;
+    }
+
+    /// <summary><paramref name="slug"/> for a Topic whose root is <paramref name="id"/>, or the first numbered suffix of it
+    /// that no Topic in <paramref name="tangentId"/> holds; a slug a Tangent's own pages hold (<see cref="Reserved"/>) takes the
+    /// suffix too. Each try is one counted query. Past <see cref="SuffixBound"/>, the Post's own Id is the suffix, and the whole
+    /// still stays within the limit.</summary>
+    public static async Task<string> Unique(string tangentId, string slug, string id, CancellationToken ct)
+    {
+        for (var suffix = 1; suffix <= SuffixBound; suffix++)
+        {
+            if (suffix == 1 && Reserved.Contains(slug)) continue;
+            var candidate = suffix == 1 ? slug : WithSuffix(slug, suffix);
+            if (await Post.Count.Where(post => post.TangentId == tangentId && post.Slug == candidate, CountStrategy.Exact, ct) == 0) return candidate;
+        }
+
+        return WithSuffix(slug, id);
     }
 }

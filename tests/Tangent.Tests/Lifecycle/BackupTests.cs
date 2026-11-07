@@ -4,6 +4,7 @@ using Koan.Data.Core.Commands;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
+using Tangent.Capture;
 using Tangent.Posts;
 using Tangent.Space;
 using Xunit;
@@ -30,7 +31,7 @@ public sealed class BackupTests(ITestOutputHelper output)
         await Given.AParticipant(original, Persona.Id("ada"), [Roles.Member], ct: Cancellation);
         var image = await Media.Keep(ArticleMediaTests.Jpeg(), Cancellation);
         Assert.IsType<Outcome<MediaUse>.Done>(await new BringMedia(image.Id, Persona.Id("ada")).Send(Cancellation));
-        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "workshop", "A picture", "![It](/media/" + image.Id + ")", Persona.Id("ada")).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), "workshop", "A picture", "![It](/media/" + image.Id + ")", Persona.Id("ada")).Send(Cancellation));
         var kept = await original.Client.GetByteArrayAsync("/media/" + image.Id, Cancellation);
         var rendered = await original.Client.GetByteArrayAsync($"/media/{image.Id}/{MediaRecipes.CardName}", Cancellation);
 
