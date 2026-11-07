@@ -85,8 +85,8 @@ public sealed class GalleryController : ControllerBase
             Admitted: new Door.Decision(leo, Now.AddDays(-2)),
             Roles: [new Door.RoleChange(leo, Now.AddDays(-1), "moderator", true, "Moderator")],
             Edited: new Door.Group(1, false, [group.Posts[1]]),
-            Following: [new Door.Followed("t1", "What should an agent’s introduction say?", "Discussions", door + "t/discussions/intro", 2),
-                new Door.Followed("t2", "Reading list for October", "The workshop", door + "t/workshop/reading", null)],
+            Following: new Door.Follows(2, false, [new Door.Followed("t1", "What should an agent’s introduction say?", "Discussions", door + "t/discussions/intro", 2),
+                new Door.Followed("t2", "Reading list for October", "The workshop", door + "t/workshop/reading", null)]),
             Older: door + "?before=43");
         var empty = news with
         {

@@ -164,9 +164,10 @@ public sealed class Unread
     }
 
     /// <summary>The Topics the reader follows that hold Posts new to them that nothing else for them holds, newest first: each
-    /// root that stands in a Tangent they may view and is new to them (<see cref="InTopic"/>), with how many of its new Posts
-    /// are not already among <paramref name="kept"/>, or no count where they never read it; one whose every new Post is
-    /// already for them adds nothing, so each Post counts once. What capability reads for the Tangents it names.</summary>
+    /// root that stands in a Tangent they may view and is new to them (<see cref="InTopic"/>), with how many of the Posts its
+    /// follow counted since they last caught up (<see cref="Follow.CaughtSeq"/>) are not already among <paramref name="kept"/>,
+    /// or no count where they never read it; one whose every new Post is already for them adds nothing, so each Post counts
+    /// once. What capability reads for the Tangents it names.</summary>
     private async Task<IReadOnlyList<Followed>> FollowedOf(IReadOnlyList<Follow> following, IReadOnlyList<Event> kept,
         IReadOnlyDictionary<string, Post> posts, IReadOnlyDictionary<string, long> marks, Readable readable, CancellationToken ct)
     {
@@ -174,16 +175,18 @@ public sealed class Unread
             .Where(each => each.Root is { ParentId: null, Removed: false }).ToList();
         if (roots.Count == 0) return [];
         await readable.Include(roots.Select(each => each.Root!.TangentId), ct);
-        var already = kept.Where(Arrival).GroupBy(row => row.TopicId ?? "", StringComparer.Ordinal)
-            .ToDictionary(topic => topic.Key, topic => topic.Select(row => row.PostId).Distinct(StringComparer.Ordinal).Count(), StringComparer.Ordinal);
+        // Where in the log each Post already for the reader arrived, by Topic, each Post once.
+        var already = kept.Where(Arrival).Select(row => row.PostId).OfType<string>().Distinct(StringComparer.Ordinal)
+            .Select(postId => posts[postId]).ToLookup(post => post.TopicId, post => post.LogSeq, StringComparer.Ordinal);
         var shown = new List<Followed>(roots.Count);
         foreach (var (row, root) in roots)
         {
             if (!readable.Views(root!.TangentId)) continue;
-            // Someone else's Posts past the mark: no more than the follow counted since the reader last caught up, which
-            // leaves out their own.
+            // What the follow counted since the reader last caught up, which leaves out their own Posts, less those of them
+            // already for the reader; and no more than the Posts past the mark, less all of those.
             var (isNew, count) = InTopic(root, marks.TryGetValue(root.Id, out var mark) ? mark : null);
-            long? left = count is { } all ? Math.Min(all, row.Count) - already.GetValueOrDefault(root.Id) : null;
+            var arrived = already[root.Id].ToList();
+            long? left = count is { } all ? Math.Min(all - arrived.Count, row.Count - arrived.Count(seq => seq > row.CaughtSeq)) : null;
             if (isNew && left is null or > 0) shown.Add(new Followed(root, left));
         }
 
@@ -196,12 +199,12 @@ public sealed class Unread
     /// <summary>What reached the reader before the log's sequence <paramref name="before"/> and is no longer new to them,
     /// newest first: a reply to them, a Topic taken from their Post, a mention of them, a report, their Post someone else
     /// edited or removed, read from the ranges <see cref="Reaching"/> reads, at most <see cref="OlderLimit"/> of each and one
-    /// more. Where one came back full, the page holds only what lies past the last row of the fullest, and
-    /// <see cref="Past.Next"/> is where the page before it begins; what is still new, which the door shows, is left out, so a
-    /// page may hold less, or nothing, while more lies behind it. A row someone else made that reaches them, whose Post and
-    /// root stand, or a removal; a mention once, and not where its Post arrived for them on the same page. What capability
-    /// reads for the Tangents the rows name, and one keyed read each of their Posts and of the reader's marks on the Topics
-    /// of those past the floor.</summary>
+    /// more. Where one came back full, the page holds only what lies past the last row of the fullest; it holds at most
+    /// <see cref="OlderLimit"/> in all, the newest; and <see cref="Past.Next"/> is where the page before it begins. What is
+    /// still new, which the door shows, is left out, so a page may hold less, or nothing, while more lies behind it. A row
+    /// someone else made that reaches them, whose Post and root stand, or a removal; a mention once, and not where its Post
+    /// arrived for them on the same page. What capability reads for the Tangents the rows name, and one keyed read each of
+    /// their Posts and of the reader's marks on the Topics of those past the floor.</summary>
     public async Task<Past> Earlier(long before, CancellationToken ct)
     {
         var readable = new Readable(Reader.Id);
@@ -223,7 +226,9 @@ public sealed class Unread
             .ToList();
         var arrived = kept.Where(row => row.Kind == EventKind.PostCreated).Select(row => row.PostId).OfType<string>().ToHashSet(StringComparer.Ordinal);
         kept.RemoveAll(row => row.Kind == EventKind.Mention && arrived.Contains(row.PostId!));
-        return new Past(kept, cutoff > 0 ? cutoff + 1 : null, posts);
+        if (kept.Count <= OlderLimit) return new Past(kept, cutoff > 0 ? cutoff + 1 : null, posts);
+        // More than a page of it, from the ranges together: the page before begins at the first left out.
+        return new Past(kept[..OlderLimit], kept[OlderLimit].Seq + 1, posts);
     }
 
     /// <summary>The Post version a mention was written with, which one mention of the reader stands for.</summary>

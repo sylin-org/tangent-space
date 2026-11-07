@@ -22,7 +22,7 @@ public sealed class FollowTests
     private static async Task<JsonElement> Door(Browser session) => (await Send(session.Client, HttpMethod.Get, "/", json: true)).Json;
 
     private static JsonElement[] Following(JsonElement door)
-        => door.GetProperty("news").TryGetProperty("following", out var following) && following.ValueKind == JsonValueKind.Array ? [.. following.EnumerateArray()] : [];
+        => [.. door.GetProperty("news").GetProperty("following").GetProperty("topics").EnumerateArray()];
 
     private static async Task<Post> Answered(Post root, string author, string body, Post parent)
         => Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), root.Id, body, author, parent.Id).Send(Cancellation)).Result;
@@ -67,6 +67,60 @@ public sealed class FollowTests
         Assert.False((await Follow.Get(Follow.Key(Ada, root.Id), Cancellation))!.On);
         await Answered(root, Cy, "Five it is.", bea);
         Assert.Empty(Following(await Door(ada)));
+    }
+
+    [Fact]
+    public async Task A_topic_followed_again_counts_what_came_after_though_a_reply_before_it_is_already_for_the_follower()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        await Given.AParticipant(tangentSpace, Cy, [Roles.Member], ct: Cancellation);
+        var root = await Started(Ada, "Lanterns", "Who lights theirs first?");
+        Assert.IsType<Outcome<Follow>.Done>(await new FollowTopic(Ada, root.Id, false).Send(Cancellation));
+        var bea = await Replied(root, Bea, "I do, at six.");
+        Assert.IsType<Outcome<Follow>.Done>(await new FollowTopic(Ada, root.Id).Send(Cancellation));
+        await Answered(root, Cy, "Six is late.", bea);
+        using var ada = await SignedIn(tangentSpace, Ada);
+
+        // Bea's reply came before Ada followed again and is under replies; Cy's, after it, under the Topic, each once.
+        var door = await Door(ada);
+        var followed = Assert.Single(Following(door));
+        Assert.Equal((root.Id, 1L), (followed.GetProperty("topicId").GetString(), followed.GetProperty("new").GetInt64()));
+        Assert.Equal((1, 2), (door.GetProperty("news").GetProperty("replies").GetProperty("count").GetInt32(), door.GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32()));
+
+        // Her own answer to Bea, written before she read the Topic, is nothing new to her: Cy's alone is.
+        await Answered(root, Ada, "Six is fine by me.", bea);
+        Assert.Equal(1L, Assert.Single(Following(await Door(ada))).GetProperty("new").GetInt64());
+    }
+
+    [Fact]
+    public async Task Past_five_followed_topics_the_door_draws_five_and_opens_the_rest_in_place()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        var roots = new List<Post>();
+        for (var number = 1; number <= 6; number++)
+        {
+            var root = await Started(Bea, "Lantern " + number, "Who lights this one?");
+            await Replied(root, Ada, "I do.");
+            await Replied(root, Mo, "Me too.");
+            roots.Add(root);
+        }
+        using var ada = await SignedIn(tangentSpace, Ada);
+
+        var following = (await Door(ada)).GetProperty("news").GetProperty("following");
+        Assert.Equal((6, false), (following.GetProperty("count").GetInt32(), following.GetProperty("atLeast").GetBoolean()));
+        var newest = Enumerable.Reverse(roots).ToList();
+        Assert.Equal(newest.Select(root => root.Id), Following(await Door(ada)).Select(topic => topic.GetProperty("topicId").GetString()));
+
+        // The newest five are links under the heading; the oldest waits behind one line, which opens it in place.
+        var html = (await Send(ada.Client, HttpMethod.Get, "/")).Body;
+        Assert.Contains("new in 6 topics you follow", html);
+        var heading = html.IndexOf("Topics you follow · 6", StringComparison.Ordinal);
+        var line = html.IndexOf("<details class=\"door-news-more\"><summary>and 1 more</summary>", heading, StringComparison.Ordinal);
+        Assert.True(heading > 0 && line > heading, "The Topics followed have no line of the rest.");
+        Assert.All(newest.Take(Space.Door.Group.Drawn), root => Assert.InRange(html.IndexOf(TopicPath(root) + "\"", heading, StringComparison.Ordinal), heading, line));
+        Assert.True(html.IndexOf(TopicPath(newest[^1]) + "\"", heading, StringComparison.Ordinal) > line);
     }
 
     [Fact]

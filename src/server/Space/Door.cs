@@ -179,7 +179,7 @@ public sealed record Door(
         Decision? Declined = null,
         Waiting? Applications = null,
         IReadOnlyList<Let>? Let = null,
-        IReadOnlyList<Followed>? Following = null,
+        Follows? Following = null,
         string? Older = null) : IPart
     {
         /// <summary>Whether nothing is new to the reader, so nothing is counted for them either.</summary>
@@ -188,6 +188,12 @@ public sealed record Door(
                              && (Edited?.Count ?? 0) == 0 && (Removed?.Count ?? 0) == 0 && (Reports?.Count ?? 0) == 0 && Applications is null
                              && (Let?.Count ?? 0) == 0 && (Following?.Count ?? 0) == 0;
     }
+
+    /// <summary>The Topics the reader follows that hold Posts new to them that nothing else in the news holds: how many,
+    /// whether that is a lower bound because a read the door made was full, and every one of them the door read, newest
+    /// first, at most <see cref="Events.Unread.CountLimit"/>. The page draws the first <see cref="Group.Drawn"/> and the
+    /// rest behind one line that says how many more, as it draws a <see cref="Group"/>.</summary>
+    public sealed record Follows(int Count, bool AtLeast, IReadOnlyList<Followed> Topics);
 
     /// <summary>A Topic the reader follows that holds Posts new to them: its title, its Tangent's name, its address, and how
     /// many of its new Posts nothing else in the news holds, absent where they never read it.</summary>

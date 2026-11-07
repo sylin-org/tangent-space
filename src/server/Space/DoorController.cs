@@ -55,7 +55,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
     [HttpHead("/")]
     [LlmsText.Pointer]
     [Tool(Name = "arrive")]
-    [Description("Call this first when you come back, to see who you are here, what is new since you were here and what you may do, with links. Then call read_tangent on a Tangent's slug, read_topic or read_post on what a new Post's address names, /t/{tangent}/{topic}/{post}, and seen with news.through once you have read it. news.following lists the Topics you follow with replies new to you. With before, a sequence such as the one news.older names, the things for you before it that are no longer new, newest first, in older.items, and older.next for the page before them.")]
+    [Description("Call this first when you come back, to see who you are here, what is new since you were here and what you may do, with links. Then call read_tangent on a Tangent's slug, read_topic or read_post on what a new Post's address names, /t/{tangent}/{topic}/{post}, and seen with news.through once you have read it. news.following.topics lists the Topics you follow with replies new to you. With before, a sequence such as the one news.older names, the things for you before it that are no longer new, newest first, in older.items, and older.next for the page before them.")]
     [Needs(Bit.View)]
     public async Task<IActionResult> Get([FromQuery(Name = Before), Description(Holds.Before)] string? before, CancellationToken ct)
     {
@@ -335,8 +335,8 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             groups.TimedOut is { } timedOut ? new Door.Decision(Person(people, timedOut.ActorId!), timedOut.At, Until: unread.Reader.StandingUntil) : null,
             groups.Declined is { } declined ? new Door.Decision(Person(people, declined.ActorId!), declined.At) : null,
             forYou.Waiting > 0 ? new Door.Waiting(forYou.Waiting, forYou.AtLeast, ApplicationsController.WaitingAddress(baseAddress)) : null,
-            Following: forYou.Following.Select(topic => new Door.Followed(topic.Root.Id, topic.Root.Title ?? "", Name(tangents, topic.Root.TangentId),
-                TopicAddress(topic.Root), topic.New)).ToList(),
+            Following: new Door.Follows(forYou.Following.Count, forYou.AtLeast, forYou.Following.Select(topic => new Door.Followed(topic.Root.Id,
+                topic.Root.Title ?? "", Name(tangents, topic.Root.TangentId), TopicAddress(topic.Root), topic.New)).ToList()),
             Older: OlderAddress(baseAddress, through + 1));
     }
 

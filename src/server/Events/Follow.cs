@@ -10,8 +10,8 @@ namespace Tangent.Events;
 /// <summary>A participant's choice that a Topic's new replies are for them, keyed by participant and Topic. <see cref="On"/>
 /// says whether they follow it: a row that says false records that they stopped, so writing in it again does not follow it
 /// again. What the writes compile, so the door reads it as one range: <see cref="Count"/>, how many Posts someone else wrote
-/// in the Topic since the participant last caught up with it, <see cref="New"/> while there are some, and
-/// <see cref="LastLogSeq"/>, the Topic's newest Post's place in the log. Writing in a Topic follows it (<see cref="Wrote"/>);
+/// in the Topic since the participant last caught up with it, at <see cref="CaughtSeq"/> in the log, <see cref="New"/> while
+/// there are some, and <see cref="LastLogSeq"/>, the Topic's newest Post's place in the log. Writing in a Topic follows it (<see cref="Wrote"/>);
 /// every reply raises its other followers (<see cref="Moved"/>); reading it lowers their own (<see cref="Read"/>), and so
 /// does saying the door seen (<see cref="Caught"/>). It is apart from a checkpoint and moves no position. It names no
 /// Tangent: the root says where the Topic is.</summary>
@@ -39,6 +39,10 @@ public sealed class Follow : Entity<Follow>
 
     public long Count { get; set; }
 
+    /// <summary>The Topic's newest Post's place in the log when the participant last caught up with it, or chose to follow
+    /// it: <see cref="Count"/> counts only Posts past it.</summary>
+    public long CaughtSeq { get; set; }
+
     /// <summary>The row that says whether <paramref name="participantId"/> follows the Topic of <paramref name="root"/>,
     /// with nothing new.</summary>
     public static Follow Of(string participantId, Post root, bool on) => new()
@@ -47,7 +51,8 @@ public sealed class Follow : Entity<Follow>
         ParticipantId = participantId,
         TopicId = root.Id,
         On = on,
-        LastLogSeq = root.LastLogSeq
+        LastLogSeq = root.LastLogSeq,
+        CaughtSeq = root.LastLogSeq
     };
 
     /// <summary>Inside the command that wrote in the Topic of <paramref name="root"/>: its writer follows it where they never
@@ -57,7 +62,7 @@ public sealed class Follow : Entity<Follow>
     {
         var row = await Get(Key(authorId, root.Id), ct);
         if (row is null) await Of(authorId, root, true).Save(ct);
-        else if (caughtUp && row.New) await row.Lowered(0, ct);
+        else if (caughtUp && row.New) await row.Lowered(0, root, ct);
     }
 
     /// <summary>Inside the command that wrote a reply in the Topic of <paramref name="root"/>: each of its followers but its
@@ -88,7 +93,7 @@ public sealed class Follow : Entity<Follow>
     /// past the mark. One keyed read.</summary>
     public static async Task Read(string participantId, Post root, long through, CancellationToken ct)
     {
-        if (await Get(Key(participantId, root.Id), ct) is { New: true } row) await row.Lowered(Math.Max(0, root.LastSequence - through), ct);
+        if (await Get(Key(participantId, root.Id), ct) is { New: true } row) await row.Lowered(Math.Max(0, root.LastSequence - through), root, ct);
     }
 
     /// <summary>Inside the command that said the door seen through <paramref name="through"/>: nothing is new for
@@ -104,6 +109,7 @@ public sealed class Follow : Entity<Follow>
             {
                 row.Count = 0;
                 row.New = false;
+                row.CaughtSeq = row.LastLogSeq;
             }
 
             if (rows.Count > 0) await rows.Save(ct);
@@ -129,12 +135,14 @@ public sealed class Follow : Entity<Follow>
         => Query(f => f.ParticipantId == participantId && f.New && f.LastLogSeq > floor,
             new QueryDefinition { Page = 1, PageSize = size }.WithSort<Follow>(sort => sort.OrderByDescending(f => f.LastLogSeq)), ct);
 
-    /// <summary>Saves the row with at most <paramref name="left"/> Posts new to them, where that lowers it.</summary>
-    private async Task Lowered(long left, CancellationToken ct)
+    /// <summary>Saves the row with at most <paramref name="left"/> Posts new to them, where that lowers it, caught up at the
+    /// newest Post of <paramref name="root"/> where none is left.</summary>
+    private async Task Lowered(long left, Post root, CancellationToken ct)
     {
         if (left >= Count) return;
         Count = left;
         New = left > 0;
+        if (!New) CaughtSeq = root.LastLogSeq;
         await this.Save(ct);
     }
 }

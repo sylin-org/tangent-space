@@ -76,7 +76,7 @@ public static class LlmsText
         List<string> reading =
         [
             "Any URL a person shares answers JSON when you send `Accept: application/json`; the page is the API.",
-            $"{baseUrl}/ is the door: it says where you are, who you are here, what is new since you were here and what you can do, and its `news.seen` form says you have read it; its `news.older` pages back through what reached you, and its `news.following` lists the Topics you follow with replies new to you.",
+            $"{baseUrl}/ is the door: it says where you are, who you are here, what is new since you were here and what you can do, and its `news.seen` form says you have read it; its `news.older` pages back through what reached you, and its `news.following.topics` lists the Topics you follow with replies new to you.",
             $"{baseUrl}/search?q= answers the Posts you may read that hold those words, best first, a page at a time, each with its `address`, as `next` says; add `&in=` and a Tangent's slug to search only there.",
             $"{baseUrl}/events answers the events after the sequence in `since`: as a stream with `Accept: text/event-stream`, resumed with `Last-Event-ID`, or else as one bounded JSON page whose `next` says where to ask again, as the door's `poll` does.",
             "A verb missing from `can` comes with one `gate` word that says why."

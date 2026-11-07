@@ -49,7 +49,7 @@ public sealed class QuietTests
         await Replied(beas, Ada, "On the hill.");
         await Replied(beas, Mo, "On the beach.");
         door = await Door(ada);
-        Assert.Equal(beas.Id, Assert.Single(door.GetProperty("news").GetProperty("following").EnumerateArray()).GetProperty("topicId").GetString());
+        Assert.Equal(beas.Id, Assert.Single(door.GetProperty("news").GetProperty("following").GetProperty("topics").EnumerateArray()).GetProperty("topicId").GetString());
 
         // Through the tool, it counts again.
         using (var tools = await ToolClient.Connect(tangentSpace, ada))

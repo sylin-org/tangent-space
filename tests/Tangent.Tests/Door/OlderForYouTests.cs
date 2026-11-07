@@ -90,4 +90,32 @@ public sealed class OlderForYouTests
         var paged = Items(first).Concat(Items(then)).Select(item => item.GetProperty("post").GetProperty("postId").GetString()!).ToList();
         Assert.Equal(Enumerable.Reverse(replies).ToList(), paged);
     }
+
+    [Fact]
+    public async Task Replies_and_reports_read_together_page_back_twenty_at_a_time_in_all_each_on_exactly_one_page()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateModeratorsTangent().Send(Cancellation));
+        var root = await Started(Mo, "Lanterns", "Who lights theirs first?");
+        var reached = new List<string>();
+        for (var number = 1; number <= 25; number++)
+        {
+            var reply = await Replied(root, Bea, "Reply " + number + ".");
+            var report = Assert.IsType<Outcome<Post>.Done>(await new ReportPost(Tids.Mint(), reply.Id, PostBody.Of("Reason " + number + "."), Ada).Send(Cancellation)).Result;
+            reached.AddRange([reply.Id, report.Id]);
+        }
+        using var mo = await SignedIn(tangentSpace, Mo);
+        Assert.IsType<Outcome<Checkpoint>.Done>(await new Seen(Mo, (await Door(mo)).GetProperty("news").GetProperty("through").GetInt64()).Send(Cancellation));
+
+        var pages = new List<JsonElement[]>();
+        for (var path = Older(await Door(mo)); path is not null && pages.Count < 4;)
+        {
+            var page = await Door(mo, path);
+            pages.Add(Items(page));
+            path = page.GetProperty("older").TryGetProperty("next", out var next) && next.ValueKind == JsonValueKind.String ? new Uri(next.GetString()!).PathAndQuery : null;
+        }
+        Assert.Equal([Unread.OlderLimit, Unread.OlderLimit, 10], pages.Select(page => page.Length).ToList());
+        Assert.Equal(Enumerable.Reverse(reached).ToList(), pages.SelectMany(page => page).Select(item => item.GetProperty("post").GetProperty("postId").GetString()!).ToList());
+    }
 }

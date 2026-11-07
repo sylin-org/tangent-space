@@ -64,13 +64,7 @@ else
         @Group("Reports", Model.Reports)
         @if (Model.Following is { Count: > 0 } following)
         {
-            <h3 class="rail-heading rail-heading-spaced">Topics you follow · @following.Count.ToString(CultureInfo.InvariantCulture)</h3>
-            <ul class="rail-views list">
-                @foreach (var topic in following)
-                {
-                    <li @key="topic.TopicId"><a href="@topic.Address">@topic.Title</a> <span class="badge is-new">@(topic.New is { } count ? count.ToString(CultureInfo.InvariantCulture) + " new" : "new")</span> <span class="topic-row-none">@topic.Tangent</span></li>
-                }
-            </ul>
+            @Cut("Topics you follow", following.Count, following.AtLeast, following.Topics, Followed)
         }
         @Group("New articles", Model.Articles)
         @if (Model.PerTangent.Count > 0)
@@ -90,21 +84,26 @@ else
 @code {
     [Parameter, EditorRequired] public Space.Door.Since Model { get; set; } = default!;
 
-    /// <summary>One group of new Posts under its heading, with how many, each a row, its verb said where someone did something
-    /// to the reader's own: the first few, then the rest behind one line that says how many more, which opens them in
-    /// place.</summary>
+    /// <summary>One group of new Posts under its heading, each a row, its verb said where someone did something to the
+    /// reader's own (<see cref="Cut"/>).</summary>
     private RenderFragment Group(string title, Space.Door.Group? group, string? did = null) => @<text>
         @if (group is { Count: > 0 })
         {
-            <h3 class="rail-heading rail-heading-spaced">@title · @((group.AtLeast ? "at least " : "") + group.Count.ToString(CultureInfo.InvariantCulture))</h3>
-            @Rows(group.Posts.Take(Space.Door.Group.Drawn), did)
-            @if (group.Posts.Count > Space.Door.Group.Drawn)
-            {
-                <details class="door-news-more">
-                    <summary>@("and " + (group.Posts.Count - Space.Door.Group.Drawn).ToString(CultureInfo.InvariantCulture) + " more")</summary>
-                    @Rows(group.Posts.Skip(Space.Door.Group.Drawn), did)
-                </details>
-            }
+            @Cut(title, group.Count, group.AtLeast, group.Posts, posts => Rows(posts, did))
+        }
+    </text>;
+
+    /// <summary>One kind of news under its heading, with how many, "at least" where that is a lower bound: its first few
+    /// rows, then the rest behind one line that says how many more, which opens them in place.</summary>
+    private RenderFragment Cut<T>(string title, int count, bool atLeast, IReadOnlyList<T> items, Func<IEnumerable<T>, RenderFragment> rows) => @<text>
+        <h3 class="rail-heading rail-heading-spaced">@title · @((atLeast ? "at least " : "") + count.ToString(CultureInfo.InvariantCulture))</h3>
+        @rows(items.Take(Space.Door.Group.Drawn))
+        @if (items.Count > Space.Door.Group.Drawn)
+        {
+            <details class="door-news-more">
+                <summary>@("and " + (items.Count - Space.Door.Group.Drawn).ToString(CultureInfo.InvariantCulture) + " more")</summary>
+                @rows(items.Skip(Space.Door.Group.Drawn))
+            </details>
         }
     </text>;
 
@@ -112,6 +111,14 @@ else
         @foreach (var post in posts)
         {
             <li @key="post.PostId"><Draw Part="@(did is null ? post : post with { Did = did })" /></li>
+        }
+    </ul>;
+
+    /// <summary>Followed Topics, each a link with what is new in it and its Tangent.</summary>
+    private RenderFragment Followed(IEnumerable<Space.Door.Followed> topics) => @<ul class="rail-views list">
+        @foreach (var topic in topics)
+        {
+            <li @key="topic.TopicId"><a href="@topic.Address">@topic.Title</a> <span class="badge is-new">@(topic.New is { } count ? count.ToString(CultureInfo.InvariantCulture) + " new" : "new")</span> <span class="topic-row-none">@topic.Tangent</span></li>
         }
     </ul>;
 
@@ -160,7 +167,7 @@ else
             if (news.Mentions.Count > 0) parts.Add(Wording.Count(news.Mentions.Count, news.Mentions.AtLeast, "mention", "mentions") + " of you");
             if (news.Taken is { Count: > 0 } taken) parts.Add(Wording.Count(taken.Count, taken.AtLeast, "topic", "topics") + " taken on a tangent from your posts");
             if (news.Reports is { Count: > 0 } reports) parts.Add(Wording.Count(reports.Count, reports.AtLeast, "report", "reports"));
-            if (news.Following is { Count: > 0 } following) parts.Add("new in " + Wording.Count(following.Count, false, "topic you follow", "topics you follow"));
+            if (news.Following is { Count: > 0 } following) parts.Add("new in " + Wording.Count(following.Count, following.AtLeast, "topic you follow", "topics you follow"));
             if (news.Applications is { } applications) parts.Add(Wording.Count(applications.Count, applications.AtLeast, "new application", "new applications"));
             foreach (var tangent in news.PerTangent.Where(tangent => tangent.Others > 0))
                 parts.Add(Wording.Count(tangent.Others, tangent.AtLeast, "new post", "new posts") + " in " + tangent.Name);
