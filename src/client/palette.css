@@ -3,9 +3,10 @@
  * or with no data-theme when the device prefers dark (System, the default choice). The place's accent is chosen with
  * data-accent="gold|jade|iris|copper" on <html>; the derived tones (accent-line, accent-soft, selection) follow it.
  * Ink is written twice because one block answers the explicit choice and the other the device under System; the token
- * parity test holds both to the reference; the place's first four tokens follow from these (tokens.css). A bundled
- * base's own palette (bases/<name>.palette.css) takes this file's
- * place when the palette is left to the base. */
+ * parity test holds both to the reference; the place's first four tokens follow from these (tokens.css), and the
+ * place's publication reads Paper's from this file as it is served, so each stays a hex colour or a var() of another
+ * token (FirstFour). A bundled base's own palette (bases/<name>.palette.css) takes this file's place when the palette
+ * is left to the base. */
 
 @layer palette {
 :root {

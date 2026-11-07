@@ -191,7 +191,8 @@ public static class Syndication
 
     /// <summary>The place as the proprietor's publication under the account <paramref name="did"/> they are bound to: put
     /// where it is missing, under someone else or another account, or says something else now. One under an earlier
-    /// account of theirs is withdrawn from it first, where its grant still lets the place.</summary>
+    /// account of theirs is withdrawn from it first, where its grant still lets the place. Its icon goes up for a mark
+    /// the record under this account has not carried, and the one it carries is named again otherwise.</summary>
     private static async Task<Publication> Placed(TangentSpace space, string did, Publication? publication, AtprotoAdapter adapter, JobContext context,
         CancellationToken ct)
     {
@@ -204,8 +205,14 @@ public static class Syndication
             publication = null;
         }
         var key = ours ? publication!.Key : Tid.Mint(DateTimeOffset.UtcNow);
-        var written = await adapter.Publish(space, did, key, ct);
-        var placed = new Publication { Proprietor = space.ProprietorId!, Did = did, Key = key, Uri = written.Uri, Cid = written.Cid, Fingerprint = fingerprint };
+        var mark = space.Appearance.Mark;
+        var icon = ours && publication!.Mark == mark ? publication.IconBlob() : await adapter.Icon(mark, did, ct);
+        var written = await adapter.Publish(space, did, key, icon, ct);
+        var placed = new Publication
+        {
+            Proprietor = space.ProprietorId!, Did = did, Key = key, Uri = written.Uri, Cid = written.Cid, Fingerprint = fingerprint,
+            Mark = mark, Icon = icon?.ToJsonString() ?? ""
+        };
         await Sent(new KeepPublication(placed), ct);
         return placed;
     }
