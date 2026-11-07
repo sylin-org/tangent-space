@@ -42,6 +42,8 @@ public sealed class LeaveTests
         var receipt = new Receipt { Id = Receipt.Key(Ada, root.Id), ConnectionId = Ada, PostId = root.Id, TangentId = Workshop, At = DateTimeOffset.UtcNow };
         Assert.IsType<Outcome<Receipt>.Done>(await new Store<Receipt>(receipt).Send(Cancellation));
         Assert.IsType<Outcome<Ask>.Done>(await new Store<Ask>(new Ask { Id = Ask.Key(Studio, Ada), TangentId = Studio, PersonId = Ada, AskedAt = DateTimeOffset.UtcNow }).Send(Cancellation));
+        // Writing in a Topic follows it, so Ada holds a follow to take with her.
+        Assert.NotEmpty(await Tangent.Events.Follow.Query(follow => follow.ParticipantId == Ada, Cancellation));
 
         using var ada = await SignedIn(tangentSpace, Ada);
         using var bea = await SignedIn(tangentSpace, Bea);
@@ -60,6 +62,7 @@ public sealed class LeaveTests
         Assert.False((await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json.TryGetProperty("who", out _));
         Assert.Null(await Participant.Get(Ada, Cancellation));
         Assert.Empty(await Checkpoint.Query(checkpoint => checkpoint.ParticipantId == Ada, Cancellation));
+        Assert.Empty(await Tangent.Events.Follow.Query(follow => follow.ParticipantId == Ada, Cancellation));
         Assert.Null(await Connection.Get(Ada, Cancellation));
         Assert.Null(await Ask.Get(Ask.Key(Studio, Ada), Cancellation));
         Assert.NotNull(await Receipt.Get(receipt.Id, Cancellation));
