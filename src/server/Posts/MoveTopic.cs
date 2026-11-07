@@ -12,8 +12,9 @@ namespace Tangent.Posts;
 /// its address where it stood becomes a <see cref="FormerAddress"/>, which forwards. Every Post of it, each Post's media uses
 /// and every row of the log about it, one range of <c>ix_event_topics</c>, take the new Tangent a page of
 /// <see cref="Tangents.DeleteTangent.PostPage"/> at a time, each read finding what the last left, so every reader of the log
-/// stays right and none changes; a row older than the new Tangent itself reaches no one there
-/// (<see cref="Capabilities.Owns"/>). The Tangent it leaves counts it no longer and pins it no more, the one it enters counts
+/// stays right and none changes; each row also takes where the new Tangent's own rows begin (<see cref="Event.Into"/>), so a
+/// row older than the new Tangent itself is still its own and reaches its readers (<see cref="Capabilities.Owns"/>). The
+/// Tangent it leaves counts it no longer and pins it no more, the one it enters counts
 /// it (<see cref="Tangents.Tangent.TopicWent"/>, <see cref="Tangents.Tangent.TopicCame"/>), and
 /// <see cref="EventKind.PostMoved"/> is appended last, in the new Tangent, targeting no one, which wakes the Connections, so an
 /// article's copy follows it. The Topic exists for the actor, who holds <see cref="Bit.View"/> in its Tangent, or the command
@@ -74,7 +75,7 @@ public sealed record MoveTopic(string TopicId, string To, string ActorId, DateTi
             var rows = await Event.Query(row => row.TopicId == root.Id && row.TangentId == from, new QueryDefinition { Page = 1, PageSize = EventPage }, ct);
             read = rows.Count;
             if (read == 0) break;
-            foreach (var row in rows) row.TangentId = To;
+            foreach (var row in rows) (row.TangentId, row.Into) = (To, target.LogSeq);
             await Event.UpsertMany(rows, ct);
         }
 

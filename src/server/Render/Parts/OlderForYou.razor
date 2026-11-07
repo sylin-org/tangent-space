@@ -1,6 +1,6 @@
 @* The door paged back: what reached the reader and is no longer new, newest first, each a row with what was done, then the
-   way back to what is new and to the page before. A page with nothing on it says why: nothing older at all, or only what
-   is still new, which the door shows. *@
+   way back to what is new and to the page before. A page with nothing on it says why: nothing older at all, only what is
+   still new, which the door shows, or nothing that is for them now, with older things further back. *@
 <section class="door-news" aria-labelledby="door-older-title">
     <div class="topic-list-head">
         <h2 id="door-older-title" class="topic-list-title">Older for you</h2>
@@ -16,11 +16,19 @@
     }
     else
     {
-        <Draw Part="@(new Render.Note(Model.Next is null ? "Nothing older for you." : "Everything here is still new to you, on your door; older things lie further back."))" />
+        <Draw Part="@(new Render.Note(Empty(Model)))" />
     }
     <Draw Part="@(new Render.Pager("For you", new Render.Onward("What is new", Model.Newest), Model.Next is { } next ? new Render.Onward("Older", next) : null))" />
 </section>
 
 @code {
     [Parameter, EditorRequired] public Space.DoorPast.Earlier Model { get; set; } = default!;
+
+    /// <summary>What a page with nothing on it says.</summary>
+    private static string Empty(Space.DoorPast.Earlier page) => page switch
+    {
+        { Next: null } => "Nothing older for you.",
+        { StillNew: true } => "Everything here is still new to you, on your door; older things lie further back.",
+        _ => "Nothing here is for you now; older things lie further back."
+    };
 }

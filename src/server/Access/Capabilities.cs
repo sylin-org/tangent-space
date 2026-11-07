@@ -117,14 +117,14 @@ public sealed class Capabilities
     public IReadOnlyList<string> Can => Bits.Names(Held);
 
     /// <summary>Where the Tangent's own rows of the log begin, from its row (<see cref="Tangents.Tangent.LogSeq"/>), as
-    /// <see cref="LoadEach"/> answers: a row of its slug before it belongs to a Tangent deleted before this one took the
-    /// slug. Past every row for a Tangent with no row of its own; zero for the place and wherever <see cref="LoadEach"/>
+    /// <see cref="LoadEach"/> answers: a row of its slug before it, that no move took into it, belongs to a Tangent deleted
+    /// before this one took the slug. Past every row for a Tangent with no row of its own; zero for the place and wherever <see cref="LoadEach"/>
     /// did not answer.</summary>
     public long Since { get; private init; }
 
-    /// <summary>Whether the row of the log at <paramref name="seq"/> that names this Tangent is one of its own
-    /// (<see cref="Since"/>).</summary>
-    public bool Owns(long seq) => seq >= Since;
+    /// <summary>Whether <paramref name="row"/>, a row of the log that names this Tangent, is one of its own: written since
+    /// the Tangent began (<see cref="Since"/>), or taken into it by a move of its Topic (<see cref="Events.Event.Into"/>).</summary>
+    public bool Owns(Events.Event row) => row.Seq >= Since || row.Into == Since;
 
     public bool Holds(Bit verb) => (Held & verb) == verb;
 

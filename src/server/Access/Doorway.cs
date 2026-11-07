@@ -12,11 +12,17 @@ namespace Tangent.Access;
 /// <summary>What a route needs of its reader: one bit, on what its address names. A route that declares it is judged by
 /// <see cref="Doorway.Judge"/> once, before anything is bound, and its action reads what the judgement found (<see cref="Here.Of"/>).
 /// <see cref="Participant"/> asks a signed-in participant besides, as a report does; <see cref="Outside"/> lets in someone outside a
-/// members-only Tangent they may join or ask to join, as the Tangent's own address does.</summary>
+/// members-only Tangent they may join or ask to join, as the Tangent's own address does; <see cref="Applicant"/> lets in an
+/// applicant a private place is closed to, as leaving does.</summary>
 public sealed class NeedsAttribute(Bit bit) : AccessAttribute<Bit>(bit)
 {
     /// <summary>Whether only a signed-in participant may: a visitor is told to sign in whatever the bit says.</summary>
     public bool Participant { get; init; }
+
+    /// <summary>Whether a participant a private place is closed to while their application waits or once it was declined
+    /// (<see cref="Capabilities.ApplyToRead"/>, <see cref="Capabilities.DeclinedToRead"/>) reaches the action, which acts on
+    /// them alone; every other bit is still judged, on the place.</summary>
+    public bool Applicant { get; init; }
 
     /// <summary>Whether a participant who does not read the Tangent the address names, and may join or ask to join it
     /// (<see cref="Tangents.Inside.Outside"/>), reaches the action, which answers them with its card (<see cref="Here.Outside"/>);
@@ -126,7 +132,8 @@ public sealed class Doorway : IAuthorizationProvider
     /// <summary>The address as it stands for <paramref name="personId"/> (<see cref="Here.Find"/>), and then each bit
     /// <paramref name="needs"/> names, on what the address names; <see cref="Bit.View"/> is the address's own, which finding it asked.
     /// A Tangent absent to a participant outside it who may join or ask to join is found where <paramref name="needs"/> lets them in
-    /// (<see cref="NeedsAttribute.Outside"/>).</summary>
+    /// (<see cref="NeedsAttribute.Outside"/>), and a private place closed to an applicant where it lets them in
+    /// (<see cref="NeedsAttribute.Applicant"/>).</summary>
     public static async Task<(Here Here, Reason? Refusal)> Judge(string? personId, IReadOnlyList<NeedsAttribute> needs, string? tangent, string? topic,
         string? post, CancellationToken ct)
     {
@@ -134,6 +141,9 @@ public sealed class Doorway : IAuthorizationProvider
         if (refusal == Capabilities.Absent && personId is not null && topic is null && here.Tangent is { } row && needs.Any(need => need.Outside)
             && await Tangents.Inside.Outside(row, personId, ct) is { } outside)
             (here, refusal) = (here with { Outside = outside }, null);
+        if ((refusal == Capabilities.ApplyToRead || refusal == Capabilities.DeclinedToRead) && personId is not null && tangent is null
+            && needs.Any(need => need.Applicant))
+            refusal = null;
         if (refusal is not null) return (here, refusal);
         if (personId is null && needs.Any(need => need.Participant)) return (here, Capabilities.SignIn);
         var on = here.Capabilities;

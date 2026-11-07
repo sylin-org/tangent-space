@@ -203,8 +203,8 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
     [HttpPost(LeavePath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "leave_place", Destructive = true, Idempotent = true, OpenWorld = true)]
-    [Description("Leave this Tangent Space for good: you are signed out everywhere, your roles, checkpoints, Connection and asks go, and the place's grant to write as the Bluesky account you hold now ends. Your Posts stay, each under the account you wrote it as, and read as someone who left. Signing in again later arrives anew. The operator cannot leave.")]
-    [Needs(Bit.View, Participant = true)]
+    [Description("Leave this Tangent Space for good: you are signed out everywhere, your roles, checkpoints, Connection and asks go, and the place's grant to write as the Bluesky account you hold now ends. Your Posts stay, each under the account you wrote it as, and read as someone who left. Signing in again later arrives anew. An applicant who leaves ends their application. The operator cannot leave.")]
+    [Needs(Bit.View, Participant = true, Applicant = true)]
     public async Task<IActionResult> Leave(CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";

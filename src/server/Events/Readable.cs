@@ -110,7 +110,7 @@ public sealed class Readable(string? participantId, TimeProvider? clock = null)
     /// <summary>What the reader holds on the Tangent <paramref name="row"/> names, where the row is one of its own; null
     /// otherwise.</summary>
     private Capabilities? Owned(Event row)
-        => row.TangentId is { } tangent && _tangents.TryGetValue(tangent, out var on) && on.Owns(row.Seq) ? on : null;
+        => row.TangentId is { } tangent && _tangents.TryGetValue(tangent, out var on) && on.Owns(row) ? on : null;
 
     /// <summary>Whether <paramref name="row"/> is an application: an arrival that left the newcomer applied.</summary>
     public static bool Application(Event row) => row is { Kind: EventKind.StandingChanged, Standing: Participants.Standing.Applied };

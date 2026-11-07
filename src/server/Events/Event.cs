@@ -30,6 +30,11 @@ public sealed class Event : Entity<Event>
 
     public string? TangentId { get; set; }
 
+    /// <summary>Where a move took the row (<see cref="Posts.MoveTopic"/>): the first row of the Tangent its Topic moved into
+    /// (<see cref="Tangents.Tangent.LogSeq"/>), so the row is that Tangent's own however long before it began
+    /// (<see cref="Access.Capabilities.Owns"/>); null on a row that never moved.</summary>
+    public long? Into { get; set; }
+
     /// <summary>The Topic a Post's row is about, by its root's Id. In <c>ix_event_topics</c> before the sequence, so one
     /// Topic's rows are one range, which a move takes to its new Tangent (<see cref="Posts.MoveTopic"/>).</summary>
     [Index(Name = "ix_event_topics", Order = 0)]

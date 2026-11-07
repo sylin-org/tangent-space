@@ -201,10 +201,12 @@ public sealed class Unread
     /// edited or removed, read from the ranges <see cref="Reaching"/> reads, at most <see cref="OlderLimit"/> of each and one
     /// more. Where one came back full, the page holds only what lies past the last row of the fullest; it holds at most
     /// <see cref="OlderLimit"/> in all, the newest; and <see cref="Past.Next"/> is where the page before it begins. What is
-    /// still new, which the door shows, is left out, so a page may hold less, or nothing, while more lies behind it. A row
-    /// someone else made that reaches them, whose Post and root stand, or a removal; a mention once, and not where its Post
-    /// arrived for them on the same page. What capability reads for the Tangents the rows name, and one keyed read each of
-    /// their Posts and of the reader's marks on the Topics of those past the floor.</summary>
+    /// still new, which the door shows, is left out, so a page may hold less, or nothing, while more lies behind it, and
+    /// <see cref="Past.StillNew"/> says whether it left any out. A row someone else made that reaches them, whose Post and
+    /// root stand; a removal only while its Post stays removed, and only the one that removed it (<see cref="Post.RemovedAt"/>),
+    /// so an undone removal leaves here as it leaves the door; a mention once, and not where its Post arrived for them on
+    /// the same page. What capability reads for the Tangents the rows name, and one keyed read each of their Posts and of
+    /// the reader's marks on the Topics of those past the floor.</summary>
     public async Task<Past> Earlier(long before, CancellationToken ct)
     {
         var readable = new Readable(Reader.Id);
@@ -219,16 +221,26 @@ public sealed class Unread
         var marks = await Marks(rows.Where(row => row.Seq > Floor && Arrival(row)).Select(row => row.TopicId).OfType<string>(), ct);
 
         var mentioned = new HashSet<string>(StringComparer.Ordinal);
-        var kept = rows.Where(row => posts.TryGetValue(row.PostId ?? "", out var post) && posts.TryGetValue(row.TopicId ?? "", out var root)
-                                     && (row.Kind == EventKind.PostRemoved || !post.Removed)
-                                     && !(row.Seq > Floor && (!Arrival(row) || post.Sequence > (marks.TryGetValue(root.Id, out var mark) ? mark : -1)))
-                                     && (row.Kind != EventKind.Mention || mentioned.Add(Mentioned(row))))
-            .ToList();
+        var kept = new List<Event>(rows.Count);
+        var stillNew = false;
+        foreach (var row in rows)
+        {
+            if (!posts.TryGetValue(row.PostId ?? "", out var post) || !posts.TryGetValue(row.TopicId ?? "", out var root)) continue;
+            if (row.Kind == EventKind.PostRemoved ? !post.Removed || row.At != post.RemovedAt : post.Removed) continue;
+            if (row.Seq > Floor && (!Arrival(row) || post.Sequence > (marks.TryGetValue(root.Id, out var mark) ? mark : -1)))
+            {
+                stillNew = true;
+                continue;
+            }
+
+            if (row.Kind != EventKind.Mention || mentioned.Add(Mentioned(row))) kept.Add(row);
+        }
+
         var arrived = kept.Where(row => row.Kind == EventKind.PostCreated).Select(row => row.PostId).OfType<string>().ToHashSet(StringComparer.Ordinal);
         kept.RemoveAll(row => row.Kind == EventKind.Mention && arrived.Contains(row.PostId!));
-        if (kept.Count <= OlderLimit) return new Past(kept, cutoff > 0 ? cutoff + 1 : null, posts);
+        if (kept.Count <= OlderLimit) return new Past(kept, cutoff > 0 ? cutoff + 1 : null, posts, stillNew);
         // More than a page of it, from the ranges together: the page before begins at the first left out.
-        return new Past(kept[..OlderLimit], kept[OlderLimit].Seq + 1, posts);
+        return new Past(kept[..OlderLimit], kept[OlderLimit].Seq + 1, posts, stillNew);
     }
 
     /// <summary>The Post version a mention was written with, which one mention of the reader stands for.</summary>
@@ -276,8 +288,9 @@ public sealed class Unread
     public sealed record Followed(Post Root, long? New);
 
     /// <summary>One page of what reached the reader and is no longer new to them (<see cref="Earlier"/>): its rows, newest
-    /// first, where the page before it begins, null where nothing lies behind it, and the Posts the rows name, by Id.</summary>
-    public sealed record Past(IReadOnlyList<Event> Rows, long? Next, IReadOnlyDictionary<string, Post> Posts);
+    /// first, where the page before it begins, null where nothing lies behind it, the Posts the rows name, by Id, and whether
+    /// it left out something that reached them and is still new, which the door shows.</summary>
+    public sealed record Past(IReadOnlyList<Event> Rows, long? Next, IReadOnlyDictionary<string, Post> Posts, bool StillNew);
 
     /// <summary>The masthead's count: how many things are for the reader and new to them, a lower bound where
     /// <see cref="AtLeast"/>, and the door, where they are read. <see cref="Through"/> is the newest of them, past which

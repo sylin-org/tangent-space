@@ -33,9 +33,10 @@ public sealed record DoorPast(
 
     /// <summary>One page of what reached the reader and is no longer new: each thing as its <see cref="Item.Kind"/> says it —
     /// <c>reply</c>, <c>taken</c>, <c>mention</c>, <c>report</c>, <c>edited</c> or <c>removed</c> — with its Post, newest
-    /// first; <see cref="Next"/>, the door's address of the page before it, absent where nothing lies behind it; and
-    /// <see cref="Newest"/>, the door, where what is new is read.</summary>
-    public sealed record Earlier(IReadOnlyList<Item> Items, string? Next, string Newest) : IPart;
+    /// first; <see cref="Next"/>, the door's address of the page before it, absent where nothing lies behind it;
+    /// <see cref="Newest"/>, the door, where what is new is read; and <see cref="StillNew"/>, whether the page left out
+    /// something still new to them, which the door shows.</summary>
+    public sealed record Earlier(IReadOnlyList<Item> Items, string? Next, string Newest, bool StillNew = false) : IPart;
 
     /// <summary>One thing that reached the reader: what it is, and its Post as the door's news draws one.</summary>
     public sealed record Item(string Kind, Door.NewPost Post);

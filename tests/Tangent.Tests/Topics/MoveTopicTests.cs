@@ -165,6 +165,35 @@ public sealed class MoveTopicTests
         Assert.Equal(BaseUrl + "/t/" + Backroom + "/" + root.Slug, (await Send(mo.Client, HttpMethod.Get, TopicPath(root))).Location);
     }
 
+    [Fact]
+    public async Task A_topic_moved_into_a_tangent_made_after_it_keeps_what_reached_its_readers_new_and_older()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Moving(tangentSpace);
+        var leo = Persona.Id("leo4moves");
+        await Given.AParticipant(tangentSpace, leo, [Roles.Administrator], ct: Cancellation);
+        var root = await Started(Ada, "Lanterns", "Mine hangs by the door.");
+        var read = await Replied(root, Bea, "Mine by the window.");
+        var unread = await Replied(root, Bea, "And one by the gate.");
+        Assert.IsType<Outcome<Checkpoint>.Done>(await new Seen(Ada, read.Sequence, root.Id).Send(Cancellation));
+        // The archive begins in the log after every row of the Topic.
+        var archive = Assert.IsType<Outcome<Tangents.Tangent>.Done>(
+            await new CreateTangent("archive", "Archive", "", PostKind.Topic, 3, Audience.Public, leo).Send(Cancellation)).Result;
+        Assert.All(await Event.Query(row => row.TopicId == root.Id, Cancellation), row => Assert.True(row.Seq < archive.LogSeq));
+
+        Assert.IsType<Outcome<Post>.Done>(await new MoveTopic(root.Id, archive.Id, Mo).Send(Cancellation));
+
+        var ada = await Unread.Of((await Participants.Participant.Get(Ada, Cancellation))!, Cancellation);
+        Assert.Contains((await ada.ForYouNow(Cancellation)).Rows, row => row.PostId == unread.Id);
+        Assert.Contains((await ada.Earlier(long.MaxValue, Cancellation)).Rows, row => row.PostId == read.Id);
+        // Deleted with the Topic, the archive leaves its rows to no one, and none to a Tangent that takes its slug later.
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new DeleteTangent(archive.Id, leo, Topics: 1).Send(Cancellation));
+        var again = Assert.IsType<Outcome<Tangents.Tangent>.Done>(
+            await new CreateTangent("archive", "Archive", "", PostKind.Topic, 3, Audience.Public, leo).Send(Cancellation)).Result;
+        var anew = (await Capabilities.LoadEach(Ada, [again.Id], Cancellation))[again.Id];
+        Assert.All(await Event.Query(row => row.TopicId == root.Id, Cancellation), row => Assert.False(anew.Owns(row)));
+    }
+
     /// <summary>The place of the write verbs, with the porch, a public Tangent of discussions, and the backroom, a private one
     /// its moderators read.</summary>
     private static async Task Moving(TangentSpaceFixture tangentSpace)

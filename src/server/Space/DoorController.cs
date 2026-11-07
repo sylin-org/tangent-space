@@ -84,8 +84,9 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
         var each = new Dictionary<string, Capabilities>(page.Each, StringComparer.Ordinal);
         foreach (var (id, on) in await Capabilities.LoadEach(personId, tangentIds, ct)) each[id] = on;
         bool Viewable(string? tangentId) => tangentId is not null && each.TryGetValue(tangentId, out var on) && on.Exists;
-        // A row of a Tangent's slug from before that Tangent took it is a deleted Tangent's, which reaches no one.
-        bool Reached(Event e) => Viewable(e.TangentId) && each[e.TangentId!].Owns(e.Seq);
+        // A row of a Tangent's slug from before that Tangent took it, that no move took into it, is a deleted Tangent's,
+        // which reaches no one.
+        bool Reached(Event e) => Viewable(e.TangentId) && each[e.TangentId!].Owns(e);
         var tangents = await BySlug(page.Tangents, tangentIds.Where(Viewable).ToList(), ct);
         // The moderators' Tangent comes after every other, so past the first page of a long list; whoever may view it
         // finds it on the door whatever the place holds.
@@ -392,7 +393,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
                 TangentSpaceSettingsController.Entry(place, baseAddress),
                 new Unread.Badge(forYou.Count, forYou.AtLeast, door, forYou.Through, forYou.Applications)),
             DateOnly.FromDateTime(DateTime.UtcNow),
-            new DoorPast.Earlier(items, past.Next is { } next ? OlderAddress(baseAddress, next) : null, door)));
+            new DoorPast.Earlier(items, past.Next is { } next ? OlderAddress(baseAddress, next) : null, door, past.StillNew)));
     }
 
     /// <summary>The name each role these changes name holds now, by key, in one keyed read; a role since deleted has

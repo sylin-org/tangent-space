@@ -72,6 +72,55 @@ public sealed class OlderForYouTests
     }
 
     [Fact]
+    public async Task A_removal_pages_back_while_its_post_stays_removed_and_only_the_one_that_removed_it()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        var root = await Started(Ada, "Lanterns", "Who lights theirs first?");
+        var reply = await Replied(root, Bea, "I do, at six.");
+        using var bea = await SignedIn(tangentSpace, Bea);
+        async Task<List<string?>> Removals()
+        {
+            var door = await Door(bea);
+            Assert.IsType<Outcome<Checkpoint>.Done>(await new Seen(Bea, door.GetProperty("news").GetProperty("through").GetInt64()).Send(Cancellation));
+            return Items(await Door(bea, Older(await Door(bea)))).Where(item => item.GetProperty("kind").GetString() == "removed")
+                .Select(item => item.GetProperty("post").GetProperty("postId").GetString()).ToList();
+        }
+
+        Assert.IsType<Outcome<Post>.Done>(await new RemovePost(reply.Id, Mo).Send(Cancellation));
+        Assert.Equal([reply.Id], await Removals());
+
+        // Undone, the removal's line leaves her older things as it leaves her door.
+        Assert.IsType<Outcome<Post>.Done>(await new UndoRemoval(reply.Id, Mo).Send(Cancellation));
+        Assert.Empty(await Removals());
+
+        // Removed again, one line, the removal that stands.
+        Assert.IsType<Outcome<Post>.Done>(await new RemovePost(reply.Id, Mo).Send(Cancellation));
+        Assert.Equal([reply.Id], await Removals());
+    }
+
+    [Fact]
+    public async Task A_page_left_empty_by_a_deleted_topic_says_nothing_there_is_for_them_and_never_that_it_is_still_new()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        var root = await Started(Bea, "Lanterns", "Who lights theirs first?");
+        for (var number = 1; number <= Unread.OlderLimit + 1; number++) await Replied(root, Ada, "Reply " + number + ".");
+        using var bea = await SignedIn(tangentSpace, Bea);
+        Assert.IsType<Outcome<Checkpoint>.Done>(await new Seen(Bea, (await Door(bea)).GetProperty("news").GetProperty("through").GetInt64()).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new DeleteTopic(root.Id, Mo, Replies: Unread.OlderLimit + 1).Send(Cancellation));
+
+        var older = Older(await Door(bea));
+        var past = (await Door(bea, older)).GetProperty("older");
+        Assert.Empty(past.GetProperty("items").EnumerateArray());
+        Assert.False(past.GetProperty("stillNew").GetBoolean());
+        Assert.Equal(JsonValueKind.String, past.GetProperty("next").ValueKind);
+        var html = (await Send(bea.Client, HttpMethod.Get, older)).Body;
+        Assert.Contains("Nothing here is for you now; older things lie further back.", html);
+        Assert.DoesNotContain("Everything here is still new", html);
+    }
+
+    [Fact]
     public async Task Many_things_read_page_back_twenty_at_a_time_each_on_exactly_one_page()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);

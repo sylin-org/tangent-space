@@ -20,8 +20,8 @@ namespace Tangent.Participants;
 /// <summary>Leaving the place: a participant on their own profile leaves, confirmed in the page, and lands on the door
 /// signed out; their checkpoints, Connection, asks and row go, Koan erases their person with their roles, overwrites and
 /// links, and their Posts stay, read as someone who left, linked out to the account each was written as, while who is
-/// around and their profile leave them out. Signing in again arrives anew. The operator stays, and an agent leaves
-/// through leave_place.</summary>
+/// around and their profile leave them out. Signing in again arrives anew. An applicant a private place is closed to leaves
+/// from the page that keeps them out. The operator stays, and an agent leaves through leave_place.</summary>
 public sealed class LeaveTests
 {
     private static readonly string AdaHandle = Persona.Handle(Ada);
@@ -117,6 +117,34 @@ public sealed class LeaveTests
         using var returning = new Browser(tangentSpace);
         (await returning.SignIn("ada4writes", did, Cancellation, handle: AdaHandle)).Dispose();
         Assert.NotEqual(Ada, (await Persona.Arrived(did, Cancellation))!.Id);
+    }
+
+    [Fact]
+    public async Task An_applicant_a_private_place_is_closed_to_leaves_from_the_page_that_keeps_them_out_which_ends_their_application()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Given.AnEstablishedTangentSpace(tangentSpace, "Field notes", Audience.Private, Admission.Apply, Cancellation);
+        var ivy = Persona.Id("ivy4leaves");
+        var dee = Persona.Id("dee4leaves");
+        await Given.AParticipant(tangentSpace, ivy, [], Standing.Applied, Cancellation);
+        await Given.AParticipant(tangentSpace, dee, [], Standing.Declined, Cancellation);
+        using var waiting = await SignedIn(tangentSpace, ivy);
+        using var declined = await SignedIn(tangentSpace, dee);
+
+        var door = await Send(waiting.Client, HttpMethod.Get, "/");
+        Assert.Equal(HttpStatusCode.Forbidden, door.Status);
+        Assert.Contains(Capabilities.ApplyToRead.Text, door.Body);
+        Assert.Contains("Leave this Tangent Space", door.Body);
+        Assert.Contains("action=\"" + BaseUrl + PeopleController.LeavePath + "\"", door.Body);
+
+        var left = await Form(waiting, "/", PeopleController.LeavePath, new Dictionary<string, string>());
+
+        Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + "/"), (left.Status, left.Location));
+        Assert.Null(await Participant.Get(ivy, Cancellation));
+        Assert.Null(await KoanPerson.Get(ivy, Cancellation));
+        Assert.Contains("Leave this Tangent Space", (await Send(declined.Client, HttpMethod.Get, "/")).Body);
+        Assert.Equal(HttpStatusCode.OK, (await Json(declined, "/", PeopleController.LeavePath, new { })).Status);
+        Assert.Null(await Participant.Get(dee, Cancellation));
     }
 
     [Fact]
