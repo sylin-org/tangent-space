@@ -7,12 +7,19 @@ import { logEvent } from './unseen'
 // earlier self: the Post's article as the server renders it, its islands not yet mounted.
 export const postPlaced = 'post-placed'
 
+// The rows that change a Post as a page shows it, which fetch it again in place.
+const changesPost = new Set(['post.edited', 'post.removed', 'removal.undone'])
+
+// Whether a row of a Tangent changes its list of Topics: every row of a Post, an undone removal and a deleted Topic.
+const changesList = (kind: string) => kind.startsWith('post.') || kind === 'removal.undone' || kind === 'topic.deleted'
+
 // The live updater, one per page: it follows the log from where the page's request found it (live.ts) and patches the
 // page as rows that concern it arrive, fetching what changed as the server renders it. On a Topic's page, a new reply
 // in the Topic is fetched as its Post's fragment and appended when the page shows the newest window, and otherwise
-// counted in the notice below the replies, which links to it; a Post on the page that is edited or removed is fetched
-// again in place. On a Tangent's page, its list of Topics is fetched again, which marks what is new. On the door, the
-// door is fetched again from its own fragment. When the transport has fallen back to the door, which names no rows,
+// counted in the notice below the replies, which links to it; a Post on the page that is edited, removed or has its
+// removal undone is fetched again in place. On a Tangent's page, its list of Topics is fetched again as a row of its
+// Posts arrives, or one that undoes a removal or deletes a Topic, which marks what is new. On the door, the door is
+// fetched again from its own fragment at every row. When the transport has fallen back to the door, which names no rows,
 // the Tangent's list and the door are fetched again and a Topic's notice says there may be new replies. Every run of
 // rows is also dispatched on the document (logEvent), where the masthead's count of what is new for the reader reads it,
 // and each Post placed in the page (postPlaced), whose islands the page entry mounts and to which the composer offers a
@@ -150,7 +157,7 @@ export const live = defineComponent({
         }
         waiting.push(event.post)
         notice(`${waiting.length} new ${waiting.length === 1 ? 'reply' : 'replies'} →`, props.address + '/' + encodeURIComponent(waiting[0]))
-      } else if (event.kind === 'post.edited' || event.kind === 'post.removed') {
+      } else if (changesPost.has(event.kind)) {
         if (!shown(event.post)) return
         const found = await post(event.post)
         const existing = shown(event.post)
@@ -174,7 +181,7 @@ export const live = defineComponent({
             // A Post that could not be fetched stays as the page shows it.
           }
         }
-      } else if (props.page === 'door' || events.some(event => event.tangent === props.tangent && event.kind.startsWith('post.'))) {
+      } else if (props.page === 'door' || events.some(event => event.tangent === props.tangent && changesList(event.kind))) {
         await refresh()
       }
       return true
