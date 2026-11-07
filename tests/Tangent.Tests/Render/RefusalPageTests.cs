@@ -46,7 +46,7 @@ public sealed class RefusalPageTests
     }
 
     [Fact]
-    public async Task A_write_past_its_limit_and_the_places_own_refusals_read_in_the_same_frame()
+    public async Task A_form_past_its_limit_and_the_places_own_refusals_read_in_the_same_frame()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
@@ -54,8 +54,10 @@ public sealed class RefusalPageTests
         using var ada = await SignedIn(tangentSpace, Ada);
         using var visitor = Agent(tangentSpace);
 
+        var fields = new Dictionary<string, string>();
+        fields["body"] = new string('x', (int)PostWrites.RequestLimit * 2);
         // The body waits for the server's go-ahead, so the refusal is read before an unread body closes the connection.
-        using var oversized = new HttpRequestMessage(HttpMethod.Post, TopicPath(root)) { Content = JsonBody(new { body = new string('x', (int)PostWrites.RequestLimit * 2) }) };
+        using var oversized = new HttpRequestMessage(HttpMethod.Post, TopicPath(root)) { Content = FormBody(fields) };
         oversized.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
         oversized.Headers.ExpectContinue = true;
         using var refused = await ada.Client.SendAsync(oversized, Cancellation);

@@ -244,7 +244,7 @@ public sealed class TwoDoorsTests
         var malformed = await Send(doors.AdaBrowser.Client, HttpMethod.Post, TopicPath(root), array, json: true);
         using var elsewhere = new StringContent("[]", System.Text.Encoding.UTF8, "application/json");
         var nowhere = await Send(doors.AdaBrowser.Client, HttpMethod.Post, "/t/nowhere/nothing", elsewhere, json: true);
-        Assert.Equal((HttpStatusCode.BadRequest, "application/problem+json"), (malformed.Status, malformed.MediaType));
+        Assert.Equal((HttpStatusCode.BadRequest, "invalid"), (malformed.Status, malformed.Kind));
         Assert.Equal((HttpStatusCode.NotFound, "absent"), (nowhere.Status, nowhere.Kind));
         Assert.Equal(before, await Counted());
     }

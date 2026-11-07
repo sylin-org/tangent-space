@@ -92,18 +92,20 @@ public sealed class AddressTests
     }
 
     [Fact]
-    public async Task A_reply_whose_body_passes_the_cap_is_refused_and_writes_nothing()
+    public async Task A_removal_whose_body_passes_the_cap_is_refused_and_removes_nothing()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
         var root = await Started(Ada, "Lanterns", "How do you hang yours?");
         using var ada = await SignedIn(tangentSpace, Ada);
-        var before = await Counted();
+        var fields = new Dictionary<string, string>();
+        fields["padding"] = new string('x', 3 * 1024 * 1024);
 
-        var answered = await Send(ada.Client, HttpMethod.Post, TopicPath(root), JsonBody(new { id = Tids.Mint(), body = new string('x', 3 * 1024 * 1024) }), json: true);
+        var answered = await Send(ada.Client, HttpMethod.Post, PostPath(root, root) + "/remove", FormBody(fields), json: true);
 
         // A body past the limit is refused where it is read, before the action.
         Assert.Equal((HttpStatusCode.RequestEntityTooLarge, "invalid"), (answered.Status, answered.Kind));
-        Assert.Equal(before, await Counted());
+        Assert.False((await Post.Get(root.Id, Cancellation))?.Removed);
+        Assert.Empty(await Events.Event.Query(e => e.Kind == Events.EventKind.PostRemoved, Cancellation));
     }
 }

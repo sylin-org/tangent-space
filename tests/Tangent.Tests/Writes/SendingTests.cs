@@ -7,7 +7,7 @@ using static Tangent.Posts.Writing;
 namespace Tangent.Posts;
 
 /// <summary>What a person's words meet behind a busy store: they finish whatever becomes of the request that sent them,
-/// and where they never ran, nothing of them was written and they are safe to send again.</summary>
+/// and told they never ran, they are safe to send again.</summary>
 public sealed class SendingTests
 {
     private static readonly TimeSpan Bound = TimeSpan.FromSeconds(10);
@@ -50,7 +50,7 @@ public sealed class SendingTests
     }
 
     [Fact]
-    public async Task A_reply_that_never_ran_behind_a_busy_store_writes_nothing_and_sent_again_with_its_id_it_lands()
+    public async Task A_reply_told_it_never_ran_says_so_and_sent_again_it_lands()
     {
         var settings = Settings();
         settings["Koan:Data:Sqlite:BusyTimeout"] = "00:00:01";
@@ -68,8 +68,8 @@ public sealed class SendingTests
         release.SetResult();
         await held.WaitAsync(Bound, Cancellation);
 
-        // The composer reads a failure of the server as uncertain and asks again.
-        Assert.True((int)busy.StatusCode >= 500, busy.StatusCode.ToString());
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, busy.StatusCode);
+        Assert.Equal("1", busy.Headers.RetryAfter?.ToString());
         Assert.Null(await Post.Get(id, Cancellation));
 
         using var again = await ada.Client.SendAsync(Reply(root, id, "From the porch beam."), Cancellation);
