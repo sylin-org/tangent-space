@@ -25,7 +25,8 @@ namespace Tangent.Posts;
 /// the same Post again while their earlier report stands — its root neither removed nor closed — replies in that
 /// report's Topic with the new reason, so the moderators keep one Topic per reporter and Post with every reason in
 /// order, and with no reason answers with that report and writes nothing; once the moderators close or remove it, the
-/// next report starts a Topic of its own. Idempotent by Id: the same
+/// next report starts a Topic of its own; a reason that replies is new to whoever follows that report's Topic
+/// (<see cref="Follow.Moved"/>), while the reporter, who mostly may not view it, follows nothing. Idempotent by Id: the same
 /// Id from the same reporter about the same Post answers with the Post it wrote, whatever reason is sent and whatever
 /// the moderators have done with it since, so a resend says nothing of the report's state; any other Post holding it is
 /// refused with <see cref="Post.IdTaken"/>, which says nothing of that Post. The reason is judged where the command is built
@@ -108,6 +109,7 @@ public sealed record ReportPost(
         await written.Save(ct);
         if (earlier is not null) await earlier.Save(ct);
         await Seen.Wrote(ReporterId, root, written.Sequence, ct);
+        if (earlier is not null) await Follow.Moved(root, ReporterId, ct);
         await MediaUse.Record(written, ReporterId, [], ct);
         await Mentions.Notify(written, ReporterId, [], at, ct);
         return new Outcome<Post>.Done(written);

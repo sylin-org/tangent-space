@@ -62,11 +62,12 @@ public sealed record DeleteTopic(string TopicId, string ActorId, int Replies = 0
     }
 
     /// <summary>Inside the running command, deletes <paramref name="posts"/> and what each holds: every snapshot of it, its
-    /// media uses, and its row.</summary>
+    /// media uses, the follows of a root (<see cref="Follow"/>), and its row.</summary>
     internal static async Task Rows(IReadOnlyList<Post> posts, CancellationToken ct)
     {
         await Post.Remove(posts.SelectMany(post => Versions(post).Select(version => AuditPartition.Key(post.Id, version))), AuditPartition.Name, ct);
         await MediaUse.Remove(posts.SelectMany(post => post.UsedMedia().Select(media => MediaUse.Key(media, post.Id))), ct);
+        await Follow.RemoveAll(posts.Where(post => post.ParentId is null).Select(post => post.Id).ToList(), ct);
         await Post.Remove(posts.Select(post => post.Id), ct);
     }
 

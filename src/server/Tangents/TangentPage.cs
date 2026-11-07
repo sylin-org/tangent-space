@@ -70,6 +70,20 @@ public sealed partial record TangentPage(
     [Render.Slot(Render.Slot.Rail), Newtonsoft.Json.JsonIgnore]
     public Render.AudienceNote Reach => new(Audience != "public");
 
+    /// <summary>Whether the reader quieted the Tangent, so what is new in it does not count on their door; absent for a
+    /// visitor.</summary>
+    public bool? Quiet { get; init; }
+
+    /// <summary>The form that quiets the Tangent, or lets it count again, for a signed-in reader.</summary>
+    public Render.Form? Quieting { get; init; }
+
+    [Render.Slot(Render.Slot.Rail), Newtonsoft.Json.JsonIgnore]
+    public Render.EntryList? Attention => Quieting is { } form
+        ? new([new Render.Entry(Quiet == true
+            ? "What is new here doesn't count on your door; replies and mentions of you, and the topics you follow, still do."
+            : "What is new here counts on your door.", [form])], "Your door")
+        : null;
+
     [Render.Slot(Render.Slot.Rail), Newtonsoft.Json.JsonIgnore]
     public Render.LeaveTangent? Leaving => Leave is { } leave ? new(leave) : null;
 

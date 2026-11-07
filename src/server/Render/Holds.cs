@@ -35,6 +35,9 @@ public static class Holds
     public const string BroughtImage = "A PNG, JPEG or WebP image, at most 20 MiB: a file of a multipart form, or its bytes in base64 in one JSON object. The answer's id is a cover's value, and its reference is what a body's Markdown names it by: ![what it shows](reference).";
 
     public const string SeenThrough = "What you have seen through: with no topic, the sequence of the log the door's news.through names, so nothing up to it is new to you anywhere; with a topic, the sequence of that Topic its page's through names. It never moves back.";
+    public const string Before = "The sequence the door names as older, as its news.older carries it: what reached you before it that is no longer new; left out, what is new.";
+    public const string Follow = "true to follow the Topic, false to stop; left out, true.";
+    public const string Quiet = "true to quiet the Tangent, false to let it count again; left out, true.";
     public const string SeenTopic = "The id of the Topic you have read, as its page gives it; left out, everything the door read through is seen.";
 
     public const string Words = "The words to look for, at most 200 characters; left out, nothing is searched.";

@@ -51,7 +51,7 @@ public sealed class NewTangentController(KoanWebBaseUrl baseUrl) : ControllerBas
     [HttpPost(Route)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "create_tangent", Destructive = false, Idempotent = false, OpenWorld = false)]
-    [Description("Create a Tangent by naming it, for whoever holds ManageSpace. Sending it again makes a second one. Follow with start_topic.")]
+    [Description("Create a Tangent by naming it, for whoever holds ManageSpace. Sending it again makes a second one. Then call start_topic.")]
     public async Task<IActionResult> Create(CreateTangentInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";

@@ -96,6 +96,7 @@ public sealed record TopicPage(
     [Render.Slot(Render.Slot.Rail), Newtonsoft.Json.JsonIgnore]
     public Render.TopicRail Rail => new(Tangent, IsArticle, NewTopic, Replies.Select(Placed).ToList(), Outlined);
 
+
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
     public Render.Piece? Piece => IsArticle
         ? new(new Render.ArticleHead(Title, Cover, Root.Author with { Account = Root.WrittenAs }, Root.CreatedAt, ReadMinutes, ArticleHeader, Outlined),
@@ -126,6 +127,18 @@ public sealed record TopicPage(
     public Render.TopicReplies Window => new(Replies.Select(Placed).ToList(), ReplyCount, From, Through, Older, Newer, Seen,
         Who is { } reader ? JsonSerializer.Serialize(new { participant = reader.Id, topic = Id, title = Title, address = Address, newest = Newer is null }) : null,
         new Render.LiveUpdates(Render.LiveUpdates.TopicPage, Tangent.Slug, Id, Address, Newer is null));
+
+    /// <summary>Whether the reader follows the Topic, so its new replies are for them on their door; absent for a visitor.</summary>
+    public bool? Following { get; init; }
+
+    /// <summary>The form that follows the Topic, or stops following it, for a signed-in reader.</summary>
+    public Form? Follow { get; init; }
+
+    /// <summary>Following, under the replies, where a phone reads it too.</summary>
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.EntryList? Attention => Follow is { } form
+        ? new([new Render.Entry(Following == true ? "Its new replies come to your door." : "Follow it to have its new replies come to your door.", [form])], "Your door")
+        : null;
 
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
     public Render.ReplyBox Box => new(Reply, Who?.Id, Who?.Handle,

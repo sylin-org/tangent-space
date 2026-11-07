@@ -27,7 +27,7 @@ public sealed class UnreadTests
         await Place(tangentSpace);
         var topic = await Started(Ada, "Lanterns", "Who lights theirs first?");
         using var ada = await SignedIn(tangentSpace, Ada);
-        Assert.True((await Door(ada)).GetProperty("news").GetProperty("quiet").GetBoolean());
+        Assert.True((await Door(ada)).GetProperty("news").GetProperty("empty").GetBoolean());
 
         // Bea replies in Ada's Topic: Ada's door tells it once, with the count, and her Tangent page counts the Topic new.
         var reply = await Replied(topic, Bea, "I do, at six.");
@@ -51,7 +51,7 @@ public sealed class UnreadTests
 
         // Read, it clears everywhere it was told.
         door = await Door(ada);
-        Assert.True(door.GetProperty("news").GetProperty("quiet").GetBoolean());
+        Assert.True(door.GetProperty("news").GetProperty("empty").GetBoolean());
         Assert.Equal(0, door.GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32());
         Assert.Equal((false, (long?)0), await OnTangentPage(ada, topic));
         Assert.Contains("Nothing new since you were here.", (await Send(ada.Client, HttpMethod.Get, "/")).Body);
@@ -69,7 +69,7 @@ public sealed class UnreadTests
             new Dictionary<string, string> { [SeenController.ThroughField] = through.ToString(System.Globalization.CultureInfo.InvariantCulture) })).Status);
 
         door = await Door(ada);
-        Assert.True(door.GetProperty("news").GetProperty("quiet").GetBoolean());
+        Assert.True(door.GetProperty("news").GetProperty("empty").GetBoolean());
         Assert.Equal(0, door.GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32());
         Assert.Equal((false, (long?)0), await OnTangentPage(ada, topic));
         Assert.Equal((false, (long?)0), await OnTangentPage(ada, other));
@@ -102,15 +102,15 @@ public sealed class UnreadTests
         Assert.True(Assert.Single(read.GetProperty("replies").EnumerateArray()).GetProperty("new").GetBoolean());
         await Worked("seen", new { topic = read.GetProperty("id").GetString(), through = read.GetProperty("through").GetInt64() });
         arrived = await Worked("arrive", new { });
-        Assert.True(arrived.GetProperty("news").GetProperty("quiet").GetBoolean());
+        Assert.True(arrived.GetProperty("news").GetProperty("empty").GetBoolean());
 
         await Replied(topic, Bea, "Six sharp.");
         await Started(Bea, "Wicks", "Cotton or hemp?");
         arrived = await Worked("arrive", new { });
-        Assert.False(arrived.GetProperty("news").GetProperty("quiet").GetBoolean());
+        Assert.False(arrived.GetProperty("news").GetProperty("empty").GetBoolean());
         await Worked("seen", new { through = arrived.GetProperty("news").GetProperty("through").GetInt64() });
         arrived = await Worked("arrive", new { });
-        Assert.True(arrived.GetProperty("news").GetProperty("quiet").GetBoolean());
+        Assert.True(arrived.GetProperty("news").GetProperty("empty").GetBoolean());
         Assert.Equal(0, arrived.GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32());
     }
 
@@ -152,8 +152,9 @@ public sealed class UnreadTests
 
         using var mo = await SignedIn(tangentSpace, Mo);
         Assert.Contains("<a class=\"masthead-unseen\" href=\"" + BaseUrl + "/\" hidden aria-label=\"0 new for you\"", Collapsed((await Send(mo.Client, HttpMethod.Get, "/")).Body));
+        // Bea's are the mention of her and Ada's reply in the Topic Bea replied in, which she follows.
         using var bea = await SignedIn(tangentSpace, Bea);
-        Assert.Equal(1, (await Door(bea)).GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32());
+        Assert.Equal(2, (await Door(bea)).GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32());
         Assert.DoesNotContain("masthead-unseen", (await Send(Agent(tangentSpace), HttpMethod.Get, "/")).Body);
     }
 
@@ -189,7 +190,7 @@ public sealed class UnreadTests
 
         var door = await Door(ada);
         var news = door.GetProperty("news");
-        Assert.Equal((1, false), (door.GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32(), news.GetProperty("quiet").GetBoolean()));
+        Assert.Equal((1, false), (door.GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32(), news.GetProperty("empty").GetBoolean()));
         Assert.Equal(Mo, news.GetProperty("timedOut").GetProperty("who").GetProperty("id").GetString());
         Assert.Equal(until.ToUnixTimeSeconds(), news.GetProperty("timedOut").GetProperty("until").GetDateTimeOffset().ToUnixTimeSeconds());
         Assert.True(news.TryGetProperty("seen", out var seen) && seen.ValueKind == JsonValueKind.Object);
@@ -210,7 +211,7 @@ public sealed class UnreadTests
 
         var door = await Door(ada);
         Assert.Equal(1, door.GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32());
-        Assert.False(door.GetProperty("news").GetProperty("quiet").GetBoolean());
+        Assert.False(door.GetProperty("news").GetProperty("empty").GetBoolean());
         Assert.False(door.TryGetProperty("gate", out var gate) && gate.ValueKind == JsonValueKind.String);
         Assert.Contains("It has ended, and you can start topics and reply here again.", WebUtility.HtmlDecode((await Send(ada.Client, HttpMethod.Get, "/")).Body));
     }
@@ -226,7 +227,7 @@ public sealed class UnreadTests
 
         var door = await Door(grace);
         var news = door.GetProperty("news");
-        Assert.Equal((1, false), (door.GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32(), news.GetProperty("quiet").GetBoolean()));
+        Assert.Equal((1, false), (door.GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32(), news.GetProperty("empty").GetBoolean()));
         Assert.Equal(Mo, news.GetProperty("declined").GetProperty("who").GetProperty("id").GetString());
         var html = WebUtility.HtmlDecode((await Send(grace.Client, HttpMethod.Get, "/")).Body);
         Assert.Contains("Since you were here: your application was declined.", html);
@@ -243,14 +244,14 @@ public sealed class UnreadTests
 
         var door = await Door(mo);
         var news = door.GetProperty("news");
-        Assert.Equal((1, false), (door.GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32(), news.GetProperty("quiet").GetBoolean()));
+        Assert.Equal((1, false), (door.GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32(), news.GetProperty("empty").GetBoolean()));
         Assert.Equal(1, news.GetProperty("applications").GetProperty("count").GetInt32());
         Assert.Contains("Since you were here: 1 new application.", WebUtility.HtmlDecode((await Send(mo.Client, HttpMethod.Get, "/")).Body));
 
         await Form(mo, "/", SeenController.Path, new Dictionary<string, string> { [SeenController.ThroughField] = Valued(news.GetProperty("seen"), SeenController.ThroughField)! });
         door = await Door(mo);
         Assert.Equal((0, true, 1), (door.GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32(),
-            door.GetProperty("news").GetProperty("quiet").GetBoolean(), door.GetProperty("applications").GetProperty("count").GetInt32()));
+            door.GetProperty("news").GetProperty("empty").GetBoolean(), door.GetProperty("applications").GetProperty("count").GetInt32()));
     }
 
     /// <summary>The writing place, whose admission says apply.</summary>

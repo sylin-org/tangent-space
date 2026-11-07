@@ -74,7 +74,7 @@ public sealed class DoorTests(ITestOutputHelper output)
         {
             var news = json.RootElement.GetProperty("news");
             Assert.Equal((since, through), (news.GetProperty("from").GetInt64(), news.GetProperty("through").GetInt64()));
-            Assert.False(news.GetProperty("quiet").GetBoolean());
+            Assert.False(news.GetProperty("empty").GetBoolean());
             Assert.Equal((Reader, "reader.example"), (json.RootElement.GetProperty("who").GetProperty("id").GetString(),
                 json.RootElement.GetProperty("who").GetProperty("handle").GetString()));
 
@@ -200,7 +200,7 @@ public sealed class DoorTests(ITestOutputHelper output)
 
         using var json = await Json(browser.Client, "/");
         var news = json.RootElement.GetProperty("news");
-        Assert.True(news.GetProperty("quiet").GetBoolean());
+        Assert.True(news.GetProperty("empty").GetBoolean());
         Assert.Empty(news.GetProperty("perTangent").EnumerateArray());
         Assert.Equal(Capabilities.Apply.Word, json.RootElement.GetProperty("gate").GetString());
         Assert.Contains("Nothing new since you were here.", WebUtility.HtmlDecode(await Html(browser.Client, "/")));
@@ -370,7 +370,7 @@ public sealed class DoorTests(ITestOutputHelper output)
         using (var json = await Json(browser.Client, "/"))
         {
             var news = json.RootElement.GetProperty("news");
-            Assert.True(news.GetProperty("quiet").GetBoolean());
+            Assert.True(news.GetProperty("empty").GetBoolean());
             Assert.False(news.TryGetProperty("seen", out var seen) && seen.ValueKind != JsonValueKind.Null);
             Assert.False(json.RootElement.GetProperty("alive")[0].GetProperty("topic").GetProperty("new").GetBoolean());
         }
@@ -540,7 +540,7 @@ public sealed class DoorTests(ITestOutputHelper output)
     private static async Task<long> Mark(string participantId)
     {
         var last = await Event.Log.Highest(Cancellation);
-        Assert.IsType<Outcome<Checkpoint>.Done>(await new Store<Checkpoint>(Checkpoint.At(participantId, Scope.Place, last)).Send(Cancellation));
+        Assert.IsType<Outcome<Checkpoint>.Done>(await new Seen(participantId, last).Send(Cancellation));
         return last;
     }
 

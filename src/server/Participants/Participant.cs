@@ -67,6 +67,20 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
     [Index(Name = "ix_participant_waiting")]
     public long? WaitingSeq { get; set; }
 
+    /// <summary>The slugs of the Tangents the participant quieted: what is new in them stops counting on their door, while
+    /// what is for them there still reaches them (<see cref="Tangents.QuietTangent"/>).</summary>
+    public List<string> Quiet { get; set; } = [];
+
+    /// <summary>Quiets the Tangent <paramref name="slug"/>, or with <paramref name="on"/> false lets it count again; false,
+    /// with nothing changed, where it already stands so.</summary>
+    public bool Quieten(string slug, bool on)
+    {
+        if (Quiet.Contains(slug) == on) return false;
+        if (on) Quiet.Add(slug);
+        else Quiet.Remove(slug);
+        return true;
+    }
+
     /// <summary>The refusal a decision meets for a participant whose standing is not an application's.</summary>
     public static readonly Reason NotAnApplication = Reason.Conflict("Only an application waiting or declined is decided.");
 

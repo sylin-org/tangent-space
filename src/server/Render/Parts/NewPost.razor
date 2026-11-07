@@ -1,7 +1,10 @@
-@* One new Post for the reader, as a row: who wrote it, or what someone did to it, in which Topic and Tangent, its first
-   words where it still has them, and when. *@
-<a class="row topic is-new" href="@Model.Address">
-    <span class="topic-row-dot"><span class="new-dot" role="img" aria-label="Unread"></span></span>
+@* One Post that reached the reader, as a row: who wrote it, or what someone did to it, in which Topic and Tangent, its
+   first words where it still has them, and when; marked new while it is. *@
+<a class="@(Model.New ? "row topic is-new" : "row topic")" href="@Model.Address">
+    <span class="topic-row-dot">@if (Model.New)
+        {
+            <span class="new-dot" role="img" aria-label="Unread"></span>
+        }</span>
     <span class="topic-row-body">
         <span class="topic-row-title">@Model.Topic</span>
         <span class="topic-row-opening"><Draw Part="@(Model.Who with { Profile = null })" As="Shape.Name" />@if (Model.Did is { } did) { @(" " + did) } else { <Draw Part="@Model.Edited" /> }@(Model.Line.Length > 0 ? ": " + Model.Line : "")</span>

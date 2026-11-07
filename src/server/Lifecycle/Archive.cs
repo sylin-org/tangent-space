@@ -101,7 +101,7 @@ public sealed class Archive
     /// <summary>The door a visitor reads.</summary>
     private async Task Door(CancellationToken ct)
     {
-        if (await As<DoorController>(ct) is not { } door0 || await door0.Get(ct) is not OkObjectResult { Value: Door door })
+        if (await As<DoorController>(ct) is not { } door0 || await door0.Get(null, ct) is not OkObjectResult { Value: Door door })
             throw new InvalidOperationException("A visitor of a public place reads its door.");
         await _export.Page(Export.First, door with { Address = Export.First + ".html", Can = [], SignIn = null, Gate = null, Day = Export.Undated }, ".", null, ct);
     }

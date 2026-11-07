@@ -121,7 +121,7 @@ public sealed record Door(
 
     /// <summary>The news as the door draws it: with nothing new, only where no first steps stand in its place.</summary>
     [Slot(Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Since? Told => News is { Quiet: true } && FirstSteps is not null ? null : News;
+    public Since? Told => News is { Empty: true } && FirstSteps is not null ? null : News;
 
     /// <summary>The first steps that make the place its manager's own (<see cref="Space.FirstSteps"/>).</summary>
     [Slot(Slot.Column)]
@@ -154,10 +154,12 @@ public sealed record Door(
     /// standing since; <see cref="Applications"/>, for whoever decides them, how many applications arrived since;
     /// <see cref="Roles"/>, the roles someone gave them or took from them since, the newest change of each;
     /// <see cref="Edited"/>, their Posts someone else edited since that still stand, each once, and
-    /// <see cref="Removed"/>, those someone else removed, each with who did it. Then what is new in each Tangent
-    /// (<see cref="PerTangent"/>) and the new <see cref="Articles"/>, past those for the reader. A Post's entry stays while the Post is new, so
-    /// reading its Topic clears it here. <see cref="Seen"/> is the form that says all of it is seen, through
-    /// <see cref="Through"/>, present while there is news.</summary>
+    /// <see cref="Removed"/>, those someone else removed, each with who did it; <see cref="Following"/>, the Topics they
+    /// follow that hold Posts new to them that nothing above holds. Then what is new in each Tangent they did not quiet
+    /// (<see cref="PerTangent"/>) and the new <see cref="Articles"/> there, past those for the reader. A Post's entry stays
+    /// while the Post is new, so reading its Topic clears it here. <see cref="Seen"/> is the form that says all of it is
+    /// seen, through <see cref="Through"/>, present while there is news; <see cref="Older"/> is the door's address of what
+    /// reached them through <see cref="Through"/> and is no longer new (<see cref="DoorPast"/>).</summary>
     public sealed record Since(
         long From,
         long Through,
@@ -176,14 +178,20 @@ public sealed record Door(
         Decision? TimedOut = null,
         Decision? Declined = null,
         Waiting? Applications = null,
-        IReadOnlyList<Let>? Let = null) : IPart
+        IReadOnlyList<Let>? Let = null,
+        IReadOnlyList<Followed>? Following = null,
+        string? Older = null) : IPart
     {
         /// <summary>Whether nothing is new to the reader, so nothing is counted for them either.</summary>
-        public bool Quiet => Replies.Count == 0 && Mentions.Count == 0 && PerTangent.Count == 0 && Articles.Count == 0 && (Taken?.Count ?? 0) == 0
+        public bool Empty => Replies.Count == 0 && Mentions.Count == 0 && PerTangent.Count == 0 && Articles.Count == 0 && (Taken?.Count ?? 0) == 0
                              && Admitted is null && Lifted is null && TimedOut is null && Declined is null && (Roles?.Count ?? 0) == 0
                              && (Edited?.Count ?? 0) == 0 && (Removed?.Count ?? 0) == 0 && (Reports?.Count ?? 0) == 0 && Applications is null
-                             && (Let?.Count ?? 0) == 0;
+                             && (Let?.Count ?? 0) == 0 && (Following?.Count ?? 0) == 0;
     }
+
+    /// <summary>A Topic the reader follows that holds Posts new to them: its title, its Tangent's name, its address, and how
+    /// many of its new Posts nothing else in the news holds, absent where they never read it.</summary>
+    public sealed record Followed(string TopicId, string Title, string Tangent, string Address, long? New);
 
     /// <summary>A decision about the reader's ask to join a members-only Tangent, or their being let in: who, when, the
     /// Tangent's name and address, and whether they were let in.</summary>
@@ -219,6 +227,10 @@ public sealed record Door(
         /// <summary>What someone did to the reader's own Post, where the row says it in place of who wrote it.</summary>
         [Newtonsoft.Json.JsonIgnore]
         public string? Did { get; init; }
+
+        /// <summary>Whether it is new to the reader, as it is wherever the news lists it; not once the door is paged back.</summary>
+        [Newtonsoft.Json.JsonIgnore]
+        public bool New { get; init; } = true;
     }
 
     /// <summary>What is new in one Tangent of its kind: its Topics and its replies, and how many of them no other part of

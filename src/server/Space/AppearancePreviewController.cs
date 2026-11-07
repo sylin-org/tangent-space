@@ -31,6 +31,6 @@ public sealed class AppearancePreviewController : ControllerBase
         Response.Headers.XFrameOptions = "SAMEORIGIN";
         var door = ActivatorUtilities.CreateInstance<DoorController>(HttpContext.RequestServices);
         door.ControllerContext = ControllerContext;
-        return await door.Get(ct);
+        return await door.Get(null, ct);
     }
 }

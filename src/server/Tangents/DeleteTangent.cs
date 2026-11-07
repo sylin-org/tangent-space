@@ -10,8 +10,8 @@ using Tangent.Space;
 
 namespace Tangent.Tangents;
 
-/// <summary>Deletes a Tangent whole, in one hold: its Posts with their snapshots and their media uses
-/// (<see cref="DeleteTopic.Rows"/>), its asks, every
+/// <summary>Deletes a Tangent whole, in one hold: its Posts with their snapshots, their media uses and the follows of its
+/// Topics (<see cref="DeleteTopic.Rows"/>), its asks, every
 /// overwrite on its resource (<see cref="Overwrites.RemoveAll"/>), its image's use and its row, and appends
 /// <see cref="EventKind.TangentDeleted"/>; nothing of it stays in its place. Its rows of the log stay, and reach no one
 /// once it has no row (<see cref="Capabilities.LoadEach"/>); a Connection takes down each copy of its articles from the

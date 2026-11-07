@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Security.Claims;
+using Koan.Data.Core.Commands;
 using Koan.Web.Attributes;
 using Koan.Web.Auth.Infrastructure;
 using Koan.Web.Controllers;
@@ -14,6 +15,9 @@ using Tangent.Space;
 
 namespace Tangent.Tangents;
 
+/// <summary>What quieting a Tangent sends, as a form or one JSON object.</summary>
+public sealed record QuietInput([Description(Holds.Quiet)] bool? Quiet = null);
+
 /// <summary>The Tangent page, one resource both ways: the Tangent, its <c>can</c>, and one bounded page of its Topics,
 /// whole or narrowed to a month or an author (<see cref="TopicList.Narrowing"/>), the whole list's first page led by the
 /// Topic its moderators pinned (<see cref="TopicList.Pinned"/>), with what is new to the reader, a pinned Topic and a closed one marked,
@@ -26,7 +30,8 @@ namespace Tangent.Tangents;
 /// and keyed: the Tangent and capability's rows, which the Doorway read, the pinned Topic's root by Id on a page of the whole list, one read of Topics, their latest replies by Id, the people on the page and those the rail names, the reader's place mark and their marks on
 /// those Topics, which say what is new to them (<see cref="Unread"/>), the first <see cref="SwitcherLimit"/>
 /// Tangents the reader may view for the switcher (<see cref="ViewableTangents"/>), and, for a signed-in reader, what they
-/// hold in the place, which says whether the switcher offers a new Tangent.</summary>
+/// hold in the place, which says whether the switcher offers a new Tangent, and whether they quieted it, from the row the
+/// Doorway read, with the form that quiets it or lets it count again (<see cref="Quiet"/>).</summary>
 public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
     /// <summary>The query parameter that carries the cursor of the page to continue from.</summary>
@@ -49,11 +54,22 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
     /// anyone else at their own address all the same (<see cref="Author"/>).</summary>
     public const int AuthorLimit = 10;
 
+    /// <summary>The segment under a Tangent's address where a participant quiets it or lets it count again;
+    /// <see cref="Slug.Reserved"/> keeps it from every Topic.</summary>
+    public const string QuietSegment = "quiet";
+
+    /// <summary>The field that says whether to quiet.</summary>
+    public const string QuietField = "quiet";
+
+    /// <summary>Whether the participant quieted the Tangent, as a JSON answer says it: its slug, its address and
+    /// <c>quiet</c>.</summary>
+    public sealed record Quieted(string Slug, string Address, bool Quiet);
+
     [HttpGet("/t/{tangent}")]
     [HttpHead("/t/{tangent}")]
     [Tool(Name = "read_tangent")]
     [Needs(Bit.View, Outside = true)]
-    [Description("Read a Tangent: its Topics a page at a time, narrowed to a month or an author where you name one, the one its moderators pinned first on the first page of them all, what is new to you, pinned or closed marked, and a Topic whose root was removed saying who removed it; an articles Tangent lists every month it narrows to and the authors who started the most, with how many each, and narrows to any author by their id. Follow with read_topic on a Topic's slug, or start_topic to begin one. A members-only Tangent you may join or ask to join answers its card instead, with joining; follow with join_tangent.")]
+    [Description("Read a Tangent: its Topics a page at a time, narrowed to a month or an author where you name one, the one its moderators pinned first on the first page of them all, what is new to you, pinned or closed marked, and a Topic whose root was removed saying who removed it; an articles Tangent lists every month it narrows to and the authors who started the most, with how many each, and narrows to any author by their id; quiet says whether you quieted it. Then call read_topic on a Topic's slug, start_topic to begin one, or quiet_tangent. A members-only Tangent you may join or ask to join answers its card instead, with joining; then call join_tangent.")]
     public async Task<IActionResult> Get([Description(Holds.Tangent)] string tangent, [FromQuery(Name = After), Description(Holds.After)] string? after,
         [FromQuery(Name = Month), Description(Holds.Month)] string? month, [FromQuery(Name = Author), Description(Holds.Author)] string? author,
         CancellationToken ct)
@@ -131,8 +147,34 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
             within?.Key,
             by is null ? null : Person(people, by),
             articles ? Months(row, address) : null,
-            articles ? Authors(offered, address, people) : null));
+            articles ? Authors(offered, address, people) : null)
+        {
+            Quiet = reader?.Quiet.Contains(row.Id),
+            Quieting = reader is null ? null : QuietForm(address, reader.Quiet.Contains(row.Id))
+        });
     }
+
+    [HttpPost("/t/{tangent}/" + QuietSegment)]
+    [Tool(Name = "quiet_tangent", Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Needs(Bit.View, Participant = true)]
+    [Description("Quiet a Tangent, so what is new in it stops counting in arrive's news and on your door, while replies to you, mentions of you and the Topics you follow there still do. With quiet false, it counts again.")]
+    public async Task<IActionResult> Quiet([FromRoute, Description(Holds.Tangent)] string tangent, QuietInput input, CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-store";
+        var row = Here.Of(HttpContext).Tangent!;
+        var outcome = await new QuietTangent(Here.Of(HttpContext).PersonId!, row.Id, input.Quiet ?? true).Send(ct);
+        if (outcome is not Outcome<Participant>.Done { Result: var participant }) return Answers.NotDone(HttpContext, outcome);
+        var address = Address(row.Id);
+        if (PostWrites.WantsJson(Request)) return Ok(new Quieted(row.Id, address, participant.Quiet.Contains(row.Id)));
+        Response.Headers.Location = address;
+        return StatusCode(StatusCodes.Status303SeeOther);
+    }
+
+    /// <summary>The form that quiets the Tangent at <paramref name="address"/>, or, where it is <paramref name="quiet"/>, lets
+    /// it count again.</summary>
+    public static Render.Form QuietForm(string address, bool quiet)
+        => Render.Form.Posting(address + "/" + QuietSegment, new Render.Form.Field(QuietField, Holds.Quiet, quiet ? "false" : "true", Render.Form.Input.Hidden))
+            with { Tool = "quiet-tangent", Submit = quiet ? "Stop quieting" : "Quiet this Tangent", Quiet = true };
 
     /// <summary>Every month the Tangent's Topics started in, newest first, with how many, as its row keeps them.</summary>
     private static IReadOnlyList<Render.TopicViews.Choice> Months(Tangent row, string address) => row.Months

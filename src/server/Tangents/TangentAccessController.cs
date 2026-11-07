@@ -47,7 +47,7 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, RoleCollecti
 
     [HttpGet(Route)]
     [Tool(Name = "read_tangent_access")]
-    [Description("Read which roles read and post in a Tangent, a page at a time, for whoever may change it. Follow with change_tangent_access.")]
+    [Description("Read which roles read and post in a Tangent, a page at a time, for whoever may change it. Then call change_tangent_access.")]
     [Needs(Bit.View)]
     public async Task<IActionResult> Get([Description(Holds.Tangent)] string tangent, [FromQuery(Name = RolesController.PageQuery), Description(Holds.Number)] string? page, CancellationToken ct)
     {

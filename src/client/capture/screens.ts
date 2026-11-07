@@ -112,6 +112,12 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'lifted', seed: 'lifted', signedIn: true },
     ],
   },
+  // The door paged back for the persona whose checkpoint stands at the log's last sequence: what reached her and is no
+  // longer new, newest first, from before any sequence the log holds.
+  'door-older': {
+    path: '/',
+    states: [{ name: 'read', seed: 'door-quiet', signedIn: true, query: { before: '1000000' } }],
+  },
   // Every Tangent the persona may view in a place of sixty after its first: the first page, the page after it, and the
   // first page as a visitor reads it.
   tangents: {

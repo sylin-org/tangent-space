@@ -75,7 +75,7 @@ public sealed class SeenTests
 
         Assert.False(await NewOnTangentPage(bea, root));
         Assert.Equal(0, await NewOnDoor(bea));
-        Assert.True((await Send(bea.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news").GetProperty("quiet").GetBoolean());
+        Assert.True((await Send(bea.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news").GetProperty("empty").GetBoolean());
 
         await Replied(root, Mo, "Or a nail, at a pinch.");
 
@@ -126,7 +126,7 @@ public sealed class SeenTests
         var old = await Replied(root, Mo, "From a hook.");
         using var bea = await SignedIn(tangentSpace, Bea);
         await Form(bea, TopicPath(root), SeenController.Path, Fields(root, "1"));
-        Assert.True((await Send(bea.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news").GetProperty("quiet").GetBoolean());
+        Assert.True((await Send(bea.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news").GetProperty("empty").GetBoolean());
 
         Assert.IsType<Outcome<Post>.Done>(await new EditPost(old.Id, 1, PostBody.Of($"From a hook, [@bea](/p/{Bea})."), null, Mo).Send(Cancellation));
 

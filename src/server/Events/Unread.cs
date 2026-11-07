@@ -11,8 +11,9 @@ namespace Tangent.Events;
 /// <see cref="Floor"/>, the later of their arrival (<see cref="Participant.ArrivedSeq"/>) and their place mark; in a
 /// Topic, past their mark there. So a Post is new where its <see cref="Post.LogSeq"/> is past the floor and its
 /// <see cref="Post.Sequence"/> past their Topic mark, and a Topic's new Posts are always its last ones. What is for
-/// them (<see cref="ForYou"/>) is read on the door and counted on every page's masthead (<see cref="Badge"/>). Reads
-/// only and takes no lock: a position moves by <see cref="Seen"/> and by the reader's own write.</summary>
+/// them (<see cref="ForYou"/>) is read on the door and counted on every page's masthead (<see cref="Badge"/>), and what
+/// reached them and is no longer new is paged back (<see cref="Earlier"/>). Reads only and takes no lock: a position moves
+/// by <see cref="Seen"/> and by the reader's own write.</summary>
 public sealed class Unread
 {
     /// <summary>The highest count said as it is; past it the count reads "at least" (<c>99+</c>).</summary>
@@ -81,24 +82,16 @@ public sealed class Unread
     /// its newest, and a role given or taken is the newest change of that role. Newest first. One read of at most
     /// <see cref="CountLimit"/> and one more rows of each kind, the mentions of their roles one range of
     /// <c>ix_event_roles</c> for each, what capability reads for the Tangents they name, and
-    /// one keyed read each of the Posts they name and of the reader's marks on their Topics.</summary>
+    /// one keyed read each of the Posts they name and of the reader's marks on their Topics; and the Topics they follow with
+    /// something new past the floor (<see cref="Follow.NewFor"/>), one range of as many, whose roots and marks join
+    /// the same keyed reads (<see cref="FollowedOf"/>).</summary>
     public async Task<ForYou> ForYouNow(CancellationToken ct, TimeProvider? clock = null)
     {
         var floor = Floor;
         var readerId = Reader.Id;
-        var page = new QueryDefinition { Page = 1, PageSize = CountLimit + 1 };
-        var targeted = await Event.Query(e => e.TargetId == readerId && e.Seq > floor,
-            page.WithSort<Event>(sort => sort.OrderByDescending(e => e.Seq)), ct);
         var readable = new Readable(readerId, clock);
-        IReadOnlyList<Event> reports = await readable.Reports(ct)
-            ? await Event.Query(e => e.Report == true && e.Seq > floor,
-                new QueryDefinition { Page = 1, PageSize = CountLimit + 1 }.WithSort<Event>(sort => sort.OrderByDescending(e => e.Seq)), ct)
-            : [];
-        var held = await readable.Held(ct);
-        IReadOnlyList<Event> named = held.Count > 0
-            ? await Event.Query(e => held.Contains(e.Role!) && e.Kind == EventKind.Mention && e.Seq > floor,
-                new QueryDefinition { Page = 1, PageSize = CountLimit + 1 }.WithSort<Event>(sort => sort.OrderByDescending(e => e.Seq)), ct)
-            : [];
+        var (targeted, reports, named) = await Reaching(floor, long.MaxValue, CountLimit, readable, ct);
+        var following = await Follow.NewFor(readerId, floor, CountLimit + 1, ct);
         await readable.Prepare([.. targeted, .. reports, .. named], ct);
         var decides = await readable.Decides(ct);
         var waiting = decides ? await Applications.Waiting(floor, long.MaxValue, CountLimit + 1, ct) : [];
@@ -108,8 +101,8 @@ public sealed class Unread
         var reached = targeted.Concat(reports).Concat(named.Where(row => mentioning.Add(Mentioned(row))))
             .Where(row => row.ActorId != readerId && readable.Reaches(row))
             .DistinctBy(row => row.Seq).OrderByDescending(row => row.Seq).ToList();
-        var posts = await Posts(reached, ct);
-        var marks = await Marks(reached.Where(Arrival).Select(row => row.TopicId).OfType<string>(), ct);
+        var posts = await Posts(reached, ct, following.Select(row => row.TopicId));
+        var marks = await Marks(reached.Where(Arrival).Select(row => row.TopicId).OfType<string>().Concat(following.Select(row => row.TopicId)), ct);
 
         var kept = new List<Event>(reached.Count);
         var edits = new HashSet<string>(StringComparer.Ordinal);
@@ -135,13 +128,102 @@ public sealed class Unread
             if (holds) kept.Add(row);
         }
 
-        var through = new[] { floor, kept.Count > 0 ? kept[0].Seq : floor, waiting.Count > 0 ? waiting[0].WaitingSeq!.Value : floor }.Max();
-        var atLeast = targeted.Count > CountLimit || reports.Count > CountLimit || named.Count > CountLimit || waiting.Count > CountLimit;
         // A Post that reaches the reader as a reply, a Topic taken from theirs or a report is one thing for them, whatever
         // it mentions.
         var arrived = kept.Where(row => row.Kind == EventKind.PostCreated).Select(row => row.PostId).OfType<string>().ToHashSet(StringComparer.Ordinal);
         kept.RemoveAll(row => row.Kind == EventKind.Mention && row.PostId is { } postId && arrived.Contains(postId));
-        return new ForYou(kept, waiting.Count, atLeast, through, decides, posts);
+        var followed = await FollowedOf(following, kept, posts, marks, readable, ct);
+        var through = new[]
+        {
+            floor, kept.Count > 0 ? kept[0].Seq : floor, waiting.Count > 0 ? waiting[0].WaitingSeq!.Value : floor,
+            followed.Count > 0 ? followed.Max(topic => topic.Root.LastLogSeq) : floor
+        }.Max();
+        var atLeast = targeted.Count > CountLimit || reports.Count > CountLimit || named.Count > CountLimit || waiting.Count > CountLimit
+                      || following.Count > CountLimit;
+        return new ForYou(kept, waiting.Count, atLeast, through, decides, posts) { Following = followed };
+    }
+
+    /// <summary>The three ranges of the log that reach the reader by what they are, each newest first, past
+    /// <paramref name="above"/> and before <paramref name="below"/>, at most <paramref name="size"/> and one more: each row
+    /// that names them as its target, each report while <paramref name="readable"/> says reports reach them, and each mention
+    /// of a role they hold, one range of <c>ix_event_roles</c> for each.</summary>
+    private async Task<(IReadOnlyList<Event> Targeted, IReadOnlyList<Event> Reports, IReadOnlyList<Event> Named)> Reaching(long above, long below, int size,
+        Readable readable, CancellationToken ct)
+    {
+        var readerId = Reader.Id;
+        QueryDefinition Newest() => new QueryDefinition { Page = 1, PageSize = size + 1 }.WithSort<Event>(sort => sort.OrderByDescending(e => e.Seq));
+        var targeted = await Event.Query(e => e.TargetId == readerId && e.Seq > above && e.Seq < below, Newest(), ct);
+        IReadOnlyList<Event> reports = await readable.Reports(ct)
+            ? await Event.Query(e => e.Report == true && e.Seq > above && e.Seq < below, Newest(), ct)
+            : [];
+        var held = await readable.Held(ct);
+        IReadOnlyList<Event> named = held.Count > 0
+            ? await Event.Query(e => held.Contains(e.Role!) && e.Kind == EventKind.Mention && e.Seq > above && e.Seq < below, Newest(), ct)
+            : [];
+        return (targeted, reports, named);
+    }
+
+    /// <summary>The Topics the reader follows that hold Posts new to them that nothing else for them holds, newest first: each
+    /// root that stands in a Tangent they may view and is new to them (<see cref="InTopic"/>), with how many of its new Posts
+    /// are not already among <paramref name="kept"/>, or no count where they never read it; one whose every new Post is
+    /// already for them adds nothing, so each Post counts once. What capability reads for the Tangents it names.</summary>
+    private async Task<IReadOnlyList<Followed>> FollowedOf(IReadOnlyList<Follow> following, IReadOnlyList<Event> kept,
+        IReadOnlyDictionary<string, Post> posts, IReadOnlyDictionary<string, long> marks, Readable readable, CancellationToken ct)
+    {
+        var roots = following.Take(CountLimit).Select(row => (Row: row, Root: posts.GetValueOrDefault(row.TopicId)))
+            .Where(each => each.Root is { ParentId: null, Removed: false }).ToList();
+        if (roots.Count == 0) return [];
+        await readable.Include(roots.Select(each => each.Root!.TangentId), ct);
+        var already = kept.Where(Arrival).GroupBy(row => row.TopicId ?? "", StringComparer.Ordinal)
+            .ToDictionary(topic => topic.Key, topic => topic.Select(row => row.PostId).Distinct(StringComparer.Ordinal).Count(), StringComparer.Ordinal);
+        var shown = new List<Followed>(roots.Count);
+        foreach (var (row, root) in roots)
+        {
+            if (!readable.Views(root!.TangentId)) continue;
+            // Someone else's Posts past the mark: no more than the follow counted since the reader last caught up, which
+            // leaves out their own.
+            var (isNew, count) = InTopic(root, marks.TryGetValue(root.Id, out var mark) ? mark : null);
+            long? left = count is { } all ? Math.Min(all, row.Count) - already.GetValueOrDefault(root.Id) : null;
+            if (isNew && left is null or > 0) shown.Add(new Followed(root, left));
+        }
+
+        return shown;
+    }
+
+    /// <summary>The most things one page of what reached the reader and is no longer new holds (<see cref="Earlier"/>).</summary>
+    public const int OlderLimit = 20;
+
+    /// <summary>What reached the reader before the log's sequence <paramref name="before"/> and is no longer new to them,
+    /// newest first: a reply to them, a Topic taken from their Post, a mention of them, a report, their Post someone else
+    /// edited or removed, read from the ranges <see cref="Reaching"/> reads, at most <see cref="OlderLimit"/> of each and one
+    /// more. Where one came back full, the page holds only what lies past the last row of the fullest, and
+    /// <see cref="Past.Next"/> is where the page before it begins; what is still new, which the door shows, is left out, so a
+    /// page may hold less, or nothing, while more lies behind it. A row someone else made that reaches them, whose Post and
+    /// root stand, or a removal; a mention once, and not where its Post arrived for them on the same page. What capability
+    /// reads for the Tangents the rows name, and one keyed read each of their Posts and of the reader's marks on the Topics
+    /// of those past the floor.</summary>
+    public async Task<Past> Earlier(long before, CancellationToken ct)
+    {
+        var readable = new Readable(Reader.Id);
+        var (targeted, reports, named) = await Reaching(0, before, OlderLimit, readable, ct);
+        var cutoff = new[] { targeted, reports, named }.Where(range => range.Count > OlderLimit).Select(range => range[^1].Seq).DefaultIfEmpty(0).Max();
+        var rows = targeted.Concat(reports).Concat(named)
+            .Where(row => row.Seq > cutoff && row.Kind is EventKind.PostCreated or EventKind.Mention or EventKind.PostEdited or EventKind.PostRemoved)
+            .ToList();
+        await readable.Prepare(rows, ct);
+        rows = rows.Where(row => row.ActorId != Reader.Id && readable.Reaches(row)).DistinctBy(row => row.Seq).OrderByDescending(row => row.Seq).ToList();
+        var posts = await Posts(rows, ct);
+        var marks = await Marks(rows.Where(row => row.Seq > Floor && Arrival(row)).Select(row => row.TopicId).OfType<string>(), ct);
+
+        var mentioned = new HashSet<string>(StringComparer.Ordinal);
+        var kept = rows.Where(row => posts.TryGetValue(row.PostId ?? "", out var post) && posts.TryGetValue(row.TopicId ?? "", out var root)
+                                     && (row.Kind == EventKind.PostRemoved || !post.Removed)
+                                     && !(row.Seq > Floor && (!Arrival(row) || post.Sequence > (marks.TryGetValue(root.Id, out var mark) ? mark : -1)))
+                                     && (row.Kind != EventKind.Mention || mentioned.Add(Mentioned(row))))
+            .ToList();
+        var arrived = kept.Where(row => row.Kind == EventKind.PostCreated).Select(row => row.PostId).OfType<string>().ToHashSet(StringComparer.Ordinal);
+        kept.RemoveAll(row => row.Kind == EventKind.Mention && arrived.Contains(row.PostId!));
+        return new Past(kept, cutoff > 0 ? cutoff + 1 : null, posts);
     }
 
     /// <summary>The Post version a mention was written with, which one mention of the reader stands for.</summary>
@@ -162,23 +244,35 @@ public sealed class Unread
             ? await (await Of(reader, ct)).BadgeNow(baseAddress + "/", ct)
             : null;
 
-    /// <summary>The Posts the rows name and the roots of their Topics, by Id, in one keyed read.</summary>
-    public static async Task<IReadOnlyDictionary<string, Post>> Posts(IEnumerable<Event> rows, CancellationToken ct)
+    /// <summary>The Posts the rows name and the roots of their Topics, and the Posts <paramref name="also"/> names, by Id, in
+    /// one keyed read.</summary>
+    public static async Task<IReadOnlyDictionary<string, Post>> Posts(IEnumerable<Event> rows, CancellationToken ct, IEnumerable<string>? also = null)
     {
-        var ids = rows.SelectMany(row => new[] { row.PostId, row.TopicId }).OfType<string>().Distinct(StringComparer.Ordinal).ToList();
+        var ids = rows.SelectMany(row => new[] { row.PostId, row.TopicId }).OfType<string>().Concat(also ?? []).Distinct(StringComparer.Ordinal).ToList();
         if (ids.Count == 0) return new Dictionary<string, Post>(StringComparer.Ordinal);
         return (await Post.Get(ids, ct)).OfType<Post>().ToDictionary(post => post.Id, StringComparer.Ordinal);
     }
 
-    /// <summary>What is for the reader and new to them: the <see cref="Rows"/> of the log, newest first, and how many
-    /// applications wait past their floor (<see cref="Waiting"/>), counted together (<see cref="Count"/>), a lower bound
-    /// where <see cref="AtLeast"/>; <see cref="Through"/>, the newest of them, or the floor where there is none;
-    /// whether the reader decides applications (<see cref="Applications"/>); and the Posts the rows name, by Id.</summary>
+    /// <summary>What is for the reader and new to them: the <see cref="Rows"/> of the log, newest first, how many
+    /// applications wait past their floor (<see cref="Waiting"/>), and the Topics they follow that hold Posts new to them
+    /// that nothing else here holds (<see cref="Following"/>), counted together (<see cref="Count"/>), a lower bound where
+    /// <see cref="AtLeast"/>; <see cref="Through"/>, the newest of them, or the floor where there is none; whether the reader
+    /// decides applications (<see cref="Applications"/>); and the Posts the rows and the followed Topics name, by Id.</summary>
     public sealed record ForYou(IReadOnlyList<Event> Rows, int Waiting, bool AtLeast, long Through, bool Applications,
         IReadOnlyDictionary<string, Post> Posts)
     {
-        public int Count => Rows.Count + Waiting;
+        public IReadOnlyList<Followed> Following { get; init; } = [];
+
+        public int Count => Rows.Count + Waiting + Following.Count;
     }
+
+    /// <summary>A Topic the reader follows that holds Posts new to them: its root, and how many of its new Posts nothing else
+    /// for them holds, null where they never read it.</summary>
+    public sealed record Followed(Post Root, long? New);
+
+    /// <summary>One page of what reached the reader and is no longer new to them (<see cref="Earlier"/>): its rows, newest
+    /// first, where the page before it begins, null where nothing lies behind it, and the Posts the rows name, by Id.</summary>
+    public sealed record Past(IReadOnlyList<Event> Rows, long? Next, IReadOnlyDictionary<string, Post> Posts);
 
     /// <summary>The masthead's count: how many things are for the reader and new to them, a lower bound where
     /// <see cref="AtLeast"/>, and the door, where they are read. <see cref="Through"/> is the newest of them, past which

@@ -12,7 +12,8 @@ namespace Tangent.Posts;
 /// through the log's target index, and one <see cref="EventKind.Mention"/> per participant the body mentions
 /// (<see cref="Mentions.Notify"/>). The reply and its root carry that event's sequence (<see cref="Post.Logged"/>),
 /// and the author's mark on the Topic moves onto the reply where it stood on the Post just before
-/// (<see cref="Seen.Wrote"/>). The parent is the root unless a Post of this Topic is named. The Topic exists for
+/// (<see cref="Seen.Wrote"/>); the author follows the Topic unless they stopped, and its other followers have the reply
+/// new to them (<see cref="Follow"/>). The parent is the root unless a Post of this Topic is named. The Topic exists for
 /// the author, who holds <see cref="Bit.View"/> in its Tangent, or the command answers that no Topic has the Id; the
 /// author holds <see cref="Bit.Post"/> on the Topic, which no one does on a removed one and only its moderators do on a
 /// closed one, or is refused with the gate word. Idempotent by Id: the same Id with the same request answers with the existing Post, before any
@@ -53,7 +54,8 @@ public sealed record Reply(
         await reply.Save(ct);
         await root.Save(ct);
         await MediaUse.Record(reply, reply.AuthorId, [], ct);
-        await Seen.Wrote(reply.AuthorId, root, reply.Sequence, ct);
+        await Follow.Wrote(reply.AuthorId, root, await Seen.Wrote(reply.AuthorId, root, reply.Sequence, ct), ct);
+        await Follow.Moved(root, reply.AuthorId, ct);
         await Mentions.Notify(reply, reply.AuthorId, [], at, ct);
         return new Outcome<Post>.Done(reply);
     }

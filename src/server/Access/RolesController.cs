@@ -78,7 +78,7 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
 
     [HttpGet(Path)]
     [Tool(Name = "read_roles")]
-    [Description("Read the roles in their order, the highest first, a page at a time, for whoever holds ManageRoles. Follow with create_role, change_role or delete_role where one's can allows it.")]
+    [Description("Read the roles in their order, the highest first, a page at a time, for whoever holds ManageRoles. Then call create_role, change_role or delete_role where one's can allows it.")]
     [Needs(Bit.View)]
     public async Task<IActionResult> Get([FromQuery(Name = PageQuery), Description(Holds.Number)] string? page, CancellationToken ct)
     {
@@ -93,7 +93,7 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
     [HttpPost(Path)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "create_role", Destructive = false, Idempotent = false, OpenWorld = false)]
-    [Description("Create a role by naming it and choosing what it grants, for whoever holds ManageRoles; no one is in it yet. Sending it again makes a second role. Follow with give_role.")]
+    [Description("Create a role by naming it and choosing what it grants, for whoever holds ManageRoles; no one is in it yet. Sending it again makes a second role. Then call give_role.")]
     public Task<IActionResult> Create(CreateRoleInput input, CancellationToken ct) => Write(input.Name, input.Permissions,
         Granted(input.Permissions, out var bits) is { } refused
             ? refused

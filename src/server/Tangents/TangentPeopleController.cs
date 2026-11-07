@@ -63,7 +63,7 @@ public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollecti
     [HttpGet(Route)]
     [Needs(Bit.ManageTangent)]
     [Tool(Name = "read_tangent_people")]
-    [Description("Read who reads and posts in a Tangent you manage, by role and by person, a page at a time, the asks to join that wait, and, with find, the participants whose handles start with it. Follow with let_into_tangent or change_tangent_joining.")]
+    [Description("Read who reads and posts in a Tangent you manage, by role and by person, a page at a time, the asks to join that wait, and, with find, the participants whose handles start with it. Then call let_into_tangent or change_tangent_joining.")]
     public async Task<IActionResult> Get([Description(Holds.Tangent)] string tangent, [FromQuery(Name = FindQuery), Description(Holds.Find)] string? find,
         [FromQuery(Name = AfterQuery), Description(Holds.After)] string? after, CancellationToken ct)
     {

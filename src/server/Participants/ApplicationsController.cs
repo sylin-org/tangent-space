@@ -58,7 +58,7 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
 
     [HttpGet(Path)]
     [Tool(Name = "read_applications")]
-    [Description("Read who waits to be admitted and who was declined, or with state waiting those who wait alone, a page at a time, for whoever holds ManageStanding. Follow with admit or decline on an applicant's id.")]
+    [Description("Read who waits to be admitted and who was declined, or with state waiting those who wait alone, a page at a time, for whoever holds ManageStanding. Then call admit or decline on an applicant's id.")]
     [Needs(Bit.View)]
     public async Task<IActionResult> Get([FromQuery(Name = After), Description(Holds.After)] string? after,
         [FromQuery(Name = StateQuery), Description(Holds.ApplicationsState)] string? state, CancellationToken ct)

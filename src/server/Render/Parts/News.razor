@@ -3,15 +3,17 @@
    ban, who timed them out and until when, who declined their application, who let them into a Tangent or declined their
    ask, and who gave them a role or took one, where someone did; their Posts someone else edited or removed, replies to
    them, mentions of them, the Topics taken on a tangent from their Posts, the reports for whoever may view the moderators'
-   Tangent, the new articles and what is new in each Tangent, with the form that says all of it seen. A group draws its first
-   five and opens the rest in place from one line. With nothing new, that in one sentence. A count the door could not
-   finish reads "at least". *@
-@if (Model.Quiet)
+   Tangent, the Topics they follow with what is new in each, the new articles and what is new in each Tangent, with the form
+   that says all of it seen. A group draws its first five and opens the rest in place from one line. With nothing new, that
+   in one sentence. A count the door could not finish reads "at least". Last, the way to what reached them before and is
+   no longer new. *@
+@if (Model.Empty)
 {
     <div class="topic-empty">
         <p class="topic-empty-title">Nothing new since you were here.</p>
         <Draw Part="@Model.Seen" />
     </div>
+    @Older
 }
 else
 {
@@ -60,6 +62,16 @@ else
         @Group("Mentions of you", Model.Mentions)
         @Group("Taken on a tangent from your posts", Model.Taken)
         @Group("Reports", Model.Reports)
+        @if (Model.Following is { Count: > 0 } following)
+        {
+            <h3 class="rail-heading rail-heading-spaced">Topics you follow · @following.Count.ToString(CultureInfo.InvariantCulture)</h3>
+            <ul class="rail-views list">
+                @foreach (var topic in following)
+                {
+                    <li @key="topic.TopicId"><a href="@topic.Address">@topic.Title</a> <span class="badge is-new">@(topic.New is { } count ? count.ToString(CultureInfo.InvariantCulture) + " new" : "new")</span> <span class="topic-row-none">@topic.Tangent</span></li>
+                }
+            </ul>
+        }
         @Group("New articles", Model.Articles)
         @if (Model.PerTangent.Count > 0)
         {
@@ -71,6 +83,7 @@ else
                 }
             </ul>
         }
+        @Older
     </section>
 }
 
@@ -101,6 +114,14 @@ else
             <li @key="post.PostId"><Draw Part="@(did is null ? post : post with { Did = did })" /></li>
         }
     </ul>;
+
+    /// <summary>The way to what reached the reader before and is no longer new, where the door names it.</summary>
+    private RenderFragment Older => @<text>
+        @if (Model.Older is { } older)
+        {
+            <Draw Part="@(new Render.Pager("For you", null, new Render.Onward("Older for you", older)))" />
+        }
+    </text>;
 
     /// <summary>What is new in one Tangent: its Topics, or its articles in a Tangent of articles, and its replies.</summary>
     private static string InTangent(Space.Door.InTangent tangent)
@@ -139,6 +160,7 @@ else
             if (news.Mentions.Count > 0) parts.Add(Wording.Count(news.Mentions.Count, news.Mentions.AtLeast, "mention", "mentions") + " of you");
             if (news.Taken is { Count: > 0 } taken) parts.Add(Wording.Count(taken.Count, taken.AtLeast, "topic", "topics") + " taken on a tangent from your posts");
             if (news.Reports is { Count: > 0 } reports) parts.Add(Wording.Count(reports.Count, reports.AtLeast, "report", "reports"));
+            if (news.Following is { Count: > 0 } following) parts.Add("new in " + Wording.Count(following.Count, false, "topic you follow", "topics you follow"));
             if (news.Applications is { } applications) parts.Add(Wording.Count(applications.Count, applications.AtLeast, "new application", "new applications"));
             foreach (var tangent in news.PerTangent.Where(tangent => tangent.Others > 0))
                 parts.Add(Wording.Count(tangent.Others, tangent.AtLeast, "new post", "new posts") + " in " + tangent.Name);

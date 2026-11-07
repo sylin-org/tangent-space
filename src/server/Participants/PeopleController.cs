@@ -96,7 +96,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
 
     [HttpGet(Path)]
     [Tool(Name = "read_people")]
-    [Description("Find the participants admitted here, a page at a time, by the start of a handle, by standing or by a role they hold, with what you may change of each, for whoever holds ManageStanding or ManageRoles. Follow with time_out, ban, lift, give_role or take_role where one's entry allows it.")]
+    [Description("Find the participants admitted here, a page at a time, by the start of a handle, by standing or by a role they hold, with what you may change of each, for whoever holds ManageStanding or ManageRoles. Then call time_out, ban, lift, give_role or take_role where one's entry allows it.")]
     [Needs(Bit.View)]
     public async Task<IActionResult> Get([FromQuery(Name = After), Description(Holds.After)] string? after, [FromQuery(Name = HandleQuery), Description(Holds.HandleStart)] string? handle,
         [FromQuery(Name = StandingQuery), Description(Holds.PeopleStanding)] string? standing, [FromQuery(Name = RoleQuery), Description(Holds.PeopleRole)] string? role,

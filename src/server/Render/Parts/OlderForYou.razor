@@ -1,0 +1,26 @@
+@* The door paged back: what reached the reader and is no longer new, newest first, each a row with what was done, then the
+   way back to what is new and to the page before. A page with nothing on it says why: nothing older at all, or only what
+   is still new, which the door shows. *@
+<section class="door-news" aria-labelledby="door-older-title">
+    <div class="topic-list-head">
+        <h2 id="door-older-title" class="topic-list-title">Older for you</h2>
+    </div>
+    @if (Model.Items.Count > 0)
+    {
+        <ul class="topic-rows list">
+            @foreach (var item in Model.Items)
+            {
+                <li @key="item.Post.PostId + item.Kind"><Draw Part="@item.Post" /></li>
+            }
+        </ul>
+    }
+    else
+    {
+        <Draw Part="@(new Render.Note(Model.Next is null ? "Nothing older for you." : "Everything here is still new to you, on your door; older things lie further back."))" />
+    }
+    <Draw Part="@(new Render.Pager("For you", new Render.Onward("What is new", Model.Newest), Model.Next is { } next ? new Render.Onward("Older", next) : null))" />
+</section>
+
+@code {
+    [Parameter, EditorRequired] public Space.DoorPast.Earlier Model { get; set; } = default!;
+}

@@ -57,11 +57,19 @@ public sealed class Readable(string? participantId, TimeProvider? clock = null)
 
         if (!_placeRead && rows.Any(row => row.TangentId is null)) await ReadPlace(ct);
 
-        var missing = rows.Select(row => row.TangentId).OfType<string>().Distinct(StringComparer.Ordinal)
-            .Where(id => !_tangents.ContainsKey(id)).ToList();
+        await Include(rows.Select(row => row.TangentId).OfType<string>(), ct);
+    }
+
+    /// <summary>Reads what the reader holds in each of these Tangents that it does not hold already.</summary>
+    public async Task Include(IEnumerable<string> tangentIds, CancellationToken ct)
+    {
+        var missing = tangentIds.Distinct(StringComparer.Ordinal).Where(id => !_tangents.ContainsKey(id)).ToList();
         if (missing.Count == 0) return;
         foreach (var (id, capabilities) in await Capabilities.LoadEach(participantId, missing, ct)) _tangents[id] = capabilities;
     }
+
+    /// <summary>Whether the reader may view the Tangent <paramref name="tangentId"/>, as <see cref="Include"/> read it.</summary>
+    public bool Views(string tangentId) => _tangents.TryGetValue(tangentId, out var on) && on.Exists;
 
     /// <summary>Whether the reader holds <see cref="Bit.ManageStanding"/> in the place, and so decides applications: what
     /// <see cref="Prepare"/> read of the place, or one read of it now where it read none.</summary>

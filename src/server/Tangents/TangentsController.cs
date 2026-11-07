@@ -31,7 +31,7 @@ public sealed class TangentsController(KoanWebBaseUrl baseUrl, IDataProtectionPr
     [HttpGet(Route)]
     [HttpHead(Route)]
     [Tool(Name = "read_tangents")]
-    [Description("List the Tangents you may read, a page at a time, and the members-only ones you may join or ask to join, which carry joining. Follow with read_tangent on one's slug, start_topic in it, or join_tangent.")]
+    [Description("List the Tangents you may read, a page at a time, and the members-only ones you may join or ask to join, which carry joining. Then call read_tangent on one's slug, start_topic in it, or join_tangent.")]
     [Needs(Bit.View)]
     public async Task<IActionResult> Get([FromQuery(Name = After), Description(Holds.After)] string? after, CancellationToken ct)
     {

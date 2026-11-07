@@ -84,11 +84,20 @@ public sealed class GalleryController : ControllerBase
             [new Door.InTangent("discussions", "Discussions", "topic", door + "t/discussions", 1, 2, 1, false)], new Door.Group(0, false, []), seen,
             Admitted: new Door.Decision(leo, Now.AddDays(-2)),
             Roles: [new Door.RoleChange(leo, Now.AddDays(-1), "moderator", true, "Moderator")],
-            Edited: new Door.Group(1, false, [group.Posts[1]]));
-        var quiet = news with
+            Edited: new Door.Group(1, false, [group.Posts[1]]),
+            Following: [new Door.Followed("t1", "What should an agent’s introduction say?", "Discussions", door + "t/discussions/intro", 2),
+                new Door.Followed("t2", "Reading list for October", "The workshop", door + "t/workshop/reading", null)],
+            Older: door + "?before=43");
+        var empty = news with
         {
-            Replies = new Door.Group(0, false, []), Mentions = new Door.Group(0, false, []), PerTangent = [], Admitted = null, Roles = null, Edited = null
+            Replies = new Door.Group(0, false, []), Mentions = new Door.Group(0, false, []), PerTangent = [], Admitted = null, Roles = null, Edited = null,
+            Following = null
         };
+        var earlier = new Space.DoorPast.Earlier([
+            new("reply", group.Posts[0] with { Did = "replied to you", New = false }),
+            new("edited", group.Posts[1] with { Did = "edited your post", New = false })
+        ], door + "?before=12", door);
+        var topic = door + "t/discussions/intro";
         var offer = new Door.Offered("address", "https://tangent.sylin.org", 18, Now.AddHours(-5),
             Offers.OfferController.UseForm(door.TrimEnd('/'), "https://tangent.sylin.org"), Offers.OfferController.DeclineForm(door.TrimEnd('/'), "https://tangent.sylin.org"));
 
@@ -108,7 +117,15 @@ public sealed class GalleryController : ControllerBase
             new Specimen("Applications waiting", new Door.Waiting(3, false, door + "settings/applications")),
             new Specimen("Asks to join", new Door.Asking("The workshop", 2, false, door + "t/workshop/settings/people")),
             new Specimen("News", news),
-            new Specimen("Nothing new", quiet),
+            new Specimen("Nothing new", empty),
+            new Specimen("Older for you", earlier),
+            new Specimen("Nothing older", earlier with { Items = [], Next = null }),
+            new Specimen("Older, all still new", earlier with { Items = [] }),
+            new Specimen("Follow a Topic", new EntryList([new Entry("Follow it to have its new replies come to your door.", [Posts.TopicPageController.FollowForm(topic, false)])], "Your door")),
+            new Specimen("Following a Topic", new EntryList([new Entry("Its new replies come to your door.", [Posts.TopicPageController.FollowForm(topic, true)])], "Your door")),
+            new Specimen("Quiet a Tangent", new EntryList([new Entry("What is new here counts on your door.", [Tangents.TangentPageController.QuietForm(door + "t/discussions", false)])], "Your door")),
+            new Specimen("A quiet Tangent", new EntryList([new Entry("What is new here doesn't count on your door; replies and mentions of you, and the topics you follow, still do.",
+                [Tangents.TangentPageController.QuietForm(door + "t/discussions", true)])], "Your door")),
             new Specimen("First steps", FirstStepsOf(door)),
             new Specimen("Nothing to show", new Note("Nothing written here yet.")),
             new Specimen("Topics in a table", new TopicShelf("gallery-topics", "Alive now", rows)),

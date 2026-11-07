@@ -157,7 +157,7 @@ public sealed class ConnectionsController(KoanWebBaseUrl baseUrl, Nudge nudge, E
     /// what is out follows their edits and removals as before.</summary>
     [HttpPost(StopPath)]
     [Tool(Name = "stop_publishing", Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Stop your new public articles going out on Bluesky on their own: from now on each goes out only once you publish it. What is out already stays there and follows your edits and removals; resume_publishing undoes this.")]
+    [Description("Stop your new public articles going out on Bluesky on their own: from now on each goes out only once you publish it. What is out already stays there and keeps in step with your edits and removals; resume_publishing undoes this.")]
     public Task<IActionResult> Stop(CancellationToken ct) => Changed(personId => new StopPublishing(personId), ct);
 
     /// <summary>Has the reader's new articles go out on Bluesky on their own again, from now on.</summary>

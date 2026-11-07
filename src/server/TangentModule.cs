@@ -75,6 +75,7 @@ public sealed class TangentModule : KoanModule
         services.AddScoped<HtmlRenderer>();
         services.AddSingleton(new ResourceComponents()
             .Add<Door>(door => door.Name, Door.Version, Door.Frame, Door.Card)
+            .Add<DoorPast>(page => "Older for you · " + page.Name, frame: DoorPast.Frame)
             .Add<Koan.Web.Controllers.Problem, Page>(Render.Parts.Refused.Heading)
             .Add<Participants.SignIn>(signIn => "Sign in · " + signIn.Name, frame: Participants.SignIn.Frame)
             .Add<Tangents.TangentPage>(page => page.Name + " · " + page.Place, Tangents.TangentPage.Version, Tangents.TangentPage.Frame, Tangents.TangentPage.Card)
