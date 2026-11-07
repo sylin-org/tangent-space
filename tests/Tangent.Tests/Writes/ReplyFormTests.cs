@@ -101,7 +101,7 @@ public sealed partial class ReplyFormTests
     }
 
     [Fact]
-    public async Task A_topics_root_tid_under_its_tangent_names_it_and_each_of_its_posts_the_page_moving_to_the_slugs_address_while_a_slug_that_looks_like_a_tid_names_its_own_topic()
+    public async Task A_topics_root_tid_under_any_tangent_names_it_and_each_of_its_posts_the_page_moving_to_where_it_stands_while_a_slug_that_looks_like_a_tid_names_its_own_topic()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
@@ -120,7 +120,8 @@ public sealed partial class ReplyFormTests
 
         Assert.Equal((HttpStatusCode.Found, BaseUrl + TopicPath(root)), (found.Status, found.Location));
         Assert.Equal(HttpStatusCode.NotFound, ofReply.Status);
-        Assert.Equal(HttpStatusCode.NotFound, ofOtherTangent.Status);
+        // A Topic named by its root's TID under another Tangent is found where it stands, as one that moved is.
+        Assert.Equal((HttpStatusCode.Found, BaseUrl + TopicPath(elsewhere)), (ofOtherTangent.Status, ofOtherTangent.Location));
         Assert.Equal(HttpStatusCode.NotFound, unknown.Status);
         Assert.True(Tid.IsValid(lookalike.Slug));
         Assert.Equal((HttpStatusCode.OK, lookalike.Id), (bySlug.Status, bySlug.Json.GetProperty("id").GetString()));

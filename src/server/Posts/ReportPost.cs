@@ -92,9 +92,9 @@ public sealed record ReportPost(
         else
         {
             var title = Title(await ModeratorsTangent.MayView(reported.TangentId, rows.Space, ct) ? topic.Title ?? "" : said ? FirstWords(Reason.Sent) : Unsaid);
-            written = Post.Root(Id, into.Id, title, await StartTopic.UniqueSlug(into.Id, title, Id, ct), into.DefaultKind, Opening ?? Reason, ReporterId, at,
+            written = Post.Root(Id, into.Id, title, await StartTopic.UniqueSlug(into.Id, Slug.From(title), Id, ct), into.DefaultKind, Opening ?? Reason, ReporterId, at,
                 reported.Id);
-            into.TopicStarted(written);
+            into.TopicCame(written);
             await into.Save(ct);
         }
 

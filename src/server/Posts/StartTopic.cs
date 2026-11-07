@@ -60,7 +60,7 @@ public sealed record StartTopic(
 
         var at = At ?? DateTimeOffset.UtcNow;
         Post.CheckTitle(Title);
-        var root = Post.Root(Id, TangentId, Title, await UniqueSlug(TangentId, Title, Id, ct), kind, Body, AuthorId, at, origin?.Id);
+        var root = Post.Root(Id, TangentId, Title, await UniqueSlug(TangentId, Slug.From(Title), Id, ct), kind, Body, AuthorId, at, origin?.Id);
         root.AuthorDid = await Participant.DidOf(AuthorId, ct);
         if (CoverId is not null)
         {
@@ -74,7 +74,7 @@ public sealed record StartTopic(
         root.Logged(created.Seq, root);
         await root.Save(ct);
         await MediaUse.Record(root, AuthorId, [], ct);
-        tangent.TopicStarted(root);
+        tangent.TopicCame(root);
         await tangent.Save(ct);
         await Seen.Wrote(root.AuthorId, root, root.Sequence, ct);
         await Mentions.Notify(root, root.AuthorId, [], at, ct);
@@ -88,12 +88,11 @@ public sealed record StartTopic(
         && existing.Kind == kind && existing.SentHash == Body.SentHash && existing.AuthorId == AuthorId
         && existing.OriginId == OriginId && existing.CoverId == CoverId;
 
-    /// <summary>The slug of <paramref name="title"/> for a Topic whose root is <paramref name="id"/>, or the first numbered
-    /// suffix of it that no Topic in <paramref name="tangentId"/> holds; each try is one counted query. Past the bound, the
-    /// Post's own Id is the suffix, and the whole still stays within the limit.</summary>
-    internal static async Task<string> UniqueSlug(string tangentId, string title, string id, CancellationToken ct)
+    /// <summary><paramref name="slug"/> for a Topic whose root is <paramref name="id"/>, or the first numbered suffix of it
+    /// that no Topic in <paramref name="tangentId"/> holds; each try is one counted query. Past the bound, the Post's own Id
+    /// is the suffix, and the whole still stays within the limit.</summary>
+    internal static async Task<string> UniqueSlug(string tangentId, string slug, string id, CancellationToken ct)
     {
-        var slug = Slug.From(title);
         for (var suffix = 1; suffix <= SuffixBound; suffix++)
         {
             if (suffix == 1 && Slug.Reserved.Contains(slug)) continue;

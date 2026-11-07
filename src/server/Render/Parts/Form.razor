@@ -301,7 +301,8 @@ else
         }
     </text>;
 
-    /// <summary>One choice of a field: a card with its name and what it means, an accent's tile, a picture, or a check.</summary>
+    /// <summary>One choice of a field: a card with its name and what it means, under its swatch or its tile where it has one, an
+    /// accent's tile, a picture, or a check.</summary>
     private RenderFragment Chosen(Render.Form.Field each, Render.Form.Choice choice) => @<text>
         @if (each.As == Render.Form.Input.Tone)
         {
@@ -341,6 +342,10 @@ else
                 @if (choice.Swatch is { } swatch)
                 {
                     <span class="accent-swatch" data-swatch="@swatch" aria-hidden="true"></span>
+                }
+                else if (choice.Tile is { } tile)
+                {
+                    <Draw Part="@(new Render.TangentEntry("", tile.Letter, "topic", "", 0) { Tile = new Render.Tile(tile.Tone, tile.Letter) })" As="Shape.Tile" />
                 }
                 <span class="post-form-option-text">
                     <span class="post-form-option-name">@choice.Name</span>

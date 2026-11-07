@@ -76,7 +76,8 @@ public sealed class Unread
     /// itself, as a reply to them, a Topic taken from theirs or a report, counting once whatever it mentions;
     /// and, while they hold <c>ManageStanding</c>, the applications that wait past it. A row that brought a Post
     /// (<see cref="Arrival"/>) stays while that Post and its Topic stand and the Post is new in its Topic, so reading the
-    /// Topic clears it here too; someone else's edits of one Post are its newest, a change of the reader's standing is
+    /// Topic clears it here too; someone else's edits of one Post are its newest, and their removal of it its newest while it
+    /// stays removed, so an undone removal leaves; a change of the reader's standing is
     /// its newest, and a role given or taken is the newest change of that role. Newest first. One read of at most
     /// <see cref="CountLimit"/> and one more rows of each kind, the mentions of their roles one range of
     /// <c>ix_event_roles</c> for each, what capability reads for the Tangents they name, and
@@ -112,6 +113,7 @@ public sealed class Unread
 
         var kept = new List<Event>(reached.Count);
         var edits = new HashSet<string>(StringComparer.Ordinal);
+        var removals = new HashSet<string>(StringComparer.Ordinal);
         var roles = new HashSet<string>(StringComparer.Ordinal);
         var standing = false;
         foreach (var row in reached)
@@ -123,7 +125,8 @@ public sealed class Unread
                 _ when Arrival(row) => post is { Removed: false } && root is { Removed: false }
                                        && post.Sequence > (marks.TryGetValue(root.Id, out var mark) ? mark : -1),
                 EventKind.PostEdited => post is { Removed: false } && root is not null && edits.Add(post.Id),
-                EventKind.PostRemoved or EventKind.Mention => post is not null && root is not null && (row.Kind == EventKind.PostRemoved || !post.Removed),
+                EventKind.PostRemoved => post is { Removed: true } && root is not null && removals.Add(post.Id),
+                EventKind.Mention => post is { Removed: false } && root is not null,
                 EventKind.StandingChanged => !standing && (standing = true),
                 EventKind.RoleChanged => row.Role is { } role && roles.Add(role),
                 EventKind.TangentLet => true,

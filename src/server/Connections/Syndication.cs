@@ -11,11 +11,11 @@ using Tangent.Space;
 namespace Tangent.Connections;
 
 /// <summary>A Connection's work, as its job runs it: the log past its cursor, a bounded page; the articles those rows
-/// name and every article its receipts name; and for each of its participant's articles, the version its receipt
-/// delivered against the Post's own. A public article that is ahead of its receipt is published or updated — one that
-/// arrived after the Connection began publishing on its own, or one they chose — and one that is removed or private, or
-/// that its author took down (<see cref="Receipt.Withheld"/>), is retracted, as is the copy of one gone with its Tangent,
-/// from its receipt alone. Only the
+/// name and every article its receipts name; and for each of its participant's articles, the version and the Tangent its
+/// receipt delivered against the Post's own (<see cref="Receipt.Behind"/>). A public article that is ahead of its receipt, or
+/// moved since, is published or updated — one that arrived after the Connection began publishing on its own, or one they
+/// chose — and one that is removed or private, or that its author took down (<see cref="Receipt.Withheld"/>), is retracted,
+/// as is the copy of one deleted, from its receipt alone. Only the
 /// author's own words go out as theirs: a version someone else edited waits until they choose it (<see cref="Receipt.Theirs"/>).
 /// An article that goes out starts hearing what the network says about it (<see cref="Elsewhere"/>).
 /// An article written as an account the participant is no longer bound to is only ever taken down, from the repository
@@ -59,7 +59,8 @@ public static class Syndication
         var receipts = (await Receipt.Query(receipt => receipt.ConnectionId == connection.Id,
                 new QueryDefinition { Page = 1, PageSize = ReceiptLimit }.WithSort<Receipt>(sort => sort.OrderByDescending(receipt => receipt.At)), ct))
             .ToDictionary(receipt => receipt.PostId, StringComparer.Ordinal);
-        var named = rows.Where(row => row.Kind is EventKind.PostCreated or EventKind.PostEdited or EventKind.PostRemoved
+        var named = rows.Where(row => row.Kind is EventKind.PostCreated or EventKind.PostEdited or EventKind.PostRemoved or EventKind.PostMoved
+                                          or EventKind.RemovalUndone
                                       && row.PostId is not null && row.PostId == row.TopicId)
             .Select(row => row.PostId!);
         var ids = named.Concat(receipts.Keys).Distinct(StringComparer.Ordinal).ToList();
@@ -92,10 +93,10 @@ public static class Syndication
                 {
                     if (article.AuthorDid == did) await Deliver(connection, article, receipt, publication, adapter, ct);
                 }
-                else if (receipt is not null) await TakeDown(connection, receipt, did, adapter, ct);
+                else if (receipt is not null) await TakeDown(connection, receipt, article.TangentId, did, adapter, ct);
             }
 
-            foreach (var receipt in gone) await TakeDown(connection, receipt, did, adapter, ct);
+            foreach (var receipt in gone) await TakeDown(connection, receipt, receipt.TangentId, did, adapter, ct);
         }
         catch (Exception failure) when (failure is AtprotoRepositoryException or HttpRequestException or TimeoutException
                                         or OperationCanceledException && !ct.IsCancellationRequested)
@@ -126,7 +127,7 @@ public static class Syndication
     private static async Task Deliver(Connection connection, Post article, Receipt? receipt, Publication? publication, AtprotoAdapter adapter,
         CancellationToken ct)
     {
-        var wanted = receipt is null ? connection.OnItsOwn(article.LogSeq) : receipt.Retracted || receipt.Version < article.Version;
+        var wanted = receipt is null ? connection.OnItsOwn(article.LogSeq) : receipt.Retracted || receipt.Behind(article);
         if (!wanted || !Receipt.Theirs(article, receipt)) return;
         var written = await adapter.Deliver(article, receipt, publication, ct);
         await Sent(new KeepReceipt(connection.Id, article.Id, article.TangentId, article.Version, written, DateTimeOffset.UtcNow), ct);
@@ -134,17 +135,18 @@ public static class Syndication
     }
 
     /// <summary>The copy a receipt names, where its article should not be out — private here, removed, taken down by its
-    /// author, or gone with its Tangent — taken down from the receipt alone, in the repository its address names: that of the account the
+    /// author, or deleted — taken down from the receipt alone, in the repository its address names: that of the account the
     /// Connection is under (<paramref name="did"/>), or that of an earlier account of its participant, through that
     /// account's grant; where that grant no longer lets the place, the receipt says the copy stays there, and nothing tries
     /// again. Nothing goes out under an earlier account, and nothing moves to the new one. A receipt of nothing out is
-    /// marked retracted.</summary>
-    private static async Task TakeDown(Connection connection, Receipt receipt, string did, AtprotoAdapter adapter, CancellationToken ct)
+    /// marked retracted. The receipt records <paramref name="tangentId"/>, where its article stands now, or stood where it is
+    /// deleted, so a Tangent counts the copies of what it holds.</summary>
+    private static async Task TakeDown(Connection connection, Receipt receipt, string tangentId, string did, AtprotoAdapter adapter, CancellationToken ct)
     {
         var repository = receipt.Repository();
         if (receipt.Retracted || (receipt.Stays && repository != did)) return;
         var retracted = !receipt.IsLive() || await Retracted(receipt, repository!, did, adapter, ct);
-        await Sent(new KeepReceipt(connection.Id, receipt.PostId, receipt.TangentId, receipt.Version, null, DateTimeOffset.UtcNow, Stays: !retracted), ct);
+        await Sent(new KeepReceipt(connection.Id, receipt.PostId, tangentId, receipt.Version, null, DateTimeOffset.UtcNow, Stays: !retracted), ct);
     }
 
     /// <summary>Whether the live copy a receipt names came down from <paramref name="repository"/>: at once under the

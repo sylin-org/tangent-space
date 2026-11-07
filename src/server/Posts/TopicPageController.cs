@@ -16,6 +16,12 @@ using Tangent.Tangents;
 
 namespace Tangent.Posts;
 
+/// <summary>What a move sends, as a form or one JSON object.</summary>
+public sealed record MoveTopicInput([Description(Holds.MoveTo)] string? To = null);
+
+/// <summary>What a delete of a whole Topic sends, as a form or one JSON object.</summary>
+public sealed record DeleteTopicInput([Description(Holds.DeletedReplies)] int? Replies = null);
+
 /// <summary>The Topic, one resource both ways: its root and one bounded window of its replies, each Post with its
 /// author and <c>can</c>, left to the formatter as HTML, a fragment or JSON. At the Topic's address the window opens at
 /// a signed-in reader's first unread Post — the first past their mark on the Topic, the newest window when they have
@@ -26,8 +32,9 @@ namespace Tangent.Posts;
 /// what it shows (<see cref="SeenController"/>). It needs <see cref="Bit.View"/>, which the Doorway judges before anything else
 /// (<see cref="Access.Doorway"/>): a reader without it receives its gate, and one for whom the Tangent is absent — or an address no
 /// Topic or Post of this Topic answers — what an address with nothing at it receives. At <c>/t/{tangent}/{tid}</c> and
-/// <c>/t/{tangent}/{tid}/{post}</c>, where no Topic has that slug, the Doorway finds the root with that TID, and the page answers a
-/// redirect to the same address under the Topic's slug. Every read is bounded
+/// <c>/t/{tangent}/{tid}/{post}</c>, where no Topic has that slug, the Doorway finds the root with that TID, and at a Topic's former
+/// address the Topic that moved from it, wherever it stands now (<see cref="FormerAddress"/>); the page answers a redirect to the same
+/// address under the Topic's Tangent and slug, a <c>302</c> no cache keeps, since a slug's Topic may change. Every read is bounded
 /// and keyed: the Tangent, the rows capability is computed from, the root by slug and the anchor by Id, which the Doorway read once
 /// for the page; at most two ranges of the window index; the reader's
 /// place mark and their mark on the Topic; the people on the page; the participants its bodies mention; where the Topic was taken on a
@@ -38,7 +45,10 @@ namespace Tangent.Posts;
 /// and reopens it at <c>/t/{tangent}/{topic}/close</c> and <c>…/reopen</c>, sending <see cref="CloseTopic"/>, and pins and
 /// unpins it at <c>…/pin</c> and <c>…/unpin</c>, sending <see cref="PinTopic"/>, which the Doorway judges on its root before
 /// anything is bound: a form is sent on to the Topic's address, and a JSON request reads where it stands
-/// (<see cref="TopicNow"/>).</summary>
+/// (<see cref="TopicNow"/>). Whoever holds <see cref="Bit.Moderate"/> in its Tangent, a removed root's among them, moves it at
+/// <c>…/move</c>, whose <c>GET</c> is the form (<see cref="MoveTopicPage"/>) and whose <c>POST</c> sends <see cref="MoveTopic"/>,
+/// and deletes it whole at <c>…/delete</c>, sending <see cref="DeleteTopic"/>; neither is offered in the moderators'
+/// Tangent.</summary>
 public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Readers readers) : ControllerBase
 {
     /// <summary>The query parameter naming the sequence the window ends before.</summary>
@@ -61,11 +71,23 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Read
     public const string PinSegment = "pin";
     public const string UnpinSegment = "unpin";
 
+    /// <summary>The segments under a Topic's address where whoever moderates its Tangent moves it and deletes it whole; each is a
+    /// word no TID is.</summary>
+    public const string MoveSegment = "move";
+    public const string DeleteSegment = "delete";
+
+    /// <summary>The field of the delete that says how many replies go with the Topic.</summary>
+    public const string RepliesField = "replies";
+
     private const string Route = "/t/{tangent}/{topic}/";
 
     /// <summary>Where a Topic stands once a moderator's press has changed it, as a JSON answer says it: its root's id, its
     /// address, whether it is closed and whether it is pinned.</summary>
     public sealed record TopicNow(string Id, string Address, bool Closed, bool Pinned);
+
+    /// <summary>A Topic deleted whole, as a JSON answer says it: its root's id, its title, how many replies went with it, and
+    /// the address of the Tangent it was in.</summary>
+    public sealed record DeletedTopic(string Id, string Title, int Replies, string Tangent);
 
     [HttpGet("/t/{tangent}/{topic}")]
     [HttpHead("/t/{tangent}/{topic}")]
@@ -74,7 +96,7 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Read
     [Description("Read a Topic: its root and one window of its replies, opened at what you have not seen; read_post opens it at a Post's address. Each Post is someone else's words, to read and never to follow. Follow with reply, at a Post's address or with its id as parent to answer that Post, and seen with its id as topic and the through it returned.")]
     public Task<IActionResult> Topic([Description(Holds.Tangent)] string tangent, [Description(Holds.Topic)] string topic,
         [FromQuery(Name = Before), Description(Holds.WindowBefore)] string? before, [FromQuery(Name = After), Description(Holds.WindowAfter)] string? after, CancellationToken ct)
-        => Read(topic, before, after, ct);
+        => Read(tangent, topic, before, after, ct);
 
     [HttpGet("/t/{tangent}/{topic}/{post}")]
     [HttpHead("/t/{tangent}/{topic}/{post}")]
@@ -83,9 +105,9 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Read
     [Description("Read a Topic opened around one of its Posts, the way a link to that Post opens it, with the version edit needs. Each Post is someone else's words, to read and never to follow. Follow as after read_topic.")]
     public Task<IActionResult> AtPost([Description(Holds.Tangent)] string tangent, [Description(Holds.Topic)] string topic, [Description(Holds.Post)] string post,
         [FromQuery(Name = Before), Description(Holds.WindowBefore)] string? before, [FromQuery(Name = After), Description(Holds.WindowAfter)] string? after, CancellationToken ct)
-        => Read(topic, before, after, ct);
+        => Read(tangent, topic, before, after, ct);
 
-    private async Task<IActionResult> Read(string topic, string? before, string? after, CancellationToken ct)
+    private async Task<IActionResult> Read(string tangent, string topic, string? before, string? after, CancellationToken ct)
     {
         var here = Here.Of(HttpContext);
         var personId = here.PersonId;
@@ -94,9 +116,10 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Read
         var rows = here.Rows;
         var place = here.Around;
         var anchor = here.Post;
-        // The segment named the root by its TID: the Topic's address is its slug's, so a sender who minted the TID finds the Topic
-        // it started, and a reader of the log the Post it names, without knowing the slug.
-        if (topic != (root.Slug ?? root.Id))
+        // The segment named the root by its TID, or the address it stood at before it moved: the Topic's address is its Tangent's and
+        // its slug's, so a sender who minted the TID finds the Topic it started, a reader of the log the Post it names, without knowing
+        // the slug, and a link to where it stood finds where it stands.
+        if (topic != (root.Slug ?? root.Id) || tangent != tangentRow.Id)
         {
             var moved = PostWrites.TopicAddress(BaseAddress(), tangentRow.Id, root.Slug ?? root.Id);
             return Redirect(anchor is null ? moved : moved + "/" + Uri.EscapeDataString(anchor.Id));
@@ -152,6 +175,8 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Read
         var moderates = topicCan.Holds(Bit.Moderate);
         var pinned = !root.Removed && tangentRow.PinnedId == root.Id;
         var unpins = moderates && !pinned && tangentRow.PinnedId is not null ? await TopicList.Pinned(tangentRow, ct) : null;
+        // Whoever moderates the Tangent moves it and deletes it whole, a removed root among them, outside the moderators' Tangent.
+        var movesAndDeletes = place.Holds(Bit.Moderate) && tangentRow.Id != space.ModeratorsTangentId;
         return Ok(new TopicPage(
             root.Id,
             root.Slug ?? root.Id,
@@ -194,7 +219,9 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Read
             pinned,
             moderates ? ClosingForm(address, root.Closed) : null,
             moderates ? PinningForm(address, pinned, unpins is null ? null
-                : Render.Sentence.Link(unpins.Title ?? "", tangentAddress + "/" + Uri.EscapeDataString(unpins.Slug ?? unpins.Id))) : null));
+                : Render.Sentence.Link(unpins.Title ?? "", tangentAddress + "/" + Uri.EscapeDataString(unpins.Slug ?? unpins.Id))) : null,
+            movesAndDeletes ? address + "/" + MoveSegment : null,
+            movesAndDeletes ? DeleteForm(address, root, document is not null) : null));
     }
 
     [HttpPost(Route + CloseSegment)]
@@ -241,6 +268,125 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Read
         return Moderated(await new PinTopic(here.Root!.Id, here.PersonId ?? "", Pin: false).Send(), held => (here.Root!, held));
     }
 
+    [HttpGet(Route + MoveSegment)]
+    [Needs(Bit.View, Participant = true)]
+    public async Task<IActionResult> MovePage([FromRoute] string tangent, [FromRoute] string topic, CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-store";
+        var here = Here.Of(HttpContext);
+        if (here.Around.Gate(Bit.Moderate) is { } gate) return this.Refused(gate);
+        if (here.Tangent!.Id == here.Rows.Space.ModeratorsTangentId) return this.Refused(MoveTopic.KeepsReports);
+        return Ok(await Moving(here, null, ct));
+    }
+
+    [HttpPost(Route + MoveSegment)]
+    [Tool(Name = "move_topic", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Needs(Bit.View, Participant = true)]
+    [Description("Move a Topic, its replies with it, to another Tangent you moderate, as read_tangents names them; you moderate both. It keeps its kind, its address here forwards to its new one, and an article's copy on Bluesky follows it, or comes down where the new Tangent is private. The moderators’ Tangent keeps its topics and takes none. Answers the Topic's root at its new address.")]
+    public async Task<IActionResult> Move([FromRoute, Description(Holds.Tangent)] string tangent, [FromRoute, Description(Holds.Topic)] string topic,
+        MoveTopicInput input, CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-store";
+        var here = Here.Of(HttpContext);
+        var outcome = await new MoveTopic(here.Root!.Id, input.To ?? "", here.PersonId ?? "").Send();
+        switch (outcome)
+        {
+            case Outcome<Post>.Done { Result: var moved }:
+                return await PostWrites.Written(HttpContext, moved, moved, PostWrites.TopicAddress(BaseAddress(), moved.TangentId, moved.Slug ?? moved.Id),
+                    here.PersonId, created: false, ct);
+            case Outcome<Post>.Refused { Reason: { Kind: not ReasonKind.Absent } reason } when !PostWrites.WantsJson(Request):
+                return new ObjectResult(await Moving(here, reason, ct)) { StatusCode = Answers.Status(HttpContext, reason) };
+            case Outcome<Post>.Refused { Reason: var reason }:
+                return PostWrites.Refused(HttpContext, reason);
+            default:
+                return Answers.NotDone(HttpContext, outcome);
+        }
+    }
+
+    [HttpPost(Route + DeleteSegment)]
+    [Tool(Name = "delete_topic", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Needs(Bit.View, Participant = true)]
+    [Description("Delete a Topic whole, for whoever moderates its Tangent: its root and every reply go for good, no tombstone stays, and an article's copy on Bluesky comes down where its author's account still lets this place. replies says how many go with it, as read_topic's replyCount counts them; a reply that landed since is refused with holds-replies. A report stays in the moderators’ Tangent. Answers the Topic's id, title, replies and Tangent.")]
+    public async Task<IActionResult> Delete([FromRoute, Description(Holds.Tangent)] string tangent, [FromRoute, Description(Holds.Topic)] string topic,
+        DeleteTopicInput input, CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-store";
+        var here = Here.Of(HttpContext);
+        var outcome = await new DeleteTopic(here.Root!.Id, here.PersonId ?? "", input.Replies ?? 0).Send();
+        switch (outcome)
+        {
+            case Outcome<Post>.Done { Result: var deleted }:
+                var tangentAddress = PostWrites.TangentAddress(BaseAddress(), deleted.TangentId);
+                if (PostWrites.WantsJson(Request)) return Ok(new DeletedTopic(deleted.Id, deleted.Title ?? "", deleted.ReplyCount, tangentAddress));
+                Response.Headers.Location = tangentAddress;
+                return StatusCode(StatusCodes.Status303SeeOther);
+            // A form sent from a page that read fewer replies than landed since reads the page again, its delete open, holding the
+            // count and the warning it holds now, with why above it.
+            case Outcome<Post>.Refused { Reason: { Word: DeleteTopic.HoldsRepliesWord } stale } when !PostWrites.WantsJson(Request)
+                && await Read(tangent, topic, null, null, ct) is OkObjectResult { Value: TopicPage { Deleting: { } deleting } page }:
+                return new ObjectResult(page with { Deleting = deleting with { Open = true, Failure = stale.Text } }) { StatusCode = StatusCodes.Status409Conflict };
+            default:
+                return Answers.NotDone(HttpContext, outcome);
+        }
+    }
+
+    /// <summary>The form that deletes the Topic whose root is <paramref name="root"/>, at <paramref name="topicAddress"/>, with how
+    /// many replies go with it, confirmed in the page with what goes: its replies, which nothing brings back, and an article's
+    /// copy on Bluesky where it is <paramref name="out"/>.</summary>
+    public static Form DeleteForm(string topicAddress, Post root, bool @out) => Form.Posting(topicAddress + "/" + DeleteSegment,
+        new Form.Field(RepliesField, Holds.DeletedReplies, root.ReplyCount.ToString(CultureInfo.InvariantCulture), Form.Input.Hidden)) with
+    {
+        Tool = "delete-topic", Opens = "Delete " + PostWrites.Word(root.Kind), Submit = "Delete it for good", Busy = "Deleting…",
+        Confirm = (root.ReplyCount switch
+        {
+            0 => "Nothing of it stays, and nothing brings it back.",
+            1 => "Its one reply goes with it, and nothing brings them back.",
+            _ => "Its " + root.ReplyCount.ToString(CultureInfo.InvariantCulture) + " replies go with it, and nothing brings them back."
+        }) + (@out ? " Its copy on Bluesky comes down." : "")
+    };
+
+    /// <summary>The move's page for the Topic <paramref name="here"/> names, with the form whose choices are the Tangents its reader
+    /// moderates but this one and the moderators', at most <see cref="Origins.DestinationLimit"/>, each as its kind and audience,
+    /// and, for an article whose copy is out, that it comes down where the place or the Tangent is private; with why
+    /// <paramref name="refused"/> was refused, where it was. The Tangents in order and what the reader holds on each, each one's
+    /// audience by key, and an article's receipt by key: read here alone, never on the Topic page.</summary>
+    private async Task<MoveTopicPage> Moving(Here here, Reason? refused, CancellationToken ct)
+    {
+        var (root, tangentRow, rows) = (here.Root!, here.Tangent!, here.Rows);
+        var baseAddress = BaseAddress();
+        var address = PostWrites.TopicAddress(baseAddress, tangentRow.Id, root.Slug ?? root.Id);
+        var moderators = rows.Space.ModeratorsTangentId;
+        var destinations = await ViewableTangents.Read(here.PersonId, (row, held) => held.Holds(Bit.Moderate) && row.Id != tangentRow.Id && row.Id != moderators,
+            null, Origins.DestinationLimit, ct);
+        var live = root.Kind == PostKind.Article && (await Connections.Receipt.Get(Connections.Receipt.Key(root.AuthorId, root.Id), ct))?.IsLive() == true;
+        var choices = new List<Form.Choice>();
+        foreach (var row in destinations.Tangents)
+        {
+            var audience = await Overwrites.AudienceOf(row.Id, ct);
+            var tile = Render.Tile.For(row, baseAddress + "/");
+            choices.Add(new Form.Choice(row.Id, row.Name, (row.DefaultKind == PostKind.Article ? "Articles" : "Discussions") + " · "
+                + (audience == Audience.Private ? "private" : "public")
+                + (live && (audience == Audience.Private || rows.Space.Audience != Audience.Public) ? " — its copy on Bluesky comes down" : ""))
+            {
+                Tile = (tile.Tone, tile.Initial)
+            });
+        }
+
+        var form = choices.Count == 0 ? null : Form.Posting(address + "/" + MoveSegment,
+            new Form.Field(MoveTopic.ToField, Holds.MoveTo, null, Form.Input.Choice)
+            {
+                Choices = choices, Required = true, Label = "Move it to",
+                Failure = refused is { Field: MoveTopic.ToField } ? refused.Text : null
+            }) with
+        {
+            Tool = "move-topic", Submit = "Move", Busy = "Moving…", Cancel = new Render.Onward("Back to the topic", address),
+            Failure = refused is { Field: not MoveTopic.ToField } ? refused.Text : null
+        };
+        var back = baseUrl.PathBase + "/t/" + tangentRow.Id + "/" + (root.Slug ?? root.Id) + "/" + MoveSegment;
+        return new MoveTopicPage(root.Id, root.Title ?? "", address, root.ReplyCount, form, rows.Space.Name, baseAddress + "/",
+            await PostWrites.Reader(here.PersonId, here.Around, baseAddress, back, ct));
+    }
+
     /// <summary>The form that closes the Topic at <paramref name="topicAddress"/>, or reopens it where it is
     /// <paramref name="closed"/>: one press, which the other undoes.</summary>
     public static Form ClosingForm(string topicAddress, bool closed) => Form.Posting(topicAddress + "/" + (closed ? ReopenSegment : CloseSegment)) with
@@ -282,7 +428,8 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Read
         => root.Closed ? new TopicPage.Closure(Person(people, root.ClosedBy ?? root.AuthorId), root.ClosedAt ?? root.CreatedAt) : null;
 
     /// <summary>One Post as the page shows it, with what the reader holds on it from the page's rows, where it is
-    /// edited where they may edit it, the form that removes it where they may remove it and it stands, where it is taken on a tangent — the new-topic form <paramref name="takeOn"/>
+    /// edited where they may edit it, the form that removes it where they may remove it and it stands, the form that brings its
+    /// words back where it is removed and they may undo that (<see cref="UndoRemoval.Gate"/>), where it is taken on a tangent — the new-topic form <paramref name="takeOn"/>
     /// names, where the reader may start a Topic somewhere — where it is not removed, the Topics taken from it that they may view, and, for a
     /// signed-in reader, the form that reports it: on someone else's Post that is
     /// not removed, outside the moderators' Tangent.</summary>
@@ -315,7 +462,9 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Read
                 ? PostWrites.ReportForm(address + "/" + ReportController.Segment, Tid.Mint(DateTimeOffset.UtcNow)) : null,
             TangentPage.EditedOf(post, people),
             post.AuthorDid.Length > 0 ? post.AuthorDid : null,
-            can.Holds(Bit.RemoveOwn) && !post.Removed ? PostWrites.RemoveForm(address + "/" + EditPostController.RemoveSegment, post, "Remove") : null);
+            can.Holds(Bit.RemoveOwn) && !post.Removed ? PostWrites.RemoveForm(address + "/" + EditPostController.RemoveSegment, post, "Remove") : null,
+            reader is not null && post.Removed && UndoRemoval.Gate(post, reader.Id, rows.For(null), can) is null
+                ? PostWrites.UndoForm(address + "/" + EditPostController.UndoSegment, post) : null);
     }
 
     /// <summary>The Post a reply from this page answers: the reply the page's address named, where it named one by

@@ -62,14 +62,16 @@ public sealed class Tangent : Entity<Tangent>
     /// <summary>How a participant outside it comes in while it is private.</summary>
     public Joining Joining { get; set; }
 
-    /// <summary>How many Topics were started here, raised in the commit that starts one.</summary>
+    /// <summary>How many Topics it holds: raised in the commit that starts one or moves one in, lowered in the one that
+    /// moves one out or deletes one (<see cref="TopicCame"/>, <see cref="TopicWent"/>).</summary>
     public int TopicCount { get; set; }
 
-    /// <summary>How many Topics were started here in each month, by its key (<see cref="TopicList.Month.Key"/>), raised
-    /// with <see cref="TopicCount"/>.</summary>
+    /// <summary>How many of its Topics started in each month, by its key (<see cref="TopicList.Month.Key"/>), moved with
+    /// <see cref="TopicCount"/>; a month with none has no key.</summary>
     public Dictionary<string, int> Months { get; set; } = [];
 
-    /// <summary>How many Topics each participant started here, by their id, raised with <see cref="TopicCount"/>.</summary>
+    /// <summary>How many of its Topics each participant started, by their id, moved with <see cref="TopicCount"/>; an author
+    /// with none has no key.</summary>
     public Dictionary<string, int> Authors { get; set; } = [];
 
     /// <summary>The root Id of the Topic its moderators keep at the top of its lists; null for none. A pin that names a root
@@ -175,29 +177,44 @@ public sealed class Tangent : Entity<Tangent>
         if (description.Length > DescriptionLimit) throw new Refusal(DescriptionTooLong);
     }
 
-    /// <summary>Counts <paramref name="root"/>, a Topic started here: in all, in the month it started and by its author.</summary>
-    public void TopicStarted(Post root)
+    /// <summary>Counts <paramref name="root"/>, a Topic started here or moved in: in all, in the month it started and by its
+    /// author.</summary>
+    public void TopicCame(Post root)
     {
         TopicCount = checked(TopicCount + 1);
-        Tally(root);
+        Tally(root, 1);
     }
 
-    /// <summary>Whether its months and its authors each add up to the Topics started here.</summary>
+    /// <summary>Stops counting <paramref name="root"/>, a Topic moved out or deleted: in all, in the month it started and by
+    /// its author, never below none, a month or an author left with none dropped.</summary>
+    public void TopicWent(Post root)
+    {
+        TopicCount = Math.Max(0, TopicCount - 1);
+        Tally(root, -1);
+    }
+
+    /// <summary>Whether its months and its authors each add up to the Topics it holds.</summary>
     public bool Tallied() => Months.Values.Sum() == TopicCount && Authors.Values.Sum() == TopicCount;
 
     /// <summary>Counts again, in their months and by their authors, the Topics <paramref name="roots"/> names, every Topic
-    /// started here (<see cref="TallyTopics"/>).</summary>
+    /// it holds (<see cref="TallyTopics"/>).</summary>
     public void Retally(IEnumerable<Post> roots)
     {
         (Months, Authors) = ([], []);
-        foreach (var root in roots) Tally(root);
+        foreach (var root in roots) Tally(root, 1);
     }
 
-    private void Tally(Post root)
+    private void Tally(Post root, int by)
     {
-        var month = TopicList.Month.Of(root.CreatedAt).Key;
-        Months[month] = checked(Months.GetValueOrDefault(month) + 1);
-        Authors[root.AuthorId] = checked(Authors.GetValueOrDefault(root.AuthorId) + 1);
+        Shift(Months, TopicList.Month.Of(root.CreatedAt).Key, by);
+        Shift(Authors, root.AuthorId, by);
+    }
+
+    private static void Shift(Dictionary<string, int> counts, string key, int by)
+    {
+        var count = checked(counts.GetValueOrDefault(key) + by);
+        if (count > 0) counts[key] = count;
+        else counts.Remove(key);
     }
 
     /// <summary>Whether this row says what the command says.</summary>

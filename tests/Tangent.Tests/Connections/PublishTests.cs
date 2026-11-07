@@ -142,12 +142,12 @@ public sealed class PublishTests
         Assert.Contains(document, repository.Records.Keys);
         var listed = (await Send(ada.Client, HttpMethod.Get, ConnectionsController.Path, json: true)).Json;
         var line = Assert.Single(listed.GetProperty("articles").EnumerateArray().ToList());
-        Assert.Equal((ConnectionsController.DeletedWithItsTangent, "remains", "Still public on Bluesky, though it no longer is here. Grant it again to take it down.",
+        Assert.Equal((ConnectionsController.Deleted, "remains", "Still public on Bluesky, though it no longer is here. Grant it again to take it down.",
             Publishing.Bluesky(note)), (line.GetProperty("title").GetString(), line.GetProperty("state").GetString(), line.GetProperty("sentence").GetString(),
             line.GetProperty("elsewhere").GetString()));
         Assert.False(line.TryGetProperty("address", out _));
         Assert.EndsWith("Grant it again to take down what is still public there.", listed.GetProperty("bluesky").GetProperty("sentence").GetString());
-        Assert.Contains(ConnectionsController.DeletedWithItsTangent, (await Send(ada.Client, HttpMethod.Get, ConnectionsController.Path)).Body);
+        Assert.Contains(ConnectionsController.Deleted, (await Send(ada.Client, HttpMethod.Get, ConnectionsController.Path)).Body);
         // Stopping her new articles going out on their own answers with her Connections as she reads them: the grant still
         // comes back to take the copy down.
         using (var client = await Tools.ToolClient.Connect(tangentSpace, ada))
@@ -169,6 +169,48 @@ public sealed class PublishTests
         await Until(() => !repository.Records.ContainsKey(document) && !repository.Records.ContainsKey(note));
         Assert.True((await Receipt.Get(Receipt.Key(Ada, article.Id), Cancellation))?.Retracted);
         Assert.Empty((await Send(ada.Client, HttpMethod.Get, ConnectionsController.Path, json: true)).Json.GetProperty("articles").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task A_published_article_follows_its_moves_comes_down_in_a_private_tangent_goes_out_again_once_its_removal_is_undone_and_comes_down_once_deleted()
+    {
+        var repository = new Repository();
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(),
+            services => services.AddSingleton<IAtprotoRepository>(repository), Cancellation);
+        await Place(tangentSpace);
+        const string notebook = "notebook", drafts = "drafts";
+        await Given.ATangent(tangentSpace, notebook, ct: Cancellation, kind: PostKind.Article);
+        await Given.ATangent(tangentSpace, drafts, Audience.Private, Cancellation, PostKind.Article);
+        await Tangents.Overwrites.SetAccess(tangentSpace.Services.GetRequiredService<Koan.Identity.Roles.RoleCollection>(), drafts, Access.Roles.Moderator,
+            Tangents.RoleAccess.Post, Cancellation);
+        var article = await Started(Ada, "Mending with gold", "A cracked bowl tells you where it was weak.", Articles);
+        using var ada = await SignedIn(tangentSpace, Ada);
+        await Form(ada, TopicPath(article), TopicPath(article) + "/" + PublishController.Segment, []);
+        var document = $"at://{Persona.Did(Ada)}/{AtprotoAdapter.Documents}/{article.Id}";
+        await Until(() => repository.Records.ContainsKey(document));
+
+        // Moved to another public Tangent, its copy names where it stands, and its receipt the Tangent that holds it.
+        Assert.IsType<Outcome<Post>.Done>(await new MoveTopic(article.Id, notebook, Mo).Send(Cancellation));
+        await Until(() => repository.Records.TryGetValue(document, out var put) && put["path"]!.GetValue<string>() == "/t/" + notebook + "/" + article.Slug);
+        await Until(async () => (await Receipt.Get(Receipt.Key(Ada, article.Id), Cancellation))?.TangentId == notebook);
+
+        // Moved where it is private, its copy comes down; moved back out, it goes out again.
+        Assert.IsType<Outcome<Post>.Done>(await new MoveTopic(article.Id, drafts, Mo).Send(Cancellation));
+        await Until(() => !repository.Records.ContainsKey(document));
+        Assert.Equal(drafts, (await Receipt.Get(Receipt.Key(Ada, article.Id), Cancellation))?.TangentId);
+        Assert.IsType<Outcome<Post>.Done>(await new MoveTopic(article.Id, notebook, Mo).Send(Cancellation));
+        await Until(() => repository.Records.ContainsKey(document));
+
+        // Removed and brought back by its author, it comes down and goes out again.
+        Assert.IsType<Outcome<Post>.Done>(await new RemovePost(article.Id, Ada).Send(Cancellation));
+        await Until(() => !repository.Records.ContainsKey(document));
+        Assert.IsType<Outcome<Post>.Done>(await new UndoRemoval(article.Id, Ada).Send(Cancellation));
+        await Until(() => repository.Records.ContainsKey(document));
+
+        // Deleted whole, its copy comes down from its receipt alone.
+        Assert.IsType<Outcome<Post>.Done>(await new DeleteTopic(article.Id, Mo).Send(Cancellation));
+        await Until(() => !repository.Records.ContainsKey(document));
+        Assert.True((await Receipt.Get(Receipt.Key(Ada, article.Id), Cancellation))?.Retracted);
     }
 
     /// <summary>Waits until Ada's Connection has read the log through its head.</summary>

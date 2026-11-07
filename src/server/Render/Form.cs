@@ -112,7 +112,7 @@ public sealed record Form(string Action, string Method, IReadOnlyList<Form.Field
 
         public bool Locked { get; init; }
 
-        /// <summary>The tone and letter of the tile it shows, where it is an accent or a letter in place of a picture.</summary>
+        /// <summary>The tone and letter of the tile it shows, where it is an accent, a Tangent, or a letter in place of a picture.</summary>
         [Newtonsoft.Json.JsonIgnore]
         public (string Tone, string Letter)? Tile { get; init; }
 

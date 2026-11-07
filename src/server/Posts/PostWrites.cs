@@ -140,6 +140,15 @@ public static class PostWrites
             : "; the " + Word(post.Kind) + " keeps its replies and takes no more.")
     };
 
+    /// <summary>The form that undoes the removal of <paramref name="post"/> at <paramref name="action"/>, which carries no field:
+    /// one press, since it destroys nothing, saying on an opening whose Topic its moderators have not closed that the Topic takes
+    /// replies again.</summary>
+    public static Form UndoForm(string action, Post post) => Form.Posting(action) with
+    {
+        Tool = "undo-removal", Submit = "Undo removal", Busy = "Bringing it back…", Quiet = true,
+        Note = post.ParentId is null && !post.Closed ? "The " + Word(post.Kind) + " takes replies again." : null
+    };
+
     /// <summary>The form that reports a Post at <paramref name="action"/>, with the TID <paramref name="minted"/> for it, and
     /// the reason.</summary>
     public static Form ReportForm(string action, string minted) => Form.Posting(action,

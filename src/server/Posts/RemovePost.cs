@@ -8,7 +8,8 @@ namespace Tangent.Posts;
 /// <summary>Removes a Post, leaving a visible tombstone in its place. The Post exists for the remover, who holds
 /// <see cref="Bit.View"/> in its Tangent, or the command answers that no Post has the Id; the remover holds
 /// <see cref="Bit.RemoveOwn"/> on their own Post or <see cref="Bit.Moderate"/> on any, or is refused with the gate
-/// word. In the same commit the Post as it stood, body and all, goes to the audit partition, the row becomes the
+/// word. In the same commit the Post as it stood, body and all, goes to the audit partition, where an undo reads it back
+/// (<see cref="UndoRemoval"/>), the row becomes the
 /// tombstone (<see cref="Post.Remove"/>), and <see cref="EventKind.PostRemoved"/> is appended, targeting the author where
 /// someone else removed it, so they are told. A removed root makes
 /// its Topic's root a tombstone and leaves its replies as they are. Safe to repeat: removing a tombstone answers with

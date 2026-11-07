@@ -10,7 +10,8 @@ using Tangent.Space;
 
 namespace Tangent.Tangents;
 
-/// <summary>Deletes a Tangent whole, in one hold: its Posts with their snapshots and their media uses, its asks, every
+/// <summary>Deletes a Tangent whole, in one hold: its Posts with their snapshots and their media uses
+/// (<see cref="DeleteTopic.Rows"/>), its asks, every
 /// overwrite on its resource (<see cref="Overwrites.RemoveAll"/>), its image's use and its row, and appends
 /// <see cref="EventKind.TangentDeleted"/>; nothing of it stays in its place. Its rows of the log stay, and reach no one
 /// once it has no row (<see cref="Capabilities.LoadEach"/>); a Connection takes down each copy of its articles from the
@@ -18,9 +19,9 @@ namespace Tangent.Tangents;
 /// <see cref="Bit.View"/> on it, or the command answers that no Tangent has the slug, as sending it again does; the actor
 /// holds <see cref="Bit.ManageSpace"/> in the place, or is refused with the gate word; the moderators' Tangent stays
 /// (<see cref="Kept"/>); and <see cref="Topics"/> says how many Topics go with it, as many as it holds, or the command is
-/// refused (<see cref="HoldsTopics"/>), so a bare send deletes only an empty Tangent. A Topic, once started, stays counted
-/// (<see cref="Tangent.TopicCount"/>), raised in the commit that starts it, and holds take turns, so a Topic started after
-/// the count was read refuses the delete. The Posts go a page of <see cref="PostPage"/> at a time, each read finding what
+/// refused (<see cref="HoldsTopics"/>), so a bare send deletes only an empty Tangent. The count is the Topics it holds
+/// (<see cref="Tangent.TopicCount"/>), moved in the commit that starts, moves or deletes one, a removed one still counted, and
+/// holds take turns, so a Topic started or moved in after the count was read refuses the delete. The Posts go a page of <see cref="PostPage"/> at a time, each read finding what
 /// the last left, since a command reads its own deletes; a Tangent too large for one hold fails whole, and nothing
 /// changes. The order keeps its gap.</summary>
 public sealed record DeleteTangent(string Slug, string ActorId, int Topics = 0, DateTimeOffset? At = null) : ICommand<Tangent>
@@ -59,10 +60,7 @@ public sealed record DeleteTangent(string Slug, string ActorId, int Topics = 0, 
         {
             var posts = await Post.Query(post => post.TangentId == Slug, new QueryDefinition { Page = 1, PageSize = PostPage }, ct);
             read = posts.Count;
-            if (read == 0) break;
-            await Post.Remove(posts.SelectMany(post => Versions(post).Select(version => AuditPartition.Key(post.Id, version))), AuditPartition.Name, ct);
-            await MediaUse.Remove(posts.SelectMany(post => post.UsedMedia().Select(media => MediaUse.Key(media, post.Id))), ct);
-            await Post.Remove(posts.Select(post => post.Id), ct);
+            if (read > 0) await DeleteTopic.Rows(posts, ct);
         }
 
         read = AskPage;
@@ -78,12 +76,5 @@ public sealed record DeleteTangent(string Slug, string ActorId, int Topics = 0, 
         await tangent.Remove(ct);
         await Event.Append(EventKind.TangentDeleted, At ?? DateTimeOffset.UtcNow, ct, tangentId: Slug, actorId: ActorId);
         return new Outcome<Tangent>.Done(tangent);
-    }
-
-    /// <summary>Every version a snapshot of <paramref name="post"/> may be kept at: an edit or a removal snapshots the
-    /// version it changes (<see cref="AuditPartition"/>).</summary>
-    private static IEnumerable<long> Versions(Post post)
-    {
-        for (var version = 1L; version <= post.Version; version++) yield return version;
     }
 }

@@ -47,6 +47,7 @@ public sealed class Post : Entity<Post>
     public static readonly Reason NoTitleOnReply = Reason.Invalid("A reply has no title; a Topic's title is on its root.");
     public static readonly Reason PostRemoved = Access.Capabilities.Removed;
     public static readonly Reason NeedsRemover = Reason.Invalid("A removal names who removes.");
+    public static readonly Reason NotRemoved = Reason.Invalid("Only a removed post comes back.");
 
     /// <summary>The one answer for an Id a Post already holds that is not this request's, word <c>id-taken</c>: a retry
     /// learns its Post was written, and nothing says where, whose or what that Post is.</summary>
@@ -78,7 +79,8 @@ public sealed class Post : Entity<Post>
     [Index(Name = "ix_post_origins", Order = 0)]
     public string? OriginId { get; set; }
 
-    /// <summary>The Topic's URL name, from its title at creation, unique in its Tangent and never renamed. Root only.</summary>
+    /// <summary>The Topic's URL name, from its title at creation, unique in its Tangent and never renamed, except that a Topic
+    /// moved into a Tangent that holds it takes a numbered suffix there (<see cref="MoveTopic"/>). Root only.</summary>
     [Index(Name = "ix_post_slugs", Order = 1)]
     public string? Slug { get; set; }
 
@@ -334,7 +336,7 @@ public sealed class Post : Entity<Post>
     /// <summary>Makes this Post a tombstone, or a refusal when it already is one or no one is named: it is removed, by
     /// whom and when, and its body, and who last edited it, are cleared from the row. It keeps its place, its author and
     /// its version, and a root keeps its title, slug and counters, so a Topic whose root is removed keeps its replies. The
-    /// snapshot that holds the body is the caller's, taken before this.</summary>
+    /// snapshot that holds the body is the caller's, taken before this, and <see cref="Back"/> reads it back.</summary>
     public void Remove(string removedBy, DateTimeOffset at)
     {
         if (Removed) throw new Refusal(PostRemoved);
@@ -350,6 +352,23 @@ public sealed class Post : Entity<Post>
         SentHash = "";
         EditedBy = null;
         EditedAt = null;
+    }
+
+    /// <summary>Brings a tombstone's words back from <paramref name="kept"/>, its snapshot at its version, or a refusal where it
+    /// is not removed: no longer removed, it takes its body, mentions, images, cover and who last edited it from the snapshot,
+    /// and keeps its version and when its words last changed, since the snapshot is that version.</summary>
+    public void Back(Post kept)
+    {
+        if (!Removed) throw new Refusal(NotRemoved);
+        (Removed, RemovedBy, RemovedAt) = (false, null, null);
+        Body = kept.Body;
+        MentionedIds = [.. kept.MentionedIds];
+        MentionedRoles = [.. kept.MentionedRoles];
+        MediaIds = [.. kept.MediaIds];
+        CoverId = kept.CoverId;
+        SentHash = kept.SentHash;
+        EditedBy = kept.EditedBy;
+        EditedAt = kept.EditedAt;
     }
 
     /// <summary>Closes this Topic to replies, by whom and when, or a refusal: this Post is a root that is not removed.

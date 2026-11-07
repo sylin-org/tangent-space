@@ -57,7 +57,7 @@ public sealed record ConnectionsPage(
     public Participants.AnotherAccount.Offer Switching => Another;
 
     /// <summary>Each article of the page the account carries, with its state, its Bluesky post once it is out and the
-    /// press that takes that down; one gone with its Tangent has no page to link. A page after the first says where the
+    /// press that takes that down; one deleted has no page to link. A page after the first says where the
     /// list continued if it holds nothing.</summary>
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
     public Render.EntryList? Carried => Articles.Count == 0 && First is null ? null : new(Articles.Select((article, index) =>

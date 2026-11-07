@@ -30,8 +30,10 @@ namespace Tangent.Posts;
 /// <see cref="Elsewhere"/> is what the network says about it since, for everyone (<see cref="Connections.Elsewhere.For"/>).
 /// <see cref="Closed"/> says who closed the Topic to replies and when, where its moderators did, and <see cref="Pinned"/> that
 /// they keep it at the top of its Tangent; <see cref="Closing"/> and <see cref="Pinning"/> are the forms that close or reopen
-/// it and pin or unpin it, present only for whoever holds <c>Moderate</c> there, pinning saying first which Topic it
-/// unpins.</summary>
+/// it and pin or unpin it, present only for whoever holds <c>Moderate</c> on it, pinning saying first which Topic it
+/// unpins. <see cref="Move"/> is the address of the page that moves it to another Tangent and <see cref="Deleting"/> the form
+/// that deletes it whole, carrying how many replies go with it, each present for whoever holds <c>Moderate</c> in its
+/// Tangent, a removed root's among them, outside the moderators' Tangent.</summary>
 [Render.Page(Render.Layout.Reading)]
 public sealed record TopicPage(
     string Id,
@@ -69,7 +71,9 @@ public sealed record TopicPage(
     TopicPage.Closure? Closed = null,
     bool Pinned = false,
     Form? Closing = null,
-    Form? Pinning = null)
+    Form? Pinning = null,
+    string? Move = null,
+    Form? Deleting = null)
 {
     [Newtonsoft.Json.JsonIgnore]
     public bool IsArticle => Kind == PostWrites.Word(PostKind.Article);
@@ -113,8 +117,10 @@ public sealed record TopicPage(
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
     public Post? Opening => IsArticle ? null : Placed(Root) with { Root = true, Moderating = Moderating };
 
-    /// <summary>The forms its root's footer carries for whoever moderates here: closing or reopening, then pinning or unpinning.</summary>
-    private IReadOnlyList<Form> Moderating => new[] { Closing, Pinning }.OfType<Form>().ToList();
+    /// <summary>What its root's footer carries for whoever moderates here: closing or reopening, pinning or unpinning, moving
+    /// and deleting.</summary>
+    private IReadOnlyList<Render.IPart> Moderating => new Render.IPart?[] { Closing, Pinning, Move is { } move ? new Render.LinkButton("Move", move) : null, Deleting }
+        .OfType<Render.IPart>().ToList();
 
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
     public Render.TopicReplies Window => new(Replies.Select(Placed).ToList(), ReplyCount, From, Through, Older, Newer, Seen,
@@ -147,7 +153,8 @@ public sealed record TopicPage(
     /// <see cref="New"/> marks a Post that is new to a signed-in reader (<see cref="Events.Unread.New"/>): someone else's,
     /// past where they were last here and past their mark on the Topic. <see cref="Can"/> is what the reader holds on this Post, <see cref="Edit"/> where
     /// it is edited, present only where they may edit it, and <see cref="Remove"/> the form that removes it, confirmed in the
-    /// page, present only where they may remove it and it is not removed. <see cref="TakeOnATangent"/> is the new-topic form that takes
+    /// page, present only where they may remove it and it is not removed, and <see cref="Undo"/> the form that brings a removed one's
+    /// words back, present only where they may undo its removal (<see cref="UndoRemoval.Gate"/>). <see cref="TakeOnATangent"/> is the new-topic form that takes
     /// it on a tangent, present only on a Post that is not removed, for a reader who may start a Topic somewhere;
     /// <see cref="Taken"/> holds the Topics taken on a tangent from it that the reader may view, where there are any.
     /// <see cref="Report"/> is the form that reports it to the moderators, with a TID minted for it, for a signed-in
@@ -173,7 +180,8 @@ public sealed record TopicPage(
         Form? Report = null,
         TangentPage.Edited? Edited = null,
         string? WrittenAs = null,
-        Form? Remove = null) : Render.IPart
+        Form? Remove = null,
+        Form? Undo = null) : Render.IPart
     {
         /// <summary>Whether this is the Topic's root.</summary>
         [Newtonsoft.Json.JsonIgnore]
@@ -199,9 +207,10 @@ public sealed record TopicPage(
         [Newtonsoft.Json.JsonIgnore]
         public string Door { get; init; } = "";
 
-        /// <summary>The forms a root's footer carries for whoever moderates its Topic, after its own: closing it and pinning it.</summary>
+        /// <summary>What a root's footer carries for whoever moderates its Topic, after its own: closing it, pinning it, moving it
+        /// and deleting it.</summary>
         [Newtonsoft.Json.JsonIgnore]
-        public IReadOnlyList<Form> Moderating { get; init; } = [];
+        public IReadOnlyList<Render.IPart> Moderating { get; init; } = [];
     }
 
     /// <summary>A participant or a role a body mentions, by what the body's link names: a participant's id, their handle

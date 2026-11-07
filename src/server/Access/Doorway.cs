@@ -51,8 +51,10 @@ public sealed record Here(Tangents.Tangent? Tangent, Capabilities.Rows Rows, Pos
     /// Topic page's order: the Tangent's row first, so an address no Tangent has reads no overwrites; capability's rows, once; whether the
     /// reader may view the place or the Tangent, the same for every address under it, so a visitor of a private place reads one sign-in
     /// whether an address holds something or nothing; then the missing resource's answer for a Tangent no row has, a Topic segment that
-    /// names no Topic of it by its slug or its root's TID, or an Id no Post of that Topic has. The reads are the Topic page's: the Tangent,
-    /// capability's rows, the root by slug and the Post by Id.</summary>
+    /// names no Topic of it by its slug, its root's TID or its former address, or an Id no Post of that Topic has. A Topic that moved
+    /// stands where it is now: its Tangent's row and capability's rows there, for a reader who may view it, and absent to anyone else.
+    /// The reads are the Topic page's: the Tangent, capability's rows, the root by slug and the Post by Id, and on a miss alone the
+    /// root by TID or the former address and its root, then where it stands now.</summary>
     public static async Task<(Here Here, Reason? Refusal)> Find(string? personId, string? tangent, string? topic, string? post, CancellationToken ct)
     {
         var row = tangent is not null && Slug.IsValid(tangent) ? await Tangents.Tangent.Get(tangent, ct) : null;
@@ -63,6 +65,14 @@ public sealed record Here(Tangents.Tangent? Tangent, Capabilities.Rows Rows, Pos
         if (tangent is not null && row is null) return (nothing, Capabilities.Absent);
         Post? root = null;
         if (topic is not null && (row is null || (root = await Topic(row.Id, topic, ct)) is null)) return (nothing, Capabilities.Absent);
+        if (root is not null && root.TangentId != row!.Id)
+        {
+            if (await Tangents.Tangent.Get(root.TangentId, ct) is not { } now) return (nothing, Capabilities.Absent);
+            var there = await Capabilities.LoadRows(personId, now.Id, ct);
+            if (!there.For(null).Exists) return (nothing, Capabilities.Absent);
+            (row, rows) = (now, there);
+        }
+
         Post? named = null;
         if (post is not null)
         {
@@ -74,13 +84,17 @@ public sealed record Here(Tangents.Tangent? Tangent, Capabilities.Rows Rows, Pos
     }
 
     /// <summary>The Topic a segment names in a Tangent: by its slug, or, where none has it, by its root's TID, so a sender who minted
-    /// the TID finds the Topic it started and a reader of the log, which names a Topic by its id, finds the Topic and each of its Posts.
-    /// A slug is read first, so a slug that looks like a TID names its own Topic.</summary>
+    /// the TID finds the Topic it started and a reader of the log, which names a Topic by its id, finds the Topic and each of its Posts,
+    /// wherever it stands now; or else by its former address there (<see cref="FormerAddress"/>), so a link to a Topic that moved
+    /// finds it. A slug is read first, so a slug that looks like a TID names its own Topic, and one a Topic took later has the address.</summary>
     private static async Task<Post?> Topic(string tangentId, string topic, CancellationToken ct)
     {
         if (!Slug.IsValid(topic)) return null;
         if (await TopicWindow.Topic(tangentId, topic, ct) is { } root) return root;
-        return Tid.IsValid(topic) && await Post.Get(topic, ct) is { ParentId: null } started && started.TangentId == tangentId ? started : null;
+        if (Tid.IsValid(topic) && await Post.Get(topic, ct) is { ParentId: null } started) return started;
+        return await FormerAddress.Get(FormerAddress.Key(tangentId, topic), ct) is { } former && await Post.Get(former.TopicId, ct) is { ParentId: null } moved
+            ? moved
+            : null;
     }
 }
 

@@ -89,6 +89,7 @@ public sealed class TangentModule : KoanModule
             .Add<Posts.NewTopicPage>(page => page.Origin is { } origin ? "Take this on a tangent · " + origin.Topic : (page.Kind == Posts.PostWrites.Word(Posts.PostKind.Article) ? "New article · " : "New topic · ") + page.TangentName, frame: Posts.NewTopicPage.Frame)
             .Add<Posts.EditPage>(page => (!page.Root ? "Edit post · " : page.Kind == Posts.PostWrites.Word(Posts.PostKind.Article) ? "Edit article · " : "Edit topic · ") + page.TopicTitle, frame: Posts.EditPage.Frame)
             .Add<Posts.PostHistory>(page => "Earlier versions · " + page.Topic, frame: Posts.PostHistory.Frame)
+            .Add<Posts.MoveTopicPage>(page => "Move · " + page.Title, frame: Posts.MoveTopicPage.Frame)
             .Add<Posts.ReportPage>(page => (page.Received ? "Report received · " : "Report · ") + page.Reported.Topic, frame: Posts.ReportPage.Frame)
             .Add<Participants.ProfilePage>(page => page.Name + " · " + page.Place, Participants.ProfilePage.Version, Participants.ProfilePage.Frame)
             .Add<FirstRun>(firstRun => "Set up · " + firstRun.Name, frame: FirstRun.Frame)
@@ -139,6 +140,7 @@ public sealed class TangentModule : KoanModule
         await data.GetRepository<Tangents.Tangent, string>().EnsureReady(ct);
         await data.GetRepository<Posts.Post, string>().EnsureReady(ct);
         await data.GetRepository<Posts.MediaUse, string>().EnsureReady(ct);
+        await data.GetRepository<Posts.FormerAddress, string>().EnsureReady(ct);
         await data.GetRepository<Participants.Participant, string>().EnsureReady(ct);
         await data.GetRepository<Event, string>().EnsureReady(ct);
         await data.GetRepository<Checkpoint, string>().EnsureReady(ct);

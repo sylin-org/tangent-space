@@ -17,7 +17,7 @@ namespace Tangent.Connections;
 /// visitor's browser signs in and comes back here, and a visitor's JSON or tool call is refused with <c>sign-in</c>. It
 /// reads their Connection, one page of its receipts, newest first, continued from the cursor in <c>after</c>
 /// (<see cref="Receipt.Of"/>), the articles those name, each by key, and whether each of their Tangents is public; a copy
-/// still out of an article gone with its Tangent is listed from its receipt alone (<see cref="DeletedWithItsTangent"/>),
+/// still out of an article deleted is listed from its receipt alone (<see cref="Deleted"/>),
 /// and a receipt of nothing out of one is not. A row's take-down comes back to the first page, which the row then heads,
 /// its receipt changed last (<see cref="Withhold"/>). A permission Bluesky did not give comes back here with Koan's code in
 /// <c>error</c>, and the article it was for in <see cref="ArticleQuery"/>, which the page says in words above the rest.
@@ -40,9 +40,9 @@ public sealed class ConnectionsController(KoanWebBaseUrl baseUrl, Nudge nudge, E
     /// <summary>The query a permission that was not given names its article in, by Id.</summary>
     public const string ArticleQuery = "article";
 
-    /// <summary>What names an article gone with its Tangent whose copy is still out: nothing of it stays here but its
-    /// receipt.</summary>
-    public const string DeletedWithItsTangent = "An article deleted with its Tangent";
+    /// <summary>What names an article deleted, alone or with its Tangent, whose copy is still out: nothing of it stays here but
+    /// its receipt.</summary>
+    public const string Deleted = "A deleted article";
 
     [HttpGet(Path)]
     [Tool(Name = "read_connections")]
@@ -86,7 +86,7 @@ public sealed class ConnectionsController(KoanWebBaseUrl baseUrl, Nudge nudge, E
                 : !shown && receipt.IsLive() ? (receipt.Stays ? Publishing.StaysSentence : Publishing.LeavingSentence)
                 : Sentence(state, connection!);
             var at = post is null ? null : address + AtprotoAdapter.Path(post);
-            return new ConnectionsPage.Article(post is null ? DeletedWithItsTangent : post.Title ?? "", at,
+            return new ConnectionsPage.Article(post is null ? Deleted : post.Title ?? "", at,
                 Word(state), sentence, receipt.IsLive() && receipt.Note is { } note ? Publishing.Bluesky(note) : null, receipt.At)
             {
                 Retract = shown && post!.AuthorDid == did && receipt.IsLive() && !receipt.Withheld

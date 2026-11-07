@@ -62,6 +62,8 @@ public static class Holds
     public const string ChangedTangentAudience = "Who reads it: public or private." + Stays;
     public const string TangentAccent = "amber, coral, jade, sky, iris or rose: the tone its tile wears wherever it is drawn; sent empty, the one its slug gives it." + Stays;
     public const string TangentImage = "The image its tile wears in place of its letter: the name of a bundled cover, as image takes it in change_appearance, or /media/ and the id of an image brought in here; sent empty, none." + Stays;
+    public const string MoveTo = "The slug of the Tangent the Topic moves to, one you moderate, as read_tangents names it.";
+    public const string DeletedReplies = "How many replies go with the Topic, the count its page read, which is what it holds when the delete lands; left out, none.";
     public const string DeletedTopics = "How many Topics go with the Tangent, the count its settings read, which is what it holds when the delete lands; left out, none, so only an empty Tangent is deleted.";
     public const string TangentMove = "earlier or later, to move it one place among the Tangents; sent alone, it changes nothing else.";
     public const string AccessRole = "The word of a role listed here with the access in its offered.";

@@ -22,6 +22,7 @@ public sealed class Event : Entity<Event>
     [Index(Name = "ix_event_targets", Order = 1)]
     [Index(Name = "ix_event_reports", Order = 1)]
     [Index(Name = "ix_event_roles", Order = 1)]
+    [Index(Name = "ix_event_topics", Order = 1)]
     public long Seq { get; set; }
 
     /// <summary>One of <see cref="EventKind"/>.</summary>
@@ -29,6 +30,9 @@ public sealed class Event : Entity<Event>
 
     public string? TangentId { get; set; }
 
+    /// <summary>The Topic a Post's row is about, by its root's Id. In <c>ix_event_topics</c> before the sequence, so one
+    /// Topic's rows are one range, which a move takes to its new Tangent (<see cref="Posts.MoveTopic"/>).</summary>
+    [Index(Name = "ix_event_topics", Order = 0)]
     public string? TopicId { get; set; }
 
     public string? PostId { get; set; }
