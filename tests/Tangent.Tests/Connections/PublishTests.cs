@@ -167,7 +167,7 @@ public sealed class PublishTests
         nudge.Changed();
         await nudge.Wake(Ada);
         await Until(() => !repository.Records.ContainsKey(document) && !repository.Records.ContainsKey(note));
-        Assert.True((await Receipt.Get(Receipt.Key(Ada, article.Id), Cancellation))?.Retracted);
+        await Until(async () => (await Receipt.Get(Receipt.Key(Ada, article.Id), Cancellation))?.Retracted == true);
         Assert.Empty((await Send(ada.Client, HttpMethod.Get, ConnectionsController.Path, json: true)).Json.GetProperty("articles").EnumerateArray());
     }
 
@@ -209,8 +209,9 @@ public sealed class PublishTests
 
         // Deleted whole, its copy comes down from its receipt alone.
         Assert.IsType<Outcome<Post>.Done>(await new DeleteTopic(article.Id, Mo).Send(Cancellation));
+        // The copy comes down before its receipt says so, so the receipt is waited for too.
         await Until(() => !repository.Records.ContainsKey(document));
-        Assert.True((await Receipt.Get(Receipt.Key(Ada, article.Id), Cancellation))?.Retracted);
+        await Until(async () => (await Receipt.Get(Receipt.Key(Ada, article.Id), Cancellation))?.Retracted == true);
     }
 
     /// <summary>Waits until Ada's Connection has read the log through its head.</summary>
