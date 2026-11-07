@@ -3,6 +3,7 @@ using Koan.Core;
 using Koan.Data.Abstractions;
 using Koan.Data.Abstractions.Filtering;
 using Koan.Data.Core.Sorting;
+using Koan.Identity.Roles;
 using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Http.Features;
@@ -133,12 +134,13 @@ public sealed class Archive
         var address = row.ShownHandle();
         if (!Nameable(address)) return;
         var folder = "p/" + address;
-        string? before = null;
+        RecentPosts.Cursor? before = null;
         var page = 1;
         do
         {
-            if (await As<ProfileController>(ct) is not { } profiles || await profiles.Get(address, before, ct) is not OkObjectResult { Value: ProfilePage read }) return;
-            before = read.Older is { } older ? Uri.UnescapeDataString(older[(older.IndexOf('=') + 1)..]) : null;
+            if (await Visiting(ct) is not { } http) return;
+            var read = await ProfilesController.Compose(http, _services.GetRequiredService<KoanWebBaseUrl>(), _services.GetRequiredService<RoleCollection>(), row, before, ct);
+            before = read.Older is { } older ? RecentPosts.Cursor.Parse(Uri.UnescapeDataString(older[(older.IndexOf('=') + 1)..])) : null;
             await _export.Page(folder + "/" + Export.PagePath(page), read with
             {
                 Address = Export.First + ".html",
@@ -162,13 +164,21 @@ public sealed class Archive
     /// none where a visitor may not read the place.</summary>
     private async Task<TController?> As<TController>(CancellationToken ct) where TController : ControllerBase
     {
+        if (await Visiting(ct) is not { } http) return null;
+        var controller = ActivatorUtilities.CreateInstance<TController>(_services);
+        controller.ControllerContext = new ControllerContext { HttpContext = http };
+        return controller;
+    }
+
+    /// <summary>A request of no one in particular, with the place as the Doorway finds it for a visitor; none where a visitor
+    /// may not read the place.</summary>
+    private async Task<HttpContext?> Visiting(CancellationToken ct)
+    {
         var (here, refused) = await Here.Find(null, null, null, null, ct);
         if (refused is not null) return null;
         var http = new DefaultHttpContext { RequestServices = _services };
         http.Features.Set(here);
-        var controller = ActivatorUtilities.CreateInstance<TController>(_services);
-        controller.ControllerContext = new ControllerContext { HttpContext = http };
-        return controller;
+        return http;
     }
 
     /// <summary>What a host takes for a server where nothing is to listen.</summary>

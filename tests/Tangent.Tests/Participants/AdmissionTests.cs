@@ -1,6 +1,7 @@
 using System.Net;
 using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
 using Tangent.Events;
@@ -280,6 +281,48 @@ public sealed class AdmissionTests
         Assert.True(second.Json.GetProperty("continued").GetBoolean());
         Assert.False(second.Json.TryGetProperty("next", out var none) && none.ValueKind != System.Text.Json.JsonValueKind.Null);
         Assert.Equal(HttpStatusCode.BadRequest, (await Send(mo.Client, HttpMethod.Get, ApplicationsController.Path + "?after=nonsense", json: true)).Status);
+    }
+
+    [Fact]
+    public async Task The_applications_continue_from_one_sealed_cursor_on_both_doors_whoever_applies_meanwhile()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        var start = new DateTimeOffset(2026, 10, 1, 9, 0, 0, TimeSpan.Zero);
+        async Task Applies(string name, DateTimeOffset at)
+        {
+            var applicant = Participant.Arrive(Persona.Id(name), Persona.Did(Persona.Id(name)), name + ".example", Admission.Apply, at);
+            Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(applicant).Send(Cancellation));
+        }
+        for (var i = 0; i < Applications.PageSize + 2; i++) await Applies($"seek{i:D2}", start.AddMinutes(i));
+
+        using var mo = await SignedIn(tangentSpace, Mo);
+        var first = (await Send(mo.Client, HttpMethod.Get, ApplicationsController.Path, json: true)).Json;
+        var firstIds = first.GetProperty("applications").EnumerateArray().Select(applicant => applicant.GetProperty("id").GetString()).ToList();
+        var next = new Uri(first.GetProperty("next").GetString()!);
+        // The cursor is sealed: it names no applicant, and one altered does not open.
+        Assert.DoesNotContain("seek", next.Query);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(mo.Client, HttpMethod.Get, next.PathAndQuery + "x", json: true)).Status);
+
+        // Someone applies between the two pages: the newest leads the first page read again, and the second page goes on
+        // from where the first ended, repeating no one and missing no one.
+        await Applies("seeklate", start.AddHours(1));
+        var second = (await Send(mo.Client, HttpMethod.Get, next.PathAndQuery, json: true)).Json;
+        Assert.Equal([Persona.Id("seek01"), Persona.Id("seek00")],
+            second.GetProperty("applications").EnumerateArray().Select(applicant => applicant.GetProperty("id").GetString()));
+        Assert.Empty(firstIds.Intersect(second.GetProperty("applications").EnumerateArray().Select(applicant => applicant.GetProperty("id").GetString())));
+
+        // An agent reads the same pages, continuing from the cursor the page names, and the list reads its rows alone.
+        using var tools = await Tools.ToolClient.Connect(tangentSpace, mo);
+        var read = await tools.Call("read_applications", new { });
+        Assert.Equal(Persona.Id("seeklate"), read.Structured!.Value.GetProperty("applications")[0].GetProperty("id").GetString());
+        var after = QueryHelpers.ParseQuery(new Uri(read.Structured.Value.GetProperty("next").GetString()!).Query)[ApplicationsController.After].ToString();
+        var older = await tools.Call("read_applications", new { after });
+        Assert.Equal([Persona.Id("seek02"), Persona.Id("seek01"), Persona.Id("seek00")],
+            older.Structured!.Value.GetProperty("applications").EnumerateArray().Select(applicant => applicant.GetProperty("id").GetString()));
+        Assert.Equal(400, (await tools.Call("read_applications", new { state = "declined" })).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(mo.Client, HttpMethod.Get, ApplicationsController.Path + "?set=audit", json: true)).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(mo.Client, HttpMethod.Get, ApplicationsController.Path + "?page=2", json: true)).Status);
     }
 
     [Fact]

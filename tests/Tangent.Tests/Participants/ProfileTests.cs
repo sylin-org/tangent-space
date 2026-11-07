@@ -126,6 +126,34 @@ public sealed class ProfileTests
     }
 
     [Fact]
+    public async Task A_profile_answers_at_its_handle_its_id_and_its_did_alike_on_both_doors_and_takes_nothing_else()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        using var ada = await SignedIn(tangentSpace, Ada);
+        using var tools = await Tools.ToolClient.Connect(tangentSpace, ada);
+
+        foreach (var address in new[] { AdaHandle, Ada, Persona.Did(Ada) })
+        {
+            var read = await Send(ada.Client, HttpMethod.Get, "/p/" + Uri.EscapeDataString(address), json: true);
+            Assert.Equal((HttpStatusCode.OK, Ada, BaseUrl + "/p/" + AdaHandle),
+                (read.Status, read.Json.GetProperty("id").GetString(), read.Json.GetProperty("address").GetString()));
+            var page = await Send(ada.Client, HttpMethod.Get, "/p/" + Uri.EscapeDataString(address));
+            Assert.Contains("class=\"profile", page.Body);
+            var called = await tools.Call("read_profile", new { handle = address });
+            Assert.Equal((200, Ada), (called.Status, called.Structured!.Value.GetProperty("id").GetString()));
+        }
+
+        // The profile reads its row alone: no partition, and no word it does not take, on either door.
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(ada.Client, HttpMethod.Get, "/p/" + AdaHandle + "?set=audit", json: true)).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(ada.Client, HttpMethod.Get, "/p/" + AdaHandle + "?filter=%7B%7D", json: true)).Status);
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(ada.Client, HttpMethod.Get, "/p", json: true)).Status);
+        Assert.Equal(400, (await tools.Call("read_profile", new { handle = AdaHandle, before = "yesterday" })).Status);
+        var absent = await tools.Call("read_profile", new { handle = "nobody.example" });
+        Assert.Equal((404, "absent"), (absent.Status, absent.ErrorCode));
+    }
+
+    [Fact]
     public async Task A_handle_verified_at_a_sign_in_is_taken_from_the_participant_who_kept_it()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
