@@ -101,6 +101,14 @@ export const search = defineComponent({
       return link
     }
 
+    // The search page for the words, carrying what else the form holds, such as the Tangent a Tangent's page searches alone.
+    function address(text: string): string {
+      const query = new URLSearchParams()
+      for (const [name, value] of new FormData(form)) if (typeof value === 'string') query.set(name, value)
+      query.set('q', text)
+      return `${form.action}?${query}`
+    }
+
     function show(text: string, hits: Hit[]): void {
       const list = document.createElement('div')
       list.setAttribute('role', 'listbox')
@@ -109,7 +117,7 @@ export const search = defineComponent({
       const closing = document.createElement(hits.length > 0 ? 'a' : 'p')
       closing.className = 'masthead-search-all'
       if (closing instanceof HTMLAnchorElement) {
-        closing.href = `${form.action}?q=${encodeURIComponent(text)}`
+        closing.href = address(text)
         closing.textContent = `All results for “${text}”`
       } else {
         closing.setAttribute('role', 'status')
@@ -125,7 +133,7 @@ export const search = defineComponent({
       const controller = new AbortController()
       request = controller
       try {
-        const response = await fetch(`${form.action}?q=${encodeURIComponent(text)}`, {
+        const response = await fetch(address(text), {
           headers: { Accept: 'application/json' },
           cache: 'no-store',
           signal: controller.signal,

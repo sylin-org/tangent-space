@@ -22,10 +22,10 @@ public sealed record AudienceNote(bool Private) : IPart;
 /// <summary>Where a participant who joined a private Tangent leaves it.</summary>
 public sealed record LeaveTangent(Form Leave) : IPart;
 
-/// <summary>A page of a Tangent's Topics, latest activity first, whole or narrowed (<see cref="To"/>): discussions as rows
-/// of a table, articles as cards under a lead on the first page; where none are, one sentence and, on the whole list, one
-/// next step — where a Topic is started, for a reader who may, or signing in, for a visitor; and the way to the page after
-/// and back to the latest.</summary>
+/// <summary>A page of a Tangent's Topics, newest first in its sort (<see cref="Tangents.TopicList.For"/>), whole or narrowed
+/// (<see cref="To"/>): discussions as rows of a table, by latest activity, articles as cards under a lead on the first page,
+/// by when each started; where none are, one sentence and, on the whole list, one next step — where a Topic is started, for
+/// a reader who may, or signing in, for a visitor; and the way to the page after and back to the latest.</summary>
 public sealed record TangentTopics(TangentEntry Tangent, IReadOnlyList<TopicEntry> Topics, bool Continued, string? NewTopic, string? SignIn,
     string? Next, TangentTopics.Narrowed? To = null) : IPart
 {

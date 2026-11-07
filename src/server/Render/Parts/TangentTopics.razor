@@ -1,7 +1,7 @@
-@* A page of a Tangent's Topics, latest activity first, whole or narrowed to a month or an author: discussions as rows of a
-   table, articles as cards, the first that stands leading on the first page with the Tangent's own tile where it has no
-   cover, and a removed one never; where none are, one sentence and, on the whole list, one next step; and the way to older
-   ones and back to the latest. *@
+@* A page of a Tangent's Topics, newest first, whole or narrowed to a month or an author: discussions as rows of a table, by
+   latest activity, and articles as cards, by when each started, the first that stands leading on the first page with the
+   Tangent's own tile where it has no cover, and a removed one never; where none are, one sentence and, on the whole list,
+   one next step; and the way to older ones and back to the latest. *@
 @if (Model.Topics.Count == 0)
 {
     <div class="topic-empty">
@@ -20,7 +20,7 @@ else
 {
     <div class="@(Articles ? "topic-list-head topic-list-head-ruled" : "topic-list-head")">
         <h2 class="topic-list-title">@Title</h2>
-        <span class="topic-list-order">latest activity first</span>
+        <span class="topic-list-order">@(Articles ? "newest first" : "latest activity first")</span>
         @if (Model.NewTopic is { } start)
         {
             <a class="tangent-new" href="@start">@Plus@(Articles ? "New article" : "New topic")</a>

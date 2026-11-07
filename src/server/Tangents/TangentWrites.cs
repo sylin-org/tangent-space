@@ -71,7 +71,7 @@ public static class TangentWrites
     public static readonly IReadOnlyList<Form.Choice> KindChoices =
     [
         new(PostWrites.Word(PostKind.Topic), "Discussions", "Topics are conversations, latest activity first."),
-        new(PostWrites.Word(PostKind.Article), "Articles", "Each topic opens with a published piece.")
+        new(PostWrites.Word(PostKind.Article), "Articles", "Each topic opens with a published piece, newest first.")
     ];
 
     /// <summary>A Tangent's audiences as a form offers them, each with what it means.</summary>

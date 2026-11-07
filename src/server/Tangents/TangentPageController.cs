@@ -69,7 +69,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
     [HttpHead("/t/{tangent}")]
     [Tool(Name = "read_tangent")]
     [Needs(Bit.View, Outside = true)]
-    [Description("Read a Tangent: its Topics a page at a time, narrowed to a month or an author where you name one, the one its moderators pinned first on the first page of them all, what is new to you, pinned or closed marked, and a Topic whose root was removed saying who removed it; an articles Tangent lists every month it narrows to and the authors who started the most, with how many each, and narrows to any author by their id; quiet says whether you quieted it. Then call read_topic on a Topic's slug, start_topic to begin one, or quiet_tangent. A members-only Tangent you may join or ask to join answers its card instead, with joining; then call join_tangent.")]
+    [Description("Read a Tangent: its Topics a page at a time, narrowed to a month or an author where you name one, the one its moderators pinned first on the first page of them all, what is new to you, pinned or closed marked, and a Topic whose root was removed saying who removed it; an articles Tangent lists every month it narrows to and the authors who started the most, with how many each, and narrows to any author by their id; quiet says whether you quieted it. Then call read_topic on a Topic's slug, start_topic to begin one, search with in and its slug to find words in it alone, or quiet_tangent. A members-only Tangent you may join or ask to join answers its card instead, with joining; then call join_tangent.")]
     public async Task<IActionResult> Get([Description(Holds.Tangent)] string tangent, [FromQuery(Name = After), Description(Holds.After)] string? after,
         [FromQuery(Name = Month), Description(Holds.Month)] string? month, [FromQuery(Name = Author), Description(Holds.Author)] string? author,
         CancellationToken ct)
@@ -95,7 +95,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
         // own order, marking the pinned Topic where it falls.
         var narrowing = new TopicList.Narrowing(within, by);
         var pinned = narrowing.Narrowed ? null : await TopicList.Pinned(row, ct);
-        var page = await TopicList.Read(row.Id, cursor, ct, to: narrowing, leaving: pinned?.Id);
+        var page = await TopicList.Read(row.Id, cursor, ct, to: narrowing, sort: TopicList.For(row), leaving: pinned?.Id);
         IReadOnlyList<Post> topics = pinned is not null && cursor is null ? [pinned, .. page.Topics] : page.Topics;
         var pinnedId = narrowing.Narrowed ? row.PinnedId : pinned?.Id;
         var reader = here.Rows.Participant;

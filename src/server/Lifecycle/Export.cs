@@ -179,7 +179,7 @@ public sealed class Export
         var page = 1;
         do
         {
-            var read = await TopicList.Read(tangent.Id, cursor, ct);
+            var read = await TopicList.Read(tangent.Id, cursor, ct, sort: TopicList.For(tangent));
             var topics = read.Topics.Where(root => root.CreatedAt <= _asOf).ToList();
             await Page($"t/{tangent.Id}/{PagePath(page)}", await Listed(tangent, audience, topics, page++, read.Next is not null, ct), "../..",
                 new Frame(_space.Name, "../../" + First + ".html", [new Crumb(tangent.Name)], Feeds: FeedsOf(tangent)), ct);

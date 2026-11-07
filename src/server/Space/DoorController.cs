@@ -190,10 +190,10 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
     }
 
     /// <summary>The shelves of the first <see cref="ShelfLimit"/> Tangents that hold a Topic those <paramref name="above"/>
-    /// does not: each Tangent's pinned Topic, then its latest, <see cref="ShelfTopicLimit"/> in all past those, at most one
-    /// keyed read of the pinned root and one bounded read of the topic list of each Tangent the door lists, so a Tangent whose
-    /// every Topic the front page shows gets no shelf, then one keyed read of their latest replies and one of the people they
-    /// name whom <paramref name="known"/> does not hold.</summary>
+    /// does not: each Tangent's pinned Topic, then its latest, <see cref="ShelfTopicLimit"/> in all past those, in its list's own
+    /// sort (<see cref="TopicList.For"/>), at most one keyed read of the pinned root and one bounded read of the topic list of
+    /// each Tangent the door lists, so a Tangent whose every Topic the front page shows gets no shelf, then one keyed read of
+    /// their latest replies and one of the people they name whom <paramref name="known"/> does not hold.</summary>
     private static async Task<List<Door.Shelf>> Shelves(IReadOnlyList<Tangents.Tangent> tangents, IReadOnlySet<string> above,
         IReadOnlyDictionary<string, Render.Person> known, string baseAddress, CancellationToken ct)
     {
@@ -203,7 +203,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             if (read.Count == ShelfLimit) break;
             var size = Math.Min(TopicList.PageSize, ShelfTopicLimit + above.Count);
             var pinned = await TopicList.Pinned(tangent, ct);
-            var newest = (await TopicList.Read(tangent.Id, null, ct, size, leaving: pinned?.Id)).Topics;
+            var newest = (await TopicList.Read(tangent.Id, null, ct, size, sort: TopicList.For(tangent), leaving: pinned?.Id)).Topics;
             var topics = (pinned is null ? newest : newest.Prepend(pinned)).Where(root => !root.Removed && !above.Contains(root.Id))
                 .Take(ShelfTopicLimit).ToList();
             if (topics.Count > 0) read.Add((tangent, topics, pinned?.Id));

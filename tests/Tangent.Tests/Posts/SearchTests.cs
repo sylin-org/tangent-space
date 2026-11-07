@@ -3,6 +3,7 @@ using System.Text.Json;
 using Koan.Data.Core.Commands;
 using Tangent.Access;
 using Tangent.Space;
+using Tangent.Tools;
 using Xunit;
 using static Tangent.Posts.Writing;
 
@@ -231,6 +232,88 @@ public sealed class SearchTests
         Assert.Contains("name=\"q\"", door.Body);
         Assert.Contains("value=\"copper &amp; glass\"", (await Send(tangentSpace.Client, HttpMethod.Get, Path("copper & glass"))).Body);
         Assert.DoesNotContain("masthead-search", (await Send(tangentSpace.Client, HttpMethod.Get, "/sign-in")).Body);
+    }
+
+    [Fact]
+    public async Task A_search_narrowed_to_a_tangent_finds_only_its_posts_on_every_page_says_where_it_searched_and_offers_everywhere_as_json_html_and_the_tool()
+    {
+        var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Furnish(tangentSpace);
+        await using var space = tangentSpace;
+        var elsewhere = BaseUrl + TopicPath(await Started(Ada, "A lantern elsewhere", "A lantern.", Articles));
+        var here = new List<string>();
+        for (var number = 0; number < SearchController.PageSize + 1; number++)
+            here.Add(BaseUrl + TopicPath(await Started(Ada, "Lantern " + number, "A lantern.")));
+
+        var first = (await Send(tangentSpace.Client, HttpMethod.Get, Path("lantern") + "&in=" + Workshop, json: true)).Json;
+        Assert.Equal((Workshop, Workshop, BaseUrl + "/t/" + Workshop), (first.GetProperty("in").GetProperty("slug").GetString(),
+            first.GetProperty("in").GetProperty("name").GetString(), first.GetProperty("in").GetProperty("address").GetString()));
+        Assert.Equal(BaseUrl + Path("lantern"), first.GetProperty("everywhere").GetString());
+        Assert.Equal(BaseUrl + Path("lantern") + "&in=" + Workshop + "&page=2", first.GetProperty("next").GetString());
+        var second = (await Send(tangentSpace.Client, HttpMethod.Get, Path("lantern") + "&in=" + Workshop + "&page=2", json: true)).Json;
+        Assert.Equal(BaseUrl + Path("lantern") + "&in=" + Workshop, second.GetProperty("previous").GetString());
+        Assert.Equal(here.Order(), Addresses(first).Concat(Addresses(second)).Order());
+
+        var whole = (await Send(tangentSpace.Client, HttpMethod.Get, Path("lantern"), json: true)).Json;
+        Assert.False(whole.TryGetProperty("in", out _));
+        Assert.False(whole.TryGetProperty("everywhere", out _));
+        Assert.Contains(elsewhere, Addresses(whole).Concat(Addresses((await Send(tangentSpace.Client, HttpMethod.Get, Path("lantern", 2), json: true)).Json)));
+
+        var page = (await Send(tangentSpace.Client, HttpMethod.Get, Path("lantern") + "&in=" + Workshop)).Body;
+        Assert.Contains($"In <a href=\"{BaseUrl}/t/{Workshop}\">{Workshop}</a> &#xB7; <a href=\"{BaseUrl}{Path("lantern")}\">search everywhere</a>", page);
+        Assert.Contains($"<input type=\"hidden\" name=\"in\" value=\"{Workshop}\"", page);
+        Assert.Contains($"Nothing you can read in {Workshop} holds those words.",
+            (await Send(tangentSpace.Client, HttpMethod.Get, Path("porcelain") + "&in=" + Workshop)).Body);
+
+        using var tools = await ToolClient.Connect(tangentSpace);
+        var called = await tools.Call("search", new { q = "lantern", @in = Articles });
+        Assert.False(called.Failed, called.Text);
+        Assert.Equal([elsewhere], Addresses(called.Structured!.Value));
+    }
+
+    [Fact]
+    public async Task A_search_in_a_tangent_the_reader_may_not_view_or_in_none_is_the_whole_place_and_says_nothing_of_it()
+    {
+        var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Furnish(tangentSpace);
+        await using var space = tangentSpace;
+        var open = BaseUrl + TopicPath(await Started(Ada, "An open lantern", "It lights the way."));
+        await Started(Leo, "A hidden lantern", "Lantern, the secret passphrase.", Studio);
+        using var bea = await SignedIn(tangentSpace, Bea);
+
+        var whole = await Send(bea.Client, HttpMethod.Get, Path("lantern"), json: true);
+        foreach (var other in new[] { Studio, "nowhere", "Not a slug!" })
+        {
+            var read = await Send(bea.Client, HttpMethod.Get, Path("lantern") + "&in=" + Uri.EscapeDataString(other), json: true);
+            Assert.Equal(HttpStatusCode.OK, read.Status);
+            Assert.Equal([open], Addresses(read.Json));
+            Assert.False(read.Json.TryGetProperty("in", out _));
+            Assert.Equal(whole.Json.GetProperty("hits").GetRawText(), read.Json.GetProperty("hits").GetRawText());
+        }
+
+        using var leo = await SignedIn(tangentSpace, Leo);
+        var narrowed = (await Send(leo.Client, HttpMethod.Get, Path("lantern") + "&in=" + Studio, json: true)).Json;
+        Assert.Equal(Studio, narrowed.GetProperty("in").GetProperty("slug").GetString());
+        Assert.All(Addresses(narrowed), address => Assert.StartsWith(BaseUrl + "/t/" + Studio + "/", address));
+    }
+
+    [Fact]
+    public async Task The_masthead_box_on_a_tangents_page_searches_that_tangent_and_elsewhere_the_whole_place()
+    {
+        var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Furnish(tangentSpace);
+        await using var space = tangentSpace;
+        var root = await Started(Ada, "Copper lanterns", "How the glass is cut.");
+
+        var tangent = (await Send(tangentSpace.Client, HttpMethod.Get, "/t/" + Workshop)).Body;
+        Assert.Contains($"placeholder=\"Search {Workshop}\" aria-label=\"Search {Workshop}\"", tangent);
+        Assert.Contains($"<input type=\"hidden\" name=\"in\" value=\"{Workshop}\"", tangent);
+        foreach (var path in new[] { "/", TopicPath(root) })
+        {
+            var html = (await Send(tangentSpace.Client, HttpMethod.Get, path)).Body;
+            Assert.Contains("placeholder=\"Search\" aria-label=\"Search this place\"", html);
+            Assert.DoesNotContain("name=\"in\"", html);
+        }
     }
 
     [Fact]

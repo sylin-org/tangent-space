@@ -57,6 +57,7 @@ public sealed class Post : Entity<Post>
     [Index(Name = "ix_post_topics", Order = 0)]
     [Index(Name = "ix_post_slugs", Order = 0)]
     [Index(Name = "ix_post_started", Order = 0)]
+    [Index(Name = "ix_post_created", Order = 0)]
     [Index(Name = "ix_post_topics_by", Order = 0)]
     public string TangentId { get; set; } = "";
 
@@ -70,6 +71,7 @@ public sealed class Post : Entity<Post>
     /// <summary>The Post this one replies to; null on a root.</summary>
     [Index(Name = "ix_post_topics", Order = 1)]
     [Index(Name = "ix_post_started", Order = 1)]
+    [Index(Name = "ix_post_created", Order = 1)]
     [Index(Name = "ix_post_topics_by", Order = 1)]
     [Index(Name = "ix_post_articles", Order = 1)]
     public string? ParentId { get; set; }
@@ -124,8 +126,8 @@ public sealed class Post : Entity<Post>
     public long Sequence { get; set; }
 
     /// <summary>Who wrote it. In <c>ix_post_authors</c> before the time it was written, so a participant's Posts,
-    /// newest first, are one range of it, and in <c>ix_post_topics_by</c> before a Topic's last activity, so the Topics
-    /// one author started in a Tangent, newest activity first, are one range.</summary>
+    /// newest first, are one range of it, and in <c>ix_post_topics_by</c> before the time a Topic started, so the Topics
+    /// one author started in a Tangent, newest first, are one range.</summary>
     [Index(Name = "ix_post_authors", Order = 0)]
     [Index(Name = "ix_post_topics_by", Order = 2)]
     public string AuthorId { get; set; } = "";
@@ -134,10 +136,14 @@ public sealed class Post : Entity<Post>
     /// the account the Post links out to and goes out under.</summary>
     public string AuthorDid { get; set; } = "";
 
+    /// <summary>When it was written; on a root, when its Topic started. In <c>ix_post_created</c> after the Tangent and
+    /// the parent, so a Tangent's Topics by when each started, newest first, removed ones among them, are one range.</summary>
     [Index(Name = "ix_post_origins", Order = 1)]
     [Index(Name = "ix_post_authors", Order = 1)]
     [Index(Name = "ix_post_started", Order = 3)]
     [Index(Name = "ix_post_articles", Order = 3)]
+    [Index(Name = "ix_post_created", Order = 2)]
+    [Index(Name = "ix_post_topics_by", Order = 3)]
     public DateTimeOffset CreatedAt { get; set; }
 
     /// <summary>The last sequence taken in the Topic. Root only.</summary>
@@ -155,7 +161,6 @@ public sealed class Post : Entity<Post>
 
     /// <summary>When the Topic last gained a Post. Root only.</summary>
     [Index(Name = "ix_post_topics", Order = 2)]
-    [Index(Name = "ix_post_topics_by", Order = 3)]
     public DateTimeOffset LastActivityAt { get; set; }
 
     /// <summary>The Topic's latest reply and its author; null until the first reply. Root only.</summary>

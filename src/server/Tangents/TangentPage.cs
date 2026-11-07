@@ -7,8 +7,9 @@ using Tangent.Posts;
 namespace Tangent.Tangents;
 
 /// <summary>The Tangent page as a resource: the Tangent's name, description, kind and audience, what the reader
-/// <see cref="Can"/> do here, and one bounded page of its <see cref="Topics"/>, by last activity. <see cref="Next"/> is the address of the page after this one, absent on the last; nothing is counted to
-/// answer it. <see cref="NewTopic"/> is where a Topic is started, present only when <see cref="Can"/> holds
+/// <see cref="Can"/> do here, and one bounded page of its <see cref="Topics"/>, newest first in its sort
+/// (<see cref="TopicList.For"/>): an articles Tangent's by when each started, a discussions Tangent's by last activity.
+/// <see cref="Next"/> is the address of the page after this one, absent on the last; nothing is counted to answer it. <see cref="NewTopic"/> is where a Topic is started, present only when <see cref="Can"/> holds
 /// <c>Topic</c>; <see cref="SignIn"/> is where a visitor signs in, coming back here. <see cref="Tangents"/> are the
 /// Tangents the reader may view, this one among them, with the Topics started in each. <see cref="Place"/>,
 /// <see cref="Door"/> and <see cref="Who"/> say where the page is and who reads it; <see cref="Day"/> is the UTC day
@@ -124,13 +125,13 @@ public sealed partial record TangentPage(
     public Render.LiveUpdates Live => new(Render.LiveUpdates.TangentPage, Slug);
 
     /// <summary>The frame the shell draws around the page: the place; the switcher the Tangent's crumb opens, listing the
-    /// Tangents the reader may view and, for one who may, where a new one is created; and who reads, or where a visitor signs
-    /// in.</summary>
+    /// Tangents the reader may view and, for one who may, where a new one is created; who reads, or where a visitor signs
+    /// in; and the search box, which searches this Tangent.</summary>
     public static Render.Frame Frame(TangentPage page)
     {
         var switcher = new Render.Switcher(page.Self, page.Tangents.Select(tangent => tangent with { Current = tangent.Slug == page.Slug }).ToList(),
             page.Door + TangentsController.Route.TrimStart('/'), page.NewTangent);
-        return new(page.Place, page.Door, [], page.Who, page.SignIn, page.Feeds) { Switcher = switcher };
+        return new(page.Place, page.Door, [], page.Who, page.SignIn, page.Feeds) { Switcher = switcher, SearchIn = (page.Slug, page.Name) };
     }
 
     /// <summary>The most characters of a body the page carries as a Topic's <see cref="Topic.Opening"/> or a reply's

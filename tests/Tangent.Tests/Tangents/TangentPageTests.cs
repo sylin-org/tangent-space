@@ -16,8 +16,8 @@ using Xunit;
 
 namespace Tangent.Tangents;
 
-/// <summary>The Tangent page both ways: the Tangent, its <c>can</c> and one bounded page of its Topics by last activity,
-/// with what is new to a signed-in reader marked; the gate for a reader who may not read;
+/// <summary>The Tangent page both ways: the Tangent, its <c>can</c> and one bounded page of its Topics, a discussions Tangent's
+/// by last activity and an articles Tangent's by when each started, with what is new to a signed-in reader marked; the gate for a reader who may not read;
 /// the empty state and the start affordance; a Topic whose root is removed, marked; an articles Tangent narrowed by month
 /// and by author across all its articles; and the page's <c>ETag</c>.</summary>
 public sealed class TangentPageTests
@@ -441,6 +441,65 @@ public sealed class TangentPageTests
         var called = await tools.Call("read_tangent", new { tangent = "essays", author = "leo" });
         Assert.False(called.Failed, called.Text);
         Assert.Equal(september.AsEnumerable().Reverse(), Ids(called.Structured!.Value));
+    }
+
+    [Fact]
+    public async Task An_articles_tangent_lists_by_when_each_article_started_so_a_reply_moves_nothing_and_the_newest_leads_while_discussions_keep_latest_activity()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        await Place(tangentSpace);
+        Assert.IsType<Outcome<Tangent>.Done>(await new CreateTangent("essays", "Essays", "", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
+        var older = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "essays", "The older essay", "Words of old.", "leo", At: Start).Send(Cancellation)).Result;
+        var newer = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "essays", "The newer essay", "Words of new.", "leo", At: Start.AddMinutes(1)).Send(Cancellation)).Result;
+        Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), older.Id, "A late reply.", "ada", At: Start.AddMinutes(2)).Send(Cancellation));
+
+        foreach (var path in new[] { "/t/essays", "/t/essays?author=leo", "/t/essays?month=2026-09" })
+        {
+            using var json = await Json(tangentSpace.Client, path);
+            Assert.Equal([newer.Id, older.Id], Ids(json.RootElement));
+        }
+
+        var html = await Html(tangentSpace.Client, "/t/essays");
+        Assert.Contains("<span class=\"topic-list-order\">newest first</span>", html);
+        var lead = Regex.Match(html, "<article class=\"article-card article-lead card topic\"[^>]*>.*?</article>", RegexOptions.Singleline);
+        Assert.True(lead.Success);
+        Assert.Contains("The newer essay", lead.Value);
+
+        var asked = await Started("Asked first", Start);
+        var answered = await Started("Asked next", Start.AddMinutes(1));
+        Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), asked.Id, "An answer.", "leo", At: Start.AddMinutes(2)).Send(Cancellation));
+        using (var discussions = await Json(tangentSpace.Client, "/t/" + Workshop))
+            Assert.Equal([asked.Id, answered.Id], Ids(discussions.RootElement));
+        Assert.Contains("<span class=\"topic-list-order\">latest activity first</span>", await Html(tangentSpace.Client, "/t/" + Workshop));
+    }
+
+    [Fact]
+    public async Task More_articles_than_one_page_continue_by_when_each_started_each_on_exactly_one_page_however_their_replies_fall()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        await Place(tangentSpace);
+        Assert.IsType<Outcome<Tangent>.Done>(await new CreateTangent("essays", "Essays", "", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
+        var started = new List<string>();
+        for (var index = 0; index < TopicList.PageSize + 1; index++)
+            started.Add(Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "essays", "Essay " + index, "Words.", "leo",
+                At: Start.AddMinutes(index)).Send(Cancellation)).Result.Id);
+        // The oldest articles gain the newest replies, so by latest activity they would come first.
+        for (var index = 0; index < 3; index++)
+            Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), started[index], "Late.", "ada", At: Start.AddHours(2 + index)).Send(Cancellation));
+
+        var read = new List<string>();
+        var pages = 0;
+        string? address = "/t/essays";
+        while (address is not null)
+        {
+            using var json = await Json(tangentSpace.Client, address);
+            read.AddRange(Ids(json.RootElement));
+            pages++;
+            address = json.RootElement.TryGetProperty("next", out var next) ? new Uri(next.GetString()!).PathAndQuery : null;
+        }
+
+        Assert.Equal(2, pages);
+        Assert.Equal(started.AsEnumerable().Reverse(), read);
     }
 
     [Fact]

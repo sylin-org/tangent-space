@@ -8,12 +8,16 @@ namespace Tangent.Render;
 /// opens, where the page holds one. A resource that
 /// names a frame gets the masthead, the path bar and the footer; one that names none gets its component alone in the
 /// page. The masthead holds the search box, with <see cref="Searched"/> in it, unless the page is not
-/// <see cref="Searchable"/>: a step of signing in or setting up, where nothing is there to find yet. <see cref="Document"/> is the
+/// <see cref="Searchable"/>: a step of signing in or setting up, where nothing is there to find yet; on a Tangent's page
+/// it searches that Tangent (<see cref="SearchIn"/>). <see cref="Document"/> is the
 /// <c>site.standard.document</c> record of an article published under its author's account, which the head names.</summary>
 public sealed record Frame(string Place, string Door, IReadOnlyList<Crumb> Crumbs, Who? Who = null, string? SignIn = null, IReadOnlyList<FeedLink>? Feeds = null,
     bool Searchable = true, string? Searched = null, string? Document = null)
 {
     public Switcher? Switcher { get; init; }
+
+    /// <summary>The Tangent the search box searches alone, by its slug and its name, where the page is that Tangent's.</summary>
+    public (string Slug, string Name)? SearchIn { get; init; }
 
     /// <summary>Whether the page's crumbs start at the root whatever its address names, as the saved change that shut its
     /// sender out of the Tangent it was sent to.</summary>
@@ -45,11 +49,15 @@ public sealed record Frame(string Place, string Door, IReadOnlyList<Crumb> Crumb
     /// <summary>Where the search box sends its words.</summary>
     public string Search => Door.TrimEnd('/') + Posts.SearchPage.Path;
 
-    /// <summary>The search box, where the page is searchable.</summary>
-    public Form? Searching => Searchable
-        ? Form.Reading(Search, new Form.Field("q", "", Searched, Form.Input.Search) { Label = "Search this place", Placeholder = "Search", Limit = 200 })
-            with { Tool = "search", Island = "search" }
-        : null;
+    /// <summary>The search box, where the page is searchable, narrowed to <see cref="SearchIn"/> where the page names one.</summary>
+    public Form? Searching => !Searchable ? null
+        : SearchIn is { } inside
+            ? Form.Reading(Search, Words("Search " + inside.Name, "Search " + inside.Name),
+                new Form.Field(Posts.SearchController.In, Holds.SearchIn, inside.Slug, Form.Input.Hidden)) with { Tool = "search", Island = "search" }
+            : Form.Reading(Search, Words("Search this place", "Search")) with { Tool = "search", Island = "search" };
+
+    private Form.Field Words(string label, string placeholder)
+        => new(Posts.SearchController.Words, "", Searched, Form.Input.Search) { Label = label, Placeholder = placeholder, Limit = Posts.PostSearch.TextLimit };
 
     /// <summary>The mark drawn for a place with no image of its own: the first letter of its name.</summary>
     public string Initial => Place.Length > 0 ? char.ToUpperInvariant(Place[0]).ToString() : "T";

@@ -118,6 +118,7 @@ else
                 <svg class="masthead-search-icon" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="9" r="5.5"></circle><path d="M13 13l3.5 3.5"></path></svg>
                 <input class="masthead-search-field" type="search" name="@bar.Name" value="@bar.Value" placeholder="@bar.Placeholder" aria-label="@(bar.Label ?? bar.Name)"
                        maxlength="@bar.Limit" autocomplete="off">
+                @Hidden(Model)
             </form>
         }
         else if (Model.Method == HttpMethods.Get && Model.Fields.Count(Shown) == 1 && Model.Fields.Single(Shown) is { As: Render.Form.Input.Search } search)

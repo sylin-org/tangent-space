@@ -41,6 +41,7 @@ public static class Holds
     public const string SeenTopic = "The id of the Topic you have read, as its page gives it; left out, everything the door read through is seen.";
 
     public const string Words = "The words to look for, at most 200 characters; left out, nothing is searched.";
+    public const string SearchIn = "The slug of a Tangent to search alone; left out, or one you may not read, the whole place.";
     public const string Number = "The number of the page, from one; left out, the first.";
     public const string After = "The cursor a page of this list names as its next; left out, the first.";
     public const string Month = "A month in UTC as its year and number, such as 2026-10, to narrow the Topics to those started in it; left out, every month.";

@@ -7,9 +7,9 @@ namespace Tangent.Posts;
 /// <summary>The Posts whose title or body hold the words of a text, best first, among those a reader may view: every word
 /// is optional, a Post holding more of them comes first, and the word the text ends in also matches as the start of a
 /// word, since the text may still be being typed. Koan's lexical index does the finding, and the store is told the
-/// Tangents the reader may view, or the others where they are fewer, and to leave out removed Posts, before it ranks and
-/// pages, so no page, length or score says anything of a Post the reader may not view. A partial word the store stems
-/// away finds nothing until it is whole. It never refuses: the text is trimmed and cut to <see cref="TextLimit"/>
+/// Tangents the reader may view, or the others where they are fewer, or the one Tangent a search is narrowed to, and to
+/// leave out removed Posts, before it ranks and pages, so no page, length or score says anything of a Post the reader may
+/// not view. A partial word the store stems away finds nothing until it is whole. It never refuses: the text is trimmed and cut to <see cref="TextLimit"/>
 /// characters, and text with no letter or digit finds nothing; a page holds between one and <see cref="PageLimit"/> Posts,
 /// its number from one to <see cref="PageNumberLimit"/>, and a page past the last holds none. A snippet holds
 /// <see cref="SnippetWords"/> words around the matched words, each between <see cref="Open"/> and <see cref="Close"/>.
@@ -55,10 +55,11 @@ public static class PostSearch
 
     /// <summary>Page <paramref name="page"/> (from 1) of <paramref name="size"/> Posts for <paramref name="text"/> in
     /// <paramref name="viewable"/>, the Tangents the reader may view, and in none of <paramref name="others"/>, every other
-    /// Tangent, each held within its bounds. Whatever the store answers, the page keeps only Posts in <paramref name="viewable"/>,
-    /// so a Tangent that changed while the sets were read never shows; such a page can be short. No Tangent viewable reads
-    /// nothing.</summary>
-    public static async Task<Answer> Run(string? text, IReadOnlySet<string> viewable, IReadOnlyCollection<string> others, int page = 1, int size = 20,
+    /// Tangent, or, where <paramref name="others"/> is null, in <paramref name="viewable"/> alone, as a search narrowed to one
+    /// Tangent asks, each held within its bounds. Whatever the store answers, the page keeps only Posts in
+    /// <paramref name="viewable"/>, so a Tangent that changed while the sets were read never shows; such a page can be short. No
+    /// Tangent viewable reads nothing.</summary>
+    public static async Task<Answer> Run(string? text, IReadOnlySet<string> viewable, IReadOnlyCollection<string>? others, int page = 1, int size = 20,
         CancellationToken ct = default)
     {
         page = Math.Clamp(page, 1, PageNumberLimit);
@@ -77,11 +78,11 @@ public static class PostSearch
     }
 
     /// <summary>The Posts the reader may be shown: none removed, in the smaller of the two sets the caller names, to keep or
-    /// to leave out, and in nothing more where none is left out.</summary>
-    private static LexicalSearchQuery<Post> Readable(LexicalSearchQuery<Post> query, IReadOnlySet<string> viewable, IReadOnlyCollection<string> others)
+    /// to leave out, in nothing more where none is left out, and in those to keep where the caller names none to leave out.</summary>
+    private static LexicalSearchQuery<Post> Readable(LexicalSearchQuery<Post> query, IReadOnlySet<string> viewable, IReadOnlyCollection<string>? others)
     {
-        if (others.Count == 0) return query.Within(post => !post.Removed);
-        return viewable.Count <= others.Count
+        if (others is { Count: 0 }) return query.Within(post => !post.Removed);
+        return others is null || viewable.Count <= others.Count
             ? query.Within(post => !post.Removed && viewable.Contains(post.TangentId))
             : query.Within(post => !post.Removed && !others.Contains(post.TangentId));
     }

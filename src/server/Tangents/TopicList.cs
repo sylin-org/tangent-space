@@ -6,27 +6,41 @@ using Tangent.Posts;
 
 namespace Tangent.Tangents;
 
-/// <summary>One bounded page of a Tangent's Topics, newest activity first, read through the topic-list index
-/// <c>ix_post_topics</c> (<c>TangentId</c>, <c>ParentId</c>, <c>LastActivityAt</c>), or narrowed to the Topics started in
-/// one month, a range of <c>ix_post_started</c>, or by one author, a range of <c>ix_post_topics_by</c>, which holds
-/// <c>AuthorId</c> before <c>LastActivityAt</c> (<see cref="Narrowing"/>). A page holds at most <see cref="PageSize"/> Topics and continues from a <see cref="Cursor"/>,
-/// which names the last Topic a page held by its place in that order rather than by a position, so a Topic present for the
+/// <summary>One bounded page of a Tangent's Topics, newest first, in the Tangent's own sort (<see cref="For"/>): a discussions
+/// Tangent's by last activity, through <c>ix_post_topics</c> (<c>TangentId</c>, <c>ParentId</c>, <c>LastActivityAt</c>), and an
+/// articles Tangent's by when each started, through <c>ix_post_created</c> (<c>TangentId</c>, <c>ParentId</c>,
+/// <c>CreatedAt</c>), removed Topics among them. A list narrows to the Topics started in one month, a range of
+/// <c>ix_post_created</c>, or by one author, a range of <c>ix_post_topics_by</c>, which holds <c>AuthorId</c> before
+/// <c>CreatedAt</c> (<see cref="Narrowing"/>), the ways an articles Tangent's rail offers, so by start each range is read in
+/// its order, and by last activity it is sorted. A page holds at most <see cref="PageSize"/> Topics and continues from a
+/// <see cref="Cursor"/>, which names the last Topic a page held by its place in that sort rather than by a position, so a Topic present for the
 /// whole read is on exactly one page, narrowed or not. The whole list leads its first page with the Topic its moderators
-/// pinned (<see cref="Pinned"/>), which every page of it leaves out of its own rows. Nothing is counted. Reads only and takes
-/// no lock; whom a Topic may be shown to is the caller's to decide.</summary>
+/// pinned (<see cref="Pinned"/>), which every page of it leaves out of its own rows. Nothing is counted. Reads only and takes no lock; whom a Topic may
+/// be shown to is the caller's to decide.</summary>
 public static class TopicList
 {
     /// <summary>The most Topics one page holds.</summary>
     public const int PageSize = 30;
 
+    /// <summary>How a list sorts its Topics, newest first: by when each last gained a Post, or by when each started.</summary>
+    public enum Sort
+    {
+        Activity,
+        Start
+    }
+
+    /// <summary>The sort of <paramref name="tangent"/>'s list: an articles Tangent's by when each article started, a
+    /// discussions Tangent's by latest activity.</summary>
+    public static Sort For(Tangent tangent) => tangent.DefaultKind == PostKind.Article ? Sort.Start : Sort.Activity;
+
     /// <summary>A page of Topics and where the next one starts; <see cref="Next"/> is null on the last page.</summary>
     public sealed record Page(IReadOnlyList<Post> Topics, Cursor? Next);
 
-    /// <summary>The place of the last Topic a page held: its last activity and its Id, which orders Topics whose last
-    /// activity is the same instant.</summary>
+    /// <summary>The place of the last Topic a page held: its last activity or its start, as the list sorts, and its Id,
+    /// which orders Topics at the same instant.</summary>
     public sealed record Cursor(DateTimeOffset At, string Id)
     {
-        public static Cursor After(Post topic) => new(topic.LastActivityAt, topic.Id);
+        public static Cursor After(Post topic, Sort sort) => new(sort == Sort.Start ? topic.CreatedAt : topic.LastActivityAt, topic.Id);
 
         /// <summary>The cursor a query carries, or null when the text is not one.</summary>
         public static Cursor? Parse(string? text)
@@ -76,21 +90,22 @@ public static class TopicList
         public bool Narrowed => Within is not null || By is not null;
     }
 
-    /// <summary>The page of <paramref name="tangentId"/>'s Topics after <paramref name="after"/>, or the first page,
-    /// narrowed as <paramref name="to"/> says, without the Topic whose root is <paramref name="leaving"/>, where one is named:
+    /// <summary>The page of <paramref name="tangentId"/>'s Topics after <paramref name="after"/>, or the first page, in
+    /// <paramref name="sort"/>, narrowed as <paramref name="to"/> says, without the Topic whose root is <paramref name="leaving"/>, where one is named:
     /// one read, limited to the page, the one it leaves and one more, which says whether a next page exists.</summary>
     public static async Task<Page> Read(string tangentId, Cursor? after, CancellationToken ct, int size = PageSize, Narrowing? to = null,
-        string? leaving = null)
+        Sort sort = Sort.Activity, string? leaving = null)
     {
         if (size is < 1 or > PageSize) throw new ArgumentOutOfRangeException(nameof(size));
         var terms = Narrow(to ?? Narrowing.None);
-        if (after is not null) terms.Add(Seek(after));
+        if (after is not null) terms.Add(Seek(after, sort));
         var query = new QueryDefinition { Filter = terms.Count == 0 ? null : Filter.All([.. terms]), Page = 1, PageSize = size + (leaving is null ? 1 : 2) }
-            .WithSort<Post>(sort => sort.OrderByDescending(post => post.LastActivityAt).ThenByDescending(post => post.Id));
+            .WithSort<Post>(by => (sort == Sort.Start ? by.OrderByDescending(post => post.CreatedAt) : by.OrderByDescending(post => post.LastActivityAt))
+                .ThenByDescending(post => post.Id));
         var topics = (await Post.Query(post => post.TangentId == tangentId && post.ParentId == null, query, ct))
             .Where(topic => topic.Id != leaving).ToList();
         return topics.Count > size
-            ? new Page([.. topics.Take(size)], Cursor.After(topics[size - 1]))
+            ? new Page([.. topics.Take(size)], Cursor.After(topics[size - 1], sort))
             : new Page(topics, null);
     }
 
@@ -100,15 +115,14 @@ public static class TopicList
     public static async Task<Post?> Pinned(Tangent tangent, CancellationToken ct)
         => tangent.PinnedId is { } id && await Post.Get(id, ct) is { ParentId: null, Removed: false } root && root.TangentId == tangent.Id ? root : null;
 
-    /// <summary>The terms a narrowing adds: a start within the month, which names both values of <c>Removed</c> so the
-    /// month is one range of <c>ix_post_started</c> for each, and the author.</summary>
+    /// <summary>The terms a narrowing adds: a start within the month, one range of <c>ix_post_created</c>, and the
+    /// author.</summary>
     private static List<Filter> Narrow(Narrowing to)
     {
         var terms = new List<Filter>();
         if (to.Within is { } month)
         {
             var at = FieldPath.Of(nameof(Post.CreatedAt));
-            terms.Add(Filter.On(FieldPath.Of(nameof(Post.Removed)), FilterOperator.In, FilterValue.Many([false, true])));
             terms.Add(Filter.On(at, FilterOperator.Gte, FilterValue.Of(month.Start)));
             terms.Add(Filter.On(at, FilterOperator.Lt, FilterValue.Of(month.End)));
         }
@@ -117,11 +131,11 @@ public static class TopicList
         return terms;
     }
 
-    /// <summary>The Topics after the cursor in the order a page reads them: last activity no later than the cursor's,
-    /// which the index answers as a range, and, at the cursor's own instant, an Id before the cursor's.</summary>
-    private static Filter Seek(Cursor after)
+    /// <summary>The Topics after the cursor in the sort a page reads them: last activity or start no later than the
+    /// cursor's, which the index answers as a range, and, at the cursor's own instant, an Id before the cursor's.</summary>
+    private static Filter Seek(Cursor after, Sort sort)
     {
-        var at = FieldPath.Of(nameof(Post.LastActivityAt));
+        var at = FieldPath.Of(sort == Sort.Start ? nameof(Post.CreatedAt) : nameof(Post.LastActivityAt));
         var id = FieldPath.Of(nameof(Post.Id));
         return Filter.All(
             Filter.On(at, FilterOperator.Lte, FilterValue.Of(after.At)),

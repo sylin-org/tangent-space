@@ -1643,7 +1643,7 @@
   }
 }
 
-/* TangentTopics: a page of a Tangent's Topics, latest activity first. */
+/* TangentTopics: a page of a Tangent's Topics, newest first. */
 @layer tangent {
   .topic-list-head-ruled {
     border-bottom: 1px solid var(--ts-line);

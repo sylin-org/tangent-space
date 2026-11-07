@@ -248,7 +248,8 @@ public sealed record Door(
     public sealed record Waiting(int Count, bool AtLeast, string Address) : IPart;
 
     /// <summary>One Tangent's shelf: its slug, name, kind, line, address, tile, how many Topics were started there, and its
-    /// latest few, newest activity first, leaving out those the front page shows above it.</summary>
+    /// latest few, newest first in its list's sort (the articles by when each started, the discussions by latest activity),
+    /// leaving out those the front page shows above it.</summary>
     public sealed record Shelf(string Slug, string Name, string Kind, string Description, string Address, Render.Tile Tile, int TopicCount,
         IReadOnlyList<TopicEntry> Topics) : IPart;
 
