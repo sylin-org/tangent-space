@@ -33,7 +33,10 @@ else
             <Draw Part="@(Model.Author with { Account = Model.WrittenAs })" />
             <header class="post-head">
                 <Draw Part="@(Model.Author with { Account = Model.WrittenAs })" As="Shape.Name" />
-                <span class="post-handle">@("@" + Model.Author.Handle)</span>
+                @if (Model.Author.Handle.Length > 0)
+                {
+                    <span class="post-handle">@("@" + Model.Author.Handle)</span>
+                }
                 @if (Model.New)
                 {
                     <span class="badge is-new">New</span>

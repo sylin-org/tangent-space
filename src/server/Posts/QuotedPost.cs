@@ -27,7 +27,7 @@ public sealed record QuotedPost(
     public static async Task<QuotedPost> Of(Post post, Post root, Tangents.Tangent tangent, string baseAddress, CancellationToken ct)
     {
         var people = await People(post, ct);
-        var author = people.TryGetValue(post.AuthorId, out var person) ? person : Render.Person.Unknown(post.AuthorId);
+        var author = people.TryGetValue(post.AuthorId, out var person) ? person : Render.Person.Left(post.AuthorId);
         var topicAddress = PostWrites.TopicAddress(baseAddress, tangent.Id, root.Slug ?? root.Id);
         return new QuotedPost(post.Id, topicAddress + "/" + Uri.EscapeDataString(post.Id), author, post.CreatedAt,
             post.Removed ? null : TangentPage.Opening(post, people), post.Removed, root.Title ?? "", topicAddress,

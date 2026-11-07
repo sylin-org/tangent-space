@@ -15,7 +15,10 @@ namespace Tangent.Participants;
 /// <c>/answer/</c> it answers a profile for the DID asked; under <c>/stall/</c> it never answers; under
 /// <c>/overflow/</c> it answers without end; under <c>/plain-avatar/</c> it answers a profile whose avatar is an
 /// http address; under <c>/automated/</c> a profile that labels itself a bot, as the profile view carries the record's
-/// self-labels, beside a labeler's label that does not count. Each is a base address for <c>Tangent:Profile:BaseAddress</c>.</summary>
+/// self-labels, beside a labeler's label that does not count. Each is a base address for <c>Tangent:Profile:BaseAddress</c>.
+/// Asked for a handle under <c>/answer/</c>, it answers the account <c>did:plc:</c> and the handle's first label, as
+/// verified, except that a handle starting <c>nobody</c> names no account and one starting <c>unverified</c> is answered as
+/// AppView answers a handle it cannot verify, <c>handle.invalid</c>.</summary>
 public sealed class ProfileStub : IAsyncDisposable
 {
     public const string DisplayName = "Ada Lovelace";
@@ -41,7 +44,7 @@ public sealed class ProfileStub : IAsyncDisposable
 
     public Uri AgentLabelled => new(Address, "automated/");
 
-    /// <summary>The DIDs asked for, one per request, in arrival order.</summary>
+    /// <summary>The DIDs and handles asked for, one per request, in arrival order.</summary>
     public IReadOnlyCollection<string> Requests => _requests;
 
     public static async Task<ProfileStub> StartAsync(CancellationToken ct)
@@ -59,8 +62,11 @@ public sealed class ProfileStub : IAsyncDisposable
 
         application.MapGet("/answer/" + read, (HttpContext http) =>
         {
-            var did = stub.Record(http);
-            return Results.Json(new { did, handle = HandleOf(did), displayName = DisplayName, description = "Writes things.", avatar = Avatar });
+            var actor = stub.Record(http);
+            if (actor.StartsWith("nobody", StringComparison.Ordinal)) return Results.Json(new { error = "InvalidRequest", message = "Profile not found" }, statusCode: 400);
+            var did = actor.StartsWith("did:", StringComparison.Ordinal) ? actor : "did:plc:" + actor.Split('.')[0];
+            var handle = actor.StartsWith("unverified", StringComparison.Ordinal) ? "handle.invalid" : actor.StartsWith("did:", StringComparison.Ordinal) ? HandleOf(did) : actor;
+            return Results.Json(new { did, handle, displayName = DisplayName, description = "Writes things.", avatar = Avatar });
         });
         application.MapGet("/plain-avatar/" + read, (HttpContext http) =>
         {

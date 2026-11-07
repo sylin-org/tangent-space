@@ -31,6 +31,8 @@ public sealed class Ask : Entity<Ask>
     [Index(Name = "ix_ask_tangents", Order = 0)]
     public string TangentId { get; set; } = "";
 
+    /// <summary>In <c>ix_ask_people</c>, so a participant's asks are one range, which leaving the place reads.</summary>
+    [Index(Name = "ix_ask_people")]
     public string PersonId { get; set; } = "";
 
     [Index(Name = "ix_ask_waiting", Order = 0)]

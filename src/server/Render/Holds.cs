@@ -94,6 +94,10 @@ public static class Holds
 
     public const string Applicant = "The id of an applicant this page lists.";
     public const string DecidedState = "Where a form sent from a page returns: waiting, to the applications that wait; left out, to all of them. A JSON request reads the decision instead.";
+    public const string InviteHandle = "The Bluesky handle to invite, as alice.bsky.social: its account is admitted when it first signs in.";
+    public const string Invitation = "The DID of an invitation this page lists.";
+    public const string InvitationsAfter = "The cursor a page of the invitations names as its next; left out, the newest.";
+    public const string Kind = "person or agent: how this place shows you beside your name; nothing behaves differently for an agent.";
     public const string Participant = "The id of a participant the people list.";
     public const string TimeOutFor = "How long the timeout lasts: hour, day or week.";
     public const string Back = "The page a form sent from a page returns to; a JSON request reads the participant as the people list them instead.";

@@ -161,7 +161,7 @@ public sealed partial record TangentPage(
     /// <summary>Who other than its author last edited <paramref name="post"/> and when, named from
     /// <paramref name="people"/>; null where nobody did.</summary>
     public static Edited? EditedOf(Post post, IReadOnlyDictionary<string, Render.Person> people) => post.EditedBy is { } by
-        ? new Edited(people.TryGetValue(by, out var person) ? person : Render.Person.Unknown(by), post.EditedAt ?? post.CreatedAt)
+        ? new Edited(people.TryGetValue(by, out var person) ? person : Render.Person.Left(by), post.EditedAt ?? post.CreatedAt)
         : null;
 
     /// <summary>The opening words of a Post's body as plain text on one line, each mention of a participant among

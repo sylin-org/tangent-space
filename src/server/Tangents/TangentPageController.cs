@@ -251,7 +251,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
     }
 
     private static Render.Person Person(IReadOnlyDictionary<string, Render.Person> people, string id)
-        => people.TryGetValue(id, out var person) ? person : Render.Person.Unknown(id);
+        => people.TryGetValue(id, out var person) ? person : Render.Person.Left(id);
 
     /// <summary>The latest reply of each Topic on the page that has one, by its Id, in one keyed read.</summary>
     public static async Task<IReadOnlyDictionary<string, Post>> LatestReplies(IReadOnlyList<Post> topics, CancellationToken ct)

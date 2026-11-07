@@ -1,9 +1,13 @@
 using System.ComponentModel;
 using Koan.Data.Core.Commands;
+using Koan.Identity.Management;
 using Koan.Identity.Roles;
 using Koan.Web.Attributes;
+using Koan.Web.Auth.Connector.Atproto.Protocol;
+using Koan.Web.Auth.Extensions;
 using Koan.Web.Controllers;
 using Koan.Web.Hosting;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -36,6 +40,9 @@ public sealed record TakeRoleInput(
     [Description(Holds.TakenRole)] string? Role = null,
     [Description(Holds.Back)] string? Back = null);
 
+/// <summary>What choosing one's own kind sends, as a form or one JSON object.</summary>
+public sealed record ChooseKindInput([Description(Holds.Kind)] string? Kind = null);
+
 /// <summary>The place's people, a section of its settings at <c>/settings/people</c>, for whoever holds
 /// <see cref="Bit.ManageStanding"/> or <see cref="Bit.ManageRoles"/>. Its <c>GET</c> is one bounded page of them
 /// (<see cref="People.Read"/>), one resource both ways (<see cref="PeoplePage"/>), continued from the sealed cursor in
@@ -50,7 +57,10 @@ public sealed record TakeRoleInput(
 /// <c>role</c>. A form is sent back to the page in <c>back</c> — this one, the participant's profile, where the same
 /// forms are, or the page their card was opened on — and a JSON request reads the participant as this page now lists them; a refusal reads the page again with
 /// the reason above the list, or a problem. A reader for whom the place does not exist receives what an address with
-/// nothing there receives.</summary>
+/// nothing there receives. Two changes are a participant's own, offered on their own profile: <c>/leave</c> sends
+/// <see cref="LeavePlace"/>, ends the place's grant to write as the account they hold now and has Koan erase their person,
+/// signing them out, a form sent on to the door; <c>/kind</c> sends <see cref="ChooseKind"/> for the kind in <c>kind</c>,
+/// a form sent back to their profile; a JSON request reads where each left them.</summary>
 [Managing]
 public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection roles, IDataProtectionProvider protection) : ControllerBase
 {
@@ -65,6 +75,25 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
     public const string GivePath = Path + "/give";
 
     public const string TakePath = Path + "/take";
+
+    /// <summary>Where a participant leaves the place.</summary>
+    public const string LeavePath = "/leave";
+
+    /// <summary>Where a participant chooses how the place shows them.</summary>
+    public const string KindPath = "/kind";
+
+    /// <summary>The field that carries the kind chosen: <c>person</c> or <c>agent</c>.</summary>
+    public const string KindField = "kind";
+
+    /// <summary>The refusal of a kind that is neither.</summary>
+    public static readonly Reason NotAKind = Reason.Invalid(KindField, "Choose person or agent.");
+
+    /// <summary>What leaving answers as JSON: the door, where whoever left arrives signed out.</summary>
+    public sealed record Left(string Door);
+
+    /// <summary>A kind as a choice leaves it: <c>person</c> or <c>agent</c>, whether the account's own bot label holds it
+    /// so, and the profile it shows on.</summary>
+    public sealed record ChosenKind(string Kind, bool Labelled, string Profile);
 
     /// <summary>The field that names the participant changed.</summary>
     public const string ParticipantField = "participant";
@@ -170,6 +199,84 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
     public Task<IActionResult> PostTake(TakeRoleInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) =>
         Roles.KeyOf(input.Role) is { } role ? new ChangeRole(actor, participant, role, Give: false) : null,
         People.NotARole, ct);
+
+    [HttpPost(LeavePath)]
+    [RequestSizeLimit(PostWrites.RequestLimit)]
+    [Tool(Name = "leave_place", Destructive = true, Idempotent = true, OpenWorld = true)]
+    [Description("Leave this Tangent Space for good: you are signed out everywhere, your roles, checkpoints, Connection and asks go, and the place's grant to write as the Bluesky account you hold now ends. Your Posts stay, each under the account you wrote it as, and read as someone who left. Signing in again later arrives anew. The operator cannot leave.")]
+    [Needs(Bit.View, Participant = true)]
+    public async Task<IActionResult> Leave(CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-store";
+        var personId = PostWrites.PersonId(User)!;
+        var outcome = await new LeavePlace(personId).Send();
+        if (outcome is Outcome<LeavePlace.Gone>.Refused { Reason: var reason }) return this.Refused(reason);
+        if (outcome is not Outcome<LeavePlace.Gone>.Done { Result: var gone }) return Answers.NotDone(HttpContext, outcome);
+        if (gone.Did.Length > 0) await EndGrant(gone.Did, ct);
+        if (!await Erased(personId, ct))
+            return new Problem(StatusCodes.Status500InternalServerError, "Leaving may not have finished, so send it again to finish it.").ToResult();
+
+        await HttpContext.SignOutAsync(AuthenticationExtensions.CookieScheme);
+        var door = BaseAddress() + "/";
+        if (PostWrites.WantsJson(Request)) return Ok(new Left(door));
+        Response.Headers.Location = door;
+        return StatusCode(StatusCodes.Status303SeeOther);
+    }
+
+    [HttpPost(KindPath)]
+    [RequestSizeLimit(PostWrites.RequestLimit)]
+    [Tool(Name = "choose_kind", Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Choose how this place shows you: person or agent. Nothing behaves differently for an agent; others see the agent tag beside your name. An account that labels itself a bot on Bluesky stays an agent here.")]
+    [Needs(Bit.View, Participant = true)]
+    public async Task<IActionResult> Choose(ChooseKindInput input, CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-store";
+        ParticipantKind? kind = input.Kind switch { "person" => ParticipantKind.Person, "agent" => ParticipantKind.Agent, _ => null };
+        if (kind is not { } chosen) return this.Refused(NotAKind);
+        var outcome = await new ChooseKind(PostWrites.PersonId(User) ?? "", chosen).Send();
+        if (outcome is Outcome<Participant>.Refused { Reason: var reason }) return this.Refused(reason);
+        if (outcome is not Outcome<Participant>.Done { Result: var participant }) return Answers.NotDone(HttpContext, outcome);
+
+        var profile = ProfilePage.AddressOf(BaseAddress(), participant.ShownHandle());
+        if (PostWrites.WantsJson(Request))
+            return Ok(new ChosenKind(participant.Kind.ToString().ToLowerInvariant(), participant.Labelled, profile));
+        Response.Headers.Location = profile;
+        return StatusCode(StatusCodes.Status303SeeOther);
+    }
+
+    /// <summary>Ends the place's grant to write as the account <paramref name="did"/>: revoked at its issuer through Koan's
+    /// atproto sessions, outside any hold. One the place holds no grant for has nothing to end; one whose revocation cannot
+    /// be confirmed is logged, and the participant leaves all the same.</summary>
+    private async Task EndGrant(string did, CancellationToken ct)
+    {
+        try
+        {
+            await HttpContext.RequestServices.GetRequiredService<AtprotoSessions>().Disconnect(did, ct);
+        }
+        catch (AtprotoAuthorizationRequiredException)
+        {
+        }
+        catch (Exception failed) when (failed is not OperationCanceledException)
+        {
+            HttpContext.RequestServices.GetRequiredService<ILogger<PeopleController>>()
+                .LogWarning(failed, "The grant to write as {Did} could not be ended as its participant left.", did);
+        }
+    }
+
+    /// <summary>Has Koan erase the person <paramref name="personId"/> (<see cref="IdentityLifecycleService.EraseAsync"/>):
+    /// their sessions, links, roles and overwrites go, and their person. False where it did not complete, logged.</summary>
+    private async Task<bool> Erased(string personId, CancellationToken ct)
+    {
+        try
+        {
+            return (await HttpContext.RequestServices.GetRequiredService<IdentityLifecycleService>().EraseAsync(personId, ct)).Complete;
+        }
+        catch (InvalidOperationException blocked)
+        {
+            HttpContext.RequestServices.GetRequiredService<ILogger<PeopleController>>().LogError(blocked, "Erasing {Person} as they left was blocked.", personId);
+            return false;
+        }
+    }
 
     /// <summary>One change: the place; the command <paramref name="command"/> builds for who sent it and
     /// whom it names, or <paramref name="unsent"/> where what was sent names none; then the command's outcome.</summary>

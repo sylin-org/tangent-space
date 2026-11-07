@@ -106,7 +106,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             new[] { space.ProprietorId, reader?.Id }
                 .Concat(forYouGroups?.People() ?? [])
                 .Concat(fresh.Where(e => Article(e, posts)).Select(e => e.ActorId))
-                .Concat(writers.Take(AroundLimit))
+                .Concat(writers)
                 .Concat(featured.Concat(alive).SelectMany(root => root.RecentAuthorIds.Take(Post.RecentAuthorLimit).Append(root.AuthorId)))
                 .Concat((forYouGroups?.Shown() ?? []).Concat(fresh.Where(e => Article(e, posts)).Take(Unread.CountLimit)).Select(e => posts[e.PostId!])
                     .Concat(featured).Concat(alive).SelectMany(post => post.MentionedIds.Append(post.EditedBy))),
@@ -168,7 +168,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             Resume(baseAddress, through > 0 ? through : window.Count > 0 ? window[0].Seq : 0),
             place.Holds(Bit.ManageSpace) ? baseAddress + NewTangentController.Route : null)
         {
-            Around = new Door.Crowd(writers.Count, window.Count >= LogWindow.Size, writers.Take(AroundLimit).Select(id => Person(people, id)).ToList()),
+            Around = Around(writers, people, window.Count >= LogWindow.Size),
             News = news,
             Description = description,
             DescriptionHtml = PlaceWords.Html(PlaceWords.DescriptionPart, description, baseAddress + "/"),
@@ -500,8 +500,15 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
         return (await Participant.Get(wanted, ct)).OfType<Participant>().ToDictionary(row => row.Id, row => Render.Person.Of(row, baseAddress), StringComparer.Ordinal);
     }
 
+    /// <summary>Who is around: the writers of the window who are still here, someone who left among them never.</summary>
+    private static Door.Crowd Around(IReadOnlyList<string> writers, IReadOnlyDictionary<string, Render.Person> people, bool atLeast)
+    {
+        var here = writers.Where(people.ContainsKey).ToList();
+        return new Door.Crowd(here.Count, atLeast, here.Take(AroundLimit).Select(id => people[id]).ToList());
+    }
+
     private static Render.Person Person(IReadOnlyDictionary<string, Render.Person> people, string id)
-        => people.TryGetValue(id, out var person) ? person : Render.Person.Unknown(id);
+        => people.TryGetValue(id, out var person) ? person : Render.Person.Left(id);
 
     private static string Name(IReadOnlyDictionary<string, Tangents.Tangent> tangents, string slug)
         => tangents.TryGetValue(slug, out var tangent) ? tangent.Name : slug;

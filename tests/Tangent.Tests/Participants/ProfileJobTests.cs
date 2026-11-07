@@ -121,16 +121,16 @@ public sealed class ProfileJobTests
     }
 
     [Theory]
-    [InlineData(KindSource.ProfileLabel, ParticipantKind.Agent)]
-    [InlineData(KindSource.OwnChoice, ParticipantKind.Person)]
-    public async Task An_agent_self_label_on_the_profile_makes_the_participant_an_agent_through_the_jobs_command_unless_they_chose_their_kind(
-        KindSource source, ParticipantKind expected)
+    [InlineData(KindSource.ProfileLabel, ParticipantKind.Person)]
+    [InlineData(KindSource.OwnChoice, ParticipantKind.Agent)]
+    public async Task An_agent_self_label_on_the_profile_makes_the_participant_an_agent_by_the_label_through_the_jobs_command_whatever_they_chose(
+        KindSource source, ParticipantKind kind)
     {
         await using var stub = await ProfileStub.StartAsync(Cancellation);
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(
             new Dictionary<string, string?> { ["Tangent:Profile:BaseAddress"] = stub.AgentLabelled.AbsoluteUri }, ct: Cancellation);
         const string did = "did:plc:lumen4example";
-        var stored = new Participant { Id = Persona.Id(did.Split(':')[^1]), Did = did, Handle = "lumen.example", Kind = ParticipantKind.Person, KindSource = source };
+        var stored = new Participant { Id = Persona.Id(did.Split(':')[^1]), Did = did, Handle = "lumen.example", Kind = kind, KindSource = source };
         Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(stored).Send(Cancellation));
 
         var job = await stored.Job.Submit(ct: Cancellation);
@@ -139,7 +139,8 @@ public sealed class ProfileJobTests
 
         Assert.NotNull(after);
         Assert.NotNull(after.Profile.CapturedAt);
-        Assert.Equal((expected, source), (after.Kind, after.KindSource));
+        Assert.Equal((ParticipantKind.Agent, KindSource.ProfileLabel), (after.Kind, after.KindSource));
+        Assert.True(after.Labelled);
     }
 
     [Theory]

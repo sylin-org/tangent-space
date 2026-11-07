@@ -104,12 +104,12 @@ public static class Feeds
     /// <summary>Who other than its author last edited a Topic's root and when, so its words are not said to be its author's;
     /// nothing where nobody did.</summary>
     private static string EditedLine(Post root, IReadOnlyDictionary<string, Participant> people) => root.EditedBy is { } by
-        ? "<p><em>Edited by " + WebUtility.HtmlEncode(people.TryGetValue(by, out var editor) ? editor.ShownName() : by) + ", "
+        ? "<p><em>Edited by " + WebUtility.HtmlEncode(people.TryGetValue(by, out var editor) ? editor.ShownName() : Render.Person.LeftName) + ", "
             + (root.EditedAt ?? root.CreatedAt).UtcDateTime.ToString("d MMMM yyyy", CultureInfo.InvariantCulture) + "</em></p>"
         : "";
 
     private static (string Name, string? Profile) Named(string id, IReadOnlyDictionary<string, Participant> people, string baseUrl)
         => people.TryGetValue(id, out var row)
             ? (row.ShownName(), ProfilePage.AddressOf(baseUrl, row.ShownHandle()))
-            : (id, null);
+            : (Render.Person.LeftName, null);
 }

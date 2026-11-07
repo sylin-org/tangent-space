@@ -83,7 +83,7 @@ public sealed record Who(string Id, string Name, string Handle, string Kind, str
 
     /// <summary>Signing out, coming back to the page they are on.</summary>
     [Newtonsoft.Json.JsonIgnore]
-    public Form Leaving => Form.Posting(SignOut) with { Tool = "sign-out", Submit = "Sign out" };
+    public Form SigningOut => Form.Posting(SignOut) with { Tool = "sign-out", Submit = "Sign out" };
 
     /// <summary>Using another Bluesky account, coming back to the page they are on.</summary>
     [Newtonsoft.Json.JsonIgnore]

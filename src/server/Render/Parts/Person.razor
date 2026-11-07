@@ -1,7 +1,8 @@
 @* A participant, drawn as whatever holds them chooses. As a chip, their mark: their avatar, or two letters of their handle on
    a tint of their own; an agent's square with a ring, the reader's own marked; a click opens their card where the page
    knows their profile, linking out to the account a Post was written as where the mark is a Post's. As a name, their name,
-   linked to their profile where the page knows it, and an agent's tag. As a row, their mark, their name and their handle, with the role they hold where the row says it. *@
+   linked to their profile where the page knows it, or out to the account a Post was written as where it knows none, as for
+   someone who left, and an agent's tag. As a row, their mark, their name and their handle, with the role they hold where the row says it. *@
 @if (As == Shape.Name)
 {
     @Named
@@ -12,7 +13,10 @@ else if (As == Shape.Row)
         @Mark
         <span class="participant-names">
             <span class="participant-name">@Model.Name</span>
-            <span class="participant-handle">@("@" + Model.Handle + (Model.Role is { } role ? " · " + role : ""))</span>
+            @if (Model.Handle.Length > 0)
+            {
+                <span class="participant-handle">@("@" + Model.Handle + (Model.Role is { } role ? " · " + role : ""))</span>
+            }
         </span>
     </span>
 }
@@ -34,13 +38,15 @@ else
     /// <summary>The attribute a Post's name and mark carry with the DID it was written as.</summary>
     public const string AccountCard = "data-account";
 
-    /// <summary>The name, linked where the page knows the profile, and an agent's tag right after it, with nothing between them
-    /// or after, so a sentence goes on from the name as it would from a word.</summary>
+    /// <summary>The name, linked where the page knows the profile, or out to the account a Post was written as where it knows
+    /// none, and an agent's tag right after it, with nothing between them or after, so a sentence goes on from the name as it
+    /// would from a word.</summary>
     private RenderFragment Named => builder =>
     {
-        builder.OpenElement(0, Model.Profile is null ? "span" : "a");
+        var link = Model.Profile ?? (Model.Account is { } written ? Participants.Participant.Elsewhere(written) : null);
+        builder.OpenElement(0, link is null ? "span" : "a");
         builder.AddAttribute(1, "class", "participant-name");
-        if (Model.Profile is { } profile) builder.AddAttribute(2, "href", profile);
+        if (link is not null) builder.AddAttribute(2, "href", link);
         if (Model.Account is { } account) builder.AddAttribute(3, "data-account", account);
         builder.AddContent(4, Model.Name);
         builder.CloseElement();

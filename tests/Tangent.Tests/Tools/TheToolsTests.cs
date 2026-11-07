@@ -27,8 +27,10 @@ public sealed class TheToolsTests
     /// its caller (<c>Koan:Mcp:ReadByAddress</c>).</summary>
     private static readonly IReadOnlySet<string> EdgeTools = new HashSet<string> { "read" };
 
-    /// <summary>The tools that reach past the place: publishing and retracting write the author's own repository.</summary>
-    private static readonly IReadOnlySet<string> OpenWorld = new HashSet<string> { "publish", "retract" };
+    /// <summary>The tools that reach past the place: publishing and retracting write the author's own repository, inviting
+    /// reads whose account a handle names from its public profile, and leaving ends the place's grant at the account's
+    /// issuer.</summary>
+    private static readonly IReadOnlySet<string> OpenWorld = new HashSet<string> { "publish", "retract", "invite", "leave_place" };
 
     /// <summary>Each tool, with the action that is its one definition.</summary>
     private static readonly IReadOnlyDictionary<string, MethodInfo> Tools = new Dictionary<string, MethodInfo>
@@ -67,12 +69,16 @@ public sealed class TheToolsTests
         ["read_applications"] = Action<ApplicationsController>(nameof(ApplicationsController.Get)),
         ["admit"] = Action<ApplicationsController>(nameof(ApplicationsController.Admit)),
         ["decline"] = Action<ApplicationsController>(nameof(ApplicationsController.Decline)),
+        ["invite"] = Action<ApplicationsController>(nameof(ApplicationsController.Invite)),
+        ["withdraw_invitation"] = Action<ApplicationsController>(nameof(ApplicationsController.Withdraw)),
         ["read_people"] = Action<PeopleController>(nameof(PeopleController.Get)),
         ["time_out"] = Action<PeopleController>(nameof(PeopleController.PostTimeOut)),
         ["ban"] = Action<PeopleController>(nameof(PeopleController.PostBan)),
         ["lift"] = Action<PeopleController>(nameof(PeopleController.PostLift)),
         ["give_role"] = Action<PeopleController>(nameof(PeopleController.PostGive)),
         ["take_role"] = Action<PeopleController>(nameof(PeopleController.PostTake)),
+        ["leave_place"] = Action<PeopleController>(nameof(PeopleController.Leave)),
+        ["choose_kind"] = Action<PeopleController>(nameof(PeopleController.Choose)),
         ["read_roles"] = Action<RolesController>(nameof(RolesController.Get)),
         ["create_role"] = Action<RolesController>(nameof(RolesController.Create)),
         ["change_role"] = Action<RolesController>(nameof(RolesController.Change)),
@@ -160,11 +166,15 @@ public sealed class TheToolsTests
         ["close_first_steps"] = (false, true),
         ["admit"] = (true, true),
         ["decline"] = (true, true),
+        ["invite"] = (false, true),
+        ["withdraw_invitation"] = (true, true),
         ["time_out"] = (true, false),
         ["ban"] = (true, true),
         ["lift"] = (true, true),
         ["give_role"] = (true, true),
         ["take_role"] = (true, true),
+        ["leave_place"] = (true, true),
+        ["choose_kind"] = (false, true),
         ["create_role"] = (false, false),
         ["change_role"] = (true, false),
         ["delete_role"] = (true, true),

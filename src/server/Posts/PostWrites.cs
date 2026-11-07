@@ -222,12 +222,13 @@ public static class PostWrites
     /// <summary>Who is signed in, as the shell's account menu shows them, signing out back to <paramref name="back"/>, a
     /// path under the base URL, with the place's settings where they hold <see cref="Bit.ManageSpace"/>,
     /// <see cref="Bit.ManageStanding"/> or <see cref="Bit.ManageRoles"/>, and how many things are for them
-    /// and new; null for a visitor.</summary>
+    /// and new; null for a visitor. Someone signed in whose arrival has not landed, which a sign-in never fails for, reads
+    /// as their id.</summary>
     public static async Task<Who?> Reader(string? personId, Capabilities capabilities, string baseUrl, string back, CancellationToken ct)
     {
         if (personId is null) return null;
         var participant = await Participant.Get(personId, ct);
-        return Who.Of(participant is null ? Render.Person.Unknown(personId) : Render.Person.Of(participant, baseUrl), Roles.Word(capabilities.RoleIds),
+        return Who.Of(participant is null ? new Render.Person(personId, personId, personId, "person", null) : Render.Person.Of(participant, baseUrl), Roles.Word(capabilities.RoleIds),
             baseUrl + AuthConstants.Routes.Logout + "?return=" + Uri.EscapeDataString(back), await SettingsFor(personId, baseUrl, ct),
             await Events.Unread.BadgeFor(personId, baseUrl, ct));
     }

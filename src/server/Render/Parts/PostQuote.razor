@@ -3,7 +3,8 @@
    edited it where someone else did. *@
 <blockquote class="post-quote" cite="@Model.Address">
     <p>
-        <a href="@Model.Address"><strong>@Model.Author.Name</strong> <span class="post-handle">@("@" + Model.Author.Handle)</span>
+        <a href="@Model.Address"><strong>@Model.Author.Name</strong>@if (Model.Author.Handle.Length > 0)
+            {<text> </text><span class="post-handle">@("@" + Model.Author.Handle)</span>}
             · <time datetime="@Model.CreatedAt.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture)">@Model.CreatedAt.ToUniversalTime().ToString("MMM d, yyyy", CultureInfo.InvariantCulture)</time></a>
     </p>
     <p>@(Model.Removed ? "This post is removed." : Model.Text)</p>

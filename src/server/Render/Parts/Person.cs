@@ -24,6 +24,11 @@ public sealed record Person(string Id, string Handle, string Name, string Kind, 
         => new(row.Id, row.ShownHandle(), row.ShownName(), row.Kind.ToString().ToLowerInvariant(), row.Profile.Avatar,
             baseAddress is null ? null : Participants.ProfilePage.AddressOf(baseAddress, row.ShownHandle()));
 
-    /// <summary>Someone the page knows only by their id.</summary>
-    public static Person Unknown(string id) => new(id, id, id, "person", null);
+    /// <summary>How someone who left the place reads wherever they are named.</summary>
+    public const string LeftName = "Someone who left";
+
+    /// <summary>Someone who left the place, as a page names whoever its id no longer reaches: by those words, a plain mark,
+    /// no profile and no card. As a Post's author, their name links out to the account it was written as
+    /// (<see cref="Account"/>).</summary>
+    public static Person Left(string id) => new(id, "", LeftName, "person", null);
 }

@@ -95,13 +95,17 @@ public sealed class CaptureSeedController(RoleCollection roles) : ControllerBase
     }
 
     /// <summary>A place whose admission says apply, with three applications: two waiting, the newest first, and one
-    /// declined.</summary>
+    /// declined; and one account the persona invited, still to arrive.</summary>
     private async Task ApplicationsScreen(CancellationToken ct)
     {
         await Apply(ct);
         await Applicant(Mara, "mara.bsky.social", "Mara Lind", Standing.Applied, At(29, 14, 5), ct);
         await Applicant(Lumen, "lumen.sylin.org", "Lumen", Standing.Applied, At(28, 9, 40), ct);
         await Applicant(Leo, "leo.sylin.org", "Leo Botinelly", Standing.Declined, At(26, 18, 0), ct);
+        await Write(new Keep<Invitation>(new Invitation
+        {
+            Id = "did:plc:capture4grace", Handle = "grace.bsky.social", Name = "Grace Okoro", InvitedBy = Persona, InvitedAt = At(29, 16, 30)
+        }), ct);
     }
 
     private async Task Applicant(string id, string handle, string displayName, Standing standing, DateTimeOffset appliedAt, CancellationToken ct)

@@ -136,7 +136,7 @@ public sealed class SearchController(KoanWebBaseUrl baseUrl) : ControllerBase
                 root?.Title ?? "",
                 tangent.Name,
                 post.ParentId is null ? PostWrites.TopicAddress(baseAddress, tangent.Id, slug) : PostWrites.Address(baseAddress, tangent.Id, slug, post.Id),
-                people.TryGetValue(post.AuthorId, out var author) ? author : Render.Person.Unknown(post.AuthorId),
+                people.TryGetValue(post.AuthorId, out var author) ? author : Render.Person.Left(post.AuthorId),
                 post.CreatedAt,
                 Snippet(hit, people),
                 TangentPage.EditedOf(post, people),

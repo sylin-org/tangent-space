@@ -77,6 +77,8 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
             Response.Headers.CacheControl = "no-cache, no-store";
         }
 
+        // Their own profile offers how the place shows them, and leaving it, where they may leave.
+        var own = reader is not null && reader.Id == subject.Id;
         var back = Uri.EscapeDataString(baseUrl.PathBase + ProfilePage.Segment + shownHandle);
         return Ok(new ProfilePage(
             subject.Id,
@@ -101,7 +103,9 @@ public sealed class ProfileController(KoanWebBaseUrl baseUrl, RoleCollection rol
             reader is null ? null : Reader(reader, place, back, await Events.Unread.BadgeFor(reader.Id, baseAddress, ct)),
             DateOnly.FromDateTime(DateTime.UtcNow),
             listed,
-            forms));
+            forms,
+            own ? ProfilePage.Kinds(baseAddress, subject) : null,
+            own && LeavePlace.Refusal(subject, rows.Space, DateTimeOffset.UtcNow) is null ? ProfilePage.Leaving(baseAddress) : null));
     }
 
     /// <summary>The participant the address names: by Id where it is a participant's id, as a mention links to them; by the

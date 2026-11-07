@@ -525,7 +525,7 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Read
         => new Problem(StatusCodes.Status400BadRequest, detail) { Title = "Not a window of this Topic" }.ToResult();
 
     public static Render.Person Person(IReadOnlyDictionary<string, Render.Person> people, string id)
-        => people.TryGetValue(id, out var person) ? person : Render.Person.Unknown(id);
+        => people.TryGetValue(id, out var person) ? person : Render.Person.Left(id);
 
     /// <summary>The authors of these Posts, then who closed a root's Topic, then who removed or else edited any of them, at most
     /// <paramref name="limit"/>, in one keyed read, by participant Id, each with their profile's address.</summary>
