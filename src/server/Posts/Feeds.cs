@@ -15,9 +15,9 @@ namespace Tangent.Posts;
 /// visitor, whoever asks, so it says the same to everyone and carries nothing a visitor could not read; deciding that a
 /// visitor may read it at all is the caller's. An image in a body and an article's cover are at their addresses under the
 /// base URL, which a reader with no account fetches as a visitor. Reads only and takes no lock: a Tangent's, at most
-/// <see cref="Feed.Limit"/> Posts in one query through <c>ix_post_started</c>; the articles', <see cref="Feed.Limit"/> and one
-/// more at a time through <c>ix_post_articles</c> until the window is full of those a visitor may view
-/// (<see cref="OfArticles"/>); and everyone they name by key.</summary>
+/// <see cref="Feed.Limit"/> Posts in one query through <c>ix_post_started</c>; the articles', <see cref="Feed.Limit"/> at a
+/// time through <c>ix_post_articles</c>, at most <see cref="ViewableTangents.Met.ReadLimit"/> reads, until the window is full
+/// of those a visitor may view (<see cref="OfArticles"/>); and everyone they name by key.</summary>
 public static class Feeds
 {
     /// <summary>A Tangent's feed under its address, without an extension.</summary>
@@ -56,16 +56,18 @@ public static class Feeds
     /// <summary>The feed of the place's newest articles a visitor may view: read newest first, each read continuing by seek
     /// from the last article the one before read, and kept only in the Tangents a visitor may view, each judged once as a
     /// read names it (<see cref="ViewableTangents.Met"/>), so a members-only Tangent's articles never show and every Tangent no
-    /// article names is never read. The reading stops once the window is full, so it costs the articles read up to its
-    /// last: at most every article the place holds.</summary>
+    /// article names is never read. Each read after the first leaves out the Tangents met so far that a visitor may not view,
+    /// so it fills the window or meets a Tangent no earlier read met. The reading stops once the window is full, or after
+    /// <see cref="ViewableTangents.Met.ReadLimit"/> reads, and the window holds what it found.</summary>
     public static async Task<Feed> OfArticles(TangentSpace space, string baseUrl, CancellationToken ct)
     {
         var met = new ViewableTangents.Met(null);
         var kept = new List<Post>();
         Filter? after = null;
-        while (kept.Count < Feed.Limit)
+        for (var reads = 0; reads < ViewableTangents.Met.ReadLimit && kept.Count < Feed.Limit; reads++)
         {
-            var rows = await Post.Query(post => post.Kind == PostKind.Article && post.ParentId == null && !post.Removed, Newest() with { Filter = after }, ct);
+            var rows = await Post.Query(post => post.Kind == PostKind.Article && post.ParentId == null && !post.Removed,
+                Newest() with { Filter = Filter.And(after, met.LeavingOut(nameof(Post.TangentId))) }, ct);
             kept.AddRange((await met.Keep(rows, post => post.TangentId, ct)).Take(Feed.Limit - kept.Count));
             if (rows.Count < Feed.Limit) break;
             after = Before(rows[^1]);

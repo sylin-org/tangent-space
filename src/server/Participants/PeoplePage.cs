@@ -10,11 +10,9 @@ namespace Tangent.Participants;
 /// is narrowed to, <see cref="Standing"/> the standing (<c>timed-out</c> or <c>banned</c>) and <see cref="Role"/> the word
 /// of the role whose holders it lists, each empty for none, with <see cref="RoleName"/> the role's name, null where no
 /// role here has that word; <see cref="Search"/> is where the search form asks, by the <c>handle</c> parameter, and where
-/// everyone is listed. <see cref="Forms"/> are the forms of the verbs, present only where the reader may read the people.
-/// <see cref="Can"/> is what the reader holds in the place, and
-/// <see cref="Gate"/> why they may not read the people, null when they may, when the list is empty whoever is here;
-/// <see cref="SignIn"/> is where a visitor signs in, coming back here. <see cref="Day"/> is the UTC day the times are
-/// written for. After a refusal the page says why above the list.</summary>
+/// everyone is listed. Only whoever holds <c>ManageStanding</c> or <c>ManageRoles</c> reads it. <see cref="Forms"/> are the
+/// forms of the verbs the reader may use. <see cref="Can"/> is what the reader holds in the place, and <see cref="Day"/>
+/// the UTC day the times are written for. After a refusal the page says why above the list.</summary>
 [Render.Page(Render.Layout.Settings)]
 public sealed record PeoplePage(
     IReadOnlyList<SettingsSection> Sections,
@@ -29,8 +27,6 @@ public sealed record PeoplePage(
     string Search,
     PeopleForms? Forms,
     IReadOnlyList<string> Can,
-    string? Gate,
-    string? SignIn,
     string Place,
     string Door,
     Who? Who,
@@ -57,25 +53,22 @@ public sealed record PeoplePage(
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
     public Render.PanelTitle Heading => new(Space.TangentSpaceSettingsController.PeopleSection, "Settings of " + Render.Sentence.Link(Place, Door));
 
-    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Render.Notice? Line => Gate is { } gate ? Render.Notice.Of(gate, null, SignIn) : null;
-
     /// <summary>Whose holders the page lists, where it lists a role's, with the way back to everyone.</summary>
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Render.Sentence? Holding => Gate is not null || RoleName is not { } name ? null
+    public Render.Sentence? Holding => RoleName is not { } name ? null
         : new("Those who hold the " + Render.Sentence.Strong(name) + " role. " + Render.Sentence.Link("Everyone here", Search));
 
     /// <summary>The box that finds people by the start of their handle, within the standing and the role the page is
     /// narrowed to.</summary>
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Render.Form? Finding => Gate is not null ? null : Narrowing(Render.Form.Reading(Search,
+    public Render.Form Finding => Narrowing(Render.Form.Reading(Search,
             new Render.Form.Field(PeopleController.HandleQuery, "", Handle, Render.Form.Input.Search) { Label = "Find by handle", Placeholder = "The start of a handle", Limit = 253 })
         with { Tool = "people-search read-people", Submit = "Find" }, PeopleController.HandleQuery);
 
     /// <summary>The standings the page narrows to, one press each, the one it stands at pressed, keeping the handle and the
     /// role it is narrowed to.</summary>
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Render.Form? Standings => Gate is not null ? null : Narrowing(Render.Form.Reading(Search,
+    public Render.Form Standings => Narrowing(Render.Form.Reading(Search,
             new Render.Form.Field(PeopleController.StandingQuery, "", Standing, Render.Form.Input.Switch)
             {
                 Choices = [new("", "Every standing"), new(Participants.People.Word(Participants.Standing.TimedOut), "Timed out"), new(Participants.People.Word(Participants.Standing.Banned), "Banned")]
@@ -94,11 +87,11 @@ public sealed record PeoplePage(
     }
 
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Render.Notice? Refused => Gate is not null ? null : Render.Notice.Of(null, Failure, null);
+    public Render.Notice? Refused => Render.Notice.Of(null, Failure, null);
 
     /// <summary>The people, each with their kind, where they stand and their roles, and what the reader may change of them.</summary>
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Render.EntryList? Listing => Gate is not null ? null : new(People.Select(person => new Render.Entry(null, Forms?.For(person))
+    public Render.EntryList Listing => new(People.Select(person => new Render.Entry(null, Forms?.For(person))
     {
         Subject = person.Person,
         Detail = Render.Sentence.Plain("@" + person.Person.Handle + " · " + person.Person.Kind + " · " + person.Stands + (person.Roles.Count > 0 ? " · " + string.Join(", ", person.Roles) : ""))
@@ -118,12 +111,11 @@ public sealed record PeoplePage(
     }
 
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Render.Pager? Pages => Gate is not null ? null : new("More people", Continued ? new Render.Onward("First page", First) : null,
+    public Render.Pager Pages => new("More people", Continued ? new Render.Onward("First page", First) : null,
         Next is { } next ? new Render.Onward("Next page", next) : null);
 
-    /// <summary>The frame the shell draws around the page: its settings as its one crumb, and who reads, or where a visitor
-    /// signs in.</summary>
-    public static Render.Frame Frame(PeoplePage page) => new(page.Place, page.Door, [new Render.Crumb("Settings")], page.Who, page.SignIn);
+    /// <summary>The frame the shell draws around the page: its settings as its one crumb, and who reads.</summary>
+    public static Render.Frame Frame(PeoplePage page) => new(page.Place, page.Door, [new Render.Crumb("Settings")], page.Who, null);
 
     /// <summary>A role the reader may give or take: its word, which a form sends and which never changes
     /// (<c>moderator</c>, <c>administrator</c>, or a word of the place's own), and its name as the place now calls it.</summary>

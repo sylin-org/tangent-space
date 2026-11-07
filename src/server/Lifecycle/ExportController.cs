@@ -17,10 +17,12 @@ namespace Tangent.Lifecycle;
 /// <summary>Taking the place along, a section of its settings at <c>/settings/export</c>, for whoever holds
 /// <see cref="Bit.ManageSpace"/>. Its <c>GET</c> is one resource both ways (<see cref="ExportSettingsPage"/>): where the whole
 /// Tangent Space downloads, and a page of the Tangents the reader may view, in their order, each with where it downloads,
-/// continued from the cursor in <c>after</c>; a reader who may not export is refused with the gate, <c>401</c> to sign in
-/// and <c>403</c> otherwise: a page reads it with no Tangent, and a JSON request as its problem. <c>/settings/export.zip</c> and <c>/settings/export/{tangent}.zip</c> answer the zip
-/// as <see cref="Export"/> writes it, as it is read, and never hold it; a Tangent the reader may not view answers as one
-/// no Tangent has. A reader for whom the place does not exist receives what an address with nothing there receives.</summary>
+/// continued from the cursor in <c>after</c>. <c>/settings/export.zip</c> and <c>/settings/export/{tangent}.zip</c> answer the
+/// zip as <see cref="Export"/> writes it, as it is read, and never hold it; a Tangent the reader may not view answers as one
+/// no Tangent has. The Doorway refuses each of them, before the action runs, to whoever does not hold
+/// <see cref="Bit.ManageSpace"/> on the place, <c>401</c> to sign in and <c>403</c> otherwise, a page as the refusal's page
+/// and a JSON request as its problem, and answers a reader for whom the place does not exist what an address with nothing
+/// there receives.</summary>
 [Managing]
 public sealed class ExportController(KoanWebBaseUrl baseUrl, IDataProtectionProvider protection) : ControllerBase
 {

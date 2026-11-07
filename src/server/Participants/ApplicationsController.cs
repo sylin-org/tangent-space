@@ -25,16 +25,16 @@ public sealed record WithdrawInput([Description(Holds.Invitation)] string? Accou
 /// <see cref="Bit.ManageStanding"/>. Its <c>GET</c> is one bounded page of them (<see cref="Applications.Read"/>), one
 /// resource both ways (<see cref="ApplicationsPage"/>), continued from the cursor in <c>after</c>, and, with
 /// <c>state=waiting</c>, those that wait alone (<see cref="Applications.ReadWaiting"/>), continued from the sequence in
-/// <c>after</c>, which is where the settings open the section (<see cref="WaitingAddress"/>); a cursor that is not one, or another state, is refused with <c>400</c>, and a reader who may not
-/// decide is refused with the gate, <c>401</c> to sign in and <c>403</c> otherwise: a page reads it with no applicant,
-/// and a JSON request as its problem. Its two
-/// <c>POST</c>s take the applicant's id in <c>participant</c>, as a form or a JSON object: <c>admit</c> sends
+/// <c>after</c>, which is where the settings open the section (<see cref="WaitingAddress"/>); a cursor that is not one, or
+/// another state, is refused with <c>400</c>. The Doorway refuses every route here, before the action runs, to whoever
+/// does not hold <see cref="Bit.ManageStanding"/>, <c>401</c> to sign in and <c>403</c> otherwise, a page as the refusal's
+/// page and a JSON request as its problem, and answers a reader for whom the place does not exist what an address with
+/// nothing there receives. Its two <c>POST</c>s take the applicant's id in <c>participant</c>, as a form or a JSON object: <c>admit</c> sends
 /// <see cref="Admit"/>; <c>decline</c> sends <see cref="Decline"/>. A form is sent back to
 /// the applications, those that wait where it carries <c>state=waiting</c>; a JSON request reads the decision (<see cref="DecidedApplication"/>); a refusal reads the page again
-/// with the reason above the list, or a problem. A reader for whom the place does not exist receives what an address with
-/// nothing there receives. Where admission says apply, either page also holds one bounded page of the invitations
-/// (<see cref="Invitations.Read"/>), continued from the cursor in <c>invited</c>, and two more <c>POST</c>s for whoever
-/// holds <see cref="Bit.ManageStanding"/>: <c>invite</c> takes a Bluesky handle in <c>handle</c>, reads whose account it
+/// with the reason above the list, or a problem. Where admission says apply, either page also holds one bounded page of the
+/// invitations (<see cref="Invitations.Read"/>), continued from the cursor in <c>invited</c>, and two more <c>POST</c>s:
+/// <c>invite</c> takes a Bluesky handle in <c>handle</c>, reads whose account it
 /// names from its public profile, in the request and outside any command (<see cref="ProfileReader.Find"/>), and sends
 /// <see cref="Participants.Invite"/>; <c>withdraw</c> takes the account's DID in <c>account</c> and sends
 /// <see cref="WithdrawInvitation"/>. A form is sent back to the applications that wait, where the section opens, and a
@@ -209,11 +209,10 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
     private async Task<IActionResult> Uninvited(string personId, Reason reason, string? typed, CancellationToken ct)
     {
         if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        var page = await Page(place, personId, true, null, null, ct);
+        var page = await Page(Here.Of(HttpContext).Around, personId, true, null, null, ct);
         page = page.Invite is { } invite
             ? page with { Invite = invite.Changing(HandleField, field => field with { Value = typed, Failure = reason.Text }) }
-            : page with { Failure = reason.Kind == ReasonKind.Gated ? null : reason.Text };
+            : page with { Failure = reason.Text };
         return new ObjectResult(page) { StatusCode = Answers.Status(HttpContext, reason) };
     }
 
@@ -261,45 +260,41 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
         };
     }
 
-    /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the page again, read afresh,
-    /// with the reason above the list.</summary>
+    /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the page again, read afresh
+    /// for the reader the Doorway let in, with the reason above the list.</summary>
     private async Task<IActionResult> Refused(string? personId, Reason reason, bool waiting, CancellationToken ct)
     {
         if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
 
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
-        var page = await Page(place, personId, waiting, null, null, ct);
-        if (reason.Kind != ReasonKind.Gated) page = page with { Failure = reason.Text };
+        var page = await Page(Here.Of(HttpContext).Around, personId, waiting, null, null, ct) with { Failure = reason.Text };
         return new ObjectResult(page) { StatusCode = Answers.Status(HttpContext, reason) };
     }
 
     /// <summary>One page of the applications, of those that wait alone where <paramref name="waiting"/>, continued from
-    /// <paramref name="cursor"/> or, among those that wait, from before <paramref name="before"/>; where admission says apply
-    /// and the reader may decide, one page of the invitations too, continued from <paramref name="invited"/>, with the forms
-    /// that invite and withdraw.</summary>
+    /// <paramref name="cursor"/> or, among those that wait, from before <paramref name="before"/>; where admission says apply,
+    /// one page of the invitations too, continued from <paramref name="invited"/>, with the forms that invite and
+    /// withdraw.</summary>
     private async Task<ApplicationsPage> Page(Capabilities place, string? personId, bool waiting, Applications.Cursor? cursor, long? before,
         CancellationToken ct, Invitations.Cursor? invited = null)
     {
         var baseAddress = BaseAddress();
         var here = baseUrl.PathBase + Path + (waiting ? "?" + StateQuery + "=" + ApplicationsPage.Waiting : "");
         var applications = waiting ? WaitingAddress(baseAddress) : baseAddress + Path;
-        var gate = place.Gate(Bit.ManageStanding)?.Word;
-        IReadOnlyList<Participant> read = [];
-        string? next = null;
-        if (gate is null && waiting)
+        IReadOnlyList<Participant> read;
+        string? next;
+        if (waiting)
         {
             var page = await Applications.ReadWaiting(before, ct);
             (read, next) = (page.Applicants, page.Next?.ToString(CultureInfo.InvariantCulture));
         }
-        else if (gate is null)
+        else
         {
             var page = await Applications.Read(cursor, ct);
             (read, next) = (page.Applicants, page.Next?.ToString());
         }
 
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
-        var inviting = gate is null && space.Admission == Admission.Apply;
+        var inviting = space.Admission == Admission.Apply;
         var invitations = inviting ? await Invitations.Read(invited, ct) : null;
         var inviters = invitations is null ? new Dictionary<string, Render.Person>() : await Inviters(invitations.Invited, baseAddress, ct);
         return new ApplicationsPage(
@@ -316,11 +311,9 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
             applications,
             waiting ? ApplicationsPage.Waiting : "",
             baseAddress + Path,
-            gate is null ? Deciding(baseAddress + AdmitPath, waiting) : null,
-            gate is null ? Deciding(baseAddress + DeclinePath, waiting) : null,
+            Deciding(baseAddress + AdmitPath, waiting),
+            Deciding(baseAddress + DeclinePath, waiting),
             place.Can,
-            gate,
-            personId is null ? baseAddress + SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,
             space.Name,
             baseAddress + "/",
             await PostWrites.Reader(personId, place, baseAddress, here, ct),

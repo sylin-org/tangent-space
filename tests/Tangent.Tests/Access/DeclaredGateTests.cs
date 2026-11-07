@@ -44,6 +44,57 @@ public sealed class DeclaredGateTests
         Assert.Contains($"class=\"refusal\" data-word=\"{gate}\"", page.Body);
     }
 
+    /// <summary>The people, the applications, the roles and export each answer whoever may not read them as the Doorway
+    /// refuses, the refusal's page with the gate's word for a browser, its problem for JSON and the sign-in for a visitor;
+    /// whoever may reads the section, and a form refused there reads it again, as the Doorway let them in, with the reason
+    /// above the list.</summary>
+    [Fact]
+    public async Task Each_settings_section_refuses_whoever_may_not_read_it_and_a_refused_form_reads_it_again_with_the_reason()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        var operating = Persona.Id("lea4gates");
+        await Given.AParticipant(tangentSpace, operating, [Roles.Administrator], ct: Cancellation);
+        using var lea = await SignedIn(tangentSpace, operating);
+        using var ada = await SignedIn(tangentSpace, Ada);
+        using var visitor = Agent(tangentSpace);
+
+        foreach (var (path, bit) in new[]
+                 {
+                     (Participants.PeopleController.Path, Bit.ManageStanding), (Participants.ApplicationsController.Path, Bit.ManageStanding),
+                     (RolesController.Path, Bit.ManageRoles), (Lifecycle.ExportController.Path, Bit.ManageSpace)
+                 })
+        {
+            var gate = Capabilities.NoRoleGrants(bit).Word;
+            var page = await Send(ada.Client, HttpMethod.Get, path);
+            var problem = await Send(ada.Client, HttpMethod.Get, path, json: true);
+            var visiting = await Send(visitor, HttpMethod.Get, path);
+            var held = await Send(lea.Client, HttpMethod.Get, path, json: true);
+
+            Assert.Equal(System.Net.HttpStatusCode.Forbidden, page.Status);
+            Assert.Contains($"class=\"refusal\" data-word=\"{gate}\"", page.Body);
+            Assert.Equal((System.Net.HttpStatusCode.Forbidden, gate), (problem.Status, problem.Word));
+            Assert.Equal(System.Net.HttpStatusCode.Unauthorized, visiting.Status);
+            Assert.Contains("/sign-in?return=", visiting.Body);
+            Assert.Equal(System.Net.HttpStatusCode.OK, held.Status);
+            Assert.False(held.Json.TryGetProperty("gate", out _));
+        }
+
+        var named = new string('x', RoleSettings.NameLimit + 1);
+        var role = await Form(lea, RolesController.Path, RolesController.Path,
+            new Dictionary<string, string> { [RolesController.NameField] = named, [RolesController.PermissionsField] = nameof(Bit.Post) });
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, role.Status);
+        Assert.Contains(RoleSettings.NameRule.Text, role.Body);
+        Assert.Contains($"value=\"{named}\"", role.Body);
+        Assert.Contains("Moderator", role.Body);
+
+        var decided = await Form(lea, Participants.ApplicationsController.Path, Participants.ApplicationsController.DeclinePath,
+            new Dictionary<string, string> { [Participants.ApplicationsController.ParticipantField] = Persona.Id("nobody4gates") });
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, decided.Status);
+        Assert.Contains(Participants.Applications.NoApplicant.Text, decided.Body);
+        Assert.Contains("No one is waiting to be admitted.", decided.Body);
+    }
+
     [Fact]
     public async Task Deleting_a_tangent_asks_manage_space_of_the_place_of_whoever_manages_the_tangent_before_reading_what_they_sent()
     {

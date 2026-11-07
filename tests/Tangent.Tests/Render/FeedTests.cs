@@ -161,6 +161,33 @@ public sealed class FeedTests
         Assert.DoesNotContain("rel=\"alternate\"", topic);
     }
 
+    /// <summary>The articles feed leaves out each members-only Tangent once a read meets it, so it reads past more of one
+    /// Tangent's articles than its bound of reads holds; where every read meets a Tangent no earlier one met, the bound ends
+    /// the reading and the window holds what it found.</summary>
+    [Fact]
+    public async Task The_articles_feed_leaves_out_each_members_only_tangent_it_meets_and_stops_at_its_bound_of_reads()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
+        await Place(tangentSpace);
+        var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
+        var at = Start;
+        async Task Room(string slug, int articles)
+        {
+            await Overwrites.SetAudience(roles, slug, Audience.Private, Cancellation);
+            Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new Store<Tangents.Tangent>(Tangents.Tangent.Create(slug, slug, "", PostKind.Article, 3)).Send(Cancellation));
+            for (var index = 0; index < articles; index++)
+                Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), slug, slug + " " + index, "Secret words.", "leo", at = at.AddMinutes(1)).Send(Cancellation));
+        }
+
+        await Started("Said in the open", "Open words.", at, PostKind.Article);
+        await Room(Back, ViewableTangents.Met.ReadLimit * Feed.Limit);
+        var space = (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!;
+        Assert.Equal(["Said in the open"], (await Feeds.OfArticles(space, BaseUrl, Cancellation)).Entries.Select(entry => entry.Title));
+
+        for (var room = 1; room < ViewableTangents.Met.ReadLimit; room++) await Room(Back + "-" + room, Feed.Limit);
+        Assert.Empty((await Feeds.OfArticles(space, BaseUrl, Cancellation)).Entries);
+    }
+
     [Fact]
     public async Task A_private_place_has_no_feeds_and_names_none()
     {

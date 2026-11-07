@@ -31,15 +31,16 @@ public sealed record DeleteRoleInput([Description(Holds.DeletedRole)] string? Ro
 
 /// <summary>The place's roles, a section of its settings at <c>/settings/roles</c>, for whoever holds
 /// <see cref="Bit.ManageRoles"/>. Its <c>GET</c> is one page of the roles in Koan's order (<see cref="RolesPage"/>), the
-/// highest first, one resource both ways, by <c>page</c>; a reader who may not shape them is refused with the gate,
-/// <c>401</c> to sign in and <c>403</c> otherwise: a page reads it with no role listed, and a JSON request as its problem.
-/// Its <c>POST</c>s take their fields as a form or a JSON
+/// highest first, one resource both ways, by <c>page</c>. The Doorway refuses every route here, before the action runs, to
+/// whoever does not hold <see cref="Bit.ManageRoles"/>, <c>401</c> to sign in and <c>403</c> otherwise, a page as the
+/// refusal's page and a JSON request as its problem, and answers a reader for whom the place does not exist what an
+/// address with nothing there receives. Its <c>POST</c>s take their fields as a form or a JSON
 /// object and send one command: <c>/settings/roles</c> creates a role (<see cref="CreateRole"/>) from <c>name</c> and
 /// <c>permissions</c>; <c>/change</c> changes the role whose word <c>role</c> names (<see cref="ReviseRole"/>) by any of
 /// <c>name</c>, <c>permissions</c> and <c>move</c>; <c>/delete</c> deletes it (<see cref="DeleteRole"/>). A form is sent
 /// back to the roles; a JSON request reads the role as the page now lists it, created (<c>201</c>) or changed
 /// (<c>200</c>), or nothing for a deletion (<c>204</c>); a refusal reads the page again with the reason above the list, or
-/// a problem. A reader for whom the place does not exist receives what an address with nothing there receives.</summary>
+/// a problem.</summary>
 [Managing]
 public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles) : ControllerBase
 {
@@ -132,7 +133,7 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
         return bits is null ? RoleSettings.PermissionsRule : null;
     }
 
-    /// <summary>One change: the place; then <paramref name="built"/>, the command to send or the refusal
+    /// <summary>One change, for a reader the Doorway let in: <paramref name="built"/>, the command to send or the refusal
     /// of what was sent, whose name and permissions a form keeps; then the command's outcome.</summary>
     private async Task<IActionResult> Write(string? name, string[]? permissions, object built, bool created, CancellationToken ct)
     {
@@ -167,26 +168,21 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
         }
     }
 
-    /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the page again, read afresh,
-    /// with the reason above the list, keeping a new role's name and permissions as they were sent.</summary>
+    /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the page again, read afresh
+    /// for the reader the Doorway let in, with the reason above the list, keeping a new role's name and permissions as they
+    /// were sent.</summary>
     private async Task<IActionResult> Refused(string? personId, string? name, string[]? permissions, Reason reason, bool created, CancellationToken ct)
     {
         if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
 
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
-        var page = await Page(place, personId, 1, ct);
-        if (page.Gate is null)
+        var page = await Page(Here.Of(HttpContext).Around, personId, 1, ct) with { Failure = reason.Text };
+        if (created)
         {
-            page = page with { Failure = reason.Text };
-            if (created)
+            page = page with
             {
-                page = page with
-                {
-                    Name = name ?? "",
-                    Chosen = (permissions ?? []).OfType<string>().SelectMany(word => word.Split([' ', ','], StringSplitOptions.RemoveEmptyEntries)).ToList()
-                };
-            }
+                Name = name ?? "",
+                Chosen = (permissions ?? []).OfType<string>().SelectMany(word => word.Split([' ', ','], StringSplitOptions.RemoveEmptyEntries)).ToList()
+            };
         }
 
         return new ObjectResult(page) { StatusCode = Answers.Status(HttpContext, reason) };
@@ -196,20 +192,17 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
     {
         var baseAddress = BaseAddress();
         var here = baseUrl.PathBase + Path + (number > 1 ? "?" + PageQuery + "=" + number : "");
-        var gate = place.Gate(Bit.ManageRoles)?.Word;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
-        var read = gate is null ? await roles.Page(page: number, pageSize: PageSize, ct: ct) : null;
-        var listed = read is null ? [] : read.Items.Select(role => Listed(role, place, personId, space, read.TotalCount, baseAddress)).ToList();
+        var read = await roles.Page(page: number, pageSize: PageSize, ct: ct);
+        var listed = read.Items.Select(role => Listed(role, place, personId, space, read.TotalCount, baseAddress)).ToList();
         return new RolesPage(
             TangentSpaceSettingsController.Sections(place, baseAddress, TangentSpaceSettingsController.RolesSection),
             listed,
             Bits.Each.Select(bit => new RolesPage.Permission(bit.ToString(), RoleSettings.Plain(bit), People.Holds(place, bit))).ToList(),
-            read is not null && (long)number * PageSize < read.TotalCount ? baseAddress + Path + "?" + PageQuery + "=" + (number + 1) : null,
+            (long)number * PageSize < read.TotalCount ? baseAddress + Path + "?" + PageQuery + "=" + (number + 1) : null,
             number > 1 ? baseAddress + Path + (number > 2 ? "?" + PageQuery + "=" + (number - 1) : "") : null,
-            gate is null ? Forms(baseAddress) : null,
+            Forms(baseAddress),
             place.Can,
-            gate,
-            personId is null ? baseAddress + SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,
             space.Name,
             baseAddress + "/",
             await PostWrites.Reader(personId, place, baseAddress, here, ct));

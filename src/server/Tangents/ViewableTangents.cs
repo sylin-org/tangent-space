@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Security.Cryptography;
+using Koan.Data.Abstractions.Filtering;
 using Microsoft.AspNetCore.DataProtection;
 using Tangent.Access;
 using Tangent.Posts;
@@ -15,7 +16,8 @@ namespace Tangent.Tangents;
 /// not by its length, not by a cursor. The reading stops once the page is full and one more is found, so a page costs
 /// the Tangents read up to that one: at most every Tangent the place holds, the place's own size. A Tangent created or
 /// moved while the reading goes on can be read twice, which is kept once, or missed. A read of Posts asks only about the
-/// Tangents its rows name, as they arrive (<see cref="Met"/>). Reads only and takes no lock.</summary>
+/// Tangents its rows name, as they arrive, and leaves out those met that the reader may not view (<see cref="Met"/>). Reads
+/// only and takes no lock.</summary>
 public static class ViewableTangents
 {
     /// <summary>The most Tangents one read takes.</summary>
@@ -94,10 +96,24 @@ public static class ViewableTangents
     /// <summary>The Tangents the rows of one reading name, each judged once for one reader, a visitor where the id is null,
     /// as the rows arrive: a read of Posts keeps those in a Tangent the reader may view, and never reads a Tangent none of its
     /// rows name. Each batch costs one keyed read of the Tangents it names that no earlier batch did, and what the reader holds on
-    /// them (<see cref="Capabilities.LoadEach(string?, IReadOnlyList{Tangent}, CancellationToken)"/>).</summary>
+    /// them (<see cref="Capabilities.LoadEach(string?, IReadOnlyList{Tangent}, CancellationToken)"/>). A reading of Posts
+    /// through an index of their own, as a profile's and the articles feed's are, tells each read to leave out the Tangents
+    /// met so far that the reader may not view (<see cref="LeavingOut"/>), so a read either fills what it reads for or meets a
+    /// Tangent no earlier read met, and it takes at most <see cref="ReadLimit"/> reads.</summary>
     public sealed class Met(string? personId)
     {
+        /// <summary>The most reads one reading of rows takes.</summary>
+        public const int ReadLimit = 5;
+
         private readonly Dictionary<string, Tangent?> _viewed = new(StringComparer.Ordinal);
+
+        /// <summary>What leaves out every row in a Tangent met so far that the reader may not view, or that has no row, its slug
+        /// in the field <paramref name="tangent"/> names; null where none was met.</summary>
+        public Filter? LeavingOut(string tangent)
+        {
+            var unviewed = _viewed.Where(met => met.Value is null).Select(met => (object?)met.Key).ToList();
+            return unviewed.Count == 0 ? null : Filter.On(FieldPath.Of(tangent), FilterOperator.Nin, FilterValue.Many(unviewed));
+        }
 
         /// <summary>The Tangent of a row <see cref="Keep"/> kept, or that <see cref="Views"/> said the reader may view.</summary>
         public Tangent this[string id] => _viewed.GetValueOrDefault(id) ?? throw new KeyNotFoundException("No Tangent met for the reader is " + id + ".");

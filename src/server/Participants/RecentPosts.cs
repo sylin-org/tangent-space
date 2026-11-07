@@ -10,11 +10,13 @@ namespace Tangent.Participants;
 /// <summary>One page of a participant's Posts, newest first and none removed, read through <c>ix_post_authors</c>
 /// (<c>AuthorId</c>, <c>CreatedAt</c>) one more than a page at a time, each read continuing by seek from the last Post
 /// the one before read, and kept only in the Tangents the reader may view, each Tangent judged once as a read names it
-/// (<see cref="ViewableTangents.Met"/>), so nothing about a Post the reader may not view is said, not on a page, not by its
-/// length, not by a cursor. The reading stops once the page is full and one more is kept, so a page costs the Posts read
-/// up to that one: at most every Post of theirs. A page holds at most <see cref="PageSize"/> Posts and continues from a
-/// <see cref="Cursor"/>, the place of the last Post a page held, so a Post present for the whole read is on exactly one
-/// page. Nothing is counted. Reads only and takes no lock.</summary>
+/// (<see cref="ViewableTangents.Met"/>), so no Post the reader may not view is shown and none names a Tangent of theirs.
+/// Each read after the first leaves out the Tangents met so far that the reader may not view, so it fills the page or meets
+/// a Tangent no earlier read met. The reading stops once the page is full and one more is kept, or after
+/// <see cref="ViewableTangents.Met.ReadLimit"/> reads: a page that bound ends holds what it kept, and continues from the
+/// last Post it read, which is the one place a page names a Post the reader may not view, by when it was written and its
+/// Id. A page holds at most <see cref="PageSize"/> Posts and continues from a <see cref="Cursor"/>, so a Post present for
+/// the whole read is on exactly one page. Nothing is counted. Reads only and takes no lock.</summary>
 public static class RecentPosts
 {
     /// <summary>The most Posts one page holds.</summary>
@@ -48,9 +50,12 @@ public static class RecentPosts
     public static async Task<Page> Read(string authorId, ViewableTangents.Met met, Cursor? after, CancellationToken ct)
     {
         var kept = new List<Post>();
-        while (true)
+        for (var reads = 1; ; reads++)
         {
-            var query = new QueryDefinition { Filter = after is null ? null : Seek(after), Page = 1, PageSize = PageSize + 1 }
+            var query = new QueryDefinition
+                {
+                    Filter = Filter.And(after is null ? null : Seek(after), met.LeavingOut(nameof(Post.TangentId))), Page = 1, PageSize = PageSize + 1
+                }
                 .WithSort<Post>(sort => sort.OrderByDescending(post => post.CreatedAt).ThenByDescending(post => post.Id));
             var rows = await Post.Query(post => post.AuthorId == authorId && !post.Removed, query, ct);
             foreach (var post in await met.Keep(rows, post => post.TangentId, ct))
@@ -61,6 +66,7 @@ public static class RecentPosts
 
             if (rows.Count <= PageSize) return new Page(kept, null);
             after = Cursor.After(rows[^1]);
+            if (reads == ViewableTangents.Met.ReadLimit) return new Page(kept, after);
         }
     }
 

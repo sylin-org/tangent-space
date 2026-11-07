@@ -8,14 +8,12 @@ namespace Tangent.Participants;
 /// <see cref="Next"/>, the address of the older ones, null on the last page, and <see cref="First"/>, the newest page's,
 /// for a page that <see cref="Continued"/> from a cursor. <see cref="State"/> is <c>waiting</c> where the page holds those
 /// that wait alone, as the settings open it, empty where it holds every application, declined ones too, and
-/// <see cref="All"/> the address of every application.
-/// <see cref="Admit"/> and <see cref="Decline"/> are the forms that
-/// decide, each taking the applicant's id in <c>participant</c>, present only where the reader may decide; a waiting
-/// application is admitted or declined, a declined one only admitted. <see cref="Can"/> is what the
-/// reader holds in the place, and <see cref="Gate"/> why they may not decide, null when they may, when the list is empty
-/// whatever waits; <see cref="SignIn"/> is where a visitor signs in, coming back here. <see cref="Day"/> is the UTC day the
-/// times are written for. After a refusal the page says why above the list. Where admission says apply and the reader may
-/// decide, either page also holds <see cref="Invitations"/>, one bounded page of the accounts invited, newest
+/// <see cref="All"/> the address of every application. Only whoever holds <c>ManageStanding</c> reads it.
+/// <see cref="Admit"/> and <see cref="Decline"/> are the forms that decide, each taking the applicant's id in
+/// <c>participant</c>; a waiting application is admitted or declined, a declined one only admitted. <see cref="Can"/> is
+/// what the reader holds in the place, and <see cref="Day"/> the UTC day the times are written for. After a refusal the
+/// page says why above the list. Where admission says apply, either page also holds <see cref="Invitations"/>, one bounded
+/// page of the accounts invited, newest
 /// first, with <see cref="InvitationsNext"/> the address of the older ones and <see cref="InvitationsFirst"/> the newest
 /// page's, for a page continued from a cursor; <see cref="Invite"/> invites a Bluesky handle and <see cref="Withdraw"/>
 /// withdraws an invitation by its account's DID.</summary>
@@ -28,11 +26,9 @@ public sealed record ApplicationsPage(
     string First,
     string State,
     string All,
-    Form? Admit,
-    Form? Decline,
+    Form Admit,
+    Form Decline,
     IReadOnlyList<string> Can,
-    string? Gate,
-    string? SignIn,
     string Place,
     string Door,
     Who? Who,
@@ -64,12 +60,12 @@ public sealed record ApplicationsPage(
     public Render.PanelTitle Heading => new(Space.TangentSpaceSettingsController.ApplicationsSection, "Settings of " + Render.Sentence.Link(Place, Door));
 
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Render.Notice? Line => Render.Notice.Of(Gate, Failure, SignIn);
+    public Render.Notice? Line => Render.Notice.Of(null, Failure, null);
 
     /// <summary>Those that wait alone, where the settings open the applications, or every application, declined ones too,
     /// one press each, the one the page holds pressed.</summary>
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Render.Form? States => Gate is not null ? null : Render.Form.Reading(All,
+    public Render.Form States => Render.Form.Reading(All,
             new Render.Form.Field(ApplicationsController.StateQuery, "", State, Render.Form.Input.Switch)
             {
                 Choices = [new(Waiting, "Waiting"), new("", "Every application")]
@@ -79,13 +75,13 @@ public sealed record ApplicationsPage(
     /// <summary>Each applicant: who, linked to their profile, their handle, when they applied and whether they were declined, and
     /// what the reader may decide — admit, and for one waiting, decline, confirmed in the page.</summary>
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Render.EntryList? Listed => Gate is not null ? null : new(Applications.Select(applicant => new Render.Entry(null,
+    public Render.EntryList Listed => new(Applications.Select(applicant => new Render.Entry(null,
     [
-        .. Admit is { } admit ? new Render.IPart[] { admit.Given(ApplicationsController.ParticipantField, applicant.Id) with { Tool = "admit", Submit = "Admit" } } : [],
-        .. applicant.State == Waiting && Decline is { } decline
+        Admit.Given(ApplicationsController.ParticipantField, applicant.Id) with { Tool = "admit", Submit = "Admit" },
+        .. applicant.State == Waiting
             ? new Render.IPart[]
             {
-                decline.Given(ApplicationsController.ParticipantField, applicant.Id) with
+                Decline.Given(ApplicationsController.ParticipantField, applicant.Id) with
                 {
                     Tool = "decline", Opens = "Decline", Submit = "Decline", Confirm = "They keep reading what a visitor reads, and you can still admit them later."
                 }
@@ -100,8 +96,7 @@ public sealed record ApplicationsPage(
     }).ToList(), Empty: Continued ? "No older applications." : "No one is waiting to be admitted.");
 
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Render.Pager? Pages => Gate is not null ? null
-        : new("More applications", Continued ? new Render.Onward("Newest applications", First) : null, Next is { } next ? new Render.Onward("Older applications", next) : null);
+    public Render.Pager Pages => new("More applications", Continued ? new Render.Onward("Newest applications", First) : null, Next is { } next ? new Render.Onward("Older applications", next) : null);
 
     /// <summary>Inviting a Bluesky account by its handle.</summary>
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
@@ -125,9 +120,8 @@ public sealed record ApplicationsPage(
         : new("More invitations", InvitationsFirst is { } first ? new Render.Onward("Newest invitations", first) : null,
             InvitationsNext is { } next ? new Render.Onward("Older invitations", next) : null);
 
-    /// <summary>The frame the shell draws around the page: its settings as its one crumb, and who reads, or where a visitor
-    /// signs in.</summary>
-    public static Render.Frame Frame(ApplicationsPage page) => new(page.Place, page.Door, [new Render.Crumb("Settings")], page.Who, page.SignIn);
+    /// <summary>The frame the shell draws around the page: its settings as its one crumb, and who reads.</summary>
+    public static Render.Frame Frame(ApplicationsPage page) => new(page.Place, page.Door, [new Render.Crumb("Settings")], page.Who, null);
 
     public const string Waiting = "waiting";
 
