@@ -95,11 +95,11 @@ public sealed class RefusalTests
         var asJson = await Json(ada, "/t/" + Workshop + "/new", TopicPath(removed), new { id = Tids.Mint(), body = "Still?" });
         var onForm = await Form(ada, "/t/" + Workshop + "/new", TopicPath(removed), new Dictionary<string, string> { ["id"] = Tids.Mint(), ["body"] = "Still?" });
 
-        Assert.Equal((HttpStatusCode.Forbidden, "application/problem+json", Capabilities.Closed.Word), (asJson.Status, asJson.MediaType, asJson.Word));
+        Assert.Equal((HttpStatusCode.Forbidden, "application/problem+json", Capabilities.RootRemoved.Word), (asJson.Status, asJson.MediaType, asJson.Word));
         Assert.Equal("gated", asJson.Kind);
         Assert.Equal(("text/html", HttpStatusCode.Forbidden), (onForm.MediaType, onForm.Status));
         Assert.Contains("data-word=\"closed\"", onForm.Body);
-        Assert.Contains(Capabilities.Closed.Text, System.Net.WebUtility.HtmlDecode(onForm.Body));
+        Assert.Contains(Capabilities.RootRemoved.Text, System.Net.WebUtility.HtmlDecode(onForm.Body));
         Assert.Contains(">Closed</h1>", onForm.Body);
         Assert.DoesNotContain(">closed<", onForm.Body);
         Assert.Equal(before, await Counted());

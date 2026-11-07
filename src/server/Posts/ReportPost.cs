@@ -22,10 +22,10 @@ namespace Tangent.Posts;
 /// reaches everyone who may view the moderators' Tangent among what is for them on their door, without one row written
 /// for each of them (<see cref="Unread"/>); and one <see cref="EventKind.Mention"/> goes to each participant
 /// the reason mentions who may view the moderators' Tangent (<see cref="Mentions.Notify"/>). A participant who reports
-/// the same Post again while their earlier report stands — its root not removed — replies in that
+/// the same Post again while their earlier report stands — its root neither removed nor closed — replies in that
 /// report's Topic with the new reason, so the moderators keep one Topic per reporter and Post with every reason in
-/// order, and with no reason answers with that report and writes nothing; once the moderators remove it, the next
-/// report starts a Topic of its own. Idempotent by Id: the same
+/// order, and with no reason answers with that report and writes nothing; once the moderators close or remove it, the
+/// next report starts a Topic of its own. Idempotent by Id: the same
 /// Id from the same reporter about the same Post answers with the Post it wrote, whatever reason is sent and whatever
 /// the moderators have done with it since, so a resend says nothing of the report's state; any other Post holding it is
 /// refused with <see cref="Post.IdTaken"/>, which says nothing of that Post. The reason is judged where the command is built
@@ -175,13 +175,13 @@ public sealed record ReportPost(
     }
 
     /// <summary>The reporter's earlier report of this Post that still stands — a root of the moderators' Tangent that is
-    /// not removed — or null: one read of <c>ix_post_origins</c>'s range for the Post, which holds the Topics
-    /// taken from it and nothing else.</summary>
+    /// neither removed nor closed, a row that holds no word of closing counted open — or null: one read of
+    /// <c>ix_post_origins</c>'s range for the Post, which holds the Topics taken from it and nothing else.</summary>
     private async Task<Post?> Standing(string moderators, CancellationToken ct)
     {
         var (postId, reporterId) = (PostId, ReporterId);
         var found = await Post.Query(post => post.OriginId == postId && post.TangentId == moderators && post.AuthorId == reporterId
-                                             && post.ParentId == null && post.Removed == false,
+                                             && post.ParentId == null && post.Removed == false && post.Closed != true,
             new QueryDefinition { Page = 1, PageSize = 1 }, ct);
         return found.Count > 0 ? found[0] : null;
     }

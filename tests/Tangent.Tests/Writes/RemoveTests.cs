@@ -69,7 +69,7 @@ public sealed class RemoveTests
         Assert.Equal((first.Id, first.RemovedAt, Ada, first.Body), (again.Id, again.RemovedAt, again.RemovedBy, again.Body));
         Assert.Equal((first.Id, first.RemovedAt, Ada, first.Body), (byModerator.Id, byModerator.RemovedAt, byModerator.RemovedBy, byModerator.Body));
         Assert.Equal(Capabilities.Removed, Assert.IsType<Outcome<Post>.Refused>(bySomeoneElse).Reason);
-        Assert.Equal(Capabilities.Closed, Assert.IsType<Outcome<Post>.Refused>(answer).Reason);
+        Assert.Equal(Capabilities.RootRemoved, Assert.IsType<Outcome<Post>.Refused>(answer).Reason);
         Assert.Equal(counted, (await Counted(), await Snapshots()));
         var stored = await Post.Get(root.Id, Cancellation);
         Assert.Equal((true, "", "Lanterns", "lanterns", 1, reply.Id), (stored?.Removed, stored?.Body, stored?.Title, stored?.Slug, stored?.ReplyCount, stored?.LatestReplyId));
@@ -114,8 +114,8 @@ public sealed class RemoveTests
 
         Assert.Equal(HttpStatusCode.SeeOther, closing.Status);
         var closed = WebUtility.HtmlDecode((await Send(bea.Client, HttpMethod.Get, TopicPath(root))).Body);
-        Assert.Contains($"<p class=\"topic-closed\" data-gate=\"{Capabilities.Closed.Word}\">", closed);
-        Assert.Contains(Capabilities.Closed.Text, closed);
+        Assert.Contains($"<p class=\"reply-gate\" data-gate=\"{Capabilities.RootRemoved.Word}\">", closed);
+        Assert.Contains(Capabilities.RootRemoved.Text, closed);
         Assert.DoesNotContain("class=\"reply-form reply\"", closed);
     }
 

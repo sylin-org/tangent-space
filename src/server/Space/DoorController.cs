@@ -179,20 +179,23 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
     }
 
     /// <summary>The shelves of the first <see cref="ShelfLimit"/> Tangents that hold a Topic those <paramref name="above"/>
-    /// does not: each Tangent's latest <see cref="ShelfTopicLimit"/> Topics past those, at most one bounded read of the
-    /// topic list of each Tangent the door lists, so a Tangent whose every Topic the front page shows gets no shelf, then one keyed
-    /// read of their latest replies and one of the people they name whom <paramref name="known"/> does not hold.</summary>
+    /// does not: each Tangent's pinned Topic, then its latest, <see cref="ShelfTopicLimit"/> in all past those, at most one
+    /// keyed read of the pinned root and one bounded read of the topic list of each Tangent the door lists, so a Tangent whose
+    /// every Topic the front page shows gets no shelf, then one keyed read of their latest replies and one of the people they
+    /// name whom <paramref name="known"/> does not hold.</summary>
     private static async Task<List<Door.Shelf>> Shelves(IReadOnlyList<Tangents.Tangent> tangents, IReadOnlySet<string> above,
         IReadOnlyDictionary<string, Render.Person> known, string baseAddress, CancellationToken ct)
     {
-        var read = new List<(Tangents.Tangent Tangent, List<Post> Topics)>();
+        var read = new List<(Tangents.Tangent Tangent, List<Post> Topics, string? Pinned)>();
         foreach (var tangent in tangents.Where(tangent => tangent.TopicCount > 0))
         {
             if (read.Count == ShelfLimit) break;
             var size = Math.Min(TopicList.PageSize, ShelfTopicLimit + above.Count);
-            var topics = (await TopicList.Read(tangent.Id, null, ct, size)).Topics.Where(root => !root.Removed && !above.Contains(root.Id))
+            var pinned = await TopicList.Pinned(tangent, ct);
+            var newest = (await TopicList.Read(tangent.Id, null, ct, size, leaving: pinned?.Id)).Topics;
+            var topics = (pinned is null ? newest : newest.Prepend(pinned)).Where(root => !root.Removed && !above.Contains(root.Id))
                 .Take(ShelfTopicLimit).ToList();
-            if (topics.Count > 0) read.Add((tangent, topics));
+            if (topics.Count > 0) read.Add((tangent, topics, pinned?.Id));
         }
 
         var roots = read.SelectMany(shelf => shelf.Topics).ToList();
@@ -211,7 +214,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             var address = PostWrites.TangentAddress(baseAddress, shelf.Tangent.Id);
             return new Door.Shelf(shelf.Tangent.Id, shelf.Tangent.Name, Word(shelf.Tangent.DefaultKind), shelf.Tangent.Description, address,
                 Tile.For(shelf.Tangent, baseAddress + "/"), shelf.Tangent.TopicCount,
-                shelf.Topics.Select(root => TangentPageController.Topic(root, address, people, latest, null, marks)).ToList());
+                shelf.Topics.Select(root => TangentPageController.Topic(root, address, people, latest, null, marks) with { Pinned = root.Id == shelf.Pinned }).ToList());
         }).ToList();
     }
 
@@ -355,7 +358,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
         }).ToList());
 
     /// <summary>A Topic on the front page, new to the reader by the one rule: as many of its Posts as the window holds
-    /// new to them.</summary>
+    /// new to them, and whether its moderators closed it or keep it at the top of its Tangent.</summary>
     private Door.Shown Shown(Post root, IReadOnlyDictionary<string, Tangents.Tangent> tangents, IReadOnlyDictionary<string, Render.Person> people,
         IReadOnlyDictionary<string, int> freshIn)
     {
@@ -376,7 +379,11 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             root.RecentAuthorIds.Take(Post.RecentAuthorLimit).Select(id => Person(people, id)).ToList(),
             unseen > 0,
             unseen,
-            TangentPage.EditedOf(root, people)));
+            TangentPage.EditedOf(root, people))
+        {
+            Closed = root.Closed,
+            Pinned = tangents.TryGetValue(root.TangentId, out var tangent) && tangent.PinnedId == root.Id
+        });
     }
 
     /// <summary>The listed Tangents and the other viewable Tangents the events name, by slug: one keyed read of the

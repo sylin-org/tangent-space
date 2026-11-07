@@ -551,7 +551,7 @@
   }
 
   & .topic-main > .topic-reply,
-  & .topic-main > .topic-closed {
+  & .topic-main > .reply-gate {
     margin: auto 0 16px;
     padding: 11px 16px;
     background: var(--ts-raised);

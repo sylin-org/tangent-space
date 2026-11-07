@@ -15,14 +15,15 @@ using Tangent.Space;
 namespace Tangent.Tangents;
 
 /// <summary>The Tangent page, one resource both ways: the Tangent, its <c>can</c>, and one bounded page of its Topics,
-/// whole or narrowed to a month or an author (<see cref="TopicList.Narrowing"/>), with what is new to the reader marked,
+/// whole or narrowed to a month or an author (<see cref="TopicList.Narrowing"/>), the whole list's first page led by the
+/// Topic its moderators pinned (<see cref="TopicList.Pinned"/>), with what is new to the reader, a pinned Topic and a closed one marked,
 /// and in an articles Tangent every month it narrows to and the <see cref="AuthorLimit"/> authors who started the most,
 /// from the counts its row keeps, left to the formatter as HTML, a fragment or JSON. It needs
 /// <see cref="Bit.View"/>, which the Doorway judges before anything else (<see cref="Access.Doorway"/>), so a reader without it
 /// receives its gate, and one for whom the Tangent is absent what an address with no Tangent receives; a participant outside a
 /// members-only Tangent they may join or ask to join reads its card instead, and nothing of what it holds
 /// (<see cref="TangentOutside"/>). Every read is bounded
-/// and keyed: the Tangent and capability's rows, which the Doorway read, one read of Topics, their latest replies by Id, the people on the page and those the rail names, the reader's place mark and their marks on
+/// and keyed: the Tangent and capability's rows, which the Doorway read, the pinned Topic's root by Id on a page of the whole list, one read of Topics, their latest replies by Id, the people on the page and those the rail names, the reader's place mark and their marks on
 /// those Topics, which say what is new to them (<see cref="Unread"/>), the first <see cref="SwitcherLimit"/>
 /// Tangents the reader may view for the switcher (<see cref="ViewableTangents"/>), and, for a signed-in reader, what they
 /// hold in the place, which says whether the switcher offers a new Tangent.</summary>
@@ -52,7 +53,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
     [HttpHead("/t/{tangent}")]
     [Tool(Name = "read_tangent")]
     [Needs(Bit.View, Outside = true)]
-    [Description("Read a Tangent: its Topics a page at a time, narrowed to a month or an author where you name one, what is new to you marked, and a Topic whose root was removed saying who removed it; an articles Tangent lists every month it narrows to and the authors who started the most, with how many each, and narrows to any author by their id. Follow with read_topic on a Topic's slug, or start_topic to begin one. A members-only Tangent you may join or ask to join answers its card instead, with joining; follow with join_tangent.")]
+    [Description("Read a Tangent: its Topics a page at a time, narrowed to a month or an author where you name one, the one its moderators pinned first on the first page of them all, what is new to you, pinned or closed marked, and a Topic whose root was removed saying who removed it; an articles Tangent lists every month it narrows to and the authors who started the most, with how many each, and narrows to any author by their id. Follow with read_topic on a Topic's slug, or start_topic to begin one. A members-only Tangent you may join or ask to join answers its card instead, with joining; follow with join_tangent.")]
     public async Task<IActionResult> Get([Description(Holds.Tangent)] string tangent, [FromQuery(Name = After), Description(Holds.After)] string? after,
         [FromQuery(Name = Month), Description(Holds.Month)] string? month, [FromQuery(Name = Author), Description(Holds.Author)] string? author,
         CancellationToken ct)
@@ -74,15 +75,21 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
                 $"The {Month} parameter is a month as its year and number, such as 2026-10.") { Title = "Not a month" }.ToResult();
         var by = string.IsNullOrWhiteSpace(author) ? null : author.Trim();
 
-        var page = await TopicList.Read(row.Id, cursor, ct, to: new TopicList.Narrowing(within, by));
+        // The whole list leaves its pinned Topic out of every page and leads its first with it; a narrowed one reads in its
+        // own order, marking the pinned Topic where it falls.
+        var narrowing = new TopicList.Narrowing(within, by);
+        var pinned = narrowing.Narrowed ? null : await TopicList.Pinned(row, ct);
+        var page = await TopicList.Read(row.Id, cursor, ct, to: narrowing, leaving: pinned?.Id);
+        IReadOnlyList<Post> topics = pinned is not null && cursor is null ? [pinned, .. page.Topics] : page.Topics;
+        var pinnedId = narrowing.Narrowed ? row.PinnedId : pinned?.Id;
         var reader = here.Rows.Participant;
-        var latest = await LatestReplies(page.Topics, ct);
+        var latest = await LatestReplies(topics, ct);
         var articles = row.DefaultKind == PostKind.Article;
         var offered = articles ? Offered(row, by) : [];
         IEnumerable<string> named = offered.Select(author => author.Key);
-        var people = await People(page.Topics, latest.Values, ct, by is null ? named : named.Append(by));
+        var people = await People(topics, latest.Values, ct, by is null ? named : named.Append(by));
         var unread = reader is null ? null : await Unread.Of(reader, ct);
-        var marks = unread is null ? new Dictionary<string, long>() : await unread.Marks(page.Topics.Select(topic => topic.Id), ct);
+        var marks = unread is null ? new Dictionary<string, long>() : await unread.Marks(topics.Select(topic => topic.Id), ct);
         var space = here.Rows.Space;
         var audience = space.Audience == Audience.Private || await Overwrites.AudienceOf(row.Id, ct) == Audience.Private
             ? Audience.Private
@@ -103,7 +110,7 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
             audience.ToString().ToLowerInvariant(),
             address,
             capabilities.Can,
-            page.Topics.Select(topic => Topic(topic, address, people, latest, unread, marks)).ToList(),
+            topics.Select(topic => Topic(topic, address, people, latest, unread, marks) with { Pinned = topic.Id == pinnedId && !topic.Removed }).ToList(),
             page.Next is { } next ? TangentPage.ListAddress(address, within?.Key, by, next.ToString()) : null,
             cursor is not null,
             capabilities.Holds(Bit.Topic) ? address + "/" + NewTopicSegment : null,
@@ -165,7 +172,8 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
     }
 
     /// <summary>One Topic as a list shows it, what is new in it marked for a signed-in reader by the one rule
-    /// (<see cref="Unread.InTopic"/>), and none for a visitor, and who removed its root, where someone did.</summary>
+    /// (<see cref="Unread.InTopic"/>), and none for a visitor, who removed its root, where someone did, and whether it is
+    /// closed. Whether it is pinned is the list's to say.</summary>
     public static Render.TopicEntry Topic(Post root, string tangentAddress, IReadOnlyDictionary<string, Render.Person> people,
         IReadOnlyDictionary<string, Post> latest, Unread? unread, IReadOnlyDictionary<string, long> marks)
     {
@@ -194,7 +202,10 @@ public sealed class TangentPageController(KoanWebBaseUrl baseUrl) : ControllerBa
             newPosts,
             TangentPage.EditedOf(root, people),
             root.CoverId is { } cover ? tangentAddress[..tangentAddress.LastIndexOf("/t/", StringComparison.Ordinal)] + Media.Reference(cover) : null,
-            root.Removed ? new TopicPage.Removal(Person(people, root.RemovedBy ?? root.AuthorId), root.RemovedAt ?? root.CreatedAt) : null);
+            root.Removed ? new TopicPage.Removal(Person(people, root.RemovedBy ?? root.AuthorId), root.RemovedAt ?? root.CreatedAt) : null)
+        {
+            Closed = root.Closed
+        };
     }
 
     private static Render.Person Person(IReadOnlyDictionary<string, Render.Person> people, string id)

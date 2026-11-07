@@ -70,6 +70,8 @@ public sealed class GalleryController : ControllerBase
             Topic("never-read", "A Topic the reader never opened", lumen, 1, true, null),
             Topic("yours", "A Topic the reader started", you, 0),
             Topic("edited", "A Topic someone else edited", mara, 2, by: edited),
+            Topic("pinned", "A Topic its moderators pinned", leo, 5) with { Pinned = true },
+            Topic("closed", "A Topic its moderators closed", lumen, 9) with { Closed = true },
             Topic("removed", "A Topic whose opening post was removed", mara, 3) with { Opening = "", Removed = new Posts.TopicPage.Removal(leo, Now.AddHours(-4)) }
         };
         var article = Topic("an-article", "Why Your Best Ideas Come in the Shower", leo, 3, kind: "article") with { In = articles };
@@ -117,6 +119,8 @@ public sealed class GalleryController : ControllerBase
                 Tile.For("discussions", "Discussions"), 12, rows.Take(2).ToList())),
             new Specimen("A shelf of articles", new Door.Shelf("articles", "Articles About Everything", "article", "Make room for the next thought.",
                 door + "t/articles", Tile.For("articles", "Articles About Everything"), 4, [article, article with { Id = "a2", Title = "A second article" }])),
+            new Specimen("A closed Topic’s reply box", new ReplyBox(null, Gallery.Reader, "ada.bsky.social", null, "closed", door + "t/discussions/closed", door,
+                door + "t/discussions/media", door + "t/discussions/suggest", Access.Capabilities.Closed.Word, null, new Posts.TopicPage.Closure(leo, Now.AddHours(-2)))),
             new Specimen("A form", seen)
         ])
         {

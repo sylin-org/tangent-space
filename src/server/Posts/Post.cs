@@ -43,7 +43,7 @@ public sealed class Post : Entity<Post>
     public static readonly Reason NeedsTangent = Reason.Invalid("A Topic starts in a Tangent.");
     public static readonly Reason NeedsAuthor = Reason.Invalid("A Post has an author.");
     public static readonly Reason NotARoot = Reason.Invalid("A reply goes to a Topic.");
-    public static readonly Reason TopicRemoved = Access.Capabilities.Closed;
+    public static readonly Reason TopicRemoved = Access.Capabilities.RootRemoved;
     public static readonly Reason NoTitleOnReply = Reason.Invalid("A reply has no title; a Topic's title is on its root.");
     public static readonly Reason PostRemoved = Access.Capabilities.Removed;
     public static readonly Reason NeedsRemover = Reason.Invalid("A removal names who removes.");
@@ -174,6 +174,15 @@ public sealed class Post : Entity<Post>
     public string? RemovedBy { get; set; }
 
     public DateTimeOffset? RemovedAt { get; set; }
+
+    /// <summary>Whether the Topic is closed: it takes no new reply but from whoever holds <see cref="Access.Bit.Moderate"/>
+    /// in its Tangent (<see cref="Access.Capabilities.Closed"/>), and who closed it and when. Root only; a removal leaves it
+    /// as it is.</summary>
+    public bool Closed { get; set; }
+
+    public string? ClosedBy { get; set; }
+
+    public DateTimeOffset? ClosedAt { get; set; }
 
     /// <summary>Who other than the author last edited the Post, while the words are theirs; null otherwise. An edit by
     /// the author clears it, and so does a removal.</summary>
@@ -341,6 +350,26 @@ public sealed class Post : Entity<Post>
         SentHash = "";
         EditedBy = null;
         EditedAt = null;
+    }
+
+    /// <summary>Closes this Topic to replies, by whom and when, or a refusal: this Post is a root that is not removed.
+    /// Answers whether anything changed: a closed Topic stays as it was closed. Every word stays, and its version with them.</summary>
+    public bool Close(string closedBy, DateTimeOffset at)
+    {
+        if (ParentId is not null) throw new Refusal(Posts.Reply.NoTopic);
+        if (Removed) throw new Refusal(PostRemoved);
+        if (Closed) return false;
+        (Closed, ClosedBy, ClosedAt) = (true, closedBy, at);
+        return true;
+    }
+
+    /// <summary>Opens this Topic to replies again, or a refusal: this Post is a root. Answers whether anything changed.</summary>
+    public bool Reopen()
+    {
+        if (ParentId is not null) throw new Refusal(Posts.Reply.NoTopic);
+        if (!Closed) return false;
+        (Closed, ClosedBy, ClosedAt) = (false, null, null);
+        return true;
     }
 
     /// <summary>Refuses a body that is empty, holds a NUL, was sent with more than <see cref="BodyLimit"/> bytes or would

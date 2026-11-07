@@ -203,7 +203,7 @@ public sealed class PostTests
         var onRemoved = await new Reply(Tids.Mint(), removed.Id, "Still?", "ada").Send(Cancellation);
         var onNothing = await new Reply(Tids.Mint(), Tids.Mint(), "Anyone?", "ada").Send(Cancellation);
 
-        Assert.Equal(Capabilities.Closed, Assert.IsType<Outcome<Post>.Refused>(onRemoved).Reason);
+        Assert.Equal(Capabilities.RootRemoved, Assert.IsType<Outcome<Post>.Refused>(onRemoved).Reason);
         Assert.Equal(Reply.NoTopic, Assert.IsType<Outcome<Post>.Refused>(onNothing).Reason);
         Assert.Equal(before, (await Post.Count.Exact(Cancellation), await Event.Count.Exact(Cancellation)));
         Assert.Equal((0L, 0), ((await Post.Get(removed.Id, Cancellation))!.LastSequence, (await Post.Get(removed.Id, Cancellation))!.ReplyCount));

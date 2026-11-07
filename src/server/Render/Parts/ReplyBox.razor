@@ -5,11 +5,17 @@
    address named when that is someone else's reply and not removed, and the Topic otherwise, with the way back to replying
    to the Topic; and the body, which the article island makes the article's own editor, with its tools for a reply, its
    pictures brought into this Tangent and its @ and # pickers. The composer island keeps its words and gives each Post a
-   Reply action. A reader who may not reply reads the gate's sentence instead, and a visitor the way to sign in. *@
+   Reply action. Where its moderators closed the Topic, the box says who closed it and when: above the form for whoever
+   still replies, and in place of it for everyone else, a visitor among them. A reader who may not reply otherwise reads the
+   gate's sentence instead, and a visitor the way to sign in. *@
 @if (Model.Reply is { } reply && Model.Participant is { } participant)
 {
     <section class="topic-reply" id="reply" aria-labelledby="reply-heading">
         <h2 id="reply-heading" class="topic-replies-title">Reply</h2>
+        @if (Model.Closed is { } closed)
+        {
+            <p class="reply-gate is-closed">Closed by @closed.By.Name @When(closed.At): only moderators reply now.</p>
+        }
         <form class="reply-form reply" method="post" action="@reply.Action" data-island="composer" data-props="@JsonSerializer.Serialize(new { participant, scope = "topic:" + Model.TopicId, locate = Model.Address + "/", noun = "reply" })">
             <input type="hidden" name="@PostWrites.IdField" value="@reply.Value(PostWrites.IdField)" id="reply-form-id">
             <input type="hidden" name="@PostWrites.ParentField" value="@Model.Parent?.Id">
@@ -28,9 +34,13 @@
         </form>
     </section>
 }
+else if (Model.Closed is { } closed)
+{
+    <p class="reply-gate is-closed" data-gate="@Access.Capabilities.Closed.Word">Closed by @closed.By.Name @When(closed.At): every word stays, and it takes no new replies.</p>
+}
 else if (Model.Gate is { } gate)
 {
-    <p class="topic-closed" data-gate="@gate">
+    <p class="reply-gate" data-gate="@gate">
         @if (Model.SignIn is { } signIn && gate == Access.Capabilities.SignIn.Word)
         {
             @(Access.Capabilities.Sentence(gate) + " ")<a href="@signIn">Sign in</a>
@@ -44,4 +54,8 @@ else if (Model.Gate is { } gate)
 
 @code {
     [Parameter, EditorRequired] public Render.ReplyBox Model { get; set; } = default!;
+
+    [CascadingParameter(Name = Page.TodayValue)] public DateOnly Today { get; set; }
+
+    private RenderFragment When(DateTimeOffset at) => @<time datetime="@Wording.Iso(at)" title="@Wording.Full(at)">@Wording.When(at, Today)</time>;
 }

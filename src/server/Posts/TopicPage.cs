@@ -27,7 +27,11 @@ namespace Tangent.Posts;
 /// article's cover, while its root stands and has one; <see cref="ReadMinutes"/> what its body takes to read.
 /// <see cref="Publishing"/> is where an article stands on its author's own account, for its author
 /// (<see cref="Connections.Publishing.For"/>), and <see cref="Document"/> its document record there, once it is out;
-/// <see cref="Elsewhere"/> is what the network says about it since, for everyone (<see cref="Connections.Elsewhere.For"/>).</summary>
+/// <see cref="Elsewhere"/> is what the network says about it since, for everyone (<see cref="Connections.Elsewhere.For"/>).
+/// <see cref="Closed"/> says who closed the Topic to replies and when, where its moderators did, and <see cref="Pinned"/> that
+/// they keep it at the top of its Tangent; <see cref="Closing"/> and <see cref="Pinning"/> are the forms that close or reopen
+/// it and pin or unpin it, present only for whoever holds <c>Moderate</c> there, pinning saying first which Topic it
+/// unpins.</summary>
 [Render.Page(Render.Layout.Reading)]
 public sealed record TopicPage(
     string Id,
@@ -61,7 +65,11 @@ public sealed record TopicPage(
     int ReadMinutes = 1,
     Connections.Publishing? Publishing = null,
     string? Document = null,
-    Connections.Elsewhere.Line? Elsewhere = null)
+    Connections.Elsewhere.Line? Elsewhere = null,
+    TopicPage.Closure? Closed = null,
+    bool Pinned = false,
+    Form? Closing = null,
+    Form? Pinning = null)
 {
     [Newtonsoft.Json.JsonIgnore]
     public bool IsArticle => Kind == PostWrites.Word(PostKind.Article);
@@ -91,18 +99,22 @@ public sealed record TopicPage(
             {
                 Root = true,
                 Article = true,
+                Moderating = Moderating,
                 Quote = Reply is null ? null : JsonSerializer.Serialize(new { address = Address })
             }, Publishing, Elsewhere)
         : null;
 
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Render.TopicTitle? Heading => IsArticle ? null : new(Title, Root.CreatedAt, ReplyCount);
+    public Render.TopicTitle? Heading => IsArticle ? null : new(Title, Root.CreatedAt, ReplyCount, Closed is not null, Pinned);
 
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
     public Origin? Lineage => IsArticle ? null : TakenFrom;
 
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Post? Opening => IsArticle ? null : Placed(Root) with { Root = true };
+    public Post? Opening => IsArticle ? null : Placed(Root) with { Root = true, Moderating = Moderating };
+
+    /// <summary>The forms its root's footer carries for whoever moderates here: closing or reopening, then pinning or unpinning.</summary>
+    private IReadOnlyList<Form> Moderating => new[] { Closing, Pinning }.OfType<Form>().ToList();
 
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
     public Render.TopicReplies Window => new(Replies.Select(Placed).ToList(), ReplyCount, From, Through, Older, Newer, Seen,
@@ -112,7 +124,8 @@ public sealed record TopicPage(
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
     public Render.ReplyBox Box => new(Reply, Who?.Id, Who?.Handle,
         Reply?.Value(PostWrites.ParentField) is { Length: > 0 } parent ? Replies.FirstOrDefault(reply => reply.Id == parent) : null,
-        Id, Address, Door, PostWrites.MediaForm(Tangent.Address).Action, SuggestionsController.Address(Tangent.Address, Slug), Gate, SignIn);
+        Id, Address, Door, PostWrites.MediaForm(Tangent.Address).Action, SuggestionsController.Address(Tangent.Address, Slug), Gate, SignIn,
+        Root.Removed is null ? Closed : null);
 
     /// <summary>The frame the shell draws around the page: the place, who reads or where a visitor signs in, its feeds, and
     /// an article's record where it is out.</summary>
@@ -185,6 +198,10 @@ public sealed record TopicPage(
         /// <summary>The base URL, ending in a slash, under which the body's images have their addresses.</summary>
         [Newtonsoft.Json.JsonIgnore]
         public string Door { get; init; } = "";
+
+        /// <summary>The forms a root's footer carries for whoever moderates its Topic, after its own: closing it and pinning it.</summary>
+        [Newtonsoft.Json.JsonIgnore]
+        public IReadOnlyList<Form> Moderating { get; init; } = [];
     }
 
     /// <summary>A participant or a role a body mentions, by what the body's link names: a participant's id, their handle
@@ -211,6 +228,9 @@ public sealed record TopicPage(
 
     /// <summary>Who removed a Post and when.</summary>
     public sealed record Removal(Render.Person By, DateTimeOffset At);
+
+    /// <summary>Who closed a Topic to replies and when.</summary>
+    public sealed record Closure(Render.Person By, DateTimeOffset At);
 
     /// <summary>The Tangent the Topic is in: its slug, name and address.</summary>
     public sealed record InTangent(string Slug, string Name, string Address);

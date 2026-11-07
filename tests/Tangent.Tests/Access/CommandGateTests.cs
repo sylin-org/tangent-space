@@ -45,7 +45,7 @@ public sealed class CommandGateTests
 
         var onRemoved = await new Reply(Tids.Mint(), removed.Id, "Still?", "mo").Send(Cancellation);
 
-        Assert.Equal(Capabilities.Closed, Assert.IsType<Outcome<Post>.Refused>(onRemoved).Reason);
+        Assert.Equal(Capabilities.RootRemoved, Assert.IsType<Outcome<Post>.Refused>(onRemoved).Reason);
         Assert.Equal(1, await Post.Count.Exact(Cancellation));
         Assert.Equal(0, await Event.Count.Exact(Cancellation));
     }

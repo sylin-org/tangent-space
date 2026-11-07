@@ -72,6 +72,28 @@ public sealed class Tangent : Entity<Tangent>
     /// <summary>How many Topics each participant started here, by their id, raised with <see cref="TopicCount"/>.</summary>
     public Dictionary<string, int> Authors { get; set; } = [];
 
+    /// <summary>The root Id of the Topic its moderators keep at the top of its lists; null for none. A pin that names a root
+    /// removed or no longer here leads nothing (<see cref="TopicList.Pinned"/>).</summary>
+    public string? PinnedId { get; set; }
+
+    /// <summary>Pins the Topic whose root is <paramref name="topicId"/>, in place of any other. Answers whether anything
+    /// changed.</summary>
+    public bool Pin(string topicId)
+    {
+        if (PinnedId == topicId) return false;
+        PinnedId = topicId;
+        return true;
+    }
+
+    /// <summary>Unpins the Topic whose root is <paramref name="topicId"/>, where it is the one pinned. Answers whether
+    /// anything changed.</summary>
+    public bool Unpin(string topicId)
+    {
+        if (PinnedId != topicId) return false;
+        PinnedId = null;
+        return true;
+    }
+
     /// <summary>The log's sequence of the <see cref="Events.EventKind.TangentChanged"/> that created it, written by the
     /// command that creates it; zero where none was written. Its own rows of the log begin there: a row of its slug before it
     /// belongs to a Tangent deleted before this one took the slug (<see cref="DeleteTangent"/>).</summary>

@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Globalization;
 using System.Security.Claims;
+using Koan.Data.Core.Commands;
 using Koan.Web.Attributes;
 using Koan.Web.Auth.Infrastructure;
 using Koan.Web.Controllers;
@@ -32,7 +33,12 @@ namespace Tangent.Posts;
 /// place mark and their mark on the Topic; the people on the page; the participants its bodies mention; where the Topic was taken on a
 /// tangent from and the Topics taken from each Post on the page, as far as the reader may view them
 /// (<see cref="Origins"/>); and, for a signed-in reader who may not start a Topic in this Tangent, the Tangents where they
-/// may, which decide whether each Post offers to take it on a tangent.</summary>
+/// may, which decide whether each Post offers to take it on a tangent; and, for whoever moderates here where another Topic is
+/// pinned, that Topic's root by Id, which pinning this one names. Whoever holds <see cref="Bit.Moderate"/> on the Topic closes
+/// and reopens it at <c>/t/{tangent}/{topic}/close</c> and <c>…/reopen</c>, sending <see cref="CloseTopic"/>, and pins and
+/// unpins it at <c>…/pin</c> and <c>…/unpin</c>, sending <see cref="PinTopic"/>, which the Doorway judges on its root before
+/// anything is bound: a form is sent on to the Topic's address, and a JSON request reads where it stands
+/// (<see cref="TopicNow"/>).</summary>
 public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Readers readers) : ControllerBase
 {
     /// <summary>The query parameter naming the sequence the window ends before.</summary>
@@ -44,8 +50,22 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Read
     /// <summary>The segment under a Post's address where it is edited, with its inline remove.</summary>
     public const string EditSegment = "edit";
 
-    /// <summary>The most participants the page resolves: the window's authors first, then who removed or else edited its Posts.</summary>
+    /// <summary>The most participants the page resolves: the window's authors first, then who closed it, then who removed or
+    /// else edited its Posts.</summary>
     public const int PeopleLimit = 32;
+
+    /// <summary>The segments under a Topic's address where whoever moderates there closes, reopens, pins and unpins it;
+    /// each is a word no TID is.</summary>
+    public const string CloseSegment = "close";
+    public const string ReopenSegment = "reopen";
+    public const string PinSegment = "pin";
+    public const string UnpinSegment = "unpin";
+
+    private const string Route = "/t/{tangent}/{topic}/";
+
+    /// <summary>Where a Topic stands once a moderator's press has changed it, as a JSON answer says it: its root's id, its
+    /// address, whether it is closed and whether it is pinned.</summary>
+    public sealed record TopicNow(string Id, string Address, bool Closed, bool Pinned);
 
     [HttpGet("/t/{tangent}/{topic}")]
     [HttpHead("/t/{tangent}/{topic}")]
@@ -128,6 +148,10 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Read
         var (publishing, document) = await Connections.Publishing.For(root, reader,
             await Connections.Publishing.Open(space, tangentRow.Id, ct), address, baseAddress, ct);
         var elsewhere = document is null ? null : await Connections.Elsewhere.For(root, readers, ct);
+        // Whoever moderates here closes and pins it from its root's footer; pinning it where another is pinned names that one.
+        var moderates = topicCan.Holds(Bit.Moderate);
+        var pinned = !root.Removed && tangentRow.PinnedId == root.Id;
+        var unpins = moderates && !pinned && tangentRow.PinnedId is not null ? await TopicList.Pinned(tangentRow, ct) : null;
         return Ok(new TopicPage(
             root.Id,
             root.Slug ?? root.Id,
@@ -165,8 +189,97 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Read
             TangentPage.ReadTime(root.Body),
             publishing,
             document,
-            elsewhere));
+            elsewhere,
+            Closure(root, people),
+            pinned,
+            moderates ? ClosingForm(address, root.Closed) : null,
+            moderates ? PinningForm(address, pinned, unpins is null ? null
+                : Render.Sentence.Link(unpins.Title ?? "", tangentAddress + "/" + Uri.EscapeDataString(unpins.Slug ?? unpins.Id))) : null));
     }
+
+    [HttpPost(Route + CloseSegment)]
+    [Tool(Name = "close_topic", Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Needs(Bit.Moderate)]
+    [Description("Close a Topic to replies: every word stays and stays readable, and only its moderators reply there until reopen_topic opens it again. Closing a closed Topic changes nothing. Answers the Topic's address, closed and pinned.")]
+    public async Task<IActionResult> Close([FromRoute, Description(Holds.Tangent)] string tangent, [FromRoute, Description(Holds.Topic)] string topic,
+        CancellationToken ct)
+    {
+        var here = Here.Of(HttpContext);
+        return Moderated(await new CloseTopic(here.Root!.Id, here.PersonId ?? "").Send(), closed => (closed, here.Tangent!));
+    }
+
+    [HttpPost(Route + ReopenSegment)]
+    [Tool(Name = "reopen_topic", Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Needs(Bit.Moderate)]
+    [Description("Reopen a closed Topic, so everyone who may post there replies again. Reopening an open Topic changes nothing. Answers the Topic's address, closed and pinned.")]
+    public async Task<IActionResult> Reopen([FromRoute, Description(Holds.Tangent)] string tangent, [FromRoute, Description(Holds.Topic)] string topic,
+        CancellationToken ct)
+    {
+        var here = Here.Of(HttpContext);
+        return Moderated(await new CloseTopic(here.Root!.Id, here.PersonId ?? "", Close: false).Send(), opened => (opened, here.Tangent!));
+    }
+
+    [HttpPost(Route + PinSegment)]
+    [Tool(Name = "pin_topic", Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Needs(Bit.Moderate)]
+    [Description("Pin a Topic at the top of its Tangent: first on its first page and first on its shelf on the door. A Tangent keeps one pinned, so pinning this one unpins any other, which read_topic's pinning names. Pinning the pinned Topic changes nothing. Answers the Topic's address, closed and pinned.")]
+    public async Task<IActionResult> Pin([FromRoute, Description(Holds.Tangent)] string tangent, [FromRoute, Description(Holds.Topic)] string topic,
+        CancellationToken ct)
+    {
+        var here = Here.Of(HttpContext);
+        return Moderated(await new PinTopic(here.Root!.Id, here.PersonId ?? "").Send(), held => (here.Root!, held));
+    }
+
+    [HttpPost(Route + UnpinSegment)]
+    [Tool(Name = "unpin_topic", Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Needs(Bit.Moderate)]
+    [Description("Unpin a Topic, so it stands among its Tangent's Topics in their usual order again. Unpinning a Topic that is not pinned changes nothing. Answers the Topic's address, closed and pinned.")]
+    public async Task<IActionResult> Unpin([FromRoute, Description(Holds.Tangent)] string tangent, [FromRoute, Description(Holds.Topic)] string topic,
+        CancellationToken ct)
+    {
+        var here = Here.Of(HttpContext);
+        return Moderated(await new PinTopic(here.Root!.Id, here.PersonId ?? "", Pin: false).Send(), held => (here.Root!, held));
+    }
+
+    /// <summary>The form that closes the Topic at <paramref name="topicAddress"/>, or reopens it where it is
+    /// <paramref name="closed"/>: one press, which the other undoes.</summary>
+    public static Form ClosingForm(string topicAddress, bool closed) => Form.Posting(topicAddress + "/" + (closed ? ReopenSegment : CloseSegment)) with
+    {
+        Tool = closed ? "reopen-topic" : "close-topic", Submit = closed ? "Reopen" : "Close to replies", Busy = closed ? "Reopening…" : "Closing…", Quiet = true
+    };
+
+    /// <summary>The form that pins the Topic at <paramref name="topicAddress"/>, or unpins it where it is
+    /// <paramref name="pinned"/>, saying first that it unpins <paramref name="unpins"/>, a link to the Topic pinned now, where
+    /// one is.</summary>
+    public static Form PinningForm(string topicAddress, bool pinned, string? unpins) => Form.Posting(topicAddress + "/" + (pinned ? UnpinSegment : PinSegment)) with
+    {
+        Tool = pinned ? "unpin-topic" : "pin-topic", Submit = pinned ? "Unpin" : "Pin", Busy = pinned ? "Unpinning…" : "Pinning…", Quiet = true,
+        Note = unpins is null ? null : "Pinning this unpins " + unpins + "."
+    };
+
+    /// <summary>A moderator's press answered: a form is sent on to the Topic's address, and a JSON request reads where the
+    /// Topic stands now, its root and its Tangent as <paramref name="now"/> takes them from what the command did; a refusal
+    /// is its problem.</summary>
+    private IActionResult Moderated<T>(Outcome<T> outcome, Func<T, (Post Root, Tangents.Tangent Tangent)> now)
+    {
+        Response.Headers.CacheControl = "no-store";
+        if (outcome is not Outcome<T>.Done { Result: var result })
+            return outcome is Outcome<T>.Refused { Reason: var reason } ? this.Refused(reason) : Answers.NotDone(HttpContext, outcome);
+        var (root, tangent) = now(result);
+        var address = PostWrites.TopicAddress(BaseAddress(), root.TangentId, root.Slug ?? root.Id);
+        if (!PostWrites.WantsJson(Request))
+        {
+            Response.Headers.Location = address;
+            return StatusCode(StatusCodes.Status303SeeOther);
+        }
+
+        return Ok(new TopicNow(root.Id, address, root.Closed, !root.Removed && tangent.PinnedId == root.Id));
+    }
+
+    /// <summary>Who closed the Topic whose root is <paramref name="root"/> and when, from the people the page read; null where
+    /// it is open.</summary>
+    public static TopicPage.Closure? Closure(Post root, IReadOnlyDictionary<string, Render.Person> people)
+        => root.Closed ? new TopicPage.Closure(Person(people, root.ClosedBy ?? root.AuthorId), root.ClosedAt ?? root.CreatedAt) : null;
 
     /// <summary>One Post as the page shows it, with what the reader holds on it from the page's rows, where it is
     /// edited where they may edit it, the form that removes it where they may remove it and it stands, where it is taken on a tangent — the new-topic form <paramref name="takeOn"/>
@@ -221,12 +334,13 @@ public sealed class TopicPageController(KoanWebBaseUrl baseUrl, Connections.Read
     public static Render.Person Person(IReadOnlyDictionary<string, Render.Person> people, string id)
         => people.TryGetValue(id, out var person) ? person : Render.Person.Unknown(id);
 
-    /// <summary>The authors of these Posts, then who removed or else edited any of them, at most <paramref name="limit"/>, in one keyed
-    /// read, by participant Id, each with their profile's address.</summary>
+    /// <summary>The authors of these Posts, then who closed a root's Topic, then who removed or else edited any of them, at most
+    /// <paramref name="limit"/>, in one keyed read, by participant Id, each with their profile's address.</summary>
     public static async Task<IReadOnlyDictionary<string, Render.Person>> People(IReadOnlyList<Post> posts, string baseAddress,
         CancellationToken ct, int limit = PeopleLimit)
     {
         var ids = posts.Select(post => post.AuthorId)
+            .Concat(posts.Where(post => post.Closed).Select(post => post.ClosedBy).OfType<string>())
             .Concat(posts.Where(post => post.Removed).Select(post => post.RemovedBy).OfType<string>())
             .Concat(posts.Select(post => post.EditedBy).OfType<string>())
             .Distinct(StringComparer.Ordinal).Take(limit).ToList();

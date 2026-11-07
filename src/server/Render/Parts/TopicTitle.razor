@@ -1,10 +1,21 @@
 @using System.Globalization
-@* A discussion's head: its title, when it started, and how many replies it has, none in words. *@
+@* A discussion's head: its title, when it started, how many replies it has, none in words, and whether its moderators keep
+   it at the top of its Tangent and whether they closed it. *@
 <h1 class="topic-title">@Model.Title</h1>
 <p class="topic-meta">
     <span>Started <time datetime="@Model.Started.ToUniversalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@Wording.When(Model.Started, Today)</time></span>
     <span aria-hidden="true">·</span>
     <span>@Wording.Count(Model.Replies, "reply", "replies", "No replies yet")</span>
+    @if (Model.Pinned)
+    {
+        <span aria-hidden="true">·</span>
+        <span class="badge is-pinned">Pinned</span>
+    }
+    @if (Model.Closed)
+    {
+        <span aria-hidden="true">·</span>
+        <span class="badge is-closed">Closed</span>
+    }
 </p>
 
 @code {

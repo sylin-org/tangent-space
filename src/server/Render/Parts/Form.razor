@@ -104,6 +104,10 @@ else
                 }
                 else if (!Model.ReadOnly)
                 {
+                    @if (Model.Note is { } before)
+                    {
+                        <Draw Part="@(new Render.Sentence(before))" />
+                    }
                     <button type="submit" class="@(Model.Confirm is not null ? "post-remove-submit" : Model.Main ? "sign-in-submit" : Model.Quiet ? "button" : "tangent-new")" data-busy-label="@Model.Busy">@Model.Submit</button>
                 }
             </form>

@@ -14,8 +14,8 @@ namespace Tangent.Posts;
 /// and the author's mark on the Topic moves onto the reply where it stood on the Post just before
 /// (<see cref="Seen.Wrote"/>). The parent is the root unless a Post of this Topic is named. The Topic exists for
 /// the author, who holds <see cref="Bit.View"/> in its Tangent, or the command answers that no Topic has the Id; the
-/// author holds <see cref="Bit.Post"/> on the Topic, which no one does on a removed one, or is refused with
-/// the gate word. Idempotent by Id: the same Id with the same request answers with the existing Post, before any
+/// author holds <see cref="Bit.Post"/> on the Topic, which no one does on a removed one and only its moderators do on a
+/// closed one, or is refused with the gate word. Idempotent by Id: the same Id with the same request answers with the existing Post, before any
 /// gate, so a replay is safe, whoever the handles it typed name by then; any other Post holding the Id is refused with
 /// <see cref="Post.IdTaken"/>, which says nothing of that Post. The body is judged where the command is built
 /// (<see cref="PostBody"/>), never in its hold.</summary>

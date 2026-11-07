@@ -5,7 +5,8 @@
    than the root, the way to that Post; the body's Markdown as safe HTML, each mention a link reading the participant's name
    now; who other than its author last edited it, and when, and for a Post edited at all a closed disclosure of its earlier
    versions; "Copy link", "Edit" where the reader may, "Take this on a tangent" and the Topics taken from it, Report,
-   opening its form in the page, and Remove where the reader may, confirming in the page what removing it does. A removed
+   opening its form in the page, and Remove where the reader may, confirming in the page what removing it does; on a root,
+   for whoever moderates its Topic, the presses that close or reopen it and pin or unpin it. A removed
    Post is a tombstone in the same place. The root reads larger; an article's root is its body alone, in the article's type.
    In the markup contract it is an article, its meta line its header and its actions its footer, classed by what the record
    holds. As a row, in a Topic's rail: its author's mark and name, when, and "New". *@
@@ -98,6 +99,15 @@ else
                 </details>
             }
             <Draw Part="@Model.Remove" />
+            @if (Model.Moderating.Count > 0)
+            {
+                <div class="post-moderating">
+                    @foreach (var form in Model.Moderating)
+                    {
+                        <Draw Part="@form" />
+                    }
+                </div>
+            }
         </footer>
     </article>
 }

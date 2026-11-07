@@ -10,8 +10,9 @@ public sealed record TopicRail(Posts.TopicPage.InTangent Tangent, bool Article, 
 public sealed record Piece(ArticleHead Head, Posts.TopicPage.Origin? From, Posts.TopicPage.Post Root, Connections.Publishing? Publishing,
     Connections.Elsewhere.Line? Elsewhere) : IPart;
 
-/// <summary>A discussion's head: its title, when it started and how many replies it has.</summary>
-public sealed record TopicTitle(string Title, DateTimeOffset Started, int Replies) : IPart;
+/// <summary>A discussion's head: its title, when it started, how many replies it has, and whether its moderators keep it
+/// at the top of its Tangent and whether they closed it.</summary>
+public sealed record TopicTitle(string Title, DateTimeOffset Started, int Replies, bool Closed = false, bool Pinned = false) : IPart;
 
 /// <summary>How an article opens: its cover, the proprietor's article header where they wrote one, its title, who wrote it,
 /// as the account they wrote it as, when, the minutes it takes to read, and its outline, folded where the rail folds.</summary>
@@ -35,6 +36,7 @@ public sealed record TopicReplies(IReadOnlyList<Posts.TopicPage.Post> Posts, int
 
 /// <summary>Where a reader replies under a Topic's replies: the reply form for whoever may reply, with whose words these are,
 /// the Post it answers where the address named someone else's reply, the Topic's address and where its pictures and
-/// suggestions are; otherwise why they may not, and where a visitor signs in.</summary>
+/// suggestions are; otherwise why they may not, and where a visitor signs in. Where its moderators closed the Topic, who
+/// closed it and when, above the form or in place of it.</summary>
 public sealed record ReplyBox(Form? Reply, string? Participant, string? Handle, Posts.TopicPage.Post? Parent, string TopicId, string Address,
-    string Door, string Bring, string Suggest, string? Gate, string? SignIn) : IPart;
+    string Door, string Bring, string Suggest, string? Gate, string? SignIn, Posts.TopicPage.Closure? Closed = null) : IPart;

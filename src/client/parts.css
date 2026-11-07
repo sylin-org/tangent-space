@@ -713,6 +713,19 @@
     max-width: 560px;
   }
 
+  /* Close and pin: a root's presses for whoever moderates its Topic, after its other actions. */
+  .post-moderating {
+    margin: 8px 0 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 8px;
+  }
+
+  .post-moderating .post-form-note {
+    margin: 0 0 6px;
+  }
+
   /* Remove: the same disclosure among a Post's actions, its confirm opening under it. */
   .post-footer > .post-remove {
     margin: 2px 0 0 -8px;
@@ -2370,20 +2383,27 @@
 
 /* ReplyBox: where a reader replies in a Topic, under its replies. */
 @layer tangent {
-  .topic-closed {
+  .reply-gate {
     margin: 20px 0 0;
     color: var(--ts-text-3);
     font: var(--ts-type-ui);
   }
 
-  .topic-closed {
+  .reply-gate {
     padding-top: 16px;
     border-top: 1px solid var(--ts-line);
   }
 
-  .topic-closed a {
+  .reply-gate a {
     color: var(--ts-text);
     font-weight: 600;
+  }
+
+  /* Who closed the Topic, above the form of whoever still replies in it. */
+  .topic-reply > .reply-gate {
+    margin-top: 10px;
+    padding-top: 0;
+    border-top: 0;
   }
 
   .topic-reply {

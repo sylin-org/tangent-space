@@ -11,8 +11,9 @@ namespace Tangent.Tangents;
 /// one month, a range of <c>ix_post_started</c>, or by one author, a range of <c>ix_post_topics_by</c>, which holds
 /// <c>AuthorId</c> before <c>LastActivityAt</c> (<see cref="Narrowing"/>). A page holds at most <see cref="PageSize"/> Topics and continues from a <see cref="Cursor"/>,
 /// which names the last Topic a page held by its place in that order rather than by a position, so a Topic present for the
-/// whole read is on exactly one page, narrowed or not. Nothing is counted. Reads only and takes no lock; whom a Topic may
-/// be shown to is the caller's to decide.</summary>
+/// whole read is on exactly one page, narrowed or not. The whole list leads its first page with the Topic its moderators
+/// pinned (<see cref="Pinned"/>), which every page of it leaves out of its own rows. Nothing is counted. Reads only and takes
+/// no lock; whom a Topic may be shown to is the caller's to decide.</summary>
 public static class TopicList
 {
     /// <summary>The most Topics one page holds.</summary>
@@ -76,20 +77,28 @@ public static class TopicList
     }
 
     /// <summary>The page of <paramref name="tangentId"/>'s Topics after <paramref name="after"/>, or the first page,
-    /// narrowed as <paramref name="to"/> says: one read, limited to the page and one more, which says whether a next page
-    /// exists.</summary>
-    public static async Task<Page> Read(string tangentId, Cursor? after, CancellationToken ct, int size = PageSize, Narrowing? to = null)
+    /// narrowed as <paramref name="to"/> says, without the Topic whose root is <paramref name="leaving"/>, where one is named:
+    /// one read, limited to the page, the one it leaves and one more, which says whether a next page exists.</summary>
+    public static async Task<Page> Read(string tangentId, Cursor? after, CancellationToken ct, int size = PageSize, Narrowing? to = null,
+        string? leaving = null)
     {
         if (size is < 1 or > PageSize) throw new ArgumentOutOfRangeException(nameof(size));
         var terms = Narrow(to ?? Narrowing.None);
         if (after is not null) terms.Add(Seek(after));
-        var query = new QueryDefinition { Filter = terms.Count == 0 ? null : Filter.All([.. terms]), Page = 1, PageSize = size + 1 }
+        var query = new QueryDefinition { Filter = terms.Count == 0 ? null : Filter.All([.. terms]), Page = 1, PageSize = size + (leaving is null ? 1 : 2) }
             .WithSort<Post>(sort => sort.OrderByDescending(post => post.LastActivityAt).ThenByDescending(post => post.Id));
-        var topics = await Post.Query(post => post.TangentId == tangentId && post.ParentId == null, query, ct);
+        var topics = (await Post.Query(post => post.TangentId == tangentId && post.ParentId == null, query, ct))
+            .Where(topic => topic.Id != leaving).ToList();
         return topics.Count > size
             ? new Page([.. topics.Take(size)], Cursor.After(topics[size - 1]))
             : new Page(topics, null);
     }
+
+    /// <summary>The Topic <paramref name="tangent"/>'s moderators pinned, while its root stands there: no read where none is
+    /// pinned, otherwise one keyed read; null where the pin names a root removed, gone from the Tangent or deleted, which
+    /// nothing writes away.</summary>
+    public static async Task<Post?> Pinned(Tangent tangent, CancellationToken ct)
+        => tangent.PinnedId is { } id && await Post.Get(id, ct) is { ParentId: null, Removed: false } root && root.TangentId == tangent.Id ? root : null;
 
     /// <summary>The terms a narrowing adds: a start within the month, which names both values of <c>Removed</c> so the
     /// month is one range of <c>ix_post_started</c> for each, and the author.</summary>

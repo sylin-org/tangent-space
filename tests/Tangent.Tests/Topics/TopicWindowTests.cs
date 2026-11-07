@@ -356,7 +356,7 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
         var removed = await ReplyCans();
         Assert.All(removed, can => Assert.DoesNotContain("Post", can));
         Assert.Equal(["View", "Topic", "EditOwn", "RemoveOwn"], removed[1]);
-        Assert.All([leos, readers], reply => Assert.Equal(Capabilities.Closed.Word, Gate(reply, root)));
+        Assert.All([leos, readers], reply => Assert.Equal(Capabilities.RootRemoved.Word, Gate(reply, root)));
 
         root.Removed = false;
         Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(root).Send(Cancellation));

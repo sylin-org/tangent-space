@@ -275,6 +275,25 @@ public sealed partial class ReportTests
     }
 
     [Fact]
+    public async Task A_report_the_moderators_close_is_settled_and_the_next_report_of_that_post_starts_a_topic_of_its_own()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Reporting(tangentSpace);
+        var topic = await Started(Bea, "Lanterns at dusk", "Who lights theirs first?");
+        var reply = await Replied(topic, Bea, "Whoever is slowest, obviously.");
+        var first = await Reported(Ada, reply, "This mocks someone in the workshop.");
+
+        Assert.IsType<Outcome<Post>.Done>(await new CloseTopic(first.Id, Mo).Send(Cancellation));
+        var next = await Reported(Ada, reply, "They did it again.");
+
+        Assert.Equal(((string?)null, reply.Id), (next.ParentId, next.OriginId));
+        Assert.StartsWith("They did it again.", next.Body);
+        Assert.NotEqual(first.Id, next.TopicId);
+        var settled = await Post.Get(first.Id, Cancellation);
+        Assert.Equal((true, 0), (settled?.Closed, settled?.ReplyCount));
+    }
+
+    [Fact]
     public async Task A_report_of_a_post_the_moderators_may_not_view_carries_nothing_of_its_topic_and_shows_its_origin_as_unseen()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);

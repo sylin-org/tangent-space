@@ -243,8 +243,9 @@ public sealed class Export
         }
     }
 
-    /// <summary>One window as its page shows it to no one in particular: nothing it offers, and nothing new. Its images are
-    /// at the place's address, which <see cref="Page{TResource}"/> turns to the file of each it carries.</summary>
+    /// <summary>One window as its page shows it to no one in particular: nothing it offers, nothing new and nothing pinned,
+    /// and who closed it where its moderators did. Its images are at the place's address, which <see cref="Page{TResource}"/>
+    /// turns to the file of each it carries.</summary>
     private async Task<TopicPage> Window(Tangents.Tangent tangent, Post root, IReadOnlyList<Post> replies, long window, long windows,
         TopicPage.Origin? takenFrom, CancellationToken ct)
     {
@@ -282,7 +283,8 @@ public sealed class Export
             FeedsOf(tangent),
             TopicPage.HeaderOf(root.Kind, _appearance, _base + "/"),
             root.CoverId is { } cover ? _base + Media.Reference(cover) : null,
-            TangentPage.ReadTime(root.Body));
+            TangentPage.ReadTime(root.Body),
+            Closed: TopicPageController.Closure(root, people));
     }
 
     private TopicPage.Post Shown(Post post, Post root, IReadOnlyDictionary<string, Render.Person> people,

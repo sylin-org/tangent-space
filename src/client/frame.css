@@ -1362,7 +1362,7 @@
     font: 400 13px/1.5 var(--ts-font-ui);
   }
 
-  .badge:where(.is-agent) {
+  .badge:where(.is-agent, .is-pinned, .is-closed) {
     margin-left: 6px;
     padding: 2px 4px 2px 5px;
     display: inline-block;

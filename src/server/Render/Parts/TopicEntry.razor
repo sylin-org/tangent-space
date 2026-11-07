@@ -4,8 +4,8 @@
    its recent authors, its replies with how many are new, and when it last gained a Post and from whom. As an article: a
    card with its cover where it has one, its date and read time, opening, author and replies; leading a list, drawn large
    with its cover, or the Tangent's own tile and name on the image band where it has none, and its latest-reply strip.
-   A Topic whose root is removed says who removed it and when in place of its opening, and an article its read time.
-   Zeros are said in words. *@
+   A Topic whose root is removed says who removed it and when in place of its opening, and an article its read time. A
+   pinned Topic and a closed one say so beside its title, or on a card beside its date. Zeros are said in words. *@
 @if (As is Shape.Card or Shape.Lead)
 {
     <article class="@ArticleClass">
@@ -36,6 +36,7 @@
                     <span aria-hidden="true">·</span>
                     <span>@Model.ReadMinutes.ToString(CultureInfo.InvariantCulture) min read</span>
                 }
+                @Marked
             </p>
             <h3 class="article-card-title"><a href="@Model.Address">@Model.Title</a></h3>
             @if (Model.Removed is { } removed)
@@ -78,7 +79,7 @@ else
             }
         </span>
         <span class="topic-row-body">
-            <span class="topic-row-title">@Model.Title</span>
+            <span class="topic-row-title">@Model.Title@Marked</span>
             <span class="topic-row-opening"><Draw Part="@(Model.Author with { Profile = null })" As="Shape.Name" />@if (Model.Removed is { } removed)
                 {
                     <span aria-hidden="true"> · </span><span class="topic-row-removed">@RemovedBy(removed)</span>
@@ -155,11 +156,21 @@ else
 
     private string Replies => Wording.Count(Model.ReplyCount, "reply", "replies", "No replies yet");
 
+    /// <summary>Whether its moderators keep the Topic at the top and whether they closed it, each a badge.</summary>
+    private RenderFragment Marked => @<text>@if (Model.Pinned)
+        {
+            @(" ")<span class="badge is-pinned">Pinned</span>
+        }@if (Model.Closed)
+        {
+            @(" ")<span class="badge is-closed">Closed</span>
+        }</text>;
+
     private string ArticleClass => (Lead ? "article-card article-lead" : Model.Cover is null ? "article-card" : "article-card article-card-covered") + " card topic" + States;
 
-    /// <summary>What the Topic's record holds of it, as the contract's states: removed, new to the reader, and started by the
-    /// reader or by an agent.</summary>
-    private string States => (Model.Removed is not null ? " is-removed" : "") + (Model.New ? " is-new" : "")
+    /// <summary>What the Topic's record holds of it, as the contract's states: removed, closed, pinned, new to the reader, and
+    /// started by the reader or by an agent.</summary>
+    private string States => (Model.Removed is not null ? " is-removed" : "") + (Model.Closed ? " is-closed" : "") + (Model.Pinned ? " is-pinned" : "")
+        + (Model.New ? " is-new" : "")
         + (Reader is not null && Model.Author.Id == Reader ? " by-you" : "") + (Model.Author.Agent ? " by-agent" : "");
 
     /// <summary>How many of the Topic's replies are new to the reader; absent where they never read the Topic, which is new
