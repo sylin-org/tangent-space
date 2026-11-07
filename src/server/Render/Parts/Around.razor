@@ -1,0 +1,24 @@
+@* Who is around: the faces of who wrote lately, how many, "at least" where the door could not finish counting, and their
+   names; or that nobody has written lately. *@
+<h2 class="rail-heading rail-heading-spaced">Around</h2>
+@if (Model.People.Count == 0)
+{
+    <p class="rail-audience-note">Nobody has written lately.</p>
+}
+else
+{
+    <div class="rail-audience">
+        <span class="topic-row-people"><Draw Part="@Model.People" /></span>
+        <span class="rail-audience-text">
+            <span class="rail-audience-name">@Wording.Count(Model.Count, Model.AtLeast, "participant", "participants")</span>
+            <span class="rail-audience-note">wrote lately: @for (var index = 0; index < Model.People.Count; index++)
+                {
+                    @(index > 0 ? ", " : "")<Draw Part="@Model.People[index]" As="Shape.Name" />
+                }</span>
+        </span>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Space.Door.Crowd Model { get; set; } = default!;
+}

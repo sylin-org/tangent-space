@@ -1,0 +1,21 @@
+@* A list of Tangents under its heading, each a Tangent's row, then where all of them are and where a new one is created,
+   where the list offers them. *@
+<h2 class="rail-heading">@Model.Heading</h2>
+<ul class="rail-views list">
+    @foreach (var tangent in Model.Tangents)
+    {
+        <li><Draw Part="@tangent" /></li>
+    }
+</ul>
+@if (Model.All is { } all)
+{
+    <a class="rail-new" href="@all">All Tangents</a>
+}
+@if (Model.New is { } created)
+{
+    <a class="rail-new" href="@created">New Tangent</a>
+}
+
+@code {
+    [Parameter, EditorRequired] public Render.TangentList Model { get; set; } = default!;
+}

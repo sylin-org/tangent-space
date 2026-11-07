@@ -35,16 +35,12 @@ public sealed class NewMediaController(KoanWebBaseUrl baseUrl) : ControllerBase
     [RequestSizeLimit(RequestLimit)]
     [RequestFormLimits(MultipartBodyLengthLimit = RequestLimit, ValueLengthLimit = RequestLimit)]
     [Tool(Name = "bring_in", Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Bring an image into a Tangent, before the Post that shows it. Follow with reply, start_topic or edit: the answer's reference goes in the body, and its id in an article's cover. The same image brought again is the same one.")]
+    [Needs(Bit.Topic, AnyOf = Bit.Post)]
+    [Description("Bring an image into a Tangent, before the Post that shows it. Then call reply, start_topic or edit: the answer's reference goes in the body, and its id in an article's cover. The same image brought again is the same one.")]
     public async Task<IActionResult> Bring([FromRoute, Description(Holds.Tangent)] string tangent, BringInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
-        var personId = PostWrites.PersonId(User);
-        var (found, refused) = await Here.Find(personId, tangent, null, null, ct);
-        if (refused is not null) return this.Refused(refused);
-        var here = found.Capabilities;
-        if (personId is null || (!here.Holds(Bit.Topic) && !here.Holds(Bit.Post))) return Answers.Refused(HttpContext, here.Gate(Bit.Topic) ?? Capabilities.SignIn);
-
+        var personId = Here.Of(HttpContext).PersonId!;
         if (await Sent(input, ct) is not { } sent) return NotKept(NoFile);
         Media media;
         try

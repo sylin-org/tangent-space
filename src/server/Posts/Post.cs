@@ -1,6 +1,7 @@
 using System.Text;
 using Koan.Data.Abstractions.Annotations;
 using Koan.Data.Core.Commands;
+using Koan.Data.Core.Lifecycle;
 using Koan.Data.Core.Model;
 
 namespace Tangent.Posts;
@@ -43,10 +44,11 @@ public sealed class Post : Entity<Post>
     public static readonly Reason NeedsTangent = Reason.Invalid("A Topic starts in a Tangent.");
     public static readonly Reason NeedsAuthor = Reason.Invalid("A Post has an author.");
     public static readonly Reason NotARoot = Reason.Invalid("A reply goes to a Topic.");
-    public static readonly Reason TopicRemoved = Access.Capabilities.Removed;
+    public static readonly Reason TopicRemoved = Access.Capabilities.RootRemoved;
     public static readonly Reason NoTitleOnReply = Reason.Invalid("A reply has no title; a Topic's title is on its root.");
     public static readonly Reason PostRemoved = Access.Capabilities.Removed;
     public static readonly Reason NeedsRemover = Reason.Invalid("A removal names who removes.");
+    public static readonly Reason NotRemoved = Reason.Invalid("Only a removed post comes back.");
 
     /// <summary>The one answer for an Id a Post already holds that is not this request's, word <c>id-taken</c>: a retry
     /// learns its Post was written, and nothing says where, whose or what that Post is.</summary>
@@ -56,6 +58,8 @@ public sealed class Post : Entity<Post>
     [Index(Name = "ix_post_topics", Order = 0)]
     [Index(Name = "ix_post_slugs", Order = 0)]
     [Index(Name = "ix_post_started", Order = 0)]
+    [Index(Name = "ix_post_created", Order = 0)]
+    [Index(Name = "ix_post_topics_by", Order = 0)]
     public string TangentId { get; set; } = "";
 
     /// <summary>The root of the Topic; the root's own Id on a root.</summary>
@@ -68,6 +72,8 @@ public sealed class Post : Entity<Post>
     /// <summary>The Post this one replies to; null on a root.</summary>
     [Index(Name = "ix_post_topics", Order = 1)]
     [Index(Name = "ix_post_started", Order = 1)]
+    [Index(Name = "ix_post_created", Order = 1)]
+    [Index(Name = "ix_post_topics_by", Order = 1)]
     [Index(Name = "ix_post_articles", Order = 1)]
     public string? ParentId { get; set; }
 
@@ -76,7 +82,8 @@ public sealed class Post : Entity<Post>
     [Index(Name = "ix_post_origins", Order = 0)]
     public string? OriginId { get; set; }
 
-    /// <summary>The Topic's URL name, from its title at creation, unique in its Tangent and never renamed. Root only.</summary>
+    /// <summary>The Topic's URL name, from its title at creation, unique in its Tangent and never renamed, except that a Topic
+    /// moved into a Tangent that holds it takes a numbered suffix there (<see cref="MoveTopic"/>). Root only.</summary>
     [Index(Name = "ix_post_slugs", Order = 1)]
     public string? Slug { get; set; }
 
@@ -120,18 +127,24 @@ public sealed class Post : Entity<Post>
     public long Sequence { get; set; }
 
     /// <summary>Who wrote it. In <c>ix_post_authors</c> before the time it was written, so a participant's Posts,
-    /// newest first, are one range of it.</summary>
+    /// newest first, are one range of it, and in <c>ix_post_topics_by</c> before the time a Topic started, so the Topics
+    /// one author started in a Tangent, newest first, are one range.</summary>
     [Index(Name = "ix_post_authors", Order = 0)]
+    [Index(Name = "ix_post_topics_by", Order = 2)]
     public string AuthorId { get; set; } = "";
 
     /// <summary>The DID of the Bluesky account its author was bound to when they wrote it, which an edit never changes:
     /// the account the Post links out to and goes out under.</summary>
     public string AuthorDid { get; set; } = "";
 
+    /// <summary>When it was written; on a root, when its Topic started. In <c>ix_post_created</c> after the Tangent and
+    /// the parent, so a Tangent's Topics by when each started, newest first, removed ones among them, are one range.</summary>
     [Index(Name = "ix_post_origins", Order = 1)]
     [Index(Name = "ix_post_authors", Order = 1)]
     [Index(Name = "ix_post_started", Order = 3)]
     [Index(Name = "ix_post_articles", Order = 3)]
+    [Index(Name = "ix_post_created", Order = 2)]
+    [Index(Name = "ix_post_topics_by", Order = 3)]
     public DateTimeOffset CreatedAt { get; set; }
 
     /// <summary>The last sequence taken in the Topic. Root only.</summary>
@@ -151,10 +164,8 @@ public sealed class Post : Entity<Post>
     [Index(Name = "ix_post_topics", Order = 2)]
     public DateTimeOffset LastActivityAt { get; set; }
 
-    /// <summary>The Topic's latest reply and its author; null until the first reply. Root only.</summary>
+    /// <summary>The Topic's latest reply; null until the first reply. Root only.</summary>
     public string? LatestReplyId { get; set; }
-
-    public string? LatestReplyAuthorId { get; set; }
 
     /// <summary>The Topic's most recent authors, newest first, each once, at most <see cref="RecentAuthorLimit"/>.
     /// Root only.</summary>
@@ -170,6 +181,15 @@ public sealed class Post : Entity<Post>
 
     public DateTimeOffset? RemovedAt { get; set; }
 
+    /// <summary>Whether the Topic is closed: it takes no new reply but from whoever holds <see cref="Access.Bit.Moderate"/>
+    /// in its Tangent (<see cref="Access.Capabilities.Closed"/>), and who closed it and when. Root only; a removal leaves it
+    /// as it is.</summary>
+    public bool Closed { get; set; }
+
+    public string? ClosedBy { get; set; }
+
+    public DateTimeOffset? ClosedAt { get; set; }
+
     /// <summary>Who other than the author last edited the Post, while the words are theirs; null otherwise. An edit by
     /// the author clears it, and so does a removal.</summary>
     public string? EditedBy { get; set; }
@@ -179,39 +199,32 @@ public sealed class Post : Entity<Post>
     /// <summary>When the Post's words last changed, by anyone; null until its first edit. A feed says it.</summary>
     public DateTimeOffset? ChangedAt { get; set; }
 
-    /// <summary>A Topic's root, or a refusal: the Id is a TID, the title and body are within their limits, and the Tangent
-    /// and author are named. The slug is the caller's, derived from the title and already made unique in the Tangent. A
-    /// Topic taken on a tangent names its <paramref name="originId"/>, already known to be a Post its author may view, and
-    /// a body of its author's own is their choice: one of nothing but white space is none, and the root holds an empty
-    /// body (<see cref="RootBody"/>).</summary>
-    public static Post Root(string id, string tangentId, string title, string slug, PostKind kind, PostBody body, string authorId, DateTimeOffset at,
-        string? originId = null)
+    /// <summary>Fills this row, which holds its Id, its title and, for a Topic taken on a tangent, its <see cref="OriginId"/>,
+    /// as the root of a Topic that starts in <paramref name="tangent"/>, of the Tangent's kind, or a refusal: the Id is a TID,
+    /// the title holds a visible character and the body passes its check. The slug is the caller's, derived from the title
+    /// and already made unique in the Tangent. A Topic taken on a tangent names an origin already known to be a Post its
+    /// author may view, and a body of its author's own is their choice: one of nothing but white space is none, and the root
+    /// holds an empty body (<see cref="RootBody"/>). What every row holds is judged as it is saved (<see cref="Holds"/>).</summary>
+    public void StartIn(Tangents.Tangent tangent, string slug, PostBody body, string authorId, DateTimeOffset at)
     {
-        if (!Tid.IsValid(id)) throw new Refusal(NeedsTid);
-        if (string.IsNullOrWhiteSpace(tangentId)) throw new Refusal(NeedsTangent);
-        if (string.IsNullOrWhiteSpace(authorId)) throw new Refusal(NeedsAuthor);
-        CheckTitle(title);
-        var text = RootBody(body, originId);
-        if (originId is null || text.Length > 0) CheckBody(body);
-        return new Post
-        {
-            Id = id,
-            TangentId = tangentId,
-            TopicId = id,
-            OriginId = originId,
-            Slug = slug,
-            Kind = kind,
-            Title = title.Trim(),
-            Body = text,
-            MentionedIds = text.Length > 0 ? [.. body.Mentioned] : [],
-            MentionedRoles = text.Length > 0 ? [.. body.Roles] : [],
-            MediaIds = text.Length > 0 ? [.. body.Media] : [],
-            SentHash = body.SentHash,
-            AuthorId = authorId,
-            CreatedAt = at,
-            LastActivityAt = at,
-            RecentAuthorIds = [authorId]
-        };
+        if (!Tid.IsValid(Id)) throw new Refusal(NeedsTid);
+        if (string.IsNullOrWhiteSpace(Title)) throw new Refusal(NeedsTitle);
+        var text = RootBody(body, OriginId);
+        if (OriginId is null || text.Length > 0) CheckBody(body);
+        TangentId = tangent.Id;
+        TopicId = Id;
+        Slug = slug;
+        Kind = tangent.DefaultKind;
+        Title = Title.Trim();
+        Body = text;
+        MentionedIds = text.Length > 0 ? [.. body.Mentioned] : [];
+        MentionedRoles = text.Length > 0 ? [.. body.Roles] : [];
+        MediaIds = text.Length > 0 ? [.. body.Media] : [];
+        SentHash = body.SentHash;
+        AuthorId = authorId;
+        CreatedAt = at;
+        LastActivityAt = at;
+        RecentAuthorIds = [authorId];
     }
 
     /// <summary>The body a root starts with: the body sent, except that a Topic taken on a tangent from
@@ -219,38 +232,32 @@ public sealed class Post : Entity<Post>
     public static string RootBody(PostBody body, string? originId)
         => originId is not null && string.IsNullOrWhiteSpace(body.Text) ? "" : body.Text;
 
-    /// <summary>A reply to this root, or a refusal: this Post is a root that is not removed, the Id is a TID,
-    /// the body is within its limits and the author is named. The parent is the caller's, already known to be a Post of
-    /// this Topic. The reply takes the Topic's next sequence, and the root's counters, last activity, latest reply and
-    /// recent authors move with it.</summary>
-    public Post Reply(string id, PostBody body, string authorId, string parentId, DateTimeOffset at)
+    /// <summary>Fills this row, which holds its Id and the Post it answers (<see cref="ParentId"/>, the root where it names
+    /// none, already known to be a Post of this Topic), as a reply in the Topic of <paramref name="root"/>, or a refusal:
+    /// <paramref name="root"/> is a root that is not removed, the Id is a TID and the body passes its check. The reply takes
+    /// the Topic's next sequence, and the root's counters, last activity, latest reply and recent authors move with it.</summary>
+    public void ReplyTo(Post root, PostBody body, string authorId, DateTimeOffset at)
     {
-        if (ParentId is not null) throw new Refusal(NotARoot);
-        if (Removed) throw new Refusal(TopicRemoved);
-        if (!Tid.IsValid(id)) throw new Refusal(NeedsTid);
-        if (string.IsNullOrWhiteSpace(authorId)) throw new Refusal(NeedsAuthor);
+        if (root.ParentId is not null) throw new Refusal(NotARoot);
+        if (root.Removed) throw new Refusal(TopicRemoved);
+        if (!Tid.IsValid(Id)) throw new Refusal(NeedsTid);
         CheckBody(body);
-        LastSequence = checked(LastSequence + 1);
-        ReplyCount = checked(ReplyCount + 1);
-        LastActivityAt = at;
-        LatestReplyId = id;
-        LatestReplyAuthorId = authorId;
-        RecentAuthorIds = [authorId, .. RecentAuthorIds.Where(author => author != authorId).Take(RecentAuthorLimit - 1)];
-        return new Post
-        {
-            Id = id,
-            TangentId = TangentId,
-            TopicId = Id,
-            ParentId = parentId,
-            Body = body.Text,
-            MentionedIds = [.. body.Mentioned],
-            MentionedRoles = [.. body.Roles],
-            MediaIds = [.. body.Media],
-            SentHash = body.SentHash,
-            Sequence = LastSequence,
-            AuthorId = authorId,
-            CreatedAt = at
-        };
+        root.LastSequence = checked(root.LastSequence + 1);
+        root.ReplyCount = checked(root.ReplyCount + 1);
+        root.LastActivityAt = at;
+        root.LatestReplyId = Id;
+        root.RecentAuthorIds = [authorId, .. root.RecentAuthorIds.Where(author => author != authorId).Take(RecentAuthorLimit - 1)];
+        TangentId = root.TangentId;
+        TopicId = root.Id;
+        ParentId ??= root.Id;
+        Body = body.Text;
+        MentionedIds = [.. body.Mentioned];
+        MentionedRoles = [.. body.Roles];
+        MediaIds = [.. body.Media];
+        SentHash = body.SentHash;
+        Sequence = root.LastSequence;
+        AuthorId = authorId;
+        CreatedAt = at;
     }
 
     /// <summary>Records that the log took this Post's arrival at <paramref name="logSeq"/>, on it and on its Topic's
@@ -278,31 +285,31 @@ public sealed class Post : Entity<Post>
     /// <summary>Every piece of <see cref="Media"/> the Post uses now: its cover and the images of its body.</summary>
     public IReadOnlyList<string> UsedMedia() => CoverId is { } cover ? [.. MediaIds.Prepend(cover).Distinct(StringComparer.Ordinal)] : [.. MediaIds];
 
-    /// <summary>Gives an article <paramref name="cover"/>, or takes its cover away where that is empty, or a refusal: only
-    /// an article's root has one.</summary>
-    public void Cover(string cover)
-    {
-        if (cover.Length > 0 && (ParentId is not null || Kind != PostKind.Article)) throw new Refusal(CoverOnArticle);
-        CoverId = cover.Length > 0 ? cover : null;
-    }
+    /// <summary>Gives the Post <paramref name="cover"/>, or takes its cover away where that is empty; only an article's root
+    /// is saved with one (<see cref="Holds"/>).</summary>
+    public void Cover(string cover) => CoverId = cover.Length > 0 ? cover : null;
 
     private bool Titled(string? title) => ParentId is null ? title is null || Title == title.Trim() : string.IsNullOrEmpty(title);
 
-    /// <summary>Changes the body, and a root's title when one is sent, and raises <see cref="Version"/>, or a refusal: the
-    /// Post is not removed, the body and title are within their limits, and a reply is sent no title. A root taken on a
-    /// tangent may keep no body of its author's own (<see cref="RootBody"/>); every other Post needs one. An edit by
-    /// anyone but the author names them and when (<see cref="EditedBy"/>), and the author's own leaves the words theirs
-    /// again. The pre-edit snapshot is the caller's, taken before this.</summary>
+    /// <summary>Changes the body, and the title when one is sent, and raises <see cref="Version"/>, or a refusal: the Post is
+    /// not removed, the body passes its check and a root's title holds a visible character; a title sent to a reply is
+    /// refused as the row is saved, with every rule every row holds (<see cref="Holds"/>). A root taken on a tangent may keep
+    /// no body of its author's own (<see cref="RootBody"/>); every other Post needs one. An edit by anyone but the author
+    /// names them and when (<see cref="EditedBy"/>), and the author's own leaves the words theirs again. The pre-edit snapshot
+    /// is the caller's, taken before this.</summary>
     public void Edit(PostBody body, string? title, string editorId, DateTimeOffset at)
     {
         if (Removed) throw new Refusal(PostRemoved);
         var text = ParentId is null ? RootBody(body, OriginId) : body.Text;
         if (OriginId is null || ParentId is not null || text.Length > 0) CheckBody(body);
-        if (ParentId is not null && !string.IsNullOrEmpty(title)) throw new Refusal(NoTitleOnReply);
         if (ParentId is null && title is not null)
         {
-            CheckTitle(title);
+            if (string.IsNullOrWhiteSpace(title)) throw new Refusal(NeedsTitle);
             Title = title.Trim();
+        }
+        else if (ParentId is not null && !string.IsNullOrEmpty(title))
+        {
+            Title = title;
         }
 
         Body = text;
@@ -320,7 +327,7 @@ public sealed class Post : Entity<Post>
     /// <summary>Makes this Post a tombstone, or a refusal when it already is one or no one is named: it is removed, by
     /// whom and when, and its body, and who last edited it, are cleared from the row. It keeps its place, its author and
     /// its version, and a root keeps its title, slug and counters, so a Topic whose root is removed keeps its replies. The
-    /// snapshot that holds the body is the caller's, taken before this.</summary>
+    /// snapshot that holds the body is the caller's, taken before this, and <see cref="Back"/> reads it back.</summary>
     public void Remove(string removedBy, DateTimeOffset at)
     {
         if (Removed) throw new Refusal(PostRemoved);
@@ -338,22 +345,68 @@ public sealed class Post : Entity<Post>
         EditedAt = null;
     }
 
-    /// <summary>Refuses a body that is empty, holds a NUL, was sent with more than <see cref="BodyLimit"/> bytes or would
-    /// be kept with more than <see cref="KeptBodyLimit"/>, or that its own judgement refused
-    /// (<see cref="PostBody.Refusal"/>): too intricate to render quickly, rendering too large or too deep, or mentioning
-    /// too many identities.</summary>
+    /// <summary>Brings a tombstone's words back from <paramref name="kept"/>, its snapshot at its version, or a refusal where it
+    /// is not removed: no longer removed, it takes its body, mentions, images, cover and who last edited it from the snapshot,
+    /// and keeps its version and when its words last changed, since the snapshot is that version.</summary>
+    public void Back(Post kept)
+    {
+        if (!Removed) throw new Refusal(NotRemoved);
+        (Removed, RemovedBy, RemovedAt) = (false, null, null);
+        Body = kept.Body;
+        MentionedIds = [.. kept.MentionedIds];
+        MentionedRoles = [.. kept.MentionedRoles];
+        MediaIds = [.. kept.MediaIds];
+        CoverId = kept.CoverId;
+        SentHash = kept.SentHash;
+        EditedBy = kept.EditedBy;
+        EditedAt = kept.EditedAt;
+    }
+
+    /// <summary>Closes this Topic to replies, by whom and when, or a refusal: this Post is a root that is not removed.
+    /// Answers whether anything changed: a closed Topic stays as it was closed. Every word stays, and its version with them.</summary>
+    public bool Close(string closedBy, DateTimeOffset at)
+    {
+        if (ParentId is not null) throw new Refusal(Posts.Reply.NoTopic);
+        if (Removed) throw new Refusal(PostRemoved);
+        if (Closed) return false;
+        (Closed, ClosedBy, ClosedAt) = (true, closedBy, at);
+        return true;
+    }
+
+    /// <summary>Opens this Topic to replies again, or a refusal: this Post is a root. Answers whether anything changed.</summary>
+    public bool Reopen()
+    {
+        if (ParentId is not null) throw new Refusal(Posts.Reply.NoTopic);
+        if (!Closed) return false;
+        (Closed, ClosedBy, ClosedAt) = (false, null, null);
+        return true;
+    }
+
+    /// <summary>Refuses a body that is empty, was sent with more than <see cref="BodyLimit"/> bytes, or that its own
+    /// judgement refused (<see cref="PostBody.Refusal"/>): too intricate to render quickly, rendering too large or too deep,
+    /// or mentioning too many identities. The body as the row keeps it is judged with the row (<see cref="Holds"/>).</summary>
     public static void CheckBody(PostBody body)
     {
         if (string.IsNullOrWhiteSpace(body.Text)) throw new Refusal(NeedsBody);
-        if (body.Text.Contains('\0')) throw new Refusal(BodyHasNul);
-        if (Encoding.UTF8.GetByteCount(body.Sent) > BodyLimit || Encoding.UTF8.GetByteCount(body.Text) > KeptBodyLimit)
-            throw new Refusal(BodyTooLong);
+        if (Encoding.UTF8.GetByteCount(body.Sent) > BodyLimit) throw new Refusal(BodyTooLong);
         if (body.Refusal is { } refusal) throw new Refusal(refusal);
     }
 
-    public static void CheckTitle(string? title)
+    /// <summary>What every Post holds, however it is written — a Topic started, a reply, an edit, a removal, a counter moved,
+    /// a snapshot kept — judged as it is saved, as Post's lifecycle (<see cref="TangentModule"/>), or a refusal: a Tangent and
+    /// an author; a body with no NUL, kept within <see cref="KeptBodyLimit"/> bytes; no title on a reply, and a root's within
+    /// <see cref="TitleLimit"/>; and a cover only on an article's root. It reads nothing, writes nothing and asks nothing of
+    /// the row as it stood.</summary>
+    public static EntityLifecycleResult Holds(EntityLifecycleContext<Post> context)
     {
-        if (string.IsNullOrWhiteSpace(title)) throw new Refusal(NeedsTitle);
-        if (title.Trim().Length > TitleLimit) throw new Refusal(TitleTooLong);
+        var post = context.Current;
+        if (string.IsNullOrWhiteSpace(post.TangentId)) throw new Refusal(NeedsTangent);
+        if (string.IsNullOrWhiteSpace(post.AuthorId)) throw new Refusal(NeedsAuthor);
+        if (post.Body.Contains('\0')) throw new Refusal(BodyHasNul);
+        if (Encoding.UTF8.GetByteCount(post.Body) > KeptBodyLimit) throw new Refusal(BodyTooLong);
+        if (post.ParentId is not null && !string.IsNullOrEmpty(post.Title)) throw new Refusal(NoTitleOnReply);
+        if (post.ParentId is null && post.Title is { } title && title.Trim().Length > TitleLimit) throw new Refusal(TitleTooLong);
+        if (post.CoverId is not null && (post.ParentId is not null || post.Kind != PostKind.Article)) throw new Refusal(CoverOnArticle);
+        return context.Proceed();
     }
 }

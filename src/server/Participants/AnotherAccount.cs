@@ -28,10 +28,34 @@ public static class AnotherAccount
     /// handle the participant holds now, the handle to keep in the field, why the last attempt was refused, the step that
     /// answers that refusal, and whether it opens drawn open.</summary>
     public sealed record Offer(string Action, string Return, string Failure, string Holding, string? Handle = null, string? Refused = null,
-        Form? SignInAgain = null, bool Open = false)
+        Form? SignInAgain = null, bool Open = false) : Render.IPart
     {
         /// <summary>The one line that says what stays: earlier Posts keep linking to the account they were written as.</summary>
         public string Note => "Your earlier Posts stay linked to @" + Holding + ".";
+
+        /// <summary>The step that answers a sign-in that is not fresh enough, with why above its button, its ids under
+        /// <paramref name="key"/>.</summary>
+        public Form? Again(string key) => SignInAgain is not { } again ? null : again.AsGiven() with
+        {
+            Tool = "another-account-again", Key = key + "-again", Island = "submitting", Main = true, Submit = "Sign in again", Busy = "Opening Bluesky…",
+            Failure = Refused
+        };
+
+        /// <summary>The binding: the handle, with why it was refused under it and what stays below it, coming back here, and a
+        /// refusal coming back with the handle typed; its ids under <paramref name="key"/>.</summary>
+        public Form Binding(string key) => new(Action, HttpMethods.Post,
+        [
+            new("identifier", "", Handle)
+            {
+                Label = "Bluesky handle", Prefix = "@", Placeholder = "you.bsky.social", Required = true, Handle = true,
+                Failure = SignInAgain is null ? Refused : null, Note = Render.Sentence.Plain(Note)
+            },
+            new("return", "", Return, Form.Input.Hidden),
+            new("failure", "", Failure, Form.Input.Hidden) { Carries = ("identifier", HandleQuery) }
+        ])
+        {
+            Tool = "another-account-form", Key = key, Island = "submitting", Submit = "Continue on Bluesky", Busy = "Opening Bluesky…", Quiet = SignInAgain is not null
+        };
     }
 
     /// <summary>The form in the account menu of <paramref name="who"/>, coming back to the page they are on: the place's

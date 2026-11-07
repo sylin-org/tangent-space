@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Security.Cryptography;
+using Koan.Data.Abstractions.Filtering;
 using Microsoft.AspNetCore.DataProtection;
 using Tangent.Access;
 using Tangent.Posts;
@@ -9,13 +10,14 @@ namespace Tangent.Tangents;
 /// <summary>The Tangents a reader may view, or those where they hold a verb, in the Tangents' order. The Tangents are
 /// read <see cref="ReadSize"/> at a time, each read continuing by seek from the stored order and slug of the last
 /// Tangent the one before read (<see cref="Tangent.InOrder"/>), and each Tangent is judged from Koan's compiled state for
-/// its resource (<see cref="Capabilities.LoadEach"/>). A page keeps what it asks for, each Tangent once, and continues
+/// its resource (<see cref="Capabilities.LoadEach(string?, IReadOnlyList{Tangent}, CancellationToken)"/>). A page keeps what it asks for, each Tangent once, and continues
 /// from a <see cref="Cursor"/> naming the last Tangent it keeps, sealed so the reader holds it without reading it and
 /// cannot forge one (<see cref="Cursor.Seal"/>): nothing about a Tangent the reader may not view is said, not on a page,
 /// not by its length, not by a cursor. The reading stops once the page is full and one more is found, so a page costs
 /// the Tangents read up to that one: at most every Tangent the place holds, the place's own size. A Tangent created or
-/// moved while the reading goes on can be read twice, which is kept once, or missed. Reads only and takes no
-/// lock.</summary>
+/// moved while the reading goes on can be read twice, which is kept once, or missed. A read of Posts asks only about the
+/// Tangents its rows name, as they arrive, and leaves out those met that the reader may not view (<see cref="Met"/>). Reads
+/// only and takes no lock.</summary>
 public static class ViewableTangents
 {
     /// <summary>The most Tangents one read takes.</summary>
@@ -53,10 +55,6 @@ public static class ViewableTangents
     /// starts, null on the last.</summary>
     public sealed record Page(IReadOnlyList<Tangent> Tangents, IReadOnlyDictionary<string, Capabilities> Each, Cursor? Next);
 
-    /// <summary>Every Tangent the reader may view: <see cref="Tangents"/> in order, and <see cref="Others"/>, the slugs of
-    /// the rest, which a read of Posts may name to leave them out.</summary>
-    public sealed record Whole(IReadOnlyList<Tangent> Tangents, IReadOnlyList<string> Others);
-
     /// <summary>Whether the reader may view the Tangent.</summary>
     public static bool Views(Capabilities capabilities) => capabilities.Exists;
 
@@ -81,7 +79,7 @@ public static class ViewableTangents
         {
             var rows = await Tangent.InOrder(from, earlier: false, aside: null, ReadSize, ct);
             var fresh = Fresh(rows, read);
-            var judged = await Capabilities.LoadEach(personId, fresh.Select(row => row.Id).ToList(), ct);
+            var judged = await Capabilities.LoadEach(personId, fresh, ct);
             foreach (var row in fresh)
             {
                 if (!keep(row, judged[row.Id])) continue;
@@ -95,26 +93,53 @@ public static class ViewableTangents
         }
     }
 
-    /// <summary>Every Tangent the reader may view, and the slugs of the others: every Tangent read once.</summary>
-    public static async Task<Whole> All(string? personId, CancellationToken ct)
+    /// <summary>The Tangents the rows of one reading name, each judged once for one reader, a visitor where the id is null,
+    /// as the rows arrive: a read of Posts keeps those in a Tangent the reader may view, and never reads a Tangent none of its
+    /// rows name. Each batch costs one keyed read of the Tangents it names that no earlier batch did, and what the reader holds on
+    /// them (<see cref="Capabilities.LoadEach(string?, IReadOnlyList{Tangent}, CancellationToken)"/>). A reading of Posts
+    /// through an index of their own, as a profile's and the articles feed's are, tells each read to leave out the Tangents
+    /// met so far that the reader may not view (<see cref="LeavingOut"/>), so a read either fills what it reads for or meets a
+    /// Tangent no earlier read met, and it takes at most <see cref="ReadLimit"/> reads.</summary>
+    public sealed class Met(string? personId)
     {
-        var kept = new List<Tangent>();
-        var others = new List<string>();
-        var read = new HashSet<string>(StringComparer.Ordinal);
-        (int Order, string Id)? from = null;
-        while (true)
-        {
-            var rows = await Tangent.InOrder(from, earlier: false, aside: null, ReadSize, ct);
-            var fresh = Fresh(rows, read);
-            var judged = await Capabilities.LoadEach(personId, fresh.Select(row => row.Id).ToList(), ct);
-            foreach (var row in fresh)
-            {
-                if (Views(judged[row.Id])) kept.Add(row);
-                else others.Add(row.Id);
-            }
+        /// <summary>The most reads one reading of rows takes.</summary>
+        public const int ReadLimit = 5;
 
-            if (rows.Count < ReadSize) return new Whole(kept, others);
-            from = (rows[^1].Order, rows[^1].Id);
+        private readonly Dictionary<string, Tangent?> _viewed = new(StringComparer.Ordinal);
+
+        /// <summary>What leaves out every row in a Tangent met so far that the reader may not view, or that has no row, its slug
+        /// in the field <paramref name="tangent"/> names; null where none was met.</summary>
+        public Filter? LeavingOut(string tangent)
+        {
+            var unviewed = _viewed.Where(met => met.Value is null).Select(met => (object?)met.Key).ToList();
+            return unviewed.Count == 0 ? null : Filter.On(FieldPath.Of(tangent), FilterOperator.Nin, FilterValue.Many(unviewed));
+        }
+
+        /// <summary>The Tangent of a row <see cref="Keep"/> kept, or that <see cref="Views"/> said the reader may view.</summary>
+        public Tangent this[string id] => _viewed.GetValueOrDefault(id) ?? throw new KeyNotFoundException("No Tangent met for the reader is " + id + ".");
+
+        /// <summary>Whether the reader may view the Tangent <paramref name="id"/> names: false for one with no row.</summary>
+        public async Task<bool> Views(string id, CancellationToken ct)
+        {
+            await Meet([id], ct);
+            return _viewed[id] is not null;
+        }
+
+        /// <summary>The rows in a Tangent the reader may view, in their order.</summary>
+        public async Task<IReadOnlyList<T>> Keep<T>(IReadOnlyList<T> rows, Func<T, string> tangentOf, CancellationToken ct)
+        {
+            await Meet(rows.Select(tangentOf), ct);
+            return rows.Where(row => _viewed[tangentOf(row)] is not null).ToList();
+        }
+
+        private async Task Meet(IEnumerable<string> ids, CancellationToken ct)
+        {
+            var missing = ids.Where(id => !_viewed.ContainsKey(id)).Distinct(StringComparer.Ordinal).ToList();
+            if (missing.Count == 0) return;
+            var rows = (await Tangent.Get(missing, ct)).OfType<Tangent>().ToList();
+            var judged = await Capabilities.LoadEach(personId, rows, ct);
+            foreach (var id in missing) _viewed[id] = null;
+            foreach (var row in rows.Where(row => ViewableTangents.Views(judged[row.Id]))) _viewed[row.Id] = row;
         }
     }
 }

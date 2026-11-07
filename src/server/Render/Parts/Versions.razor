@@ -1,0 +1,29 @@
+@* A Post's earlier versions, newest first: who wrote each and when, then its words as they stood, and, where older ones stand
+   beyond these, that only the most recent are shown. Under a Post its disclosure takes this section alone. *@
+<section class="post-history-versions" aria-label="Earlier versions">
+    @if (Model.History.Versions.Count == 0)
+    {
+        <p class="post-history-none">No earlier version is kept.</p>
+    }
+    @foreach (var version in Model.History.Versions)
+    {
+        <article class="post-history-version">
+            <p class="post-history-meta">
+                <strong>@version.By.Name</strong>
+                <time datetime="@Wording.Iso(version.At)" title="@Wording.Full(version.At)">@Wording.When(version.At, Today)</time>
+            </p>
+            <div class="post-body">@((MarkupString)Posts.Media.Placed(Posts.Mentions.Html(Model.History.PostId, version.Number, version.Body, version.Mentions), Model.History.Door))</div>
+        </article>
+    }
+    @if (Model.History.More)
+    {
+        <p class="post-history-none">Only the most recent earlier versions are shown.</p>
+    }
+    <p class="post-history-back"><a href="@Model.History.Address">Back to the post as it is</a></p>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public Render.Versions Model { get; set; } = default!;
+
+    [CascadingParameter(Name = Page.TodayValue)] public DateOnly Today { get; set; }
+}

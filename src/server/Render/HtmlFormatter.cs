@@ -93,16 +93,21 @@ public sealed class HtmlFormatter : TextOutputFormatter
         var renderer = http.RequestServices.GetRequiredService<HtmlRenderer>();
         var fragment = IsFragment(http.Request);
         var card = fragment || resource.Card?.Invoke(value) is not { } values ? null : _cards.RenderHead(values, http.Request);
-        var also = value is Problem { Word: var word } && word == Capabilities.SignIn.Word
-            ? new Dictionary<string, object?> { [nameof(ProblemView.SignIn)] = SignInStep(http) }
-            : null;
+        var also = new Dictionary<string, object?>
+        {
+            [nameof(Page.Reader)] = resource.Frame?.Invoke(value).Who?.Id,
+            [nameof(Page.Address)] = _baseUrl.Resolve(http) + http.Request.Path + http.Request.QueryString
+        };
+        var drawn = value is Problem refused
+            ? new RefusalPage(new Refused(refused, refused.Word == Capabilities.SignIn.Word ? SignInStep(http) : null))
+            : value;
         var html = fragment
             ? await renderer.Dispatcher.InvokeAsync(async () =>
             {
-                var alone = ParameterView.FromDictionary(new Dictionary<string, object?>(also ?? []) { [ModelParameter] = value });
+                var alone = ParameterView.FromDictionary(new Dictionary<string, object?>(also) { [ModelParameter] = drawn });
                 return (await renderer.RenderComponentAsync(resource.Component, alone)).ToHtmlString();
             })
-            : await WholeForRequest(http, renderer, resource, value, card, also);
+            : await WholeForRequest(http, renderer, resource, value, drawn, card, also);
         await http.Response.WriteAsync(html, selectedEncoding, http.RequestAborted);
     }
 
@@ -115,16 +120,16 @@ public sealed class HtmlFormatter : TextOutputFormatter
             : address;
     }
 
-    private async Task<string> WholeForRequest(HttpContext http, HtmlRenderer renderer, ResourceComponent resource, object value, string? card,
+    private async Task<string> WholeForRequest(HttpContext http, HtmlRenderer renderer, ResourceComponent resource, object value, object drawn, string? card,
         IReadOnlyDictionary<string, object?>? also)
     {
         var space = await TangentSpace.OfRequest(http);
         var address = _baseUrl.Resolve(http);
         var frame = value is Problem problem
-            ? ProblemView.Frame(problem, space.Name, address + "/", http.User.Identity?.IsAuthenticated == true ? null : address + Participants.SignInController.Path)
-            : resource.Frame?.Invoke(value);
+            ? Render.Parts.Refused.Frame(problem, space.Name, address + "/", http.User.Identity?.IsAuthenticated == true ? null : address + Participants.SignInController.Path)
+            : resource.Frame?.Invoke(value) is { } own ? own with { Crumbs = own.Under(http.Features.Get<Here>(), address) } : null;
         var appearance = http.Items[Previewed] as Appearance ?? space.Appearance;
-        return await Whole(renderer, resource, value, address, appearance, frame, card: card, also: also,
+        return await Whole(renderer, resource, value, address, appearance, frame, card: card, also: also, drawn: drawn,
             management: http.GetEndpoint()?.Metadata.GetMetadata<ManagingAttribute>() is not null);
     }
 
@@ -134,10 +139,10 @@ public sealed class HtmlFormatter : TextOutputFormatter
     /// <paramref name="standalone"/> page opens with no server and counts on no script; <paramref name="retired"/> is the
     /// line that says the place is retired, on a page of its archive. The component reads <paramref name="also"/>, where
     /// given, beside its value; <paramref name="mediaBase"/>, where given, is where the images of the place's words are
-    /// named.</summary>
+    /// named; <paramref name="drawn"/>, where given, is the page the resource is drawn as, as a refusal is.</summary>
     public static Task<string> Whole(HtmlRenderer renderer, ResourceComponent resource, object value, string baseUrl, Appearance appearance, Frame? frame,
         bool standalone = false, string? card = null, string? retired = null, IReadOnlyDictionary<string, object?>? also = null, bool management = false,
-        string? mediaBase = null) =>
+        string? mediaBase = null, object? drawn = null) =>
         renderer.Dispatcher.InvokeAsync(async () =>
     {
         var shell = ParameterView.FromDictionary(new Dictionary<string, object?>
@@ -154,7 +159,7 @@ public sealed class HtmlFormatter : TextOutputFormatter
             [nameof(Shell.ChildContent)] = (RenderFragment)(builder =>
             {
                 builder.OpenComponent(0, resource.Component);
-                builder.AddComponentParameter(1, ModelParameter, value);
+                builder.AddComponentParameter(1, ModelParameter, drawn ?? value);
                 foreach (var (name, given) in also ?? new Dictionary<string, object?>())
                     builder.AddComponentParameter(2, name, given);
                 builder.CloseComponent();

@@ -1,0 +1,132 @@
+@using Tangent.Posts
+@* The form an article is written in, laid out as the article reads: the same column, the cover in its place, the title
+   in its place at its size, the byline, then the body in the article's type; who last edited it and the words sent that
+   were not saved; who writes it, the way back and its button. It is the island's root: without script the
+   title and the body are plain fields that post, and the cover it holds stays. With script the article island turns the
+   body's field into the visual editor, which writes its Markdown back there, and brings a cover and images in the page. *@
+<div class="article-writing">
+        <h1 class="visually-hidden">@Heading</h1>
+        @if (Failure is not null)
+        {
+            <p class="sign-in-failure" id="article-failure" role="alert" data-gate="@FailureGate">@Failure</p>
+        }
+        <form class="@("article-form " + Tool)" method="post" action="@Action" data-island="@Island" data-props="@IslandProps">
+            @foreach (var given in Model.Hidden)
+            {
+                <input type="hidden" name="@given.Name" value="@given.Value">
+            }
+            <input type="hidden" name="@PostWrites.CoverField" value="@CoverId">
+            <article class="article">
+                <Draw Part="@(new Render.ArticleHead("", null, Author, At, Minutes, null, []) { CoverSlot = CoverField, TitleSlot = TitleField })" />
+                <div class="article-body-field" data-island="article" data-props="@EditorProps">
+                    <label class="field-label" for="@BodyId">Article</label>
+                    <textarea class="post-form-body article-source" id="@BodyId" name="@PostWrites.BodyField" rows="18" required placeholder="Write your article in Markdown."
+                              aria-invalid="@(BodyFailure is null ? "false" : "true")"
+                              aria-describedby="@(BodyFailure is null ? null : BodyId + "-failure")">@Body</textarea>
+                    @if (BodyFailure is not null)
+                    {
+                        <p class="field-failure" id="@(BodyId + "-failure")">@BodyFailure</p>
+                    }
+                </div>
+            </article>
+            @if (Model.EditedBy is { } edited)
+            {
+                <p class="post-form-note">Last edited by @edited.</p>
+            }
+            @if (Model.SentBody is { } sentBody)
+            {
+                <div class="field post-form-unsaved">
+                    <label class="field-label" for="@(BodyId + "-sent")">Your words, not saved</label>
+                    @if (Model.SentTitle is { } sentTitle)
+                    {
+                        <p class="post-form-unsaved-title">@sentTitle</p>
+                    }
+                    <textarea class="post-form-body" id="@(BodyId + "-sent")" rows="6" readonly>@sentBody</textarea>
+                </div>
+            }
+            <div class="post-form-actions article-form-actions">
+                @if (Model.By is { } by)
+                {
+                    <Draw Part="@by" />
+                }
+                @if (Model.Cancel is { } cancel)
+                {
+                    <a class="post-form-cancel" href="@cancel.Address">@cancel.Label</a>
+                }
+                <button type="submit" class="sign-in-submit post-form-submit" data-busy-label="@Model.Busy">@Model.Submit</button>
+            </div>
+        </form>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Render.ArticleEditor Model { get; set; } = default!;
+
+    private string Heading => Model.Heading;
+
+    /// <summary>The name of the tool the form sends: <c>start-topic</c> or <c>edit</c>.</summary>
+    private string Tool => Model.Tool;
+    private string Action => Model.Action;
+    private Render.Person Author => Model.Author;
+    private DateTimeOffset At => Model.At;
+
+    /// <summary>The base URL, ending in a slash, under which the form's images have their addresses.</summary>
+    private string Door => Model.Door;
+
+    /// <summary>The ids of the title and body fields.</summary>
+    private string TitleId => Model.TitleId;
+    private string BodyId => Model.BodyId;
+
+    /// <summary>The island that sends the form, and its props.</summary>
+    private string Island => Model.Island;
+    private string? IslandProps => Model.IslandProps;
+
+    /// <summary>Where an image is brought in, and whose drafts of what an edit keeps, where this is an edit.</summary>
+    private Render.Form? Bring => Model.Bring;
+
+    private string TangentAddress => Model.TangentAddress;
+    private string? Participant => Model.Participant;
+    private string? EditScope => Model.EditScope;
+
+    /// <summary>The slug of the Topic an edit is of, whose writers its suggestions offer first.</summary>
+    private string? Topic => Model.Topic;
+
+    private string? Title => Model.Title;
+    private string? Body => Model.Body;
+    private string? CoverId => Model.CoverId;
+    private int Minutes => Model.Minutes;
+    private string? Failure => Model.Failure;
+    private string? FailureGate => Model.FailureGate;
+    private string? TitleFailure => Model.TitleFailure;
+    private string? BodyFailure => Model.BodyFailure;
+
+    /// <summary>The hidden fields of this form.</summary>
+
+    /// <summary>What stands above the form, such as the Post a new article takes on a tangent.</summary>
+
+    /// <summary>What stands under the article inside the form, what its actions are, and what stands after the form.</summary>
+
+    /// <summary>The address of the cover the form holds, where it holds one.</summary>
+    private string? CoverAddress => CoverId is { } cover ? Door + Media.Reference(cover).TrimStart('/') : null;
+
+    private string? EditorProps => Bring is { } bring
+        ? System.Text.Json.JsonSerializer.Serialize(new { door = Door, bring = bring.Action, participant = Participant, edit = EditScope, suggest = SuggestionsController.Address(TangentAddress, Topic) })
+        : null;
+
+    private RenderFragment CoverField => @<div class="article-cover-field" data-article-cover>
+        @if (CoverAddress is { } cover)
+        {
+            <figure class="article-figure"><img src="@cover" alt=""></figure>
+        }
+    </div>;
+
+    private RenderFragment TitleField => @<div class="article-title-wrap">
+        <label class="visually-hidden" for="@TitleId">Title</label>
+        <textarea class="article-title article-title-field" id="@TitleId" name="@PostWrites.TitleField" rows="1" required maxlength="@Posts.Post.TitleLimit" placeholder="Title" autofocus="@(BodyFailure is null)"
+                  aria-invalid="@(TitleFailure is null ? "false" : "true")"
+                  aria-describedby="@(TitleFailure is null ? null : TitleId + "-failure")">@Title</textarea>
+        @if (TitleFailure is not null)
+        {
+            <p class="field-failure" id="@(TitleId + "-failure")">@TitleFailure</p>
+        }
+    </div>;
+}

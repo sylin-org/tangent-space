@@ -1,0 +1,16 @@
+@* Where a participant stands here, in one line, with what the reader may change of them inline. *@
+<section class="door-offers profile-standing" aria-label="Their standing here">
+    <div class="door-offer bar participant">
+        <p class="door-offer-line"><Draw Part="@(Model.Person.Person with { Profile = null })" As="Shape.Name" /> @(Model.Person.Until is { } until ? "is timed out here until " + Wording.Until(until) : "is " + Model.Person.Standing + " here").</p>
+        <div class="door-offer-answers">
+            @foreach (var answer in Model.Forms.For(Model.Person))
+            {
+                <Draw Part="@answer" As="Shape.Row" />
+            }
+        </div>
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public Render.Keeping Model { get; set; } = default!;
+}

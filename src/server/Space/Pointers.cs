@@ -1,3 +1,6 @@
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
+
 namespace Tangent.Space;
 
 /// <summary>One way the site points at its Tangent Space: what <see cref="Kind"/> of pointer it is, where it goes, in
@@ -18,7 +21,15 @@ public static class Pointers
     /// on unless its operator names another.</summary>
     public const string FixedUpstream = "http://127.0.0.1:5220";
 
-    /// <summary>What first run says in place of the pointers while the base URL is local, in one sentence whose code is
+    /// <summary>What a place that answers at <paramref name="address"/> shows of its pointers, on first run and in its
+    /// general settings: none while the address is local, which no site can point at, and when they appear instead
+    /// (<see cref="Later"/>); otherwise the pointers, the proxy rule passing to where <paramref name="server"/> listens.</summary>
+    public static (IReadOnlyList<Pointer> Pointers, string? Later) At(string address, bool configured, IServer server)
+        => TangentSpace.IsLocal(address)
+            ? ([], Later(configured))
+            : (For(address, Upstream(server.Features.Get<IServerAddressesFeature>()?.Addresses ?? [])), null);
+
+    /// <summary>What the place says in place of the pointers while the base URL is local, in one sentence whose code is
     /// set between backticks: they appear once the place answers at a public address — one the place offers its
     /// operator when it is reached at it, or, where the base URL is <paramref name="configured"/>, one the configuration
     /// names.</summary>

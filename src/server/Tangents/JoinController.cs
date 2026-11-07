@@ -17,6 +17,8 @@ namespace Tangent.Tangents;
 /// otherwise, and a JSON request reads where they stand (<see cref="Standing"/>).</summary>
 public sealed class JoinController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
+    /// <summary>The segments under a Tangent's address where a participant joins it and leaves it; <see cref="Slug.Reserved"/>
+    /// keeps them from every Topic.</summary>
     public const string JoinSegment = "join";
     public const string LeaveSegment = "leave";
     public const string JoinRoute = "/t/{tangent}/" + JoinSegment;

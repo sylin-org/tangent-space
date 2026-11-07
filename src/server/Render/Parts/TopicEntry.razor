@@ -1,0 +1,188 @@
+@using System.Globalization
+@* One Topic in a list. As a row of the table: a dot when it is new to the reader, its title, who started it and its opening
+   words, who else edited it where someone did, its latest reply with "New" when the reader has not seen it, the faces of
+   its recent authors, its replies with how many are new, and when it last gained a Post and from whom. As an article: a
+   card with its cover where it has one, its date and read time, opening, author and replies; leading a list, drawn large
+   with its cover, or the Tangent's own tile and name on the image band where it has none, and its latest-reply strip.
+   A Topic whose root is removed says who removed it and when in place of its opening, and an article its read time. A
+   pinned Topic and a closed one say so beside its title, or on a card beside its date. Zeros are said in words. *@
+@if (As is Shape.Card or Shape.Lead)
+{
+    <article class="@ArticleClass">
+        @if (Lead)
+        {
+            if (Model.Cover is { } lead)
+            {
+                <a class="article-cover article-cover-image" href="@Model.Address" tabindex="-1" aria-hidden="true"><img src="@Shown(lead)" alt="" loading="lazy" decoding="async"></a>
+            }
+            else if (Model.In is { } tangent)
+            {
+                <a class="@("article-cover tone-" + tangent.Worn.Tone)" href="@Model.Address" tabindex="-1" aria-hidden="true">
+                    <Draw Part="@tangent" As="Shape.Tile" />
+                    <span class="article-cover-tangent">@tangent.Name</span>
+                    <span class="article-cover-edge"></span>
+                </a>
+            }
+        }
+        else if (Model.Cover is { } thumbnail)
+        {
+            <a class="article-card-cover" href="@Model.Address" tabindex="-1" aria-hidden="true"><img src="@Shown(thumbnail)" alt="" loading="lazy" decoding="async"></a>
+        }
+        <div class="article-card-text">
+            <p class="article-card-date">
+                <time datetime="@Wording.Iso(Model.CreatedAt)">@Wording.When(Model.CreatedAt, Today)</time>
+                @if (Model.Removed is null)
+                {
+                    <span aria-hidden="true">·</span>
+                    <span>@Model.ReadMinutes.ToString(CultureInfo.InvariantCulture) min read</span>
+                }
+                @Marked
+            </p>
+            <h3 class="article-card-title"><a href="@Model.Address">@Model.Title</a></h3>
+            @if (Model.Removed is { } removed)
+            {
+                <p class="article-card-removed">@RemovedBy(removed)</p>
+            }
+            else if (Model.Opening.Length > 0)
+            {
+                <p class="article-card-opening">@Model.Opening</p>
+            }
+            <p class="article-card-author">
+                <Draw Part="@Model.Author" />
+                <Draw Part="@(Model.Author with { Profile = null })" As="Shape.Name" /><Draw Part="@Model.Edited" />
+                @if (!Lead || Model.Latest is null)
+                {
+                    <span aria-hidden="true">·</span>
+                    <span>@Replies</span>
+                    @NewReplies
+                }
+            </p>
+            @if (Lead && Model.Latest is { } latest)
+            {
+                <a class="article-strip" href="@Model.Address">
+                    <Draw Part="@latest.Author" />
+                    <span class="article-strip-line"><b>@latest.Author.Name</b><Draw Part="@latest.Edited" /> @Wording.Clip(latest.Line, StripLimit)</span>
+                    <span class="article-strip-count">@Replies</span>
+                    @NewReplies
+                </a>
+            }
+        </div>
+    </article>
+}
+else
+{
+    <a class="@("row topic" + States)" href="@Model.Address">
+        <span class="topic-row-dot">
+            @if (Model.New)
+            {
+                <span class="new-dot" role="img" aria-label="Unread"></span>
+            }
+        </span>
+        <span class="topic-row-body">
+            <span class="topic-row-title">@Model.Title@Marked</span>
+            <span class="topic-row-opening"><Draw Part="@(Model.Author with { Profile = null })" As="Shape.Name" />@if (Model.Removed is { } removed)
+                {
+                    <span aria-hidden="true"> · </span><span class="topic-row-removed">@RemovedBy(removed)</span>
+                }
+                else
+                {
+                    <Draw Part="@Model.Edited" />@(Model.Opening.Length > 0 ? ": " + Model.Opening : "")
+                }</span>
+            @if (Model.Latest is { } latest)
+            {
+                <span class="topic-row-latest-reply">
+                    <Draw Part="@latest.Author" />
+                    <span class="topic-row-latest-line"><b>@latest.Author.Name</b><Draw Part="@latest.Edited" /> @Wording.Clip(latest.Line, PreviewLimit)@if (latest.New)
+                        {
+                            <span class="badge is-new new-inline">New</span>
+                        }</span>
+                    @if (latest.New)
+                    {
+                        <span class="badge is-new new-beside">New</span>
+                    }
+                </span>
+            }
+        </span>
+        <span class="topic-row-people">
+            <Draw Part="@Model.People.Take(FaceLimit).ToList()" />
+        </span>
+        <span class="topic-row-replies">
+            @if (Model.ReplyCount == 0)
+            {
+                <span class="topic-row-none">No replies yet</span>
+            }
+            else
+            {
+                <span class="topic-row-count">@Model.ReplyCount.ToString(CultureInfo.InvariantCulture)<span class="topic-row-count-word">@(Model.ReplyCount == 1 ? " reply" : " replies")</span></span>
+            }
+            @if (SaysNew)
+            {
+                <span class="topic-row-new-separator" aria-hidden="true">·</span>
+                <span class="badge is-new">@NewWords</span>
+            }
+        </span>
+        <span class="topic-row-activity">
+            <time datetime="@Wording.Iso(Model.LastActivityAt)">@Wording.When(Model.LastActivityAt, Today)</time>
+            <span class="topic-row-who">@(Model.Latest?.Author.Name ?? Model.Author.Name)</span>
+        </span>
+    </a>
+}
+
+@code {
+    [Parameter, EditorRequired] public Render.TopicEntry Model { get; set; } = default!;
+
+    [Parameter] public Shape As { get; set; }
+
+    [CascadingParameter(Name = Page.ReaderValue)] public string? Reader { get; set; }
+
+    [CascadingParameter(Name = Page.TodayValue)] public DateOnly Today { get; set; }
+
+    [CascadingParameter(Name = nameof(Shell.Standalone))] public bool Standalone { get; set; }
+
+    /// <summary>How many faces a row shows.</summary>
+    private const int FaceLimit = 3;
+
+    /// <summary>The most characters of a latest reply a row's preview and a lead's strip show, cut at a word.</summary>
+    private const int PreviewLimit = 56;
+
+    private const int StripLimit = 40;
+
+    private bool Lead => As == Shape.Lead;
+
+    private string Shown(string cover) => Standalone ? cover : cover + "/" + Posts.MediaRecipes.CardName;
+
+    /// <summary>Who removed the Topic's root and when, in the words its tombstone says.</summary>
+    private RenderFragment RemovedBy(Posts.TopicPage.Removal removed) => @<text>Removed by @(removed.By.Id == Model.Author.Id ? "its author" : removed.By.Name) <time datetime="@Wording.Iso(removed.At)" title="@Wording.Full(removed.At)">@Wording.When(removed.At, Today)</time></text>;
+
+    private string Replies => Wording.Count(Model.ReplyCount, "reply", "replies", "No replies yet");
+
+    /// <summary>Whether its moderators keep the Topic at the top and whether they closed it, each a badge.</summary>
+    private RenderFragment Marked => @<text>@if (Model.Pinned)
+        {
+            @(" ")<span class="badge is-pinned">Pinned</span>
+        }@if (Model.Closed)
+        {
+            @(" ")<span class="badge is-closed">Closed</span>
+        }</text>;
+
+    private string ArticleClass => (Lead ? "article-card article-lead" : Model.Cover is null ? "article-card" : "article-card article-card-covered") + " card topic" + States;
+
+    /// <summary>What the Topic's record holds of it, as the contract's states: removed, closed, pinned, new to the reader, and
+    /// started by the reader or by an agent.</summary>
+    private string States => (Model.Removed is not null ? " is-removed" : "") + (Model.Closed ? " is-closed" : "") + (Model.Pinned ? " is-pinned" : "")
+        + (Model.New ? " is-new" : "")
+        + (Reader is not null && Model.Author.Id == Reader ? " by-you" : "") + (Model.Author.Agent ? " by-agent" : "");
+
+    /// <summary>How many of the Topic's replies are new to the reader; absent where they never read the Topic, which is new
+    /// with no count.</summary>
+    private long? NewCount => Model.NewPosts is { } count ? Math.Min(count, Model.ReplyCount) : null;
+
+    private bool SaysNew => NewCount is > 0 || (Model.New && NewCount is null);
+
+    private string NewWords => NewCount is { } count ? count.ToString(CultureInfo.InvariantCulture) + " new" : "New";
+
+    private RenderFragment NewReplies => builder =>
+    {
+        if (SaysNew) builder.AddMarkupContent(0, "<span class=\"badge is-new\">" + NewWords + "</span>");
+    };
+}

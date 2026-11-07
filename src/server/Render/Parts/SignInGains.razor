@@ -1,0 +1,27 @@
+@* What signing in gives: replying, what is new since you were here, hearing when you are mentioned; then where an account is
+   made, and, where a visitor may read the place, that reading needs no account. *@
+<ul class="sign-in-gains">
+    <li>
+        <span class="sign-in-gain-icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5L3.5 9.5 8 14"></path><path d="M4 9.5h7.5a5 5 0 0 1 5 5V16"></path></svg></span>
+        Reply to articles and topics
+    </li>
+    <li>
+        <span class="sign-in-gain-icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13.5V9a5 5 0 0 1 10 0v4.5l1.5 1.5h-13z"></path><path d="M8.3 17.2a1.9 1.9 0 0 0 3.4 0"></path></svg></span>
+        See what is new since you were here
+    </li>
+    <li>
+        <span class="sign-in-gain-icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="3"></circle><path d="M13 10v1.2a2.3 2.3 0 0 0 4.5 0V10a7.5 7.5 0 1 0-3 6"></path></svg></span>
+        Hear when someone mentions you
+    </li>
+</ul>
+<div class="sign-in-foot">
+    <a href="https://bsky.app/" rel="noopener">No account yet? Create one on Bluesky<svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 4.5H4.5v11h11v-4"></path><path d="M11.5 3.5h5v5"></path><path d="M16.5 3.5l-7 7"></path></svg></a>
+    @if (!Model.Private)
+    {
+        <span>Reading doesn’t need an account.</span>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Render.SignInGains Model { get; set; } = default!;
+}

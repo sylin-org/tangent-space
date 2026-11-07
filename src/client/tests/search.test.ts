@@ -27,8 +27,8 @@ function answering(body: object, status = 200): ReturnType<typeof vi.fn> {
   return stub
 }
 
-function box(): { form: HTMLFormElement; input: HTMLInputElement; panel: () => HTMLElement } {
-  document.body.innerHTML = `<form class="masthead-search" method="get" action="${address}" data-island="search"><input type="search" name="q"></form>`
+function box(carried = ''): { form: HTMLFormElement; input: HTMLInputElement; panel: () => HTMLElement } {
+  document.body.innerHTML = `<form class="masthead-search" method="get" action="${address}" data-island="search"><input type="search" name="q">${carried}</form>`
   mountIslands(document)
   const form = document.querySelector('form')!
   return { form, input: form.querySelector('input')!, panel: () => form.querySelector<HTMLElement>('.masthead-search-panel')! }
@@ -77,6 +77,17 @@ test('it asks once the typing pauses, and shows the first few as links', async (
   expect(panel().hidden).toBe(false)
   expect(input.getAttribute('aria-expanded')).toBe('true')
   expect(panel().querySelector<HTMLAnchorElement>('a.masthead-search-all')!.href).toBe(`${address}?q=lan`)
+})
+
+test('a box narrowed to a Tangent carries it to the suggestions and to all results', async () => {
+  const fetching = answering({ hits: [hit(1)] })
+  const { input, panel } = box('<input type="hidden" name="in" value="workshop">')
+
+  type(input, 'lan')
+  await settled()
+
+  expect(fetching.mock.calls[0]![0]).toBe(`${address}?q=lan&in=workshop`)
+  expect(panel().querySelector<HTMLAnchorElement>('a.masthead-search-all')!.href).toBe(`${address}?q=lan&in=workshop`)
 })
 
 test('it asks nothing for one letter or for punctuation', async () => {

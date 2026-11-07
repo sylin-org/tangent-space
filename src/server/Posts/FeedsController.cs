@@ -49,7 +49,7 @@ public sealed class FeedsController(KoanWebBaseUrl baseUrl) : ControllerBase
     private async Task<Feed?> OfArticles(CancellationToken ct)
     {
         var rows = await Capabilities.LoadRows(null, null, ct);
-        return rows.For(null).Exists ? await Feeds.OfArticles(await ViewableTangents.All(null, ct), rows.Space, Address, ct) : null;
+        return rows.For(null).Exists ? await Feeds.OfArticles(rows.Space, Address, ct) : null;
     }
 
     private IActionResult Atom(Feed feed) => ServedFile.Answer(HttpContext, AtomFeed.Of(feed), AtomFeed.MediaType + "; charset=utf-8");

@@ -10,7 +10,9 @@ namespace Tangent.Capture;
 
 /// <summary>The rows the Connections captures show: the article seed's place and articles, two more articles by the
 /// persona, and her Connection publishing them on Bluesky — one updated, one published, and one it couldn't reach
-/// Bluesky for, trying again — and what Bluesky said about the updated one. Compiled only into the capture host; fixed names, words and times.</summary>
+/// Bluesky for, trying again — and what Bluesky said about the updated one; and, for a page of them and the next, the same
+/// place with more of her articles out than one page lists, her Connection publishing with nothing wrong. Compiled only
+/// into the capture host; fixed names, words and times.</summary>
 public sealed class ConnectionsSeedController(RoleCollection roles) : ControllerBase
 {
     private const string Persona = Seeded.Persona;
@@ -28,7 +30,7 @@ public sealed class ConnectionsSeedController(RoleCollection roles) : Controller
         var since = At(27, 9, 0);
         await Write(new Keep<Connection>(new Connection
         {
-            Id = Persona, State = ConnectionState.Publishing, Since = since, Failures = 2,
+            Id = Persona, State = ConnectionState.Publishing, From = 0, Since = since, Failures = 2,
             Trouble = Syndication.Unreachable, RetryAt = new DateTimeOffset(2026, 10, 1, 14, 5, 0, TimeSpan.Zero)
         }), ct);
         await Write(new Keep<Receipt>(Written(gold, At(29, 8, 12), updated: true)), ct);
@@ -50,6 +52,36 @@ public sealed class ConnectionsSeedController(RoleCollection roles) : Controller
         {
             Id = Receipt.Key(Persona, bench.Id), ConnectionId = Persona, PostId = bench.Id, TangentId = "articles", At = At(30, 21, 41)
         }), ct);
+        return NoContent();
+    }
+
+    /// <summary>The Connections seed with the gold article's <see cref="Elsewhere"/> job started, so it reads what the
+    /// network says about it from the AppView the host names at <c>Tangent:Profile:BaseAddress</c>.</summary>
+    [HttpPost("/capture/seed/connections-listening")]
+    public async Task<IActionResult> Listening(CancellationToken ct)
+    {
+        await Seed(ct);
+        await Elsewhere.Start((await Post.Query(post => post.Slug == "mending-with-gold", ct)).Single(), ct);
+        return NoContent();
+    }
+
+    /// <summary>The article seed's place, and more of the persona's articles out on Bluesky than one page of her
+    /// Connections lists, the gold one newest, her Connection publishing them with nothing wrong.</summary>
+    [HttpPost("/capture/seed/connections-many")]
+    public async Task<IActionResult> Many(CancellationToken ct)
+    {
+        await new ArticleSeedController(roles).Seed(ct);
+        var gold = (await Post.Query(post => post.Slug == "mending-with-gold", ct)).Single();
+        await Write(new Keep<Connection>(new Connection { Id = Persona, State = ConnectionState.Publishing, From = 0, Since = At(27, 9, 0) }), ct);
+        for (var page = 1; page <= Receipt.PageSize + 5; page++)
+        {
+            var at = At(20, 8, 0).AddMinutes(page);
+            var note = await Write(new StartTopic(Tid(at, 10), "articles", "Notebook, page " + page,
+                "What the bench taught me on day " + page + ".", Persona, At: at), ct);
+            await Write(new Keep<Receipt>(Written(note, at.AddSeconds(30), updated: false)), ct);
+        }
+
+        await Write(new Keep<Receipt>(Written(gold, At(29, 8, 12), updated: true)), ct);
         return NoContent();
     }
 

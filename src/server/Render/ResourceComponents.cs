@@ -24,6 +24,16 @@ public sealed class ResourceComponents
         return this;
     }
 
+    /// <summary>A page record, drawn by the one page component from its parts (<see cref="Page"/>).</summary>
+    public ResourceComponents Add<TPage>(Func<TPage, string> title, Func<TPage, long>? version = null, Func<TPage, Frame>? frame = null,
+        Func<TPage, SocialCard?>? card = null)
+        where TPage : notnull
+        => Add<TPage, Page>(title, version, frame, card);
+
+    /// <summary>Every page record registered, which the start checks against the parts; a refusal is drawn as its page.</summary>
+    public IEnumerable<Type> Pages => _byResource.Where(pair => pair.Value.Component == typeof(Page))
+        .Select(pair => pair.Key == typeof(Koan.Web.Controllers.Problem) ? typeof(RefusalPage) : pair.Key);
+
     public bool Has(Type resource) => _byResource.ContainsKey(resource);
 
     public ResourceComponent For(Type resource) => _byResource[resource];

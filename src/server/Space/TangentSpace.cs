@@ -1,4 +1,5 @@
 using Koan.Data.Core.Commands;
+using Koan.Data.Core.Lifecycle;
 using Koan.Data.Core.Model;
 
 namespace Tangent.Space;
@@ -69,21 +70,13 @@ public sealed class TangentSpace : Entity<TangentSpace>
     public static TangentSpace Establish(string name, string proprietorId, string operatorId, string moderatorsTangentId)
         => new()
         {
-            Name = Named(name),
+            Name = name.Trim(),
             ProprietorId = proprietorId,
             OperatorId = operatorId,
             ModeratorsTangentId = moderatorsTangentId,
             Audience = Audience.Public,
             Admission = Admission.Join
         };
-
-    /// <summary>The name as the row keeps it, trimmed, or a refusal with <see cref="NameRule"/>.</summary>
-    private static string Named(string name)
-    {
-        var trimmed = name.Trim();
-        if (trimmed.Length is 0 or > NameLimit || trimmed.Any(char.IsControl)) throw new Refusal(NameRule);
-        return trimmed;
-    }
 
     /// <summary>How the place reads before first run: unnamed, with the audience and admission it will be established
     /// with. Never saved.</summary>
@@ -125,22 +118,18 @@ public sealed class TangentSpace : Entity<TangentSpace>
     /// <summary>How a newcomer arrives: joining at once, or applying and waiting until someone admits them.</summary>
     public Admission Admission { get; set; } = Admission.Join;
 
-    /// <summary>Whether a newly admitted participant's Posts wait for approval.</summary>
-    public bool NewAccountsAfterApproval { get; set; }
+    /// <summary>Whether the place's manager closed its first steps on the door (<see cref="FirstSteps"/>).</summary>
+    public bool FirstStepsClosed { get; set; }
 
     public Appearance Appearance { get; set; } = new();
 
-    /// <summary>Renames and describes the place, sets how a newcomer arrives, who reads it and its appearance, judged as
-    /// <see cref="Appearance.With"/> judges it, a change to the row, or refuses with <see cref="NameRule"/>,
-    /// <see cref="DescriptionRule"/>, <see cref="AdmissionRule"/> or <see cref="AudienceRule"/>; the name and the description are
-    /// kept trimmed. Answers whether anything changed.</summary>
+    /// <summary>Renames and describes the place, sets how a newcomer arrives, who reads it and its appearance, a change to
+    /// the row, judged as it is saved (<see cref="Holds"/>); the name is kept trimmed, and the description trimmed with
+    /// <c>\n</c> line endings. Answers whether anything changed.</summary>
     public bool Change(string name, string description, Admission admission, Audience audience, Appearance appearance)
     {
-        var named = Named(name);
+        var named = name.Trim();
         var described = description.Replace("\r\n", "\n", StringComparison.Ordinal).Trim();
-        if (described.Length > DescriptionLimit || described.Contains('\0') || !Posts.MarkdownHtml.Tractable(described)) throw new Refusal(DescriptionRule);
-        if (!Enum.IsDefined(admission)) throw new Refusal(AdmissionRule);
-        if (!Enum.IsDefined(audience)) throw new Refusal(AudienceRule);
         if (Name == named && Description == described && Admission == admission && Audience == audience && Appearance.Same(appearance)) return false;
         (Name, Description, Admission, Audience, Appearance) = (named, described, admission, audience, appearance.Copy());
         Version = checked(Version + 1);
@@ -170,4 +159,22 @@ public sealed class TangentSpace : Entity<TangentSpace>
 
     /// <summary>Raised by every change to the row.</summary>
     public long Version { get; set; } = 1;
+
+    /// <summary>What the place's row holds, however it is written — established, changed, given its address or its
+    /// moderators' Tangent — judged as it is saved, as its lifecycle (<see cref="TangentModule"/>), or a refusal: a name of 1
+    /// to <see cref="NameLimit"/> characters on one line, kept trimmed; a description of at most
+    /// <see cref="DescriptionLimit"/> characters of Markdown that renders quickly; an admission and an audience each one of
+    /// its choices; and an appearance whose every part holds its rule (<see cref="Appearance.Broken"/>). It reads nothing,
+    /// writes nothing and asks nothing of the row as it stood.</summary>
+    public static EntityLifecycleResult Holds(EntityLifecycleContext<TangentSpace> context)
+    {
+        var space = context.Current;
+        if (space.Name.Length is 0 or > NameLimit || space.Name != space.Name.Trim() || space.Name.Any(char.IsControl)) throw new Refusal(NameRule);
+        if (space.Description.Length > DescriptionLimit || space.Description.Contains('\0') || !Posts.MarkdownHtml.Tractable(space.Description))
+            throw new Refusal(DescriptionRule);
+        if (!Enum.IsDefined(space.Admission)) throw new Refusal(AdmissionRule);
+        if (!Enum.IsDefined(space.Audience)) throw new Refusal(AudienceRule);
+        if (space.Appearance.Broken() is { } broken) throw new Refusal(broken);
+        return context.Proceed();
+    }
 }

@@ -1,20 +1,25 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using Koan.Data.Core;
 using Koan.Data.Core.Commands;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Tangent.Access;
 using Tangent.Events;
 using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
+using Tangent.Tools;
 using Xunit;
 
 namespace Tangent.Tangents;
 
-/// <summary>The Tangent page both ways: the Tangent, its <c>can</c> and one bounded page of its Topics by last activity,
-/// with what is new to a signed-in reader marked; the gate for a reader who may not read;
-/// the empty state and the start affordance; and the page's <c>ETag</c>.</summary>
+/// <summary>The Tangent page both ways: the Tangent, its <c>can</c> and one bounded page of its Topics, a discussions Tangent's
+/// by last activity and an articles Tangent's by when each started, with what is new to a signed-in reader marked; the gate for a reader who may not read;
+/// the empty state and the start affordance; a Topic whose root is removed, marked; an articles Tangent narrowed by month
+/// and by author across all its articles; and the page's <c>ETag</c>.</summary>
 public sealed class TangentPageTests
 {
     private const string BaseUrl = TangentSpaceFixture.DefaultBaseUrl;
@@ -167,7 +172,7 @@ public sealed class TangentPageTests
         Assert.Contains("<span class=\"badge is-new\">1 new</span>", html);
         // The reader's account opens in the page, with the way to sign out and come back here.
         Assert.Contains("<details class=\"account menu participant is-you\">", html);
-        Assert.Contains($"<form method=\"post\" action=\"{BaseUrl}/auth/logout?return={Uri.EscapeDataString("/t/" + Workshop)}\"><button class=\"account-item account-action\">", html);
+        Assert.Contains($"<form class=\"sign-out\" method=\"post\" action=\"{BaseUrl}/auth/logout?return={Uri.EscapeDataString("/t/" + Workshop)}\"><button type=\"submit\" class=\"account-item account-action\">", html);
         Assert.Contains("</svg>Sign out</button></form>", html);
 
         using (var json = await Json(tangentSpace.Client, "/t/" + Workshop))
@@ -310,7 +315,7 @@ public sealed class TangentPageTests
 
         var visitorHtml = await Html(tangentSpace.Client, "/t/" + Workshop);
         Assert.Contains($"<a class=\"masthead-sign-in\" href=\"{BaseUrl}/sign-in?return={Uri.EscapeDataString("/t/" + Workshop)}\">Sign in</a>", visitorHtml);
-        Assert.Contains("<span class=\"switcher-item-detail\">Discussions · 1 topic</span>", WebUtility.HtmlDecode(visitorHtml));
+        Assert.Contains("<span class=\"tangent-row-detail\">Discussions · 1 topic</span>", WebUtility.HtmlDecode(visitorHtml));
         Assert.DoesNotContain("The studio", visitorHtml);
         Assert.Contains("<span class=\"topic-row-latest-line\"><b>ada.example</b> The latest word.</span>", visitorHtml);
 
@@ -319,18 +324,247 @@ public sealed class TangentPageTests
         var readerHtml = await Html(browser.Client, "/t/" + Workshop);
         Assert.DoesNotContain("masthead-sign-in", readerHtml);
         Assert.Contains(" · Member</span>", WebUtility.HtmlDecode(readerHtml));
-        Assert.Contains($"<li><form method=\"post\" action=\"{BaseUrl}/auth/logout?return={Uri.EscapeDataString("/t/" + Workshop)}\">", readerHtml);
+        Assert.Contains($"<li><form class=\"sign-out\" method=\"post\" action=\"{BaseUrl}/auth/logout?return={Uri.EscapeDataString("/t/" + Workshop)}\">", readerHtml);
         Assert.Contains("data-theme-choice=\"dark\"", readerHtml[..readerHtml.IndexOf("account-items", StringComparison.Ordinal)]);
         Assert.DoesNotContain("The studio", readerHtml);
         Assert.Contains("<span class=\"badge is-new new-beside\">New</span>", readerHtml);
     }
 
     [Fact]
+    public async Task A_topic_whose_root_is_removed_is_listed_saying_who_removed_it_as_html_and_json_and_a_removed_article_never_leads()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        await Place(tangentSpace);
+        var open = await Started("Still open", Start);
+        var gone = await Started("Taken down", Start.AddMinutes(1));
+        Assert.IsType<Outcome<Post>.Done>(await new RemovePost(gone.Id, "leo", Start.AddMinutes(2)).Send(Cancellation));
+
+        using (var json = await Json(tangentSpace.Client, "/t/" + Workshop))
+        {
+            var topics = json.RootElement.GetProperty("topics").EnumerateArray().ToDictionary(topic => topic.GetProperty("id").GetString()!);
+            var removed = topics[gone.Id].GetProperty("removed");
+            Assert.Equal(("leo", Start.AddMinutes(2)), (removed.GetProperty("by").GetProperty("id").GetString(), removed.GetProperty("at").GetDateTimeOffset()));
+            Assert.Equal(("Taken down", ""), (topics[gone.Id].GetProperty("title").GetString(), topics[gone.Id].GetProperty("opening").GetString()));
+            Assert.False(topics[open.Id].TryGetProperty("removed", out _));
+        }
+
+        var html = await Html(tangentSpace.Client, "/t/" + Workshop);
+        Assert.Contains("<a class=\"row topic is-removed\"", html);
+        Assert.Matches("<span class=\"topic-row-removed\">Removed by leo\\.example <time ", html);
+        Assert.Single(Regex.Matches(html, "is-removed"));
+
+        // In a Tangent of articles the newest is removed: the next leads, and the removed one follows as a card.
+        Assert.IsType<Outcome<Tangent>.Done>(await new CreateTangent("essays", "Essays", "", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "essays", "An older essay", "Words that stay.", "ada", At: Start.AddMinutes(3)).Send(Cancellation));
+        var newer = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "essays", "A newer essay", "Words that go.", "ada", At: Start.AddMinutes(4)).Send(Cancellation)).Result;
+        Assert.IsType<Outcome<Post>.Done>(await new RemovePost(newer.Id, "ada", Start.AddMinutes(5)).Send(Cancellation));
+
+        var essays = await Html(tangentSpace.Client, "/t/essays");
+        var lead = Regex.Match(essays, "<article class=\"article-card article-lead card topic\"[^>]*>.*?</article>", RegexOptions.Singleline);
+        var card = Regex.Match(essays, "<article class=\"article-card card topic is-removed\"[^>]*>.*?</article>", RegexOptions.Singleline);
+        Assert.True(lead.Success && card.Success, "the older essay leads and the removed one is a card");
+        Assert.Contains("An older essay", lead.Value);
+        Assert.Contains("A newer essay", card.Value);
+        Assert.Matches("<p class=\"article-card-removed\">Removed by its author <time ", card.Value);
+        Assert.DoesNotContain("min read", card.Value);
+        Assert.True(lead.Index < card.Index);
+    }
+
+    [Fact]
+    public async Task An_articles_tangent_narrows_by_month_and_by_author_across_all_its_articles_as_html_json_and_the_tool_its_rail_offering_each_with_how_many()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        await Place(tangentSpace);
+        Assert.IsType<Outcome<Tangent>.Done>(await new CreateTangent("essays", "Essays", "", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
+        // Leo's two September essays lie past the first page, behind more October essays of Ada's than a page holds.
+        var september = new List<string>();
+        foreach (var day in new[] { 10, 12 })
+            september.Add(Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "essays", "September " + day, "Words of September.", "leo",
+                At: new DateTimeOffset(2026, 9, day, 9, 0, 0, TimeSpan.Zero)).Send(Cancellation)).Result.Id);
+        var october = new List<string>();
+        for (var index = 0; index < TopicList.PageSize + 1; index++)
+            october.Add(Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "essays", "October " + index, "Words of October.", "ada",
+                At: new DateTimeOffset(2026, 10, 1, 9, index, 0, TimeSpan.Zero)).Send(Cancellation)).Result.Id);
+
+        using (var whole = await Json(tangentSpace.Client, "/t/essays"))
+        {
+            var root = whole.RootElement;
+            Assert.DoesNotContain(Ids(root), september.Contains);
+            Assert.Equal([("2026-10", "October 2026", 31, $"{BaseUrl}/t/essays?month=2026-10"), ("2026-09", "September 2026", 2, $"{BaseUrl}/t/essays?month=2026-09")],
+                Choices(root.GetProperty("months")));
+            Assert.Equal([("ada", "ada.example", 31, $"{BaseUrl}/t/essays?author=ada"), ("leo", "leo.example", 2, $"{BaseUrl}/t/essays?author=leo")],
+                Choices(root.GetProperty("authors")));
+            Assert.False(root.TryGetProperty("month", out _));
+        }
+
+        using (var narrowed = await Json(tangentSpace.Client, "/t/essays?month=2026-09"))
+        {
+            Assert.Equal(september.AsEnumerable().Reverse(), Ids(narrowed.RootElement));
+            Assert.Equal("2026-09", narrowed.RootElement.GetProperty("month").GetString());
+            Assert.False(narrowed.RootElement.TryGetProperty("next", out _));
+        }
+
+        using (var byLeo = await Json(tangentSpace.Client, "/t/essays?author=leo"))
+        {
+            Assert.Equal(september.AsEnumerable().Reverse(), Ids(byLeo.RootElement));
+            Assert.Equal("leo", byLeo.RootElement.GetProperty("author").GetProperty("id").GetString());
+        }
+
+        using (var both = await Json(tangentSpace.Client, "/t/essays?month=2026-10&author=leo"))
+            Assert.Empty(Ids(both.RootElement));
+
+        // October holds more than a page: the next page stays narrowed and continues by the same cursor.
+        var read = new List<string>();
+        string? address = "/t/essays?month=2026-10";
+        while (address is not null)
+        {
+            using var json = await Json(tangentSpace.Client, address);
+            read.AddRange(Ids(json.RootElement));
+            address = json.RootElement.TryGetProperty("next", out var next) ? new Uri(next.GetString()!).PathAndQuery : null;
+            Assert.True(address is null || address.StartsWith("/t/essays?month=2026-10&after=", StringComparison.Ordinal), address);
+        }
+
+        Assert.Equal(october.AsEnumerable().Reverse(), read);
+
+        var html = await Html(tangentSpace.Client, "/t/essays?month=2026-09");
+        Assert.Contains("<a class=\"topic-view\" href=\"" + BaseUrl + "/t/essays?month=2026-09\" aria-current=\"page\">September 2026<span class=\"topic-view-count\">2</span></a>", html);
+        Assert.Contains("<a class=\"topic-view\" href=\"" + BaseUrl + "/t/essays?author=ada\">ada.example<span class=\"topic-view-count\">31</span></a>", html);
+        Assert.Contains("<a href=\"" + BaseUrl + "/t/essays\">All articles</a>", html);
+        Assert.Contains("<h2 class=\"topic-list-title\">2 articles from September 2026</h2>", html);
+        Assert.Contains("<h2 class=\"topic-list-title\">Articles by leo.example from September 2026</h2>", await Html(tangentSpace.Client, "/t/essays?month=2026-09&author=leo"));
+        Assert.Contains("No articles by leo.example from October 2026.", await Html(tangentSpace.Client, "/t/essays?month=2026-10&author=leo"));
+
+        using var refused = await tangentSpace.Client.GetAsync("/t/essays?month=2026-13", Cancellation);
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+
+        using var tools = await ToolClient.Connect(tangentSpace);
+        var called = await tools.Call("read_tangent", new { tangent = "essays", author = "leo" });
+        Assert.False(called.Failed, called.Text);
+        Assert.Equal(september.AsEnumerable().Reverse(), Ids(called.Structured!.Value));
+    }
+
+    [Fact]
+    public async Task An_articles_tangent_lists_by_when_each_article_started_so_a_reply_moves_nothing_and_the_newest_leads_while_discussions_keep_latest_activity()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        await Place(tangentSpace);
+        Assert.IsType<Outcome<Tangent>.Done>(await new CreateTangent("essays", "Essays", "", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
+        var older = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "essays", "The older essay", "Words of old.", "leo", At: Start).Send(Cancellation)).Result;
+        var newer = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "essays", "The newer essay", "Words of new.", "leo", At: Start.AddMinutes(1)).Send(Cancellation)).Result;
+        Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), older.Id, "A late reply.", "ada", At: Start.AddMinutes(2)).Send(Cancellation));
+
+        foreach (var path in new[] { "/t/essays", "/t/essays?author=leo", "/t/essays?month=2026-09" })
+        {
+            using var json = await Json(tangentSpace.Client, path);
+            Assert.Equal([newer.Id, older.Id], Ids(json.RootElement));
+        }
+
+        var html = await Html(tangentSpace.Client, "/t/essays");
+        Assert.Contains("<span class=\"topic-list-order\">newest first</span>", html);
+        var lead = Regex.Match(html, "<article class=\"article-card article-lead card topic\"[^>]*>.*?</article>", RegexOptions.Singleline);
+        Assert.True(lead.Success);
+        Assert.Contains("The newer essay", lead.Value);
+
+        var asked = await Started("Asked first", Start);
+        var answered = await Started("Asked next", Start.AddMinutes(1));
+        Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), asked.Id, "An answer.", "leo", At: Start.AddMinutes(2)).Send(Cancellation));
+        using (var discussions = await Json(tangentSpace.Client, "/t/" + Workshop))
+            Assert.Equal([asked.Id, answered.Id], Ids(discussions.RootElement));
+        Assert.Contains("<span class=\"topic-list-order\">latest activity first</span>", await Html(tangentSpace.Client, "/t/" + Workshop));
+    }
+
+    [Fact]
+    public async Task More_articles_than_one_page_continue_by_when_each_started_each_on_exactly_one_page_however_their_replies_fall()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        await Place(tangentSpace);
+        Assert.IsType<Outcome<Tangent>.Done>(await new CreateTangent("essays", "Essays", "", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
+        var started = new List<string>();
+        for (var index = 0; index < TopicList.PageSize + 1; index++)
+            started.Add(Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "essays", "Essay " + index, "Words.", "leo",
+                At: Start.AddMinutes(index)).Send(Cancellation)).Result.Id);
+        // The oldest articles gain the newest replies, so by latest activity they would come first.
+        for (var index = 0; index < 3; index++)
+            Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), started[index], "Late.", "ada", At: Start.AddHours(2 + index)).Send(Cancellation));
+
+        var read = new List<string>();
+        var pages = 0;
+        string? address = "/t/essays";
+        while (address is not null)
+        {
+            using var json = await Json(tangentSpace.Client, address);
+            read.AddRange(Ids(json.RootElement));
+            pages++;
+            address = json.RootElement.TryGetProperty("next", out var next) ? new Uri(next.GetString()!).PathAndQuery : null;
+        }
+
+        Assert.Equal(2, pages);
+        Assert.Equal(started.AsEnumerable().Reverse(), read);
+    }
+
+    [Fact]
+    public async Task An_articles_tangents_rail_offers_the_authors_who_started_the_most_and_the_one_its_list_is_narrowed_to()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        await Place(tangentSpace);
+        Assert.IsType<Outcome<Tangent>.Done>(await new CreateTangent("essays", "Essays", "", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
+        // More writers than the rail offers: the first ones each start two essays, the last two one each.
+        var writers = Enumerable.Range(0, TangentPageController.AuthorLimit + 2).Select(index => $"writer{index:D2}").ToList();
+        foreach (var (writer, index) in writers.Select((writer, index) => (writer, index)))
+        {
+            await Given.AParticipant(tangentSpace, writer, [Roles.Member], ct: Cancellation);
+            for (var essay = 0; essay < (index < TangentPageController.AuthorLimit ? 2 : 1); essay++)
+                Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "essays", $"Essay {essay} of {writer}", "Words.", writer, At: Start.AddMinutes(index)).Send(Cancellation));
+        }
+
+        var most = writers.Take(TangentPageController.AuthorLimit).Select(writer => (writer, writer + ".example", 2, $"{BaseUrl}/t/essays?author={writer}")).ToList();
+        using (var whole = await Json(tangentSpace.Client, "/t/essays"))
+            Assert.Equal(most, Choices(whole.RootElement.GetProperty("authors")));
+
+        // Narrowed to a writer past them, the rail offers them too, current, and the list says how many they started.
+        var last = writers[^1];
+        using (var narrowed = await Json(tangentSpace.Client, "/t/essays?author=" + last))
+        {
+            Assert.Equal([.. most, (last, last + ".example", 1, $"{BaseUrl}/t/essays?author={last}")], Choices(narrowed.RootElement.GetProperty("authors")));
+            Assert.Single(Ids(narrowed.RootElement));
+        }
+
+        var html = await Html(tangentSpace.Client, "/t/essays?author=" + last);
+        Assert.Contains("<a class=\"topic-view\" href=\"" + BaseUrl + "/t/essays?author=" + last + "\" aria-current=\"page\">" + last + ".example<span class=\"topic-view-count\">1</span></a>", html);
+        Assert.Contains("<h2 class=\"topic-list-title\">1 article by " + last + ".example</h2>", html);
+        Assert.DoesNotContain("?author=" + writers[^2] + "\"", html);
+    }
+
+    [Fact]
+    public async Task A_tangent_whose_months_and_authors_do_not_add_up_to_its_topics_is_counted_again_at_start()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
+        await Place(tangentSpace);
+        await Started("One", new DateTimeOffset(2026, 9, 30, 23, 59, 0, TimeSpan.Zero));
+        await Started("Two", new DateTimeOffset(2026, 10, 1, 0, 0, 0, TimeSpan.Zero));
+        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, "Three", "Words.", "leo", At: Start).Send(Cancellation));
+        var counted = (await Tangent.Get(Workshop, Cancellation))!;
+        Assert.True(counted.Tallied());
+        var months = counted.Months.OrderBy(month => month.Key).ToList();
+        var authors = counted.Authors.OrderBy(author => author.Key).ToList();
+        Assert.Equal(new KeyValuePair<string, int>[] { new("2026-09", 2), new("2026-10", 1) }, months);
+        Assert.Equal(new KeyValuePair<string, int>[] { new("ada", 2), new("leo", 1) }, authors);
+
+        (counted.Months, counted.Authors) = ([], []);
+        await counted.Save(Cancellation);
+        await TallyTopics.AtStart(NullLogger.Instance, Cancellation);
+
+        var tallied = (await Tangent.Get(Workshop, Cancellation))!;
+        Assert.Equal(months, tallied.Months.OrderBy(month => month.Key));
+        Assert.Equal(authors, tallied.Authors.OrderBy(author => author.Key));
+    }
+
+    [Fact]
     public void The_version_differs_across_midnight_utc_for_the_same_page_since_the_day_changes_how_its_times_read()
     {
         var at = new DateTimeOffset(2026, 10, 29, 15, 0, 0, TimeSpan.Zero);
-        var author = new TangentPage.Author("ada", "ada.example", "Ada", "person", null);
-        var topic = new TangentPage.Topic(Tids.Mint(), "a-question", "A question", "topic", $"{BaseUrl}/t/{Workshop}/a-question", author,
+        var author = new global::Tangent.Render.Person("ada", "ada.example", "Ada", "person", null);
+        var topic = new global::Tangent.Render.TopicEntry(Tids.Mint(), "a-question", "A question", "topic", $"{BaseUrl}/t/{Workshop}/a-question", author,
             "Words.", 1, 0, at, at, null, [author], false, 0);
         var today = new TangentPage(Workshop, "The workshop", "", "topic", "public", $"{BaseUrl}/t/{Workshop}", ["View"], [topic], null,
             false, null, null, [], "Tangent Space", BaseUrl + "/", null, new DateOnly(2026, 10, 29));
@@ -338,9 +572,9 @@ public sealed class TangentPageTests
 
         Assert.Equal(TangentPage.Version(today), TangentPage.Version(today with { }));
         Assert.NotEqual(TangentPage.Version(today), TangentPage.Version(tomorrow));
-        Assert.Equal("3:00 PM", Render.TopicRow.When(at, today.Day));
-        Assert.Equal("Oct 29", Render.TopicRow.When(at, tomorrow.Day));
-        Assert.Equal("Oct 29, 2026", Render.TopicRow.When(at, new DateOnly(2027, 1, 1)));
+        Assert.Equal("3:00 PM", Render.Wording.When(at, today.Day));
+        Assert.Equal("Oct 29", Render.Wording.When(at, tomorrow.Day));
+        Assert.Equal("Oct 29, 2026", Render.Wording.When(at, new DateOnly(2027, 1, 1)));
     }
 
     /// <summary>The place every proof starts from: established, with an administrator who sets up the public Tangent,
@@ -360,6 +594,12 @@ public sealed class TangentPageTests
         => page.GetProperty("topics").EnumerateArray().Select(topic => topic.GetProperty("id").GetString()!).ToList();
 
     private static List<string> Strings(JsonElement array) => array.EnumerateArray().Select(item => item.GetString()!).ToList();
+
+    /// <summary>Each way a list narrows, as its JSON says it: its key, name, count and address.</summary>
+    private static List<(string, string, int, string)> Choices(JsonElement array) => array.EnumerateArray()
+        .Select(choice => (choice.GetProperty("key").GetString()!, choice.GetProperty("name").GetString()!, choice.GetProperty("count").GetInt32(),
+            choice.GetProperty("address").GetString()!))
+        .ToList();
 
     /// <summary>What the page says is new in each Topic: whether it is, and how many of its Posts, null where it is new
     /// with no count.</summary>

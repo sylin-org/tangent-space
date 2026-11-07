@@ -74,7 +74,7 @@ public sealed class DoorTests(ITestOutputHelper output)
         {
             var news = json.RootElement.GetProperty("news");
             Assert.Equal((since, through), (news.GetProperty("from").GetInt64(), news.GetProperty("through").GetInt64()));
-            Assert.False(news.GetProperty("quiet").GetBoolean());
+            Assert.False(news.GetProperty("empty").GetBoolean());
             Assert.Equal((Reader, "reader.example"), (json.RootElement.GetProperty("who").GetProperty("id").GetString(),
                 json.RootElement.GetProperty("who").GetProperty("handle").GetString()));
 
@@ -110,7 +110,38 @@ public sealed class DoorTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task The_places_manager_is_welcomed_with_its_first_steps_until_a_topic_is_written()
+    public async Task Past_five_of_a_kind_the_door_carries_every_one_draws_five_and_opens_the_rest_in_place_and_the_account_menu_opens_the_readers_own_profile()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
+        await Place(tangentSpace);
+        var mine = await Started(Workshop, "My question", Reader);
+        await Mark(Reader);
+        var replies = new List<Post>();
+        for (var index = 1; index <= 7; index++) replies.Add(await Replied(mine, "ada", body: "Answer number " + index + "."));
+        var newest = Enumerable.Reverse(replies).ToList();
+
+        using var browser = await SignedIn(tangentSpace);
+        using (var json = await Json(browser.Client, "/"))
+        {
+            var group = json.RootElement.GetProperty("news").GetProperty("replies");
+            Assert.Equal((7, false), (group.GetProperty("count").GetInt32(), group.GetProperty("atLeast").GetBoolean()));
+            Assert.Equal(newest.Select(reply => reply.Id), PostIds(group));
+            var who = json.RootElement.GetProperty("who");
+            Assert.Equal(("person", $"{BaseUrl}/p/reader.example"), (who.GetProperty("kind").GetString(), who.GetProperty("profile").GetString()));
+        }
+
+        // The newest five are rows; the two oldest wait behind one line in the same list, which opens them in place.
+        var html = await Html(browser.Client, "/");
+        var line = html.IndexOf("<details class=\"door-news-more\"><summary>and 2 more</summary>", StringComparison.Ordinal);
+        Assert.True(line > 0, "The group has no line of the rest.");
+        Assert.All(newest.Take(Door.Group.Drawn), reply => Assert.InRange(html.IndexOf("/my-question/" + reply.Id, StringComparison.Ordinal), 0, line));
+        Assert.All(newest.Skip(Door.Group.Drawn), reply => Assert.True(html.IndexOf("/my-question/" + reply.Id, StringComparison.Ordinal) > line));
+        Assert.Contains($"<a class=\"account-item\" href=\"{BaseUrl}/p/reader.example\">", html);
+        Assert.True(html.IndexOf("Your profile", StringComparison.Ordinal) < html.IndexOf("Bring your agent", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task The_places_manager_makes_it_theirs_in_first_steps_each_press_returning_to_the_door_until_they_close_them()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
         await Place(tangentSpace);
@@ -119,15 +150,34 @@ public sealed class DoorTests(ITestOutputHelper output)
 
         using (var json = await Json(browser.Client, "/"))
         {
-            var welcome = json.RootElement.GetProperty("welcoming");
-            Assert.Equal(BaseUrl + "/t/" + Articles + "/new", welcome.GetProperty("firstTopic").GetString());
-            Assert.Equal(BaseUrl + "/bring-your-agent", welcome.GetProperty("bringYourAgent").GetString());
+            var steps = json.RootElement.GetProperty("firstSteps");
+            Assert.Equal(BaseUrl + "/t/" + Articles + "/new", steps.GetProperty("firstTopic").GetString());
+            Assert.Equal(BaseUrl + "/bring-your-agent", steps.GetProperty("bringYourAgent").GetString());
+            Assert.Equal(BaseUrl + FirstStepsController.ClosePath, steps.GetProperty("close").GetProperty("action").GetString());
+            var purposes = steps.GetProperty("purposes").EnumerateArray().ToDictionary(purpose => purpose.GetProperty("name").GetString()!, purpose => purpose);
+            Assert.Equal(BaseUrl + "/t/" + Workshop, purposes["The workshop"].GetProperty("address").GetString());
+            Assert.Equal(BaseUrl + "/t/new", purposes["Off the record"].GetProperty("add").GetProperty("action").GetString());
         }
-        Assert.Contains("Welcome to Lantern Works", WebUtility.HtmlDecode(await Html(browser.Client, "/")));
+        Assert.Contains("Make it yours.", WebUtility.HtmlDecode(await Html(browser.Client, "/")));
 
-        await Started(Workshop, "A question", "ada");
+        // A press on the door sends the settings' own write and comes back to the door; another host is never where it goes.
+        using (var jade = await browser.Client.PostAsync(TangentSpaceSettingsController.AppearancePath,
+                   Form(new() { [TangentSpaceSettingsController.PaletteField] = "jade", [PostWrites.ReturnField] = "/" }), Cancellation))
+            Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + "/"), (jade.StatusCode, jade.Headers.Location?.OriginalString));
+        Assert.Equal(Palette.Jade, (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!.Appearance.Palette);
+        using (var away = await browser.Client.PostAsync(TangentSpaceSettingsController.AppearancePath,
+                   Form(new() { [TangentSpaceSettingsController.PaletteField] = "iris", [PostWrites.ReturnField] = "//elsewhere.example/" }), Cancellation))
+            Assert.Equal(BaseUrl + TangentSpaceSettingsController.AppearancePath, away.Headers.Location?.OriginalString);
+        using (var created = await browser.Client.PostAsync("/t/new", Form(new()
+               {
+                   ["name"] = "Off the record", ["description"] = "For whoever is let in.", ["kind"] = "topic", ["audience"] = "private", [PostWrites.ReturnField] = "/"
+               }), Cancellation))
+            Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + "/"), (created.StatusCode, created.Headers.Location?.OriginalString));
+
+        using (var closed = await browser.Client.PostAsync(FirstStepsController.ClosePath, Form(new()), Cancellation))
+            Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + "/"), (closed.StatusCode, closed.Headers.Location?.OriginalString));
         using var after = await Json(browser.Client, "/");
-        Assert.False(after.RootElement.TryGetProperty("welcoming", out var left) && left.ValueKind != JsonValueKind.Null);
+        Assert.False(after.RootElement.TryGetProperty("firstSteps", out var left) && left.ValueKind != JsonValueKind.Null);
     }
 
     [Fact]
@@ -150,7 +200,7 @@ public sealed class DoorTests(ITestOutputHelper output)
 
         using var json = await Json(browser.Client, "/");
         var news = json.RootElement.GetProperty("news");
-        Assert.True(news.GetProperty("quiet").GetBoolean());
+        Assert.True(news.GetProperty("empty").GetBoolean());
         Assert.Empty(news.GetProperty("perTangent").EnumerateArray());
         Assert.Equal(Capabilities.Apply.Word, json.RootElement.GetProperty("gate").GetString());
         Assert.Contains("Nothing new since you were here.", WebUtility.HtmlDecode(await Html(browser.Client, "/")));
@@ -320,7 +370,7 @@ public sealed class DoorTests(ITestOutputHelper output)
         using (var json = await Json(browser.Client, "/"))
         {
             var news = json.RootElement.GetProperty("news");
-            Assert.True(news.GetProperty("quiet").GetBoolean());
+            Assert.True(news.GetProperty("empty").GetBoolean());
             Assert.False(news.TryGetProperty("seen", out var seen) && seen.ValueKind != JsonValueKind.Null);
             Assert.False(json.RootElement.GetProperty("alive")[0].GetProperty("topic").GetProperty("new").GetBoolean());
         }
@@ -388,8 +438,8 @@ public sealed class DoorTests(ITestOutputHelper output)
         }
 
         var html = WebUtility.HtmlDecode(await Html(tangentSpace.Client, "/"));
-        Assert.Contains("<h1 id=\"door-title\" class=\"tangent-title\">Lantern Works</h1>", html);
-        Assert.Contains("The place of leo.example, @leo.example", html);
+        Assert.Contains("<span class=\"masthead-name\">Lantern Works</span>", html);
+        Assert.Matches("The place of <a class=\"participant-name\" href=\"[^\"]*/p/leo.example\">leo.example</a>, @leo.example", html);
         Assert.Contains("What should we build?", html);
         Assert.Contains("On lanterns", html);
         Assert.Contains($"<a class=\"masthead-sign-in\" href=\"{BaseUrl}/sign-in?return=%2F\">Sign in</a>", html);
@@ -490,7 +540,7 @@ public sealed class DoorTests(ITestOutputHelper output)
     private static async Task<long> Mark(string participantId)
     {
         var last = await Event.Log.Highest(Cancellation);
-        Assert.IsType<Outcome<Checkpoint>.Done>(await new Store<Checkpoint>(Checkpoint.At(participantId, Scope.Place, last)).Send(Cancellation));
+        Assert.IsType<Outcome<Checkpoint>.Done>(await new Seen(participantId, last).Send(Cancellation));
         return last;
     }
 

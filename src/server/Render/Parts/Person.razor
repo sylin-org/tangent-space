@@ -1,0 +1,70 @@
+@* A participant, drawn as whatever holds them chooses. As a chip, their mark: their avatar, or two letters of their handle on
+   a tint of their own; an agent's square with a ring, the reader's own marked; a click opens their card where the page
+   knows their profile, linking out to the account a Post was written as where the mark is a Post's. As a name, their name,
+   linked to their profile where the page knows it, or out to the account a Post was written as where it knows none, as for
+   someone who left, and an agent's tag. As a row, their mark, their name and their handle, with the role they hold where the row says it. *@
+@if (As == Shape.Name)
+{
+    @Named
+}
+else if (As == Shape.Row)
+{
+    <span class="@("row participant" + States)">
+        @Mark
+        <span class="participant-names">
+            <span class="participant-name">@Model.Name</span>
+            @if (Model.Handle.Length > 0)
+            {
+                <span class="participant-handle">@("@" + Model.Handle + (Model.Role is { } role ? " · " + role : ""))</span>
+            }
+        </span>
+    </span>
+}
+else
+{
+    @Mark
+}
+
+@code {
+    [Parameter, EditorRequired] public Render.Person Model { get; set; } = default!;
+
+    [Parameter] public Shape As { get; set; }
+
+    [CascadingParameter(Name = Page.ReaderValue)] public string? Reader { get; set; }
+
+    /// <summary>The attribute a mark carries with the profile its card reads (<c>src/client/islands/person.ts</c>).</summary>
+    public const string PersonCard = "data-person";
+
+    /// <summary>The attribute a Post's name and mark carry with the DID it was written as.</summary>
+    public const string AccountCard = "data-account";
+
+    /// <summary>The name, linked where the page knows the profile, or out to the account a Post was written as where it knows
+    /// none, and an agent's tag right after it, with nothing between them or after, so a sentence goes on from the name as it
+    /// would from a word.</summary>
+    private RenderFragment Named => builder =>
+    {
+        var link = Model.Profile ?? (Model.Account is { } written ? Participants.Participant.Elsewhere(written) : null);
+        builder.OpenElement(0, link is null ? "span" : "a");
+        builder.AddAttribute(1, "class", "participant-name");
+        if (link is not null) builder.AddAttribute(2, "href", link);
+        if (Model.Account is { } account) builder.AddAttribute(3, "data-account", account);
+        builder.AddContent(4, Model.Name);
+        builder.CloseElement();
+        if (!Model.Agent) return;
+        builder.OpenElement(5, "span");
+        builder.AddAttribute(6, "class", "badge is-agent");
+        builder.AddContent(7, "Agent");
+        builder.CloseElement();
+    };
+
+    private string States => (Model.Agent ? " is-agent" : "") + (Reader is not null && Model.Id == Reader ? " is-you" : "");
+
+    private RenderFragment Mark => @<text>@if (Monogram.Avatar(Model.Avatar) is { } avatar)
+        {
+            <img class="@("mark chip participant" + States)" src="@avatar" alt="" data-person="@Model.Profile" data-account="@Model.Account">
+        }
+        else
+        {
+            <span class="@("mark chip participant" + States + " tone-" + Monogram.Tone(Model.Id))" aria-hidden="true" data-person="@Model.Profile" data-account="@Model.Account">@Monogram.Letters(Model.Handle)</span>
+        }</text>;
+}

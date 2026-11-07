@@ -98,7 +98,7 @@ public sealed partial class ArchiveTests
         Assert.Contains($"url=../index.html#{long_.Id}", await Read(folder, "t", Workshop, "a-long-one", long_.Id, "index.html"));
 
         // The door is the door, and a removed Post stays a tombstone.
-        Assert.Contains("id=\"door-title\"", await Read(folder, "index.html"));
+        Assert.Contains("class=\"tangent-head place", await Read(folder, "index.html"));
         Assert.Contains("post-removed", await Read(folder, "t", Workshop, "a-long-one", "2.html"));
         Assert.DoesNotContain(Files(folder), file => File.ReadAllText(file).Contains("Words nobody keeps"));
 
@@ -278,7 +278,7 @@ public sealed partial class ArchiveTests
         var gone = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(62)));
         Assert.IsType<Outcome<TangentSpace>.Done>(await new ChangeTangentSpace(Leo, Footer: $"![](/media/{gone})").Send(Cancellation));
         Assert.IsType<Outcome<TangentSpace>.Done>(await new ChangeTangentSpace(Leo,
-            Masthead: $"![](/media/{logo})", Image: "/media/" + icon, Footer: "").Send(Cancellation));
+            Masthead: $"![](/media/{logo})", Mark: "/media/" + icon, Footer: "").Send(Cancellation));
         var bytes = await visitor.GetByteArrayAsync("/media/" + logo, Cancellation);
 
         var folder = Path.Combine(tangentSpace.Folder, "archive");

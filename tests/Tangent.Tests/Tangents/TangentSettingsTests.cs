@@ -14,8 +14,10 @@ namespace Tangent.Tangents;
 
 /// <summary>A Tangent's settings at <c>/t/{tangent}/settings</c>: offered to whoever holds ManageTangent there, or
 /// ManageSpace; a rename keeps the slug; an audience change writes the everyone overwrite and appends tangent.changed,
-/// and decides who reads; a move reorders the door; the moderators' Tangent keeps its audience and its place; and the
-/// settings answer JSON with <c>can</c> and <c>gate</c>.</summary>
+/// and decides who reads; a move reorders the door; the moderators' Tangent keeps its audience and its place; the
+/// settings answer JSON with <c>can</c> and <c>gate</c>; an image brought in on them and the accent are what the Tangent
+/// wears wherever it is listed; and whoever holds ManageSpace deletes a Tangent whole, past its
+/// warning where it holds Topics, and nothing of it reaches anyone afterwards.</summary>
 public sealed class TangentSettingsTests
 {
     private static readonly string Leo = Persona.Id("leo4settings");
@@ -49,10 +51,11 @@ public sealed class TangentSettingsTests
         var gate = Capabilities.NoRoleGrants(Bit.ManageTangent).Word;
         var offered = await Send(ada.Client, HttpMethod.Get, "/t/workshop/settings");
         Assert.Contains($"data-gate=\"{gate}\"", offered.Body);
-        Assert.DoesNotContain("type=\"submit\"", offered.Body);
+        Assert.DoesNotContain("type=\"submit\"", PageContent(offered.Body));
+        // The change declares ManageTangent, so the Doorway refuses it before anything is bound: the refusal's page, with its gate.
         var refused = await Form(ada, "/t/workshop", "/t/workshop/settings", Workshop("Ada's workshop"));
         Assert.Equal(HttpStatusCode.Forbidden, refused.Status);
-        Assert.Contains($"data-gate=\"{gate}\"", refused.Body);
+        Assert.Contains($"class=\"refusal\" data-word=\"{gate}\"", refused.Body);
         Assert.Equal("workshop", (await Tangent.Get("workshop", Cancellation))!.Name);
 
         var renamed = await Form(bea, "/t/workshop", "/t/workshop/settings", Workshop("Bea's workshop"));
@@ -310,6 +313,159 @@ public sealed class TangentSettingsTests
             Assert.False(closed.Json.TryGetProperty(property, out _), property);
         Assert.Equal(Audience.Private, await Overwrites.AudienceOf("workshop", Cancellation));
     }
+
+    [Fact]
+    public async Task A_manager_deletes_an_empty_tangent_at_one_press_and_one_with_topics_past_its_warning_and_the_moderators_tangent_stays()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        Assert.IsType<Outcome<Tangent>.Done>(await new CreateModeratorsTangent().Send(Cancellation));
+        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
+        var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
+        await roles.Overwrite(Overwrites.Resource("workshop"), OverwriteSubjectKind.Person, Bea, [Bits.Token(Bit.ManageTangent)], [], ct: Cancellation);
+        using var leo = await SignedIn(tangentSpace, Leo);
+        using var ada = await SignedIn(tangentSpace, Ada);
+        using var bea = await SignedIn(tangentSpace, Bea);
+
+        // An empty Tangent goes at one press, with nothing to warn of.
+        Assert.Equal(HttpStatusCode.Created, (await Json(leo, "/t/new", "/t/new", new { name = "Corner" })).Status);
+        var corner = PageContent((await Send(leo.Client, HttpMethod.Get, "/t/corner/settings")).Body);
+        Assert.Contains("Delete this Tangent", corner);
+        Assert.DoesNotContain("post-remove-note", corner);
+        var pressed = await Form(leo, "/t/corner/settings", "/t/corner/settings/delete", new() { ["topics"] = "0" });
+        Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + "/t"), (pressed.Status, pressed.Location));
+        Assert.Null(await Tangent.Get("corner", Cancellation));
+        Assert.Equal(HttpStatusCode.NotFound, (await Form(leo, "/t/corner/settings", "/t/corner/settings/delete", new() { ["topics"] = "0" })).Status);
+
+        // A private Tangent with a Topic, an edited reply, an image, an ask and a person let in.
+        var image = await Media.Keep(ArticleMediaTests.Jpeg(), Cancellation);
+        Assert.IsType<Outcome<MediaUse>.Done>(await new BringMedia(image.Id, Leo).Send(Cancellation));
+        var root = await Started(Leo, "Plans", "![A plan](/media/" + image.Id + ")", Studio);
+        var reply = await Replied(root, Leo, "First draft.");
+        Assert.IsType<Outcome<Post>.Done>(await new EditPost(reply.Id, 1, PostBody.Of("Second draft."), null, Leo).Send(Cancellation));
+        Assert.IsType<Outcome<Tangent>.Done>(await new ChangeTangent(Studio, Leo, Image: "/media/" + image.Id).Send(Cancellation));
+        await Inside.LetIn(roles, Studio, Bea, Cancellation);
+        Assert.IsType<Outcome<Ask>.Done>(await new Store<Ask>(new Ask { Id = Ask.Key(Studio, Ada), TangentId = Studio, PersonId = Ada, AskedAt = DateTimeOffset.UtcNow }).Send(Cancellation));
+        Assert.NotNull(await AuditPartition.At<Post>(reply.Id, 1, Cancellation));
+        Assert.NotNull(await MediaUse.Get(MediaUse.Key(image.Id, root.Id), Cancellation));
+        Assert.NotNull(await MediaUse.Get(MediaUse.Key(image.Id, "tangent:" + Studio), Cancellation));
+
+        Assert.Contains(await Polled(bea), row => row.Tangent == Studio);
+
+        var warned = WebUtility.HtmlDecode((await Send(leo.Client, HttpMethod.Get, "/t/studio/settings")).Body);
+        Assert.Contains("Its one topic and every reply in it go for good, and no tombstone stays in its place.", warned);
+        Assert.Contains($"href=\"{BaseUrl}/settings/export/studio.zip\">Download it first</a> to keep a copy.", warned);
+        var settings = (await Send(leo.Client, HttpMethod.Get, "/t/studio/settings", json: true)).Json;
+        Assert.Equal((1, 0, "1"), (settings.GetProperty("topics").GetInt32(), settings.GetProperty("onBluesky").GetInt32(), Valued(settings.GetProperty("delete"), "topics")));
+
+        var bare = await Json(leo, "/t/studio/settings", "/t/studio/settings/delete", new { });
+        Assert.Equal((HttpStatusCode.Conflict, DeleteTangent.HoldsTopicsWord), (bare.Status, bare.Word));
+        Assert.Equal(HttpStatusCode.Conflict, (await Json(leo, "/t/studio/settings", "/t/studio/settings/delete", new { topics = 1000 })).Status);
+        var stale = await Form(leo, "/t/studio/settings", "/t/studio/settings/delete", new() { ["topics"] = "0" });
+        Assert.Equal(HttpStatusCode.Conflict, stale.Status);
+        Assert.Contains(DeleteTangent.HoldsTopics(1).Text, WebUtility.HtmlDecode(stale.Body));
+        Assert.NotNull(await Tangent.Get(Studio, Cancellation));
+        Assert.NotNull(await Post.Get(root.Id, Cancellation));
+
+        var deleted = await Json(leo, "/t/studio/settings", "/t/studio/settings/delete", new { topics = 1 });
+
+        Assert.Equal((HttpStatusCode.OK, Studio, 1), (deleted.Status, deleted.Json.GetProperty("slug").GetString(), deleted.Json.GetProperty("topics").GetInt32()));
+        Assert.Null(await Tangent.Get(Studio, Cancellation));
+        Assert.Null(await Post.Get(root.Id, Cancellation));
+        Assert.Null(await Post.Get(reply.Id, Cancellation));
+        Assert.Null(await AuditPartition.At<Post>(reply.Id, 1, Cancellation));
+        Assert.Null(await MediaUse.Get(MediaUse.Key(image.Id, root.Id), Cancellation));
+        Assert.Null(await MediaUse.Get(MediaUse.Key(image.Id, "tangent:" + Studio), Cancellation));
+        Assert.Null(await Ask.Get(Ask.Key(Studio, Ada), Cancellation));
+        Assert.Empty((await roles.Overwrites(Overwrites.Resource(Studio), ct: Cancellation)).Items);
+        var logged = (await Event.All(Cancellation)).OrderBy(e => e.Seq).Last();
+        Assert.Equal((EventKind.TangentDeleted, Studio, Leo), (logged.Kind, logged.TangentId, logged.ActorId));
+        Assert.DoesNotContain(await Polled(bea), row => row.Tangent == Studio);
+
+        // The slug taken again starts clean: none of the deleted Tangent's rows reaches the new one's readers.
+        Assert.Equal(HttpStatusCode.Created, (await Json(leo, "/t/new", "/t/new", new { name = Studio })).Status);
+        var again = (await Tangent.Get(Studio, Cancellation))!;
+        var reached = (await Polled(bea)).Where(row => row.Tangent == Studio).ToList();
+        Assert.Contains(reached, row => row.Seq == again.LogSeq);
+        Assert.All(reached, row => Assert.True(row.Seq >= again.LogSeq));
+        Assert.DoesNotContain(Leo, (await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("around").GetProperty("people")
+            .EnumerateArray().Select(person => person.GetProperty("id").GetString()));
+
+        // The moderators' Tangent stays, and whoever manages a Tangent without ManageSpace is offered no delete.
+        Assert.False((await Send(leo.Client, HttpMethod.Get, "/t/moderators/settings", json: true)).Json.TryGetProperty("delete", out _));
+        var kept = await Json(leo, "/t/moderators/settings", "/t/moderators/settings/delete", new { topics = 0 });
+        Assert.Equal((HttpStatusCode.BadRequest, DeleteTangent.Kept.Text), (kept.Status, kept.Json.GetProperty("detail").GetString()));
+        Assert.False((await Send(bea.Client, HttpMethod.Get, "/t/workshop/settings", json: true)).Json.TryGetProperty("delete", out _));
+        var gated = await Json(bea, "/t/workshop/settings", "/t/workshop/settings/delete", new { topics = 0 });
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageSpace).Word), (gated.Status, gated.Word));
+        Assert.NotNull(await Tangent.Get("workshop", Cancellation));
+    }
+
+    [Fact]
+    public async Task An_image_brought_in_on_its_settings_and_its_accent_are_what_the_tangent_wears_in_every_list_of_it()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
+        using var leo = await SignedIn(tangentSpace, Leo);
+        using var ada = await SignedIn(tangentSpace, Ada);
+        const string settings = "/t/workshop/settings";
+        const string bring = settings + "/" + TangentWrites.ImageSegment;
+
+        // The file and its own button stand under the image's choices for whoever may change the Tangent, and for no one else.
+        Assert.Contains($"action=\"{BaseUrl}{bring}\" enctype=\"multipart/form-data\"", (await Send(leo.Client, HttpMethod.Get, settings)).Body);
+        Assert.DoesNotContain(bring, (await Send(ada.Client, HttpMethod.Get, settings)).Body);
+        var refused = await Send(ada.Client, HttpMethod.Post, bring, Picture(ArticleMediaTests.Jpeg()), page: settings);
+        Assert.Equal(HttpStatusCode.Forbidden, refused.Status);
+        var notOne = await Send(leo.Client, HttpMethod.Post, bring, Picture([1, 2, 3]), page: settings);
+        Assert.Equal(HttpStatusCode.BadRequest, notOne.Status);
+        Assert.Contains(Media.NotAnImage.Text, PageContent(notOne.Body));
+        Assert.Equal("", (await Tangent.Get(Writing.Workshop, Cancellation))!.Image);
+
+        // Brought in, it is worn at once, and its settings open again with it chosen.
+        var brought = await Send(leo.Client, HttpMethod.Post, bring, Picture(ArticleMediaTests.Jpeg()), page: settings);
+        Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + settings), (brought.Status, brought.Location));
+        var image = (await Tangent.Get(Writing.Workshop, Cancellation))!.Image;
+        var id = Media.IdIn(image)!;
+        Assert.NotNull(await MediaUse.Get(MediaUse.Key(id, "tangent:" + Writing.Workshop), Cancellation));
+        Assert.Equal(image, (await Send(leo.Client, HttpMethod.Get, settings, json: true)).Json.GetProperty("image").GetString());
+        Assert.Contains($"value=\"{image}\" checked", PageContent((await Send(leo.Client, HttpMethod.Get, settings)).Body));
+
+        // With an accent chosen too, the door, the list of Tangents and the Tangents a Topic may start in all wear both.
+        Assert.IsType<Outcome<Tangent>.Done>(await new ChangeTangent(Writing.Workshop, Leo, Accent: "rose").Send(Cancellation));
+        var worn = BaseUrl + image;
+        static (string?, string?) Tile(JsonElement tangents) => tangents.EnumerateArray().Single(tangent => tangent.GetProperty("slug").GetString() == Writing.Workshop)
+            .GetProperty("tile") is var tile ? (tile.GetProperty("tone").GetString(), tile.GetProperty("image").GetString()) : default;
+        Assert.Equal(("rose", worn), Tile((await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("tangents")));
+        Assert.Equal(("rose", worn), Tile((await Send(ada.Client, HttpMethod.Get, "/t", json: true)).Json.GetProperty("tangents")));
+        var taken = await Started(Ada, "Lanterns", "On wicks.", Articles);
+        Assert.Equal(("rose", worn), Tile((await Send(ada.Client, HttpMethod.Get, $"/t/{Articles}/new?origin={taken.Id}", json: true)).Json.GetProperty("choices")));
+        var drawn = $"<span class=\"tile tangent tone-rose\" aria-hidden=\"true\"><img class=\"tangent-tile-image\" src=\"{worn}\"";
+        Assert.Contains(drawn, PageContent((await Send(ada.Client, HttpMethod.Get, "/")).Body));
+        Assert.Contains(drawn, PageContent((await Send(ada.Client, HttpMethod.Get, "/t")).Body));
+        Assert.Contains(drawn, PageContent((await Send(ada.Client, HttpMethod.Get, $"/t/{Articles}/new?origin={taken.Id}")).Body));
+
+        // Its export carries the picture beside the pages that list the Tangent.
+        using var answer = await leo.Client.GetAsync(Lifecycle.ExportController.Path + "/" + Writing.Workshop + ".zip", Cancellation);
+        using var zip = new System.IO.Compression.ZipArchive(await answer.Content.ReadAsStreamAsync(Cancellation), System.IO.Compression.ZipArchiveMode.Read);
+        string Read(string name) => new StreamReader(zip.GetEntry(name)!.Open()).ReadToEnd();
+        Assert.NotNull(zip.GetEntry($"media/{id}.jpg"));
+        Assert.Contains($"tone-rose\" aria-hidden=\"true\"><img class=\"tangent-tile-image\" src=\"./media/{id}.jpg\"", Read("index.html"));
+        Assert.Contains($"tone-rose\" aria-hidden=\"true\"><img class=\"tangent-tile-image\" src=\"../../media/{id}.jpg\"", Read("t/workshop/index.html"));
+    }
+
+    /// <summary>An image as the settings' file field sends it: the one file of a multipart form.</summary>
+    private static MultipartFormDataContent Picture(byte[] image)
+    {
+        var file = new ByteArrayContent(image);
+        file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/jpeg");
+        return new MultipartFormDataContent { { file, NewMediaController.FileField, "lantern.jpg" } };
+    }
+
+    /// <summary>What a poll from the start of the log brings the reader: the rows that reach them, as the poll says them.</summary>
+    private static async Task<List<(long Seq, string? Tangent)>> Polled(Participants.Browser reader)
+        => (await Send(reader.Client, HttpMethod.Get, EventsController.Path + "?since=0", json: true)).Json.GetProperty("events").EnumerateArray()
+            .Select(row => (row.GetProperty("seq").GetInt64(), row.TryGetProperty("tangent", out var tangent) ? tangent.GetString() : null)).ToList();
 
     /// <summary>The slugs of the Tangents the door lists for the reader, in its order.</summary>
     private static async Task<List<string?>> DoorOrder(Participants.Browser reader)

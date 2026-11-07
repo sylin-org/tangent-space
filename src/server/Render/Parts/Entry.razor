@@ -1,0 +1,35 @@
+@* One line of a list the reader may act on: what it is about, by its name, or a sentence; the detail after it; its second
+   line; and what the reader may do with it, each a form that opens in place or a link. *@
+<li class="door-offer" data-state="@Model.State">
+    <p class="door-offer-line">
+        @if (Model.Subject is { } subject)
+        {
+            <Draw Part="@subject" As="Shape.Name" />
+        }
+        @if (Model.Text is { } text)
+        {
+            <Draw Part="@(new Render.Sentence(text))" As="Shape.Inline" />
+        }
+        @if (Model.Detail is { } detail)
+        {
+            @(Model.Subject is not null || Model.Text is not null ? " " : "")<span class="topic-row-none">· <Draw Part="@(new Render.Sentence(detail))" As="Shape.Inline" /></span>
+        }
+        @if (Model.More is { } more)
+        {
+            <br><Draw Part="@(new Render.Sentence(more))" As="Shape.Inline" />
+        }
+    </p>
+    @if (Model.Answers is { Count: > 0 } answers)
+    {
+        <div class="door-offer-answers">
+            @foreach (var answer in answers)
+            {
+                <Draw Part="@answer" As="Shape.Row" />
+            }
+        </div>
+    }
+</li>
+
+@code {
+    [Parameter, EditorRequired] public Render.Entry Model { get; set; } = default!;
+}

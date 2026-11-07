@@ -59,7 +59,7 @@ public sealed class ShellTests
         Assert.Contains($"<link rel=\"stylesheet\" href=\"{BaseUrl}/tangent.css\" />", html);
         Assert.Contains($"<script src=\"{BaseUrl}/theme.js\"></script>", html);
         Assert.Contains($"<script type=\"module\" src=\"{BaseUrl}/tangent.js\"></script>", html);
-        var island = $"<main class=\"door\" data-island=\"fragment\" data-props=\"{{&quot;url&quot;:&quot;{BaseUrl}/&quot;}}\">";
+        var island = $"<main class=\"page frame-main\" data-island=\"fragment\" data-props=\"{{&quot;url&quot;:&quot;{BaseUrl}/&quot;}}\">";
         Assert.Contains(island, html);
         Assert.StartsWith(island, fragment.Trim());
         Assert.EndsWith("</main>", fragment.Trim());

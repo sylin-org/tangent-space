@@ -81,11 +81,11 @@ public sealed class NewTangentTests
         var gate = Capabilities.NoRoleGrants(Bit.ManageSpace).Word;
         var offered = await Send(ada.Client, HttpMethod.Get, "/t/new");
         Assert.Contains($"data-gate=\"{gate}\"", offered.Body);
-        Assert.DoesNotContain("type=\"submit\"", offered.Body);
+        Assert.DoesNotContain("type=\"submit\"", PageContent(offered.Body));
+        // The create declares ManageSpace, so the Doorway refuses it before anything is bound: the refusal's page, with its gate.
         var refused = await Form(ada, "/t/workshop", "/t/new", new() { ["name"] = "Mine" });
         Assert.Equal(HttpStatusCode.Forbidden, refused.Status);
-        Assert.Contains($"data-gate=\"{gate}\"", refused.Body);
-        Assert.Contains("value=\"Mine\"", refused.Body);
+        Assert.Contains($"class=\"refusal\" data-word=\"{gate}\"", refused.Body);
         var asJson = await Json(ada, "/t/workshop", "/t/new", new { name = "Mine" });
         Assert.Equal((HttpStatusCode.Forbidden, gate), (asJson.Status, asJson.Word));
         Assert.Null(await Tangent.Get("mine", Cancellation));

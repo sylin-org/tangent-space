@@ -1,0 +1,8 @@
+@* A page's one sentence where it has nothing to show. *@
+<div class="topic-empty">
+    <p class="topic-empty-title">@Model.Title</p>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Render.Note Model { get; set; } = default!;
+}

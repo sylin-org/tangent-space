@@ -7,7 +7,7 @@ using Tangent.Space;
 
 namespace Tangent.Tangents;
 
-/// <summary>What the routes that create a Tangent and change its settings share: their fields and the words each field
+/// <summary>What the routes that create a Tangent, change its settings and delete it share: their fields and the words each field
 /// takes, who may manage a Tangent, what a refusal concerns, and the answer a write that committed gives. A write comes
 /// as a form or as JSON and is answered in kind, as a Post's write is (<see cref="PostWrites"/>).</summary>
 public static class TangentWrites
@@ -23,6 +23,14 @@ public static class TangentWrites
     /// <summary>The settings page's segment under a Tangent's address; <see cref="Slug.Reserved"/> keeps it from every
     /// Topic.</summary>
     public const string SettingsSegment = "settings";
+
+    /// <summary>Where a Tangent is deleted, under its settings.</summary>
+    public const string DeleteSegment = "delete";
+
+    /// <summary>Where an image of a person's own comes in as a Tangent's, under its settings.</summary>
+    public const string ImageSegment = "image";
+
+    public const string TopicsField = "topics";
 
     public static readonly Reason KindRule = Reason.Invalid("A Tangent’s default kind is topic or article.");
     public static readonly Reason AudienceRule = Reason.Invalid("A Tangent’s audience is public or private.");
@@ -50,10 +58,28 @@ public static class TangentWrites
     /// <summary>The form that creates a Tangent at <paramref name="action"/>: its name, and what else stands at its default
     /// until it is sent.</summary>
     public static Form CreateForm(string action) => Form.Posting(action,
-        new Form.Field(NameField, Holds.TangentName),
-        new Form.Field(DescriptionField, Holds.TangentDescription),
-        new Form.Field(KindField, Holds.TangentKind),
-        new Form.Field(AudienceField, Holds.TangentAudience));
+        new Form.Field(NameField, Holds.TangentName) { Label = "Name", Limit = Tangent.NameLimit, Required = true, Placeholder = "The workshop", Focus = true },
+        new Form.Field(DescriptionField, Holds.TangentDescription, As: Form.Input.Area) { Label = "Description", Limit = Tangent.DescriptionLimit, Default = "", Group = Quietly },
+        new Form.Field(KindField, Holds.TangentKind, As: Form.Input.Choice) { Label = "Default kind", Choices = KindChoices, Default = PostWrites.Word(PostKind.Topic), Group = Quietly },
+        new Form.Field(AudienceField, Holds.TangentAudience, As: Form.Input.Choice) { Label = "Audience", Choices = AudienceChoices, Default = Word(Audience.Public), Group = Quietly })
+        with { Tool = "create-tangent", Submit = "Create", Busy = "Creating…", Island = "submitting" };
+
+    /// <summary>The line the fields of a new Tangent other than its name sit behind, which stays true whatever is chosen.</summary>
+    private const string Quietly = "Description, kind and audience";
+
+    /// <summary>A Tangent's default kinds as a form offers them, each with what it means.</summary>
+    public static readonly IReadOnlyList<Form.Choice> KindChoices =
+    [
+        new(PostWrites.Word(PostKind.Topic), "Discussions", "Topics are conversations, latest activity first."),
+        new(PostWrites.Word(PostKind.Article), "Articles", "Each topic opens with a published piece, newest first.")
+    ];
+
+    /// <summary>A Tangent's audiences as a form offers them, each with what it means.</summary>
+    public static readonly IReadOnlyList<Form.Choice> AudienceChoices =
+    [
+        new(Word(Audience.Public), "Public", "Everyone who reads this place reads it; members post."),
+        new(Word(Audience.Private), "Private", "Only administrators, and roles given access, read it.")
+    ];
 
     /// <summary>The form that changes a Tangent's settings at <paramref name="action"/>, each field left as it is when not
     /// sent: its audience only where it is not <paramref name="fixedAudience"/>, its place among the Tangents only where
@@ -62,16 +88,24 @@ public static class TangentWrites
     {
         List<Form.Field> fields =
         [
-            new(NameField, Holds.ChangedTangentName),
-            new(DescriptionField, Holds.ChangedTangentDescription),
-            new(AccentField, Holds.TangentAccent),
-            new(ImageField, Holds.TangentImage),
-            new(KindField, Holds.ChangedTangentKind)
+            new(NameField, Holds.ChangedTangentName) { Label = "Name", Limit = Tangent.NameLimit, Required = true },
+            new(DescriptionField, Holds.ChangedTangentDescription, As: Form.Input.Area) { Label = "Description", Limit = Tangent.DescriptionLimit },
+            new(AccentField, Holds.TangentAccent, As: Form.Input.Tone) { Label = "Its accent" },
+            new(ImageField, Holds.TangentImage, As: Form.Input.Picture) { Label = "Its image, in place of its letter" },
+            new(KindField, Holds.ChangedTangentKind, As: Form.Input.Choice) { Label = "Default kind", Choices = KindChoices },
+            new(AudienceField, Holds.ChangedTangentAudience, As: Form.Input.Choice) { Label = "Audience", Choices = AudienceChoices }
         ];
-        if (!fixedAudience) fields.Add(new(AudienceField, Holds.ChangedTangentAudience));
-        if (movable && !fixedAudience) fields.Add(new(MoveField, Holds.TangentMove));
-        return new Form(action, HttpMethods.Post, fields);
+        if (fixedAudience) fields.RemoveAll(field => field.Name == AudienceField);
+        if (movable && !fixedAudience) fields.Add(new(MoveField, Holds.TangentMove, As: Form.Input.Switch));
+        return new Form(action, HttpMethods.Post, fields) { Tool = "change-tangent", Submit = "Save", Busy = "Saving…", Island = "submitting" };
     }
+
+    /// <summary>The form that deletes the Tangent <paramref name="slug"/> under <paramref name="baseAddress"/> with the
+    /// <paramref name="topics"/> it holds, which go with it.</summary>
+    public static Form DeleteForm(string baseAddress, string slug, int topics) => Form.Posting(
+            PostWrites.TangentAddress(baseAddress, slug) + "/" + SettingsSegment + "/" + DeleteSegment,
+            new Form.Field(TopicsField, Holds.DeletedTopics, topics.ToString(System.Globalization.CultureInfo.InvariantCulture), Form.Input.Hidden))
+        with { Tool = "delete-tangent", Submit = "Delete", Busy = "Deleting…" };
 
     public static string Word(Audience audience) => audience.ToString().ToLowerInvariant();
 
@@ -107,7 +141,7 @@ public static class TangentWrites
         var address = PostWrites.TangentAddress(baseAddress, tangent.Id);
         if (!PostWrites.WantsJson(http.Request))
         {
-            http.Response.Headers.Location = next;
+            http.Response.Headers.Location = PostWrites.Onward(http, baseAddress, next);
             return new StatusCodeResult(StatusCodes.Status303SeeOther);
         }
 
@@ -123,6 +157,10 @@ public static class TangentWrites
         };
     }
 }
+
+/// <summary>A Tangent as it stood when it was deleted, for an agent: its slug, its name, how many Topics went with it,
+/// and where the Tangents that stand are listed.</summary>
+public sealed record DeletedTangent(string Slug, string Name, int Topics, string Tangents);
 
 /// <summary>A Tangent as a write leaves it, for an agent: its slug, name, description, default kind and audience, its
 /// <see cref="Order"/> for a sender who holds <c>ManageSpace</c> and so arranges the place's list, its page, its settings,

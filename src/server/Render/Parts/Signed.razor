@@ -1,0 +1,9 @@
+@* Who sends a form, beside its button: the words, then the name, a link where it leads anywhere. *@
+<span class="post-form-as">@(Model.Words + " ")@if (Model.Address is { } address)
+{<a href="@address">@Model.Name</a>}
+else
+{<strong>@Model.Name</strong>}</span>
+
+@code {
+    [Parameter, EditorRequired] public Render.Signed Model { get; set; } = default!;
+}

@@ -17,10 +17,12 @@ namespace Tangent.Lifecycle;
 /// <summary>Taking the place along, a section of its settings at <c>/settings/export</c>, for whoever holds
 /// <see cref="Bit.ManageSpace"/>. Its <c>GET</c> is one resource both ways (<see cref="ExportSettingsPage"/>): where the whole
 /// Tangent Space downloads, and a page of the Tangents the reader may view, in their order, each with where it downloads,
-/// continued from the cursor in <c>after</c>; a reader who may not export is refused with the gate, <c>401</c> to sign in
-/// and <c>403</c> otherwise: a page reads it with no Tangent, and a JSON request as its problem. <c>/settings/export.zip</c> and <c>/settings/export/{tangent}.zip</c> answer the zip
-/// as <see cref="Export"/> writes it, as it is read, and never hold it; a Tangent the reader may not view answers as one
-/// no Tangent has. A reader for whom the place does not exist receives what an address with nothing there receives.</summary>
+/// continued from the cursor in <c>after</c>. <c>/settings/export.zip</c> and <c>/settings/export/{tangent}.zip</c> answer the
+/// zip as <see cref="Export"/> writes it, as it is read, and never hold it; a Tangent the reader may not view answers as one
+/// no Tangent has. The Doorway refuses each of them, before the action runs, to whoever does not hold
+/// <see cref="Bit.ManageSpace"/> on the place, <c>401</c> to sign in and <c>403</c> otherwise, a page as the refusal's page
+/// and a JSON request as its problem, and answers a reader for whom the place does not exist what an address with nothing
+/// there receives.</summary>
 [Managing]
 public sealed class ExportController(KoanWebBaseUrl baseUrl, IDataProtectionProvider protection) : ControllerBase
 {
@@ -31,15 +33,16 @@ public sealed class ExportController(KoanWebBaseUrl baseUrl, IDataProtectionProv
 
     private const string Extension = ".zip";
 
+    /// <summary>Where the Tangent <paramref name="slug"/> downloads, under <paramref name="baseAddress"/>.</summary>
+    public static string ZipOf(string baseAddress, string slug) => baseAddress + Path + "/" + Uri.EscapeDataString(slug) + Extension;
+
     [HttpGet(Path)]
+    [Needs(Bit.ManageSpace)]
     public async Task<IActionResult> Get([FromQuery(Name = After)] string? after, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
-        if (place.Gate(Bit.ManageSpace) is { } refused && PostWrites.WantsJson(Request)) return this.Refused(refused);
-
+        var place = Here.Of(HttpContext).Around;
         ViewableTangents.Cursor? cursor = null;
         if (after is not null && (cursor = ViewableTangents.Cursor.Open(after, protection)) is null)
             return new Problem(StatusCodes.Status400BadRequest,
@@ -49,49 +52,36 @@ public sealed class ExportController(KoanWebBaseUrl baseUrl, IDataProtectionProv
         var address = baseAddress + Path;
         var here = baseUrl.PathBase + Path;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
-        var gate = place.Gate(Bit.ManageSpace);
-        var page = gate is null ? await ViewableTangents.Read(personId, ViewableTangents.Views, cursor, TangentsController.PageSize, ct) : null;
+        var page = await ViewableTangents.Read(personId, ViewableTangents.Views, cursor, TangentsController.PageSize, ct);
         var resource = new ExportSettingsPage(
             TangentSpaceSettingsController.Sections(place, baseAddress, TangentSpaceSettingsController.ExportSection),
-            gate is null ? address + Extension : null,
-            page?.Tangents.Select(tangent => new ExportSettingsPage.Download(tangent.Id, tangent.Name, PostWrites.Word(tangent.DefaultKind), tangent.TopicCount,
-                address + "/" + Uri.EscapeDataString(tangent.Id) + Extension)).ToList() ?? [],
-            page?.Next is { } next ? address + "?" + After + "=" + Uri.EscapeDataString(next.Seal(protection)) : null,
+            address + Extension,
+            page.Tangents.Select(tangent => new ExportSettingsPage.Download(tangent.Id, tangent.Name, PostWrites.Word(tangent.DefaultKind), tangent.TopicCount,
+                ZipOf(baseAddress, tangent.Id))).ToList(),
+            page.Next is { } next ? address + "?" + After + "=" + Uri.EscapeDataString(next.Seal(protection)) : null,
             cursor is not null,
             address,
             place.Can,
-            gate?.Word,
-            personId is null ? baseAddress + Participants.SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,
             space.Name,
             baseAddress + "/",
             await PostWrites.Reader(personId, place, baseAddress, here, ct));
-        return gate is null ? Ok(resource) : new ObjectResult(resource) { StatusCode = Answers.Status(HttpContext, gate) };
+        return Ok(resource);
     }
 
     [HttpGet(Path + Extension)]
-    public Task<IActionResult> Whole(CancellationToken ct) => Download(null, ct);
+    [Needs(Bit.ManageSpace)]
+    public Task<IActionResult> Whole(CancellationToken ct) => Download(ct);
 
     [HttpGet(Path + "/{tangent}" + Extension)]
-    public Task<IActionResult> OfTangent(string tangent, CancellationToken ct) => Download(tangent, ct);
+    [Needs(Bit.ManageSpace, Place = true)]
+    public Task<IActionResult> OfTangent(string tangent, CancellationToken ct) => Download(ct);
 
-    /// <summary>The zip of the Tangent named by <paramref name="slug"/>, or of the whole place, to a reader who holds
+    /// <summary>The zip of the Tangent the address names, as the Doorway found it, or of the whole place, to a reader who holds
     /// <see cref="Bit.ManageSpace"/>. Its headers leave with its first file; from there a failure ends the connection.</summary>
-    private async Task<IActionResult> Download(string? slug, CancellationToken ct)
+    private async Task<IActionResult> Download(CancellationToken ct)
     {
-        var personId = PostWrites.PersonId(User);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
-        if (place.Gate(Bit.ManageSpace) is { } gate) return Answers.Refused(HttpContext, gate);
-
-        Tangents.Tangent? only = null;
-        if (slug is not null)
-        {
-            // The Tangent's row is read before its overwrites, so an address no Tangent has takes no place in Koan's cache.
-            if (!Slug.IsValid(slug) || await Tangents.Tangent.Get(slug, ct) is not { } row) return this.Refused(Capabilities.Absent);
-            if (!(await Capabilities.Load(personId, row.Id, null, ct)).Exists) return this.Refused(Capabilities.Absent);
-            only = row;
-        }
-
+        var here = Here.Of(HttpContext);
+        var (personId, only) = (here.PersonId, here.Tangent);
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
         var name = new ContentDispositionHeaderValue("attachment");
         name.SetHttpFileName(string.Join('-', new[] { Slug.From(space.Name, "tangent-space"), only?.Id, DateTimeOffset.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) }.OfType<string>()) + Extension);

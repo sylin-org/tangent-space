@@ -147,8 +147,8 @@ public sealed class Export
     /// <summary>A page of the Tangents, each with where it opens: at the root of a zip, and of an archive at <c>t/</c>, its
     /// address on the place, the root being its door.</summary>
     private Task Listing(IReadOnlyList<Tangents.Tangent> tangents, int page, bool more, CancellationToken ct) => Page((Retired ? "t/" : "") + PagePath(page), new TangentsPage(
-        tangents.Select(tangent => new TangentPage.Listed(tangent.Id, tangent.Name, PostWrites.Word(tangent.DefaultKind),
-            (Retired ? "" : "t/") + Uri.EscapeDataString(tangent.Id) + "/" + First + ".html", tangent.TopicCount)).ToList(),
+        tangents.Select(tangent => Render.TangentEntry.Of(tangent, (Retired ? "" : "t/") + Uri.EscapeDataString(tangent.Id) + "/" + First + ".html",
+            Retired ? "../" : "./", _base + "/")).ToList(),
         more ? PagePath(page + 1) + ".html" : null,
         page > 1,
         First + ".html",
@@ -179,10 +179,10 @@ public sealed class Export
         var page = 1;
         do
         {
-            var read = await TopicList.Read(tangent.Id, cursor, ct);
+            var read = await TopicList.Read(tangent.Id, cursor, ct, sort: TopicList.For(tangent));
             var topics = read.Topics.Where(root => root.CreatedAt <= _asOf).ToList();
             await Page($"t/{tangent.Id}/{PagePath(page)}", await Listed(tangent, audience, topics, page++, read.Next is not null, ct), "../..",
-                new Frame(_space.Name, "../../" + First + ".html", [new Crumb(_space.Name, "../../" + First + ".html"), new Crumb(tangent.Name)], Feeds: FeedsOf(tangent)), ct);
+                new Frame(_space.Name, "../../" + First + ".html", [new Crumb(tangent.Name)], Feeds: FeedsOf(tangent)), ct);
             cursor = read.Next;
         } while (cursor is not null);
     }
@@ -218,7 +218,7 @@ public sealed class Export
             page > 1,
             null,
             null,
-            [new TangentPage.Listed(tangent.Id, tangent.Name, PostWrites.Word(tangent.DefaultKind), First + ".html", tangent.TopicCount)],
+            [Render.TangentEntry.Of(tangent, First + ".html", "../../", _base + "/")],
             _space.Name,
             "../../" + First + ".html",
             null,
@@ -236,15 +236,16 @@ public sealed class Export
             var replies = await TopicWindow.Between(root.Id, (window - 1) * WindowSize, window * WindowSize, ct);
             var path = window == 1 ? First : window.ToString(CultureInfo.InvariantCulture);
             var page = await Window(tangent, root, replies, window, windows, takenFrom, ct);
-            await Page(folder + "/" + path, page, "../../..", TopicView.Frame(page) with { Door = "../../../" + First + ".html" }, ct);
+            await Page(folder + "/" + path, page, "../../..", TopicPage.Frame(page) with { Door = "../../../" + First + ".html", Crumbs = Frame.Trail(new Crumb(tangent.Name, "../" + First + ".html"), new Crumb(root.Title ?? ""), []) }, ct);
             if (!Retired) continue;
             if (window == 1) await Forward(folder + "/" + root.Id, "../" + First + ".html#" + root.Id, root.Title ?? "", ct);
             foreach (var reply in replies) await Forward(folder + "/" + reply.Id, "../" + path + ".html#" + reply.Id, root.Title ?? "", ct);
         }
     }
 
-    /// <summary>One window as its page shows it to no one in particular: nothing it offers, and nothing new. Its images are
-    /// at the place's address, which <see cref="Page{TResource}"/> turns to the file of each it carries.</summary>
+    /// <summary>One window as its page shows it to no one in particular: nothing it offers, nothing new and nothing pinned,
+    /// and who closed it where its moderators did. Its images are at the place's address, which <see cref="Page{TResource}"/>
+    /// turns to the file of each it carries.</summary>
     private async Task<TopicPage> Window(Tangents.Tangent tangent, Post root, IReadOnlyList<Post> replies, long window, long windows,
         TopicPage.Origin? takenFrom, CancellationToken ct)
     {
@@ -282,10 +283,11 @@ public sealed class Export
             FeedsOf(tangent),
             TopicPage.HeaderOf(root.Kind, _appearance, _base + "/"),
             root.CoverId is { } cover ? _base + Media.Reference(cover) : null,
-            TangentPage.ReadTime(root.Body));
+            TangentPage.ReadTime(root.Body),
+            Closed: TopicPageController.Closure(root, people));
     }
 
-    private TopicPage.Post Shown(Post post, Post root, IReadOnlyDictionary<string, TangentPage.Author> people,
+    private TopicPage.Post Shown(Post post, Post root, IReadOnlyDictionary<string, Render.Person> people,
         IReadOnlyDictionary<string, TopicPage.Mention> mentioned, IReadOnlyDictionary<string, TopicPage.Taken> taken,
         IReadOnlyDictionary<string, long> sequences)
     {
@@ -364,7 +366,7 @@ public sealed class Export
 
     /// <summary>The people as a page shows them: in a zip by their marks, since their avatars and their profiles are
     /// elsewhere; in an archive as on the live page, since their profiles are at the same addresses.</summary>
-    private IReadOnlyDictionary<string, TangentPage.Author> Marks(IReadOnlyDictionary<string, TangentPage.Author> people) => Retired
+    private IReadOnlyDictionary<string, Render.Person> Marks(IReadOnlyDictionary<string, Render.Person> people) => Retired
         ? people
         : people.ToDictionary(person => person.Key, person => person.Value with { Avatar = null, Profile = null }, StringComparer.Ordinal);
 

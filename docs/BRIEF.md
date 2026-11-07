@@ -6,11 +6,11 @@ Accepted by Leo on 28 October 2026. This page is the yardstick for the tree at t
 
 ## The address
 
-A Tangent Space lives at a URL its proprietor chooses: a subdomain, an apex, or a path under `www`. `tangent.<domain>` is the suggested address — like `www.` or `mail.`, the one a person or an agent tries first for a more personal connection with whoever is behind a site: a person, a company, or an AI with a domain of its own. No registry and no central service. The site points at its Tangent Space in whichever form whoever runs the site can place — a `<link rel="tangent">` on its pages, a `/.well-known/tangent` at its origin, or a `_tangent` DNS record — and the Tangent Space answers under its own base URL with a descriptor (address, identity, publication) and an `llms.txt` that says in plain words what agents may do here.
+A Tangent Space lives at a URL its proprietor chooses: a subdomain, an apex, or a path under `www`. `tangent.<domain>` is the suggested address — like `www.` or `mail.`, the one a person or an agent tries first for a more personal connection with whoever is behind a site: a person, a company, or an AI with a domain of its own. No registry and no central service. The site points at its Tangent Space in whichever form whoever runs the site can place — a `<link rel="tangent">` on its pages, a `/.well-known/tangent` at its origin, or a `_tangent` DNS record — and the Tangent Space answers under its own base URL with a descriptor (address, identity, feeds), its publication's address and an `llms.txt` that says in plain words what agents may do here.
 
 ## One place, one proprietor
 
-The thing at `tangent.sylin.org` is **Leo's Tangent Space**. One place, one **proprietor**, whose place it is and whose voice fronts it (a person, a company, or an AI), and one **operator**, who answers for it: whoever set it up, signed in as themselves, usually the same one. Inside it, BBS words:
+The thing at `tangent.sylin.org` is **Leo's Tangent Space**. One place, one **proprietor**, whose place it is and whose voice fronts it (a person, a company, or an AI), and one **operator**, who answers for it: whoever set it up, signed in as themselves, whom setting it up also makes its proprietor. Inside it, BBS words:
 
 | Word | Meaning |
 | --- | --- |
@@ -36,9 +36,9 @@ Every page is also its own API: the link a person shares is the link an agent fe
 
 ## Publication and protocols
 
-Public articles are canonically `site.standard.document` records in their author's atproto repository, with the cover image as a blob and inline images carried by the Tangent Space's own content type; **the Tangent Space is the `site.standard.publication`**, under the proprietor's account, and its own pages are the canonical URLs. Publishing writes the document and a Bluesky post that embeds it. Replies, quotes and likes anywhere on the network arrive as attributed references; nothing is imported from feeds. Private content lives only on the Tangent Space's own server.
+Public articles are canonically `site.standard.document` records in their author's atproto repository, with the cover image as a blob and the body as its text; **the Tangent Space is the `site.standard.publication`**, under the proprietor's account, and its own pages are the canonical URLs. Publishing writes the document and a Bluesky post that embeds it. Replies, quotes and likes anywhere on the network arrive as attributed references; nothing is imported from feeds. Private content lives only on the Tangent Space's own server.
 
-The core is protocol-agnostic. A **Connection** belongs to a participant and syndicates only what that participant wrote; it reads the Tangent Space's event log from its own cursor and keeps a receipt per Post and version, and the protocol package decides what to do — publish, update, retract, requote — from those versions. The core emits content changed, content removed and audience changed, owns content versions, and sees only URIs, versions, receipts and declared capabilities. A package owns its mapping and its policy. The first packages: atproto, Webmention with Bridgy Fed, Mastodon. Feeds are an output of every public Tangent, not a package.
+The core is protocol-agnostic. A **Connection** belongs to a participant and syndicates only what that participant wrote; it reads the Tangent Space's event log from its own cursor and keeps a receipt per Post and version, and the protocol package decides what to do — publish, update, retract — from those versions. The core's log says what changed — a Post written, edited, removed or moved, a Topic or a Tangent deleted, a Tangent's audience changed — and the core owns content versions, and sees only URIs, versions, receipts and declared capabilities. A package owns its mapping and its policy. The first packages: atproto, Webmention with Bridgy Fed, Mastodon. Feeds are an output of every public Tangent, not a package.
 
 ## Self-reliance
 

@@ -1,0 +1,18 @@
+@* The way to the page before and to the page after, where there are any. *@
+@if (Model.Before is not null || Model.After is not null)
+{
+    <nav class="topic-pages" aria-label="@Model.Label">
+        @if (Model.Before is { } before)
+        {
+            <a href="@before.Address">@before.Label</a>
+        }
+        @if (Model.After is { } after)
+        {
+            <a class="topic-pages-next" href="@after.Address">@after.Label</a>
+        }
+    </nav>
+}
+
+@code {
+    [Parameter, EditorRequired] public Render.Pager Model { get; set; } = default!;
+}

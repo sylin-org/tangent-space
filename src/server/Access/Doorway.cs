@@ -11,11 +11,32 @@ namespace Tangent.Access;
 
 /// <summary>What a route needs of its reader: one bit, on what its address names. A route that declares it is judged by
 /// <see cref="Doorway.Judge"/> once, before anything is bound, and its action reads what the judgement found (<see cref="Here.Of"/>).
-/// <see cref="Participant"/> asks a signed-in participant besides, as a report does.</summary>
+/// <see cref="AnyOf"/> names another bit that lets the reader in as well, as either managing standing or managing roles lets
+/// them read the people; <see cref="Place"/> judges the bit on the place where the address names a Tangent, as deleting one
+/// does; <see cref="Participant"/> asks a signed-in participant besides, as a report does; <see cref="Outside"/> lets in someone
+/// outside a members-only Tangent they may join or ask to join, as the Tangent's own address does; <see cref="Applicant"/> lets
+/// in an applicant a private place is closed to, as leaving does.</summary>
 public sealed class NeedsAttribute(Bit bit) : AccessAttribute<Bit>(bit)
 {
+    /// <summary>Another bit that lets the reader in where they hold it; a refusal names the declared bit's gate.</summary>
+    public Bit AnyOf { get; init; }
+
+    /// <summary>Whether the bit is judged on the place, whatever the address names; the address is still found as it stands
+    /// for the reader, so a Tangent absent to them answers as missing.</summary>
+    public bool Place { get; init; }
+
     /// <summary>Whether only a signed-in participant may: a visitor is told to sign in whatever the bit says.</summary>
     public bool Participant { get; init; }
+
+    /// <summary>Whether a participant a private place is closed to while their application waits or once it was declined
+    /// (<see cref="Capabilities.ApplyToRead"/>, <see cref="Capabilities.DeclinedToRead"/>) reaches the action, which acts on
+    /// them alone; every other bit is still judged, on the place.</summary>
+    public bool Applicant { get; init; }
+
+    /// <summary>Whether a participant who does not read the Tangent the address names, and may join or ask to join it
+    /// (<see cref="Tangents.Inside.Outside"/>), reaches the action, which answers them with its card (<see cref="Here.Outside"/>);
+    /// every other bit is still judged, and absent to them.</summary>
+    public bool Outside { get; init; }
 }
 
 /// <summary>An address as it stands for its reader: its Tangent, the rows what the reader holds there is computed from, and the Topic's root
@@ -23,6 +44,10 @@ public sealed class NeedsAttribute(Bit bit) : AccessAttribute<Bit>(bit)
 /// the page.</summary>
 public sealed record Here(Tangents.Tangent? Tangent, Capabilities.Rows Rows, Post? Root, Post? Post)
 {
+    /// <summary>Where the reader stands outside the Tangent, at a route that answers them (<see cref="NeedsAttribute.Outside"/>);
+    /// null for everyone who reads it, and at every other route.</summary>
+    public Tangents.Outsider? Outside { get; init; }
+
     /// <summary>What the reader holds on what the address names: the Post, a reply judged by its Topic's root; the Topic, by its root;
     /// otherwise the Tangent, or the place.</summary>
     public Capabilities Capabilities => Rows.For(Post ?? Root, Post is { ParentId: not null } ? Root : null);
@@ -41,8 +66,10 @@ public sealed record Here(Tangents.Tangent? Tangent, Capabilities.Rows Rows, Pos
     /// Topic page's order: the Tangent's row first, so an address no Tangent has reads no overwrites; capability's rows, once; whether the
     /// reader may view the place or the Tangent, the same for every address under it, so a visitor of a private place reads one sign-in
     /// whether an address holds something or nothing; then the missing resource's answer for a Tangent no row has, a Topic segment that
-    /// names no Topic of it by its slug or its root's TID, or an Id no Post of that Topic has. The reads are the Topic page's: the Tangent,
-    /// capability's rows, the root by slug and the Post by Id.</summary>
+    /// names no Topic of it by its slug, its root's TID or its former address, or an Id no Post of that Topic has. A Topic that moved
+    /// stands where it is now: its Tangent's row and capability's rows there, for a reader who may view it, and absent to anyone else.
+    /// The reads are the Topic page's: the Tangent, capability's rows, the root by slug and the Post by Id, and on a miss alone the
+    /// root by TID or the former address and its root, then where it stands now.</summary>
     public static async Task<(Here Here, Reason? Refusal)> Find(string? personId, string? tangent, string? topic, string? post, CancellationToken ct)
     {
         var row = tangent is not null && Slug.IsValid(tangent) ? await Tangents.Tangent.Get(tangent, ct) : null;
@@ -52,7 +79,15 @@ public sealed record Here(Tangents.Tangent? Tangent, Capabilities.Rows Rows, Pos
         if (!around.Exists) return (nothing, around.Gate(Bit.View));
         if (tangent is not null && row is null) return (nothing, Capabilities.Absent);
         Post? root = null;
-        if (topic is not null && (row is null || (root = await Topic(row.Id, topic, post is null, ct)) is null)) return (nothing, Capabilities.Absent);
+        if (topic is not null && (row is null || (root = await Topic(row.Id, topic, ct)) is null)) return (nothing, Capabilities.Absent);
+        if (root is not null && root.TangentId != row!.Id)
+        {
+            if (await Tangents.Tangent.Get(root.TangentId, ct) is not { } now) return (nothing, Capabilities.Absent);
+            var there = await Capabilities.LoadRows(personId, now.Id, ct);
+            if (!there.For(null).Exists) return (nothing, Capabilities.Absent);
+            (row, rows) = (now, there);
+        }
+
         Post? named = null;
         if (post is not null)
         {
@@ -63,13 +98,18 @@ public sealed record Here(Tangents.Tangent? Tangent, Capabilities.Rows Rows, Pos
         return (new Here(row, rows, root, named), null);
     }
 
-    /// <summary>The Topic a segment names in a Tangent: by its slug, or, where none has it and no Post is named, by its root's TID, so a
-    /// sender who minted the TID finds the Topic it started. A slug is read first, so a slug that looks like a TID names its own Topic.</summary>
-    private static async Task<Post?> Topic(string tangentId, string topic, bool byTid, CancellationToken ct)
+    /// <summary>The Topic a segment names in a Tangent: by its slug, or, where none has it, by its root's TID, so a sender who minted
+    /// the TID finds the Topic it started and a reader of the log, which names a Topic by its id, finds the Topic and each of its Posts,
+    /// wherever it stands now; or else by its former address there (<see cref="FormerAddress"/>), so a link to a Topic that moved
+    /// finds it. A slug is read first, so a slug that looks like a TID names its own Topic, and one a Topic took later has the address.</summary>
+    private static async Task<Post?> Topic(string tangentId, string topic, CancellationToken ct)
     {
         if (!Slug.IsValid(topic)) return null;
         if (await TopicWindow.Topic(tangentId, topic, ct) is { } root) return root;
-        return byTid && Tid.IsValid(topic) && await Post.Get(topic, ct) is { ParentId: null } started && started.TangentId == tangentId ? started : null;
+        if (Tid.IsValid(topic) && await Post.Get(topic, ct) is { ParentId: null } started) return started;
+        return await FormerAddress.Get(FormerAddress.Key(tangentId, topic), ct) is { } former && await Post.Get(former.TopicId, ct) is { ParentId: null } moved
+            ? moved
+            : null;
     }
 }
 
@@ -99,15 +139,33 @@ public sealed class Doorway : IAuthorizationProvider
     }
 
     /// <summary>The address as it stands for <paramref name="personId"/> (<see cref="Here.Find"/>), and then each bit
-    /// <paramref name="needs"/> names, on what the address names; <see cref="Bit.View"/> is the address's own, which finding it asked.</summary>
+    /// <paramref name="needs"/> names, or the other bit it takes (<see cref="NeedsAttribute.AnyOf"/>), on what the address names, or on
+    /// the place (<see cref="NeedsAttribute.Place"/>), read once where the address names a Tangent; <see cref="Bit.View"/> is the
+    /// address's own, which finding it asked.
+    /// A Tangent absent to a participant outside it who may join or ask to join is found where <paramref name="needs"/> lets them in
+    /// (<see cref="NeedsAttribute.Outside"/>), and a private place closed to an applicant where it lets them in
+    /// (<see cref="NeedsAttribute.Applicant"/>).</summary>
     public static async Task<(Here Here, Reason? Refusal)> Judge(string? personId, IReadOnlyList<NeedsAttribute> needs, string? tangent, string? topic,
         string? post, CancellationToken ct)
     {
         var (here, refusal) = await Here.Find(personId, tangent, topic, post, ct);
+        if (refusal == Capabilities.Absent && personId is not null && topic is null && here.Tangent is { } row && needs.Any(need => need.Outside)
+            && await Tangents.Inside.Outside(row, personId, ct) is { } outside)
+            (here, refusal) = (here with { Outside = outside }, null);
+        if ((refusal == Capabilities.ApplyToRead || refusal == Capabilities.DeclinedToRead) && personId is not null && tangent is null
+            && needs.Any(need => need.Applicant))
+            refusal = null;
         if (refusal is not null) return (here, refusal);
         if (personId is null && needs.Any(need => need.Participant)) return (here, Capabilities.SignIn);
         var on = here.Capabilities;
-        return (here, needs.Where(need => need.Need != Bit.View).Select(need => on.Gate(need.Need)).FirstOrDefault(gate => gate is not null));
+        var place = needs.Any(need => need.Place) && here.Tangent is not null ? (await Capabilities.LoadRows(personId, null, ct)).For(null) : here.Around;
+        foreach (var need in needs.Where(need => need.Need != Bit.View))
+        {
+            var judged = need.Place ? place : on;
+            if (judged.Gate(need.Need) is { } gate && (need.AnyOf == Bit.None || judged.Gate(need.AnyOf) is not null)) return (here, gate);
+        }
+
+        return (here, null);
     }
 
     /// <summary>What a verb declares, reached through its class: the class's, then its own, every one holding.</summary>

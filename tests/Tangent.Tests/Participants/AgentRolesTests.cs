@@ -34,15 +34,24 @@ public sealed class AgentRolesTests
         using var ada = await SignedIn(tangentSpace, Ada);
         using var scout = await AgentArrives(tangentSpace, Scout, ScoutHandle);
 
+        // Arriving, it reads who it is here: an agent, with its own profile's address, which answers as itself, and the
+        // account menu's mark is an agent's.
+        var self = Who(await Page(scout, "/"));
+        Assert.Equal(("agent", BaseUrl + "/p/" + ScoutHandle), (self.GetProperty("kind").GetString(), self.GetProperty("profile").GetString()));
+        Assert.Equal(Scout, (await Page(scout, Under(self.GetProperty("profile").GetString()!))).GetProperty("id").GetString());
+        var html = (await Send(scout.Client, HttpMethod.Get, "/")).Body;
+        var account = html[html.IndexOf("class=\"account-button\"", StringComparison.Ordinal)..html.IndexOf("class=\"account-panel", StringComparison.Ordinal)];
+        Assert.Contains("participant is-agent is-you", account);
+
         // A member like any other: no settings, and the people are not theirs to read.
-        Assert.False(Who(await Page(scout, "/")).TryGetProperty("settings", out var none) && none.ValueKind == JsonValueKind.String);
+        Assert.False(self.TryGetProperty("settings", out var none) && none.ValueKind == JsonValueKind.String);
         Assert.Equal(HttpStatusCode.Forbidden, (await Send(scout.Client, HttpMethod.Get, PeopleController.Path, json: true)).Status);
 
         // Someone who holds ManageRoles finds it among the people, as an agent, and gives it the role with the one form.
         var people = await Page(leo, PeopleController.Path);
         var listed = Row(people, Scout);
-        Assert.Equal(("agent", "admitted"), (listed.GetProperty("kind").GetString(), listed.GetProperty("standing").GetString()));
-        Assert.Contains("· agent ·", (await Send(leo.Client, HttpMethod.Get, PeopleController.Path)).Body);
+        Assert.Equal(("agent", "admitted"), (listed.GetProperty("person").GetProperty("kind").GetString(), listed.GetProperty("standing").GetString()));
+        Assert.Contains("· agent ·", WebUtility.HtmlDecode((await Send(leo.Client, HttpMethod.Get, PeopleController.Path)).Body));
         var given = await Follow(leo, people.GetProperty("forms").GetProperty("give"),
             new Dictionary<string, string> { [PeopleController.ParticipantField] = Scout, [PeopleController.RoleField] = "moderator" });
         Assert.True(given.Status == HttpStatusCode.OK, given.Body);
@@ -134,7 +143,7 @@ public sealed class AgentRolesTests
         using var rook = await AgentArrives(tangentSpace, Rook, "rook.agent.example");
         using var bea = await SignedIn(tangentSpace, Bea);
         var people = await Page(scout, PeopleController.Path);
-        Assert.Equal(["person", "agent"], new[] { Row(people, Bea), Row(people, Rook) }.Select(row => row.GetProperty("kind").GetString()));
+        Assert.Equal(["person", "agent"], new[] { Row(people, Bea), Row(people, Rook) }.Select(row => row.GetProperty("person").GetProperty("kind").GetString()));
         Assert.Contains("administrator", Offered(Row(people, Rook), "give"));
         var made = await Follow(scout, people.GetProperty("forms").GetProperty("give"),
             new Dictionary<string, string> { [PeopleController.ParticipantField] = Rook, [PeopleController.RoleField] = "administrator" });
@@ -224,7 +233,7 @@ public sealed class AgentRolesTests
     private static JsonElement Who(JsonElement page) => page.GetProperty("who");
 
     private static JsonElement Row(JsonElement page, string id)
-        => Assert.Single(page.GetProperty("people").EnumerateArray(), row => row.GetProperty("id").GetString() == id);
+        => Assert.Single(page.GetProperty("people").EnumerateArray(), row => row.GetProperty("person").GetProperty("id").GetString() == id);
 
     private static List<string?> Strings(JsonElement element, string name)
         => element.GetProperty(name).EnumerateArray().Select(item => item.GetString()).ToList();

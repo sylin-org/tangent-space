@@ -28,8 +28,8 @@ public static class FirstTangent
     {
         var tangent = Tangents.Tangent.Create(slug, Name, "", PostKind.Topic, await Tangents.Tangent.NextOrder(ct));
         await Overwrites.SetAudience(Collection(), slug, Audience.Public, ct);
+        tangent.LogSeq = (await Event.Append(EventKind.TangentChanged, at, ct, tangentId: tangent.Id, actorId: actorId, audience: Audience.Public)).Seq;
         await tangent.Save(ct);
-        await Event.Append(EventKind.TangentChanged, at, ct, tangentId: tangent.Id, actorId: actorId, audience: Audience.Public);
         return tangent;
     }
 

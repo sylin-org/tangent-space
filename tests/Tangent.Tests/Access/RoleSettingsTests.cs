@@ -94,12 +94,21 @@ public sealed class RoleSettingsTests
 
         // Given on People as the seeded roles are, and listed among her roles.
         Assert.Contains(("night-shift", "Night watch"), (await Send(leo.Client, HttpMethod.Get, PeopleController.Path, json: true)).Json
-            .GetProperty("people").EnumerateArray().Single(row => row.GetProperty("id").GetString() == Ada).GetProperty("give").EnumerateArray()
+            .GetProperty("people").EnumerateArray().Single(row => row.GetProperty("person").GetProperty("id").GetString() == Ada).GetProperty("give").EnumerateArray()
             .Select(role => (role.GetProperty("word").GetString(), role.GetProperty("name").GetString())));
         var given = await Json(leo, PeopleController.Path, PeopleController.GivePath, new { participant = Ada, role = "night-shift" });
         Assert.Equal(HttpStatusCode.OK, given.Status);
         Assert.Contains("Night watch", Strings(given.Json, "roles"));
         Assert.True((await roles.Bag(Ada, authenticated: true, Cancellation)).InRole("role:night-shift"));
+
+        // Each role but everyone names where its people are listed, and the page links there before it is changed or deleted.
+        page = await Send(leo.Client, HttpMethod.Get, path, json: true);
+        var holders = Row(page.Json, "night-shift").GetProperty("people").GetString()!;
+        Assert.Equal(BaseUrl + PeopleController.Path + "?role=night-shift", holders);
+        Assert.False(Row(page.Json, "everyone").TryGetProperty("people", out var none) && none.ValueKind != JsonValueKind.Null);
+        Assert.Contains($"href=\"{holders}\">Who holds it</a>", WebUtility.HtmlDecode((await Send(leo.Client, HttpMethod.Get, path)).Body));
+        Assert.Equal([Ada], (await Send(leo.Client, HttpMethod.Get, new Uri(holders).PathAndQuery, json: true)).Json.GetProperty("people").EnumerateArray()
+            .Select(row => row.GetProperty("person").GetProperty("id").GetString()));
 
         // A seeded role stays.
         var seeded = await Json(leo, path, RolesController.DeletePath, new { role = "moderator" });

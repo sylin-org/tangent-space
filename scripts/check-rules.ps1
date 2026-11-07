@@ -11,6 +11,7 @@ $checks = @(
     @{ Name = 'greenfield'; Command = { & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'check-greenfield.ps1') } }
     @{ Name = 'no-dialogs'; Command = { & node --test (Join-Path $base 'tests/rules/*.test.mjs') 2>&1 } }
     @{ Name = 'ports';      Command = { & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'check-ports.ps1') } }
+    @{ Name = 'parts';      Command = { & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'check-parts.ps1') } }
 )
 
 $failed = 0

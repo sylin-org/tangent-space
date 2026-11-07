@@ -9,30 +9,30 @@ namespace Tangent.Tangents;
 /// (<see cref="For"/>), and to the asker, who decided (<see cref="Decided"/>).</summary>
 public static class Asking
 {
-    /// <summary>The asks that wait in the Tangents <paramref name="personId"/> manages, by Tangent, newest first, where asks
-    /// wait there (<see cref="Inside.AsksWait"/>): one read of at most <see cref="Ask.ReadSize"/> and one more waiting asks,
-    /// what capability reads for the Tangents they name, one keyed read of those Tangents, and the audience of each that
-    /// still asks. A count is a lower bound where the read was full.</summary>
-    public static async Task<IReadOnlyList<Door.Asking>> For(string personId, string baseAddress, CancellationToken ct)
+    /// <summary>The asks that wait in each of <paramref name="tangents"/> that the reader manages, as <paramref name="each"/>
+    /// says what they hold there, in the Tangents' order, where asks wait there (<see cref="Inside.AsksWait"/>): for each whose
+    /// joining is not join, its audience and one read of at most <see cref="Ask.ReadSize"/> and one more of its waiting asks. A
+    /// count is a lower bound where its read was full.</summary>
+    public static async Task<IReadOnlyList<Door.Asking>> For(IReadOnlyList<Tangent> tangents, IReadOnlyDictionary<string, Capabilities> each,
+        string baseAddress, CancellationToken ct)
     {
-        var waiting = await Ask.Waiting(null, Ask.ReadSize + 1, ct);
-        if (waiting.Count == 0) return [];
-        var full = waiting.Count > Ask.ReadSize;
-        var ids = waiting.Select(ask => ask.TangentId).Distinct(StringComparer.Ordinal).ToList();
-        var each = await Capabilities.LoadEach(personId, ids, ct);
-        var managed = ids.Where(id => each[id].Holds(Bit.ManageTangent)).ToList();
-        if (managed.Count == 0) return [];
-        var rows = (await Tangent.Get(managed, ct)).OfType<Tangent>().ToDictionary(row => row.Id, StringComparer.Ordinal);
         var asking = new List<Door.Asking>();
-        foreach (var id in managed.Where(id => rows.TryGetValue(id, out var row) && row.Joining != Joining.Join))
-            if (Inside.AsksWait(rows[id], await Overwrites.AudienceOf(id, ct)))
-                asking.Add(new Door.Asking(rows[id].Name, waiting.Count(ask => ask.TangentId == id), full, TangentPeopleController.PeopleAddress(baseAddress, id)));
+        foreach (var row in tangents)
+        {
+            if (row.Joining == Joining.Join || !each.TryGetValue(row.Id, out var held) || !held.Holds(Bit.ManageTangent)) continue;
+            if (!Inside.AsksWait(row, await Overwrites.AudienceOf(row.Id, ct))) continue;
+            var waiting = await Ask.Waiting(row.Id, Ask.ReadSize + 1, ct);
+            if (waiting.Count > 0)
+                asking.Add(new Door.Asking(row.Name, Math.Min(waiting.Count, Ask.ReadSize), waiting.Count > Ask.ReadSize,
+                    TangentPeopleController.PeopleAddress(baseAddress, row.Id)));
+        }
+
         return asking;
     }
 
     /// <summary>The decisions about the reader's asks, from their rows of the log, with one keyed read of the Tangents
     /// they name.</summary>
-    public static async Task<IReadOnlyList<Door.Let>?> Decided(IReadOnlyList<Event> rows, IReadOnlyDictionary<string, TangentPage.Author> people,
+    public static async Task<IReadOnlyList<Door.Let>?> Decided(IReadOnlyList<Event> rows, IReadOnlyDictionary<string, Render.Person> people,
         string baseAddress, CancellationToken ct)
     {
         if (rows.Count == 0) return null;

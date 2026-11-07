@@ -12,7 +12,7 @@ namespace Tangent.Tangents;
 /// <summary>How a participant outside a private Tangent comes in: only as its managers let them in (<see cref="Closed"/>),
 /// at once (<see cref="Join"/>), or by asking, which someone who holds <see cref="Bit.ManageTangent"/> there decides
 /// (<see cref="Ask"/>). A private Tangent that a participant may join or ask to join is listed to them, with what it is
-/// about; a closed one stays absent to them.</summary>
+/// about, and its own address shows them the same; a closed one stays absent to them.</summary>
 public enum Joining
 {
     Closed,
@@ -31,6 +31,8 @@ public sealed class Ask : Entity<Ask>
     [Index(Name = "ix_ask_tangents", Order = 0)]
     public string TangentId { get; set; } = "";
 
+    /// <summary>In <c>ix_ask_people</c>, so a participant's asks are one range, which leaving the place reads.</summary>
+    [Index(Name = "ix_ask_people")]
     public string PersonId { get; set; } = "";
 
     [Index(Name = "ix_ask_waiting", Order = 0)]
@@ -112,4 +114,20 @@ public static class Inside
     /// <summary>Whether a private Tangent is open to joining or asking: its joining is not closed, and it is not the
     /// moderators' Tangent.</summary>
     public static bool Joinable(Tangent tangent, string? moderatorsTangentId) => tangent.Joining != Joining.Closed && tangent.Id != moderatorsTangentId;
+
+    /// <summary>Where a participant who does not read the Tangent stands outside it, as its card shows them: they take part in
+    /// the place (<see cref="Bit.Post"/> there), it is <see cref="Joinable"/>, and their own overwrite does not keep them out
+    /// (<see cref="Out"/>), with their ask where they made one; null where any of these fails, and the Tangent stays absent
+    /// to them. Keyed reads: capability's rows in the place, their own overwrite and their ask.</summary>
+    public static async Task<Outsider?> Outside(Tangent tangent, string personId, CancellationToken ct)
+    {
+        var place = await Capabilities.LoadRows(personId, null, ct);
+        if (!place.For(null).Holds(Bit.Post) || !Joinable(tangent, place.Space.ModeratorsTangentId) || Out(await Own(tangent.Id, personId, ct)))
+            return null;
+        return new Outsider(await Ask.Get(Ask.Key(tangent.Id, personId), ct));
+    }
 }
+
+/// <summary>A participant outside a members-only Tangent they may join or ask to join (<see cref="Inside.Outside"/>): their
+/// ask, where they made one.</summary>
+public sealed record Outsider(Ask? Asked);

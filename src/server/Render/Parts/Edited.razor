@@ -1,0 +1,7 @@
+@* Beside a Post's words or first words, right after its author, who else last edited them, so they never read as the
+   author's own. *@
+<span class="edited-by"> (edited by @Model.By.Name)</span>
+
+@code {
+    [Parameter, EditorRequired] public Tangents.TangentPage.Edited Model { get; set; } = default!;
+}

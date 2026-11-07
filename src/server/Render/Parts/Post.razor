@@ -1,0 +1,145 @@
+@using System.Text.Json
+@using Tangent.Posts
+@* One Post of a Topic. In the thread: its author's mark and name, linked to their profile, their handle and agent tag, "New"
+   where the reader has not seen it, and when it was written, linked to the Post's own address; for a reply to a Post other
+   than the root, the way to that Post; the body's Markdown as safe HTML, each mention a link reading the participant's name
+   now; who other than its author last edited it, and when, and for a Post edited at all a closed disclosure of its earlier
+   versions; "Copy link", "Edit" where the reader may, "Take this on a tangent" and the Topics taken from it, Report,
+   opening its form in the page, and Remove where the reader may, confirming in the page what removing it does, or on a
+   tombstone Undo removal where the reader may bring its words back; on a root, for whoever moderates its Topic, the presses
+   that close or reopen it and pin or unpin it, the way to move it and its delete, confirming in the page what goes. A removed
+   Post is a tombstone in the same place. The root reads larger; an article's root is its body alone, in the article's type.
+   In the markup contract it is an article, its meta line its header and its actions its footer, classed by what the record
+   holds. As a row, in a Topic's rail: its author's mark and name, when, and "New". *@
+@if (As == Shape.Row)
+{
+    <a class="@("row post" + (Model.Anchor ? " is-current" : "") + (Model.New ? " is-new" : ""))" href="@("#" + Model.Id)" aria-current="@(Model.Anchor ? "true" : null)">
+        <Draw Part="@Model.Author" />
+        <span class="topic-rail-reply-text">
+            <span class="topic-rail-reply-name">@Model.Author.Name</span>
+            <span class="topic-rail-reply-time">@Wording.When(Model.CreatedAt, Today)</span>
+        </span>
+        @if (Model.New)
+        {
+            <span class="badge is-new">New</span>
+        }
+    </a>
+}
+else
+{
+    <article id="@Model.Id" class="@Classes" aria-current="@(Model.Anchor ? "true" : null)">
+        @if (!Model.Article)
+        {
+            <Draw Part="@(Model.Author with { Account = Model.WrittenAs })" />
+            <header class="post-head">
+                <Draw Part="@(Model.Author with { Account = Model.WrittenAs })" As="Shape.Name" />
+                @if (Model.Author.Handle.Length > 0)
+                {
+                    <span class="post-handle">@("@" + Model.Author.Handle)</span>
+                }
+                @if (Model.New)
+                {
+                    <span class="badge is-new">New</span>
+                }
+                <a class="post-time" href="@Model.Address" title="@Wording.Full(Model.CreatedAt)"><time datetime="@Wording.Iso(Model.CreatedAt)">@Wording.When(Model.CreatedAt, Today)</time></a>
+            </header>
+        }
+        @if (Model.Parent is { } parent)
+        {
+            <a class="post-parent" href="@parent">In reply to @(Model.ParentAuthor ?? "an earlier post")</a>
+        }
+        @if (Model.Removed is { } removed)
+        {
+            <p class="post-removed">Removed by @(removed.By.Id == Model.Author.Id ? "its author" : removed.By.Name) <time datetime="@Wording.Iso(removed.At)" title="@Wording.Full(removed.At)">@Wording.When(removed.At, Today)</time></p>
+        }
+        else
+        {
+            <div class="@(Model.Article ? "article-prose" : Model.Root ? "post-body post-body-root" : "post-body")" data-island="@(Model.Quote is null || Standalone ? null : "quote")" data-props="@(Standalone ? null : Model.Quote)">@((MarkupString)Body)</div>
+            @if (Model.Edited is { } edited)
+            {
+                <p class="post-edited">Edited by @edited.By.Name <time datetime="@Wording.Iso(edited.At)" title="@Wording.Full(edited.At)">@Wording.When(edited.At, Today)</time></p>
+            }
+            @if (Model.Version > 1 && !Standalone)
+            {
+                <details class="post-history" data-island="history" data-props="@JsonSerializer.Serialize(new { url = History })">
+                    <summary>@(Model.Edited is null ? "Edited" : "Earlier versions")</summary>
+                    <div class="post-history-body"><a href="@History">Read its earlier versions</a></div>
+                </details>
+            }
+        }
+        <footer class="post-footer">
+            <div class="post-actions">
+                @if (!Standalone)
+                {
+                    <button type="button" class="post-action post-copy-link" hidden data-island="copy" data-props="@JsonSerializer.Serialize(new { text = Model.Address })">Copy link</button>
+                }
+                @if (Model.Edit is { } edit)
+                {
+                    <a class="post-action" href="@edit">Edit</a>
+                }
+            </div>
+            @if (Model.TakeOnATangent is { } take)
+            {
+                <div class="post-actions">
+                    <a class="post-action" href="@take">Take this on a tangent</a>
+                </div>
+            }
+            @if (Model.Taken is { } taken)
+            {
+                <p class="post-parent post-taken">
+                    @("Taken on a tangent in " + (taken.AtLeast ? "at least " : "") + taken.Count + (taken.Count == 1 && !taken.AtLeast ? " topic:" : " topics:"))
+                    @for (var index = 0; index < taken.Topics.Count; index++)
+                    {
+                        var topic = taken.Topics[index];
+                        @(index == 0 ? " " : " · ")<a href="@topic.Address">@topic.Title</a>@(" in " + topic.Tangent + (topic.Removed ? " (removed)" : ""))
+                    }
+                </p>
+            }
+            @if (Model.Report is { } report)
+            {
+                <details class="post-report">
+                    <summary class="post-action">Report</summary>
+                    <Draw Part="@report" />
+                </details>
+            }
+            <Draw Part="@Model.Remove" />
+            <Draw Part="@Model.Undo" />
+            @if (Model.Moderating.Count > 0)
+            {
+                <div class="post-moderating">
+                    <Draw Part="@Model.Moderating" />
+                </div>
+            }
+        </footer>
+    </article>
+}
+
+@code {
+    [Parameter, EditorRequired] public TopicPage.Post Model { get; set; } = default!;
+
+    [Parameter] public Shape As { get; set; }
+
+    [CascadingParameter(Name = Page.ReaderValue)] public string? Reader { get; set; }
+
+    [CascadingParameter(Name = Page.TodayValue)] public DateOnly Today { get; set; }
+
+    /// <summary>Whether the page stands alone, with nothing to act on and no address beyond itself: no copy, no history.</summary>
+    [CascadingParameter(Name = nameof(Shell.Standalone))] public bool Standalone { get; set; }
+
+    private string Classes => "post" + (Model.Root ? " post-root" : "") + (Model.Article ? " post-article" : "") + (Model.Anchor ? " is-current" : "")
+        + (Model.Removed is not null ? " is-removed" : "") + (Model.New ? " is-new" : "")
+        + (Model.Author.Id == Reader ? " by-you" : "") + (Model.Author.Agent ? " by-agent" : "");
+
+    /// <summary>The body's Markdown as safe HTML, an article's headings with the ids its outline opens them at.</summary>
+    private string Body
+    {
+        get
+        {
+            var html = Media.Placed(Mentions.Html(Model.Id, Model.Version, Model.Body ?? "", Model.Mentions), Model.Door);
+            return Model.Article ? Outline.Of(html).Html : html;
+        }
+    }
+
+    /// <summary>Where the Post's earlier versions are read.</summary>
+    private string History => Model.Address + "/" + PostHistoryController.Segment;
+}

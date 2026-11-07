@@ -112,6 +112,12 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'lifted', seed: 'lifted', signedIn: true },
     ],
   },
+  // The door paged back for the persona whose checkpoint stands at the log's last sequence: what reached her and is no
+  // longer new, newest first, from before any sequence the log holds.
+  'door-older': {
+    path: '/',
+    states: [{ name: 'read', seed: 'door-quiet', signedIn: true, query: { before: '1000000' } }],
+  },
   // Every Tangent the persona may view in a place of sixty after its first: the first page, the page after it, and the
   // first page as a visitor reads it.
   tangents: {
@@ -184,15 +190,15 @@ export const screens: Readonly<Record<string, Screen>> = {
     path: '/settings/roles',
     states: [
       { name: 'with-roles', place: 'persona', seed: 'roles', signedIn: true },
-      { name: 'new-role-open', place: 'persona', seed: 'roles', signedIn: true, click: '.roles-new > summary', waitFor: '.roles-new[open]' },
-      { name: 'change-open', place: 'persona', seed: 'roles', signedIn: true, click: '.roles-change > summary', waitFor: '.roles-change[open]' },
+      { name: 'new-role-open', place: 'persona', seed: 'roles', signedIn: true, click: '.create-role > summary', waitFor: '.create-role[open]' },
+      { name: 'change-open', place: 'persona', seed: 'roles', signedIn: true, click: '.change-role > summary', waitFor: '.change-role[open]' },
       {
         name: 'delete-confirmation',
         place: 'persona',
         seed: 'roles',
         signedIn: true,
-        click: '.roles-delete > summary',
-        waitFor: '.roles-delete[open]',
+        click: '.delete-role > summary',
+        waitFor: '.delete-role[open]',
       },
       { name: 'refused', signedIn: true },
     ],
@@ -234,7 +240,7 @@ export const screens: Readonly<Record<string, Screen>> = {
     path: '/settings/applications',
     states: [
       { name: 'with-applicants', place: 'persona', seed: 'applications', signedIn: true },
-      { name: 'decline-confirmation', place: 'persona', seed: 'applications', signedIn: true, click: '.application-decline summary' },
+      { name: 'decline-confirmation', place: 'persona', seed: 'applications', signedIn: true, click: '.decline > summary' },
       { name: 'empty', place: 'persona', signedIn: true },
     ],
   },
@@ -252,10 +258,10 @@ export const screens: Readonly<Record<string, Screen>> = {
         place: 'persona',
         seed: 'people',
         signedIn: true,
-        click: '.people-time-out > summary',
-        waitFor: '.people-time-out[open]',
+        click: '.time-out > summary',
+        waitFor: '.time-out[open]',
       },
-      { name: 'ban-confirmation', place: 'persona', seed: 'people', signedIn: true, click: '.people-ban > summary', waitFor: '.people-ban[open]' },
+      { name: 'ban-confirmation', place: 'persona', seed: 'people', signedIn: true, click: '.ban > summary', waitFor: '.ban[open]' },
       { name: 'found', place: 'persona', seed: 'people', signedIn: true, query: { handle: 'ma' } },
       { name: 'moderator', seed: 'many-tangents', signedIn: true },
       { name: 'refused', signedIn: true },
@@ -372,7 +378,7 @@ export const screens: Readonly<Record<string, Screen>> = {
         reseed: 'discussions-reopened',
         values: { 'input[name="audience"][value="public"]': 'private' },
         click: '.post-form-submit',
-        waitFor: '#closed-heading',
+        waitFor: '.sign-in-title',
       },
       { name: 'moderators', place: 'persona', seed: 'tangent', signedIn: true, path: '/t/moderators/settings' },
     ],
@@ -613,8 +619,8 @@ export const screens: Readonly<Record<string, Screen>> = {
         seed: 'profile',
         signedIn: true,
         path: '/p/mara.bsky.social',
-        click: '.profile-standing .people-ban > summary',
-        waitFor: '.profile-standing .people-ban[open]',
+        click: '.profile-standing .ban > summary',
+        waitFor: '.profile-standing .ban[open]',
       },
     ],
   },

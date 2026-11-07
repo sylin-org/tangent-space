@@ -1,6 +1,7 @@
 using Koan.Data.Abstractions;
 using Koan.Data.Abstractions.Filtering;
 using Koan.Data.Core.Commands;
+using Koan.Data.Core.Lifecycle;
 using Koan.Data.Core.Model;
 using Koan.Data.Core.Sorting;
 using Tangent.Posts;
@@ -41,13 +42,12 @@ public sealed class Tangent : Entity<Tangent>
     /// brought in here, as <c>/media/{id}</c>; empty for none.</summary>
     public string Image { get; set; } = "";
 
-    /// <summary>Takes <paramref name="accent"/> and <paramref name="image"/>, each left as it is where null, or refuses with
-    /// <see cref="AccentRule"/> or <see cref="ImageRule"/>. Answers whether anything changed.</summary>
+    /// <summary>Takes <paramref name="accent"/> and <paramref name="image"/>, each left as it is where null and trimmed,
+    /// judged as the row is saved (<see cref="Holds"/>). Answers whether anything changed.</summary>
     public bool Wear(string? accent, string? image)
     {
         var tone = accent?.Trim() ?? Accent;
-        if (tone.Length > 0 && !Render.Tile.Tones.Contains(tone)) throw new Refusal(AccentRule);
-        var picture = image is null ? Image : Space.Art.Judged(image) ?? throw new Refusal(ImageRule);
+        var picture = image is null ? Image : Space.Art.Judged(image) ?? image;
         if (tone == Accent && picture == Image) return false;
         (Accent, Image) = (tone, picture);
         return true;
@@ -62,24 +62,54 @@ public sealed class Tangent : Entity<Tangent>
     /// <summary>How a participant outside it comes in while it is private.</summary>
     public Joining Joining { get; set; }
 
-    /// <summary>How many Topics were started here, raised in the commit that starts one.</summary>
+    /// <summary>How many Topics it holds: raised in the commit that starts one or moves one in, lowered in the one that
+    /// moves one out or deletes one (<see cref="TopicCame"/>, <see cref="TopicWent"/>).</summary>
     public int TopicCount { get; set; }
 
-    /// <summary>A Tangent, or a refusal: the slug has the slug's shape and is not <see cref="NewSegment"/>, and the name
-    /// and description are within their limits.</summary>
-    public static Tangent Create(string slug, string name, string description, PostKind defaultKind, int order)
+    /// <summary>How many of its Topics started in each month, by its key (<see cref="TopicList.Month.Key"/>), moved with
+    /// <see cref="TopicCount"/>; a month with none has no key.</summary>
+    public Dictionary<string, int> Months { get; set; } = [];
+
+    /// <summary>How many of its Topics each participant started, by their id, moved with <see cref="TopicCount"/>; an author
+    /// with none has no key.</summary>
+    public Dictionary<string, int> Authors { get; set; } = [];
+
+    /// <summary>The root Id of the Topic its moderators keep at the top of its lists; null for none. A pin that names a root
+    /// removed or no longer here leads nothing (<see cref="TopicList.Pinned"/>).</summary>
+    public string? PinnedId { get; set; }
+
+    /// <summary>Pins the Topic whose root is <paramref name="topicId"/>, in place of any other. Answers whether anything
+    /// changed.</summary>
+    public bool Pin(string topicId)
     {
-        if (!Slug.IsValid(slug)) throw new Refusal(NeedsSlug);
-        if (slug == NewSegment) throw new Refusal(SlugReserved);
-        Check(name, description);
-        return new Tangent { Id = slug, Name = name.Trim(), Description = description, DefaultKind = defaultKind, Order = order };
+        if (PinnedId == topicId) return false;
+        PinnedId = topicId;
+        return true;
     }
 
-    /// <summary>Renames, describes and sets the default kind, or refuses as <see cref="Create"/> does; the slug stays.
-    /// Answers whether anything changed.</summary>
+    /// <summary>Unpins the Topic whose root is <paramref name="topicId"/>, where it is the one pinned. Answers whether
+    /// anything changed.</summary>
+    public bool Unpin(string topicId)
+    {
+        if (PinnedId != topicId) return false;
+        PinnedId = null;
+        return true;
+    }
+
+    /// <summary>The log's sequence of the <see cref="Events.EventKind.TangentChanged"/> that created it, written by the
+    /// command that creates it; zero where none was written. Its own rows of the log begin there: a row of its slug before it
+    /// belongs to a Tangent deleted before this one took the slug (<see cref="DeleteTangent"/>).</summary>
+    public long LogSeq { get; set; }
+
+    /// <summary>A Tangent of this slug, name, description, default kind and order, the name trimmed, judged as it is saved
+    /// (<see cref="Holds"/>).</summary>
+    public static Tangent Create(string slug, string name, string description, PostKind defaultKind, int order)
+        => new() { Id = slug, Name = name.Trim(), Description = description, DefaultKind = defaultKind, Order = order };
+
+    /// <summary>Renames, describes and sets the default kind, judged as the row is saved (<see cref="Holds"/>); the slug
+    /// stays. Answers whether anything changed.</summary>
     public bool Change(string name, string description, PostKind defaultKind)
     {
-        Check(name, description);
         if (Name == name.Trim() && Description == description && DefaultKind == defaultKind) return false;
         (Name, Description, DefaultKind) = (name.Trim(), description, defaultKind);
         return true;
@@ -134,15 +164,64 @@ public sealed class Tangent : Entity<Tangent>
             Filter.All(Filter.On(order, FilterOperator.Eq, FilterValue.Of(place.Order)), Filter.On(id, beyond, FilterValue.Of(place.Id))));
     }
 
-    private static void Check(string name, string description)
+    /// <summary>What every Tangent holds, however it is written — created, changed, worn, counted, renumbered — judged as it
+    /// is saved, as Tangent's lifecycle (<see cref="TangentModule"/>), or a refusal: its slug has the slug's shape and is not
+    /// <see cref="NewSegment"/>; its name holds a visible character, at most <see cref="NameLimit"/> once trimmed; its
+    /// description at most <see cref="DescriptionLimit"/>; its accent is none or one of <see cref="Render.Tile.Tones"/>; and its
+    /// image is none, a bundled cover or an image brought in here (<see cref="Space.Art.Judged"/>), kept trimmed. It reads
+    /// nothing, writes nothing and asks nothing of the row as it stood.</summary>
+    public static EntityLifecycleResult Holds(EntityLifecycleContext<Tangent> context)
     {
-        if (string.IsNullOrWhiteSpace(name)) throw new Refusal(NeedsName);
-        if (name.Trim().Length > NameLimit) throw new Refusal(NameTooLong);
-        if (description.Length > DescriptionLimit) throw new Refusal(DescriptionTooLong);
+        var tangent = context.Current;
+        if (!Slug.IsValid(tangent.Id)) throw new Refusal(NeedsSlug);
+        if (tangent.Id == NewSegment) throw new Refusal(SlugReserved);
+        if (string.IsNullOrWhiteSpace(tangent.Name)) throw new Refusal(NeedsName);
+        if (tangent.Name.Trim().Length > NameLimit) throw new Refusal(NameTooLong);
+        if (tangent.Description.Length > DescriptionLimit) throw new Refusal(DescriptionTooLong);
+        if (tangent.Accent.Length > 0 && !Render.Tile.Tones.Contains(tangent.Accent)) throw new Refusal(AccentRule);
+        tangent.Image = Space.Art.Judged(tangent.Image) ?? throw new Refusal(ImageRule);
+        return context.Proceed();
     }
 
-    /// <summary>Counts a Topic started here.</summary>
-    public void TopicStarted() => TopicCount = checked(TopicCount + 1);
+    /// <summary>Counts <paramref name="root"/>, a Topic started here or moved in: in all, in the month it started and by its
+    /// author.</summary>
+    public void TopicCame(Post root)
+    {
+        TopicCount = checked(TopicCount + 1);
+        Tally(root, 1);
+    }
+
+    /// <summary>Stops counting <paramref name="root"/>, a Topic moved out or deleted: in all, in the month it started and by
+    /// its author, never below none, a month or an author left with none dropped.</summary>
+    public void TopicWent(Post root)
+    {
+        TopicCount = Math.Max(0, TopicCount - 1);
+        Tally(root, -1);
+    }
+
+    /// <summary>Whether its months and its authors each add up to the Topics it holds.</summary>
+    public bool Tallied() => Months.Values.Sum() == TopicCount && Authors.Values.Sum() == TopicCount;
+
+    /// <summary>Counts again, in their months and by their authors, the Topics <paramref name="roots"/> names, every Topic
+    /// it holds (<see cref="TallyTopics"/>).</summary>
+    public void Retally(IEnumerable<Post> roots)
+    {
+        (Months, Authors) = ([], []);
+        foreach (var root in roots) Tally(root, 1);
+    }
+
+    private void Tally(Post root, int by)
+    {
+        Shift(Months, TopicList.Month.Of(root.CreatedAt).Key, by);
+        Shift(Authors, root.AuthorId, by);
+    }
+
+    private static void Shift(Dictionary<string, int> counts, string key, int by)
+    {
+        var count = checked(counts.GetValueOrDefault(key) + by);
+        if (count > 0) counts[key] = count;
+        else counts.Remove(key);
+    }
 
     /// <summary>Whether this row says what the command says.</summary>
     public bool Same(string name, string description, PostKind defaultKind, int order) =>

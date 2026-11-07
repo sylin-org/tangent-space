@@ -7,6 +7,7 @@ using Koan.Web.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
+using Tangent.Access;
 using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
@@ -84,7 +85,7 @@ public sealed class Archive
             await archive.Door(ct);
             await archive._export.Tangents(ct);
             await archive._export.Feed(Feeds.ArticlesPath.TrimStart('/'),
-                await Feeds.OfArticles(await ViewableTangents.All(null, ct), space, baseAddress, ct), ct);
+                await Feeds.OfArticles(space, baseAddress, ct), ct);
             await archive.Profiles(ct);
             files.Finish();
         }
@@ -100,7 +101,7 @@ public sealed class Archive
     /// <summary>The door a visitor reads.</summary>
     private async Task Door(CancellationToken ct)
     {
-        if (await As<DoorController>().Get(ct) is not OkObjectResult { Value: Door door })
+        if (await As<DoorController>(ct) is not { } door0 || await door0.Get(null, ct) is not OkObjectResult { Value: Door door })
             throw new InvalidOperationException("A visitor of a public place reads its door.");
         await _export.Page(Export.First, door with { Address = Export.First + ".html", Can = [], SignIn = null, Gate = null, Day = Export.Undated }, ".", null, ct);
     }
@@ -118,8 +119,7 @@ public sealed class Archive
                 Page = 1,
                 PageSize = PeopleRead
             }.WithSort<Participant>(sort => sort.OrderBy(participant => participant.Id));
-            var rows = await Participant.Query(participant => participant.Standing == Standing.Admitted
-                || participant.Standing == Standing.TimedOut || participant.Standing == Standing.Banned, query, ct);
+            var rows = await Participant.Query(People.Among, query, ct);
             foreach (var row in rows) await Profile(row, ct);
             if (rows.Count < PeopleRead) return;
             after = rows[^1].Id;
@@ -137,7 +137,7 @@ public sealed class Archive
         var page = 1;
         do
         {
-            if (await As<ProfileController>().Get(address, before, ct) is not OkObjectResult { Value: ProfilePage read }) return;
+            if (await As<ProfileController>(ct) is not { } profiles || await profiles.Get(address, before, ct) is not OkObjectResult { Value: ProfilePage read }) return;
             before = read.Older is { } older ? Uri.UnescapeDataString(older[(older.IndexOf('=') + 1)..]) : null;
             await _export.Page(folder + "/" + Export.PagePath(page), read with
             {
@@ -158,11 +158,16 @@ public sealed class Archive
 
     private static bool Nameable(string segment) => segment.IndexOfAny(Path.GetInvalidFileNameChars()) < 0;
 
-    /// <summary>A page's own handler, reading for no one in particular.</summary>
-    private TController As<TController>() where TController : ControllerBase
+    /// <summary>A page's own handler, reading for no one in particular, with the place as the Doorway finds it for a visitor;
+    /// none where a visitor may not read the place.</summary>
+    private async Task<TController?> As<TController>(CancellationToken ct) where TController : ControllerBase
     {
+        var (here, refused) = await Here.Find(null, null, null, null, ct);
+        if (refused is not null) return null;
+        var http = new DefaultHttpContext { RequestServices = _services };
+        http.Features.Set(here);
         var controller = ActivatorUtilities.CreateInstance<TController>(_services);
-        controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { RequestServices = _services } };
+        controller.ControllerContext = new ControllerContext { HttpContext = http };
         return controller;
     }
 

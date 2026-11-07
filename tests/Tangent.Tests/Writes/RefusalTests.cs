@@ -82,11 +82,11 @@ public sealed class RefusalTests
     }
 
     [Fact]
-    public async Task A_reply_in_a_removed_topic_is_refused_with_removed_as_a_problem_and_as_the_page_and_nothing_is_written()
+    public async Task A_reply_in_a_topic_whose_root_is_removed_is_refused_as_closed_as_a_problem_and_as_the_page_and_nothing_is_written()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
-        var removed = Post.Root(Tids.Mint(), Workshop, "Closed", "closed", PostKind.Topic, "No more replies.", Mo, DateTimeOffset.UtcNow);
+        var removed = Given.ARoot(Tids.Mint(), Workshop, "Said and done", "said-and-done", PostKind.Topic, "No more replies.", Mo, DateTimeOffset.UtcNow);
         removed.Removed = true;
         Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(removed).Send(Cancellation));
         using var ada = await SignedIn(tangentSpace, Ada);
@@ -95,13 +95,13 @@ public sealed class RefusalTests
         var asJson = await Json(ada, "/t/" + Workshop + "/new", TopicPath(removed), new { id = Tids.Mint(), body = "Still?" });
         var onForm = await Form(ada, "/t/" + Workshop + "/new", TopicPath(removed), new Dictionary<string, string> { ["id"] = Tids.Mint(), ["body"] = "Still?" });
 
-        Assert.Equal((HttpStatusCode.Forbidden, "application/problem+json", Capabilities.Removed.Word), (asJson.Status, asJson.MediaType, asJson.Word));
+        Assert.Equal((HttpStatusCode.Forbidden, "application/problem+json", Capabilities.RootRemoved.Word), (asJson.Status, asJson.MediaType, asJson.Word));
         Assert.Equal("gated", asJson.Kind);
         Assert.Equal(("text/html", HttpStatusCode.Forbidden), (onForm.MediaType, onForm.Status));
-        Assert.Contains("data-word=\"removed\"", onForm.Body);
-        Assert.Contains(Capabilities.Removed.Text, System.Net.WebUtility.HtmlDecode(onForm.Body));
-        Assert.Contains(">Removed</h1>", onForm.Body);
-        Assert.DoesNotContain(">removed<", onForm.Body);
+        Assert.Contains("data-word=\"closed\"", onForm.Body);
+        Assert.Contains(Capabilities.RootRemoved.Text, System.Net.WebUtility.HtmlDecode(onForm.Body));
+        Assert.Contains(">Closed</h1>", onForm.Body);
+        Assert.DoesNotContain(">closed<", onForm.Body);
         Assert.Equal(before, await Counted());
     }
 
@@ -127,7 +127,7 @@ public sealed class RefusalTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
-        var hidden = Post.Root(Tids.Mint(), Studio, "Plans", "plans", PostKind.Topic, "Not for everyone.", Mo, DateTimeOffset.UtcNow);
+        var hidden = Given.ARoot(Tids.Mint(), Studio, "Plans", "plans", PostKind.Topic, "Not for everyone.", Mo, DateTimeOffset.UtcNow);
         Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(hidden).Send(Cancellation));
         using var ada = await SignedIn(tangentSpace, Ada);
         var before = await Counted();

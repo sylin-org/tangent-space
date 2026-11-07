@@ -1,0 +1,54 @@
+@* The pointers a site places, any one of them enough: each with what it is and where it goes, and its text ready to copy;
+   as a section of a page, under its heading and the sentence that says what they are for. *@
+@if (Model.Heading is { } heading)
+{
+    <h2 class="rail-heading rail-heading-spaced" id="@Render.Pointing.Anchor">@heading</h2>
+}
+@if (Model.Lede is { } lede)
+{
+    <Draw Part="@(new Render.Sentence(lede))" />
+}
+@if (Model.Pointers.Count > 0)
+{
+    <ol class="first-run-pointers">
+        @foreach (var pointer in Model.Pointers)
+        {
+            var id = "pointer-" + pointer.Kind;
+            <li class="first-run-pointer" data-pointer="@pointer.Kind">
+                <div class="first-run-pointer-head">
+                    @if (Model.Heading is null)
+                    {
+                        <h2 class="first-run-pointer-title" id="@(id)-title">@Title(pointer)</h2>
+                    }
+                    else
+                    {
+                        <h3 class="first-run-pointer-title" id="@(id)-title">@Title(pointer)</h3>
+                    }
+                    @if (pointer.Text.Length > 0)
+                    {
+                        <button type="button" class="first-run-copy" data-island="copy" data-props="@System.Text.Json.JsonSerializer.Serialize(new { target = id })"
+                                aria-describedby="@(id)-title" hidden>Copy</button>
+                    }
+                </div>
+                <p class="first-run-pointer-where"><Draw Part="@(new Render.Sentence(pointer.Where))" As="Shape.Inline" /></p>
+                @if (pointer.Text.Length > 0)
+                {
+                    <pre class="first-run-snippet" id="@id" tabindex="0"><code>@pointer.Text</code></pre>
+                }
+            </li>
+        }
+    </ol>
+}
+
+@code {
+    [Parameter, EditorRequired] public Render.Pointing Model { get; set; } = default!;
+
+    private static string Title(Space.Pointer pointer) => pointer.Kind switch
+    {
+        Space.Pointers.Link => "A link on your site’s pages",
+        Space.Pointers.WellKnown => "A file at your site’s origin",
+        Space.Pointers.Txt => "A DNS record",
+        Space.Pointers.Proxy => "The reverse-proxy rule for the path",
+        _ => pointer.Kind
+    };
+}

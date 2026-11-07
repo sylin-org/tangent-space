@@ -47,8 +47,8 @@ public static class ModeratorsTangent
         var roles = Collection();
         await Overwrites.SetAudience(roles, slug, Audience.Private, ct);
         await roles.Overwrite(Overwrites.Resource(slug), OverwriteSubjectKind.Role, Roles.Moderator, Bits.Tokens(ModeratorBits), [], ct: ct);
+        tangent.LogSeq = (await Event.Append(EventKind.TangentChanged, at, ct, tangentId: tangent.Id, actorId: actorId, audience: Audience.Private)).Seq;
         await tangent.Save(ct);
-        await Event.Append(EventKind.TangentChanged, at, ct, tangentId: tangent.Id, actorId: actorId, audience: Audience.Private);
         return tangent;
     }
 

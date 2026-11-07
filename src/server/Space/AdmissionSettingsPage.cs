@@ -8,6 +8,7 @@ namespace Tangent.Space;
 /// change it, takes <c>admission</c>. <see cref="Can"/> is what the reader holds in the place, and
 /// <see cref="Gate"/> why they may not change it, null when they may; <see cref="SignIn"/> is where a visitor signs in,
 /// coming back here. After a refusal the form says why above the choices.</summary>
+[Page(Layout.Settings)]
 public sealed record AdmissionSettingsPage(
     IReadOnlyList<SettingsSection> Sections,
     string Admission,
@@ -19,4 +20,23 @@ public sealed record AdmissionSettingsPage(
     string Place,
     string Door,
     Who? Who,
-    string? Failure = null);
+    string? Failure = null)
+{
+    [Slot(Slot.Rail), Newtonsoft.Json.JsonIgnore]
+    public SettingsRail Rail => new(Sections);
+
+    [Slot(Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public PanelTitle Heading => new(TangentSpaceSettingsController.AdmissionSection, "Settings of " + Render.Sentence.Link(Place, Door));
+
+    [Slot(Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Notice? Line => Notice.Of(Gate, Failure, SignIn);
+
+    /// <summary>The form as the page draws it: the reader's to send, or read only where it is not.</summary>
+    [Slot(Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Form Shown => (Change ?? (TangentSpaceSettingsController.AdmissionForm(Door.TrimEnd('/')) with { ReadOnly = true }))
+        .With(TangentSpaceSettingsController.AdmissionField, Admission);
+
+    /// <summary>The frame the shell draws around the page: its settings as its one crumb, and who reads, or where a visitor
+    /// signs in.</summary>
+    public static Frame Frame(AdmissionSettingsPage page) => new(page.Place, page.Door, [new Crumb("Settings")], page.Who, page.SignIn);
+}

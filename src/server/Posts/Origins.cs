@@ -52,7 +52,7 @@ public static class Origins
             PostWrites.Address(baseUrl, tangent.Id, topic.Slug ?? topic.Id, origin.Id),
             topic.Title ?? "",
             tangent.Name,
-            author?.ShownName() ?? origin.AuthorId,
+            author?.ShownName() ?? Render.Person.LeftName,
             origin.Removed);
     }
 

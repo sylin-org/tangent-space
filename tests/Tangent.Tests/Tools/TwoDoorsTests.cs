@@ -93,7 +93,7 @@ public sealed class TwoDoorsTests
     {
         await using var tangentSpace = await Starting();
         using var doors = await Open(tangentSpace);
-        var hidden = Post.Root(Tids.Mint(), Studio, "Plans", "plans", PostKind.Topic, "Not for everyone.", Mo, DateTimeOffset.UtcNow);
+        var hidden = Given.ARoot(Tids.Mint(), Studio, "Plans", "plans", PostKind.Topic, "Not for everyone.", Mo, DateTimeOffset.UtcNow);
         Assert.IsType<Outcome<Post>.Done>(await new Store<Post>(hidden).Send(Cancellation));
 
         var nothing = await doors.Posted("/t/" + Workshop + "/nothing", new { body = "Anyone?" });

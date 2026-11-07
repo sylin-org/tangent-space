@@ -34,6 +34,14 @@ public static class Given
         return tangent;
     }
 
+    /// <summary>A Topic's root as starting it fills one, unsaved: of <paramref name="kind"/>, in the Tangent <paramref name="tangentId"/>.</summary>
+    public static Post ARoot(string id, string tangentId, string title, string slug, PostKind kind, PostBody body, string authorId, DateTimeOffset at)
+    {
+        var root = new Post { Id = id, Title = title };
+        root.StartIn(new Tangents.Tangent { Id = tangentId, DefaultKind = kind }, slug, body, authorId, at);
+        return root;
+    }
+
     /// <summary>The persona <paramref name="id"/> as a participant, bound to their account, with their logins bound to
     /// them, a standing and the roles they hold.</summary>
     public static async Task<Participant> AParticipant(TangentSpaceFixture tangentSpace, string id, IReadOnlyList<string> roles,

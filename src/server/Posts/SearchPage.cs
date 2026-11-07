@@ -6,9 +6,11 @@ namespace Tangent.Posts;
 /// <summary>A search of what the place has said, one resource both ways: <see cref="Text"/>, the words searched for, null
 /// before anyone has; one bounded page of <see cref="Hits"/>, best first, only ever Posts the reader may view;
 /// and <see cref="Next"/> and <see cref="Previous"/>, the addresses of the pages either side, each absent where there is none.
-/// <see cref="Place"/>,
+/// <see cref="In"/> is the one Tangent the search is narrowed to, and <see cref="Everywhere"/> the same search in the whole
+/// place, both absent where it is the whole place. <see cref="Place"/>,
 /// <see cref="Door"/>, <see cref="SignIn"/> and <see cref="Who"/> say where the page is and who reads it, and
 /// <see cref="Day"/> is the UTC day its times are written for.</summary>
+[Render.Page(Render.Layout.Panel)]
 public sealed record SearchPage(
     string Place,
     string Door,
@@ -19,7 +21,9 @@ public sealed record SearchPage(
     string? Previous,
     string? SignIn,
     Who? Who,
-    DateOnly Day)
+    DateOnly Day,
+    SearchPage.Within? In = null,
+    string? Everywhere = null)
 {
     /// <summary>Where a search answers under the base URL.</summary>
     public const string Path = "/search";
@@ -29,8 +33,30 @@ public sealed record SearchPage(
     /// <see cref="Snippet"/>: its words around the matches in plain text, as runs, the matched words marked, or its first
     /// words, unmarked, where the title is what matched. <see cref="TangentSlug"/> and <see cref="TopicSlug"/> are what its
     /// address names, which a tool takes.</summary>
-    public sealed record Hit(string Id, string Kind, string Topic, string Tangent, string Address, TangentPage.Author Author, DateTimeOffset At,
-        IReadOnlyList<Run> Snippet, TangentPage.Edited? Edited = null, string TangentSlug = "", string TopicSlug = "");
+    public sealed record Hit(string Id, string Kind, string Topic, string Tangent, string Address, Render.Person Author, DateTimeOffset At,
+        IReadOnlyList<Run> Snippet, TangentPage.Edited? Edited = null, string TangentSlug = "", string TopicSlug = "") : Render.IPart;
+
+    /// <summary>The Tangent a search is narrowed to: its slug, its name and its address.</summary>
+    public sealed record Within(string Slug, string Name, string Address);
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.PanelTitle Heading => new(Text is { } text ? "Search: " + text : "Search", In is { } inside
+        ? "In " + Render.Sentence.Link(inside.Name, inside.Address) + " · " + Render.Sentence.Link("search everywhere", Everywhere ?? Address)
+        : "In " + Render.Sentence.Link(Place, Door));
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.SearchHits Found => new(Hits,
+        Text is null ? "Type the words you’re looking for in the box at the top of the page."
+        : In is { } inside ? "Nothing you can read in " + inside.Name + " holds those words."
+        : "Nothing you can read here holds those words.", Previous, Next);
+
+    /// <summary>The frame the shell draws around the page: the search as its one crumb, who reads or where a visitor signs in,
+    /// and the words, which the masthead's box holds, still narrowed to the Tangent the search is.</summary>
+    public static Render.Frame Frame(SearchPage page)
+        => new(page.Place, page.Door, [new Render.Crumb("Search")], page.Who, page.SignIn, Searched: page.Text)
+        {
+            SearchIn = page.In is { } inside ? (inside.Slug, inside.Name) : null
+        };
 
     /// <summary>A stretch of a snippet's words, marked where they are what matched. A run is words and never markup, so a
     /// page or an agent shows it safely whatever a Post's body holds.</summary>

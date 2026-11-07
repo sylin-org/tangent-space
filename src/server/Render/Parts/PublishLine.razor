@@ -1,0 +1,19 @@
+@* An article's line about its author's own account, shown to its author alone: the offer to publish it there, with not
+   now the first time, or where it stands there, with its Bluesky post once it is out and their Connections page; for an
+   article no longer public here or removed, that its copy is still out there, and what takes it down. *@
+<div class="door-offer bar offer publish-line" data-state="@Model.State">
+    <p class="door-offer-line">
+        @Model.Sentence
+        @if (Model.Detail is { } detail)
+        {
+            <span class="topic-row-none">@(" " + detail)</span>
+        }
+    </p>
+    <div class="door-offer-answers">
+        <Draw Part="@Model.Answers" As="Shape.Row" />
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Connections.Publishing Model { get; set; } = default!;
+}

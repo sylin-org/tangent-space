@@ -42,6 +42,17 @@ public sealed partial class Media : MediaEntity<Media>
         .Replace("src=\"/media/", "src=\"" + door + "media/", StringComparison.Ordinal)
         .Replace("href=\"/media/", "href=\"" + door + "media/", StringComparison.Ordinal);
 
+    /// <summary>The media the file <paramref name="field"/> of a multipart form is, kept as <see cref="Keep"/> keeps it, or a
+    /// refusal: the form holds no such file, or one past <see cref="SentLimit"/>.</summary>
+    public static async Task<Media> KeepFile(IFormCollection? form, string field, CancellationToken ct)
+    {
+        if (form?.Files.GetFile(field) is not { } file) throw new Refusal(NotAnImage);
+        if (file.Length > SentLimit) throw new Refusal(TooLarge);
+        using var sent = new MemoryStream();
+        await file.CopyToAsync(sent, ct);
+        return await Keep(sent.ToArray(), ct);
+    }
+
     /// <summary>The media these sent bytes are, or a refusal: anything but a PNG, a JPEG or a WebP of a size this keeps.
     /// The same picture sent twice is kept once.</summary>
     public static async Task<Media> Keep(byte[] sent, CancellationToken ct)

@@ -1,0 +1,6 @@
+@* The place's welcome under its door's head. *@
+<section class="door-intro post-body" aria-label="Welcome">@((MarkupString)Model.Html)</section>
+
+@code {
+    [Parameter, EditorRequired] public Render.Intro Model { get; set; } = default!;
+}

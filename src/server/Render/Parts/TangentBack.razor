@@ -1,0 +1,9 @@
+@* The way back to a Tangent from a page under it: its name and the way to all its Topics. *@
+<h2 class="rail-heading">@Model.Name</h2>
+<ul class="rail-views">
+    <li><a href="@Model.Address">@Model.Label</a></li>
+</ul>
+
+@code {
+    [Parameter, EditorRequired] public Render.TangentBack Model { get; set; } = default!;
+}

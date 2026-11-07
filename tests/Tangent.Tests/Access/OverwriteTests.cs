@@ -65,7 +65,7 @@ public sealed class OverwriteTests
         Assert.Equal("ada denies Moderate", (await Capabilities.Load("ada", "three", null, Cancellation)).Gate(Bit.Moderate)?.Word);
         Assert.True((await Capabilities.Load("bo", "three", null, Cancellation)).Holds(Bit.Moderate));
 
-        var own = Post.Root(Tids.Mint(), "four", "Mine", "mine", PostKind.Topic, "Words.", "leo", DateTimeOffset.UtcNow);
+        var own = Given.ARoot(Tids.Mint(), "four", "Mine", "mine", PostKind.Topic, "Words.", "leo", DateTimeOffset.UtcNow);
         var administrator = await Capabilities.Load("leo", "four", own, Cancellation);
         Assert.Equal(Bits.All, administrator.Held);
         Assert.Equal(Bits.Names(Bits.All), administrator.Can);

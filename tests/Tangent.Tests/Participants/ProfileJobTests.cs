@@ -7,8 +7,8 @@ using Xunit;
 
 namespace Tangent.Participants;
 
-/// <summary>The profile job: one bounded public read, cached on the participant through the at most once a
-/// day.</summary>
+/// <summary>The profile job: one bounded public read, cached on the participant through a command, at most once in the
+/// profile's lifetime, at a sign-in or a Post they write.</summary>
 public sealed class ProfileJobTests
 {
     private static readonly TimeSpan Bound = TimeSpan.FromSeconds(20);
@@ -16,7 +16,7 @@ public sealed class ProfileJobTests
     private static CancellationToken Cancellation => TestContext.Current.CancellationToken;
 
     [Fact]
-    public async Task The_job_caches_handle_display_name_and_avatar_through_a_command_and_a_run_within_a_day_is_skipped()
+    public async Task The_job_caches_handle_display_name_and_avatar_through_a_command_and_a_run_within_its_lifetime_is_skipped()
     {
         await using var stub = await ProfileStub.StartAsync(Cancellation);
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(new Dictionary<string, string?>
@@ -39,7 +39,7 @@ public sealed class ProfileJobTests
         // No bot self-label: a person.
         Assert.Equal((ParticipantKind.Person, KindSource.ProfileLabel), (participant.Kind, participant.KindSource));
 
-        // Within the day: another run reads nothing, and a sign-in submits nothing.
+        // Within its lifetime: another run reads nothing, and a sign-in submits nothing.
         var again = await participant.Job.Submit(ct: Cancellation);
         Assert.True((await again.Completion(Bound, Cancellation)).Succeeded);
         using var signedInAgain = await browser.SignIn("ada", did, Cancellation, handle: "ada.example");
@@ -74,16 +74,63 @@ public sealed class ProfileJobTests
     }
 
     [Theory]
-    [InlineData(KindSource.ProfileLabel, ParticipantKind.Agent)]
-    [InlineData(KindSource.OwnChoice, ParticipantKind.Person)]
-    public async Task An_agent_self_label_on_the_profile_makes_the_participant_an_agent_through_the_jobs_command_unless_they_chose_their_kind(
-        KindSource source, ParticipantKind expected)
+    [InlineData("reply")]
+    [InlineData("start_topic")]
+    [InlineData("edit")]
+    public async Task A_post_written_after_the_profiles_lifetime_reads_it_again_so_a_name_changed_on_Bluesky_follows_while_they_stay_signed_in(string write)
+    {
+        await using var stub = await ProfileStub.StartAsync(Cancellation);
+        var settings = Posts.Writing.Settings();
+        settings["Tangent:Profile:BaseAddress"] = stub.Answering.AbsoluteUri;
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(settings, ct: Cancellation);
+        await Posts.Writing.Place(tangentSpace);
+        var ada = Posts.Writing.Ada;
+        var did = Persona.Did(ada);
+        var root = await Posts.Writing.Started(ada, "Lanterns", "How do you hang yours?");
+        using var session = await Posts.Writing.SignedIn(tangentSpace, ada);
+        var signedIn = await Captured(did);
+
+        // An hour on, the profile they signed in with, as Ada Before, is past its lifetime, and their account says Ada Lovelace now.
+        var stale = DateTimeOffset.UtcNow - Profile.Lifetime - TimeSpan.FromMinutes(1);
+        signedIn.Profile = new Profile { DisplayName = "Ada Before", CapturedAt = stale };
+        Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(signedIn).Send(Cancellation));
+
+        // A reply a page sends, a Topic an agent's tool starts, an edit sent as JSON: each answers as it did, and reads
+        // the profile again.
+        var path = Posts.Writing.TopicPath(root);
+        switch (write)
+        {
+            case "reply":
+                var replied = await Posts.Writing.Form(session, path, path, new Dictionary<string, string> { ["id"] = Posts.Tids.Mint(), ["body"] = "From the porch beam." });
+                Assert.Equal(HttpStatusCode.SeeOther, replied.Status);
+                break;
+            case "start_topic":
+                using (var tools = await Tools.ToolClient.Connect(tangentSpace, session))
+                    Assert.False((await tools.Call("start_topic", new { tangent = Posts.Writing.Workshop, title = "Wicks", body = "Cotton or hemp?" })).Failed);
+                break;
+            default:
+                var edit = Posts.Writing.PostPath(root, root) + "/edit";
+                var edited = await Posts.Writing.Json(session, edit, edit, new { title = "Lanterns", body = "How do you hang yours, and where?", version = 1 });
+                Assert.Equal(HttpStatusCode.OK, edited.Status);
+                break;
+        }
+
+        var after = await Captured(did, after: stale);
+        Assert.Equal(ProfileStub.DisplayName, after.ShownName());
+        Assert.Equal(2, stub.Requests.Count(asked => asked == did));
+    }
+
+    [Theory]
+    [InlineData(KindSource.ProfileLabel, ParticipantKind.Person)]
+    [InlineData(KindSource.OwnChoice, ParticipantKind.Agent)]
+    public async Task An_agent_self_label_on_the_profile_makes_the_participant_an_agent_by_the_label_through_the_jobs_command_whatever_they_chose(
+        KindSource source, ParticipantKind kind)
     {
         await using var stub = await ProfileStub.StartAsync(Cancellation);
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(
             new Dictionary<string, string?> { ["Tangent:Profile:BaseAddress"] = stub.AgentLabelled.AbsoluteUri }, ct: Cancellation);
         const string did = "did:plc:lumen4example";
-        var stored = new Participant { Id = Persona.Id(did.Split(':')[^1]), Did = did, Handle = "lumen.example", Kind = ParticipantKind.Person, KindSource = source };
+        var stored = new Participant { Id = Persona.Id(did.Split(':')[^1]), Did = did, Handle = "lumen.example", Kind = kind, KindSource = source };
         Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(stored).Send(Cancellation));
 
         var job = await stored.Job.Submit(ct: Cancellation);
@@ -92,7 +139,8 @@ public sealed class ProfileJobTests
 
         Assert.NotNull(after);
         Assert.NotNull(after.Profile.CapturedAt);
-        Assert.Equal((expected, source), (after.Kind, after.KindSource));
+        Assert.Equal((ParticipantKind.Agent, KindSource.ProfileLabel), (after.Kind, after.KindSource));
+        Assert.True(after.Labelled);
     }
 
     [Theory]

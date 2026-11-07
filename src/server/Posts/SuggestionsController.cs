@@ -12,13 +12,13 @@ using Tangent.Tangents;
 namespace Tangent.Posts;
 
 /// <summary>What a writer can name as they type, in a Tangent and a Topic of it: after <c>@</c>, the people and the roles,
-/// and after <c>#</c>, the Tangents they may view, at most <see cref="Limit"/>, judged as <see cref="Bit.View"/> on the
-/// Tangent. People come in the order a conversation meets them: an exact handle first, then who wrote in this Topic, who
+/// and after <c>#</c>, the Tangents they may view among the first page of the place's (<see cref="ViewableTangents.Read"/>),
+/// at most <see cref="Limit"/>, judged as <see cref="Bit.View"/> on the Tangent. People come in the order a conversation meets them: an exact handle first, then who wrote in this Topic, who
 /// wrote lately in this Tangent, and whoever's handle starts with what was typed; a role is every role the place gives
 /// (<see cref="Roles.Given"/>), with how many hold it. Every read is bounded and takes no lock: the Tangent and the
 /// reader's rows, the Topic's root, a page of the Tangent's Topics, the participants they name in one keyed read, one
-/// range of the handle index, a page of the roles and one count each, or the Tangents the reader may view. Nothing is
-/// written.</summary>
+/// range of the handle index, a page of the roles and one count each, or one page of the Tangents the reader may view.
+/// Nothing is written.</summary>
 public sealed class SuggestionsController : ControllerBase
 {
     /// <summary>The segment under a Tangent's address where suggestions are read; <see cref="Slug.Reserved"/> keeps it
@@ -131,7 +131,7 @@ public sealed class SuggestionsController : ControllerBase
     }
 
     private static async Task<IReadOnlyList<Suggestion>> Viewable(string? personId, string needle, CancellationToken ct)
-        => (await ViewableTangents.All(personId, ct)).Tangents
+        => (await ViewableTangents.Read(personId, ViewableTangents.Views, null, ViewableTangents.ReadSize, ct)).Tangents
             .Select((tangent, index) => (Meets: Meets(needle, tangent.Id, tangent.Name), Index: index, Tangent: tangent))
             .Where(entry => entry.Meets is not null)
             .OrderBy(entry => entry.Meets).ThenBy(entry => entry.Index).Take(Limit)

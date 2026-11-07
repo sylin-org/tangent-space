@@ -21,6 +21,7 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
     public string Did { get; set; } = "";
 
     [Index(Name = "ix_participant_handles")]
+    [Index(Name = "ix_participant_standings", Order = 1)]
     public string Handle { get; set; } = "";
 
     public Profile Profile { get; set; } = new();
@@ -32,22 +33,24 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
     /// Read live wherever they are named, so a rename shows everywhere at once.</summary>
     public string ShownName() => Profile.DisplayName is { Length: > 0 } name ? name : ShownHandle();
 
-    /// <summary>Shown, never evaluated: an agent when the account labels itself a bot on its own profile, a person
-    /// otherwise, unless the participant chose it themselves.</summary>
+    /// <summary>Shown, never evaluated: an agent when the account labels itself a bot on its own profile or when the
+    /// participant chose to be shown as one (<see cref="Choose"/>), a person otherwise.</summary>
     public ParticipantKind Kind { get; set; }
 
-    /// <summary>Where <see cref="Kind"/> came from; the profile's label never overrides the participant's own
-    /// choice.</summary>
+    /// <summary>Where <see cref="Kind"/> came from: the profile's label, or the participant's own choice of the agent
+    /// mark. The label wins: an account that labels itself a bot is an agent here, whatever its holder chose.</summary>
     public KindSource KindSource { get; set; } = KindSource.ProfileLabel;
 
-    /// <summary>Place-wide.</summary>
+    /// <summary>Whether the account's own bot label makes them an agent, which they cannot take back here.</summary>
+    public bool Labelled => Kind == ParticipantKind.Agent && KindSource == KindSource.ProfileLabel;
+
+    /// <summary>Place-wide. Those who stand as one standing are one range of <c>ix_participant_standings</c>, in handle
+    /// order.</summary>
+    [Index(Name = "ix_participant_standings", Order = 0)]
     public Standing Standing { get; set; } = Standing.Admitted;
 
     /// <summary>When a timeout ends.</summary>
     public DateTimeOffset? StandingUntil { get; set; }
-
-    /// <summary>Why the standing is what it is, in the moderator's words.</summary>
-    public string? StandingNote { get; set; }
 
     /// <summary>When the participant applied, while their application is waiting or declined; null once they are
     /// admitted, and for everyone who joined. The applications list reads it newest first.</summary>
@@ -64,6 +67,20 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
     [Index(Name = "ix_participant_waiting")]
     public long? WaitingSeq { get; set; }
 
+    /// <summary>The slugs of the Tangents the participant quieted: what is new in them stops counting on their door, while
+    /// what is for them there still reaches them (<see cref="Tangents.QuietTangent"/>).</summary>
+    public List<string> Quiet { get; set; } = [];
+
+    /// <summary>Quiets the Tangent <paramref name="slug"/>, or with <paramref name="on"/> false lets it count again; false,
+    /// with nothing changed, where it already stands so.</summary>
+    public bool Quieten(string slug, bool on)
+    {
+        if (Quiet.Contains(slug) == on) return false;
+        if (on) Quiet.Add(slug);
+        else Quiet.Remove(slug);
+        return true;
+    }
+
     /// <summary>The refusal a decision meets for a participant whose standing is not an application's.</summary>
     public static readonly Reason NotAnApplication = Reason.Conflict("Only an application waiting or declined is decided.");
 
@@ -75,6 +92,10 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
 
     /// <summary>The refusal a timeout meets whose end is not after its start.</summary>
     public static readonly Reason TimeoutEnds = Reason.Invalid("A timeout ends after it begins.");
+
+    /// <summary>The refusal a participant meets who takes back an agent mark their own account's bot label gives them.</summary>
+    public static readonly Reason LabelledAgent = Reason.Conflict("labelled",
+        "Your Bluesky account labels itself a bot, so you are shown as an agent here; take the label off on Bluesky to change it.");
 
     /// <summary>The refusal a sign-in meets that carries no atproto identity.</summary>
     public static readonly Reason NoAccount = Reason.Invalid("A participant signs in with a Bluesky account, so the sign-in carries its DID.");
@@ -225,19 +246,33 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
     public bool ProfileFresh(DateTimeOffset now) => Profile.CapturedAt is { } captured && now - captured < Profile.Lifetime;
 
     /// <summary>Caches what the profile service answered for the account they are bound to, with the time of capture, and
-    /// takes the kind its bot self-label says unless the participant chose their kind themselves. The handle is not the
-    /// profile's to change.</summary>
+    /// the kind its bot self-label says: an agent wherever it says bot, whatever the participant chose; a person where it
+    /// does not, unless they chose to be shown as an agent. The handle is not the profile's to change.</summary>
     public void Capture(ProfileAnswer answer, DateTimeOffset at)
     {
         if (answer.Did != Did) throw new Refusal(Reason.Invalid($"The profile answered is {answer.Did}'s, not {Did}'s."));
-        if (KindSource == KindSource.ProfileLabel) Kind = answer.AgentLabel ? ParticipantKind.Agent : ParticipantKind.Person;
+        if (answer.AgentLabel) (Kind, KindSource) = (ParticipantKind.Agent, KindSource.ProfileLabel);
+        else if (KindSource == KindSource.ProfileLabel) Kind = ParticipantKind.Person;
         Profile = new Profile
         {
             DisplayName = answer.DisplayName,
             Description = answer.Description,
             Avatar = answer.Avatar,
+            Banner = answer.Banner,
             CapturedAt = at
         };
+    }
+
+    /// <summary>The participant's own choice of how the place shows them: as an agent, which marks them so until they take
+    /// it back, or as a person, which takes back their own mark and is refused with <see cref="LabelledAgent"/> where their
+    /// account's bot label makes them an agent (<see cref="Labelled"/>). False, with nothing changed, where they are shown
+    /// so already.</summary>
+    public bool Choose(ParticipantKind kind)
+    {
+        if (kind == Kind) return false;
+        if (kind == ParticipantKind.Person && Labelled) throw new Refusal(LabelledAgent);
+        (Kind, KindSource) = kind == ParticipantKind.Agent ? (ParticipantKind.Agent, KindSource.OwnChoice) : (ParticipantKind.Person, KindSource.ProfileLabel);
+        return true;
     }
 
     /// <summary>The profile job: Koan runs it after a submission, outside any command.</summary>

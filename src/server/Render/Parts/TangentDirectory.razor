@@ -1,0 +1,37 @@
+@* Every Tangent the reader may view: those they are in as rows, the members-only ones they are outside of as cards with the
+   way in; where a new one is created, for whoever may; and the Tangents after and the first ones a link away. None reads as
+   one sentence. *@
+@if (Model.Tangents.Count == 0)
+{
+    <p class="post-form-note">@(Model.Continued ? "No more Tangents." : "No Tangent is open to you here.")</p>
+}
+else
+{
+    <ul class="rail-views tangents-all list">
+        @foreach (var tangent in Model.Tangents)
+        {
+            <li @key="tangent.Slug"><Draw Part="@tangent" As="@(tangent.Joining is null ? Shape.Row : Shape.Card)" /></li>
+        }
+    </ul>
+}
+@if (Model.New is { } created)
+{
+    <a class="rail-new" href="@created">New Tangent</a>
+}
+@if (Model.Continued || Model.Next is not null)
+{
+    <nav class="topic-pages" aria-label="More Tangents">
+        @if (Model.Continued)
+        {
+            <a href="@Model.First">First Tangents</a>
+        }
+        @if (Model.Next is { } next)
+        {
+            <a class="topic-pages-next" href="@next">More Tangents →</a>
+        }
+    </nav>
+}
+
+@code {
+    [Parameter, EditorRequired] public Render.TangentDirectory Model { get; set; } = default!;
+}

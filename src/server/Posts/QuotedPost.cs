@@ -9,7 +9,7 @@ namespace Tangent.Posts;
 public sealed record QuotedPost(
     string Id,
     string Address,
-    TangentPage.Author Author,
+    Render.Person Author,
     DateTimeOffset CreatedAt,
     string? Text,
     bool Removed,
@@ -17,7 +17,7 @@ public sealed record QuotedPost(
     string TopicAddress,
     string Tangent,
     string TangentAddress,
-    TangentPage.Edited? Edited = null)
+    TangentPage.Edited? Edited = null) : Render.IPart
 {
     /// <summary>The most characters of a Post's first words that a title offered from them carries.</summary>
     public const int TitleWords = 60;
@@ -27,7 +27,7 @@ public sealed record QuotedPost(
     public static async Task<QuotedPost> Of(Post post, Post root, Tangents.Tangent tangent, string baseAddress, CancellationToken ct)
     {
         var people = await People(post, ct);
-        var author = people.TryGetValue(post.AuthorId, out var person) ? person : new TangentPage.Author(post.AuthorId, post.AuthorId, post.AuthorId, "person", null);
+        var author = people.TryGetValue(post.AuthorId, out var person) ? person : Render.Person.Left(post.AuthorId);
         var topicAddress = PostWrites.TopicAddress(baseAddress, tangent.Id, root.Slug ?? root.Id);
         return new QuotedPost(post.Id, topicAddress + "/" + Uri.EscapeDataString(post.Id), author, post.CreatedAt,
             post.Removed ? null : TangentPage.Opening(post, people), post.Removed, root.Title ?? "", topicAddress,
@@ -48,9 +48,9 @@ public sealed record QuotedPost(
 
     /// <summary>The Post's author, its last editor and the participants its body mentions, in one keyed read, by
     /// participant Id.</summary>
-    public static async Task<IReadOnlyDictionary<string, TangentPage.Author>> People(Post post, CancellationToken ct)
+    public static async Task<IReadOnlyDictionary<string, Render.Person>> People(Post post, CancellationToken ct)
     {
         var ids = post.MentionedIds.Prepend(post.AuthorId).Concat(post.EditedBy is { } editor ? [editor] : []).Distinct(StringComparer.Ordinal).ToList();
-        return (await Participant.Get(ids, ct)).OfType<Participant>().ToDictionary(row => row.Id, row => TangentPage.Author.Of(row), StringComparer.Ordinal);
+        return (await Participant.Get(ids, ct)).OfType<Participant>().ToDictionary(row => row.Id, row => Render.Person.Of(row), StringComparer.Ordinal);
     }
 }

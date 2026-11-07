@@ -104,7 +104,7 @@ public sealed class EditTests
         Assert.Equal(HttpStatusCode.Conflict, onForm.Status);
         Assert.Contains(">Hung from the beam, says the moderator.</textarea>", onForm.Body);
         Assert.Contains("<input type=\"hidden\" name=\"version\" value=\"2\" />", onForm.Body);
-        Assert.Contains("readonly>Mine hang from the porch.</textarea>", onForm.Body);
+        Assert.Matches("<textarea [^>]*readonly[^>]*>Mine hang from the porch.</textarea>", onForm.Body);
         Assert.Equal(2L, Assert.IsType<Outcome<Post>.Done>(repeat).Result.Version);
         Assert.Equal(before, (await Counted(), await Snapshots()));
         Assert.Equal(("Hung from the beam, says the moderator.", 2L), ((await Post.Get(root.Id, Cancellation))?.Body, (await Post.Get(root.Id, Cancellation))?.Version));

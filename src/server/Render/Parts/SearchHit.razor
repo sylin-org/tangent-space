@@ -1,0 +1,31 @@
+@* One Post a search found: who wrote it, by their mark and name, its Topic linked to the Post, its Tangent and when, and its
+   words under it, the matched words marked, first saying who else edited them where someone did. *@
+<div class="search-hit-body">
+    <p class="door-offer-line search-hit-line">
+        <Draw Part="@Model.Author" />
+        <span class="search-hit-text"><strong>@Model.Author.Name</strong> in <a class="search-hit-link" href="@Model.Address">@Model.Topic</a> <span class="topic-row-none">· @Model.Tangent · <time datetime="@Wording.Iso(Model.At)">@Wording.When(Model.At, Today)</time></span></span>
+    </p>
+    @if (Model.Snippet.Count > 0 || Model.Edited is not null)
+    {
+        <p class="snippet">@if (Model.Edited is not null)
+            {
+                <Draw Part="@Model.Edited" />@(" ")
+            }@foreach (var run in Model.Snippet)
+            {
+                if (run.Marked)
+                {
+                    <mark class="search-mark">@run.Text</mark>
+                }
+                else
+                {
+                    @run.Text
+                }
+            }</p>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Posts.SearchPage.Hit Model { get; set; } = default!;
+
+    [CascadingParameter(Name = Page.TodayValue)] public DateOnly Today { get; set; }
+}

@@ -5,8 +5,9 @@ import { fragmentHeader } from '../islands/fragment'
 import { createLiveTransport, type LiveEvent, type LiveState, type LiveTransport } from '../live'
 
 // The live updater against a mocked Tangent Space: the stream's frames patch a Topic's page — a new reply appended at
-// the newest window, counted in the notice elsewhere, an edited Post fetched again in place — and the door; when the
-// stream fails the transport polls, and when the poll fails it reads the door; and nothing it sends writes.
+// the newest window, counted in the notice elsewhere, an edited Post or an undone removal fetched again in place — a
+// Tangent's list and the door; when the stream fails the transport polls, and when the poll fails it reads the door; and
+// nothing it sends writes.
 
 const events = 'https://tangent.example/events'
 const door = 'https://tangent.example/'
@@ -103,6 +104,41 @@ test('at the newest window a new reply is fetched as its fragment and appended, 
   expect(document.getElementById('r1')!.classList.contains('is-current')).toBe(false)
   expect(calls[0].url).toBe(`${events}?since=10`)
   expect(document.querySelector('nav')!.hidden).toBe(true)
+  onlyReads()
+})
+
+test('a removed post whose removal is undone is fetched again in place of its tombstone', async () => {
+  topicPage(false)
+  document.getElementById('r1')!.textContent = 'Removed by a moderator.'
+  serve((url, init) => {
+    if (streamed(init)) return stream([row(11, 'removal.undone', 'r1', { version: 2 })])
+    if (url === `${topic}/r1` && fragmentOf(init))
+      return html('<div class="layout"><main><section class="topic-replies"><article id="r1" class="post is-current" aria-current="true">I do, at six.</article></section></main></div>')
+    return new Response('', { status: 404 })
+  })
+
+  mounted = mountIslands(document).filter((island) => island.name === 'live')
+
+  await vi.waitFor(() => expect(document.getElementById('r1')!.textContent).toBe('I do, at six.'), { timeout: 5000 })
+  expect(document.getElementById('r1')!.classList.contains('is-current')).toBe(false)
+  expect(document.querySelector('nav')!.hidden).toBe(true)
+  onlyReads()
+})
+
+test.each(['removal.undone', 'topic.deleted'])('on a Tangent a %s row fetches its list of Topics again', async (kind) => {
+  document.body.innerHTML =
+    '<main class="frame-main"><div class="layout"><div class="layout-main tangent-main"><ul><li>Removed</li><li>Lanterns at dusk</li></ul></div></div></main>' +
+    `<div class="live" data-island="live" data-props="${props({ page: 'tangent', tangent: 'workshop' })}"></div>`
+  serve((url, init) => {
+    if (streamed(init)) return stream([row(11, kind, 'root1')])
+    if (url === location.href && fragmentOf(init))
+      return html('<main class="frame-main"><div class="layout"><div class="layout-main tangent-main"><ul><li>Lanterns at dusk</li></ul></div></div></main>')
+    return new Response('', { status: 404 })
+  })
+
+  mounted = mountIslands(document).filter((island) => island.name === 'live')
+
+  await vi.waitFor(() => expect(document.querySelector('.tangent-main')!.innerHTML).toBe('<ul><li>Lanterns at dusk</li></ul>'), { timeout: 5000 })
   onlyReads()
 })
 

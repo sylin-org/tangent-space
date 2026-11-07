@@ -10,8 +10,9 @@ namespace Tangent.Posts;
 /// entity as it stood at one version, copied whole through Koan's entity serializer and keyed
 /// <c>{id}#v{version}</c>, the key Koan's entity audit gives a snapshot. The copy is saved through
 /// <c>Data.Upsert(model, partition)</c>, which joins the command's hold like every other save, so a snapshot commits in
-/// the one native transaction with the change it records, or not at all. One
-/// version is snapshotted once: the command that snapshots it raises the version or ends the entity's changes.</summary>
+/// the one native transaction with the change it records, or not at all. A version is snapshotted again only with what it
+/// already holds: the command that snapshots it raises the version or ends the entity's changes, and an undone removal
+/// (<see cref="UndoRemoval"/>) brings back that version's words, which its next edit or removal snapshots once more.</summary>
 public static class AuditPartition
 {
     /// <summary>The partition's name, as Koan names it.</summary>

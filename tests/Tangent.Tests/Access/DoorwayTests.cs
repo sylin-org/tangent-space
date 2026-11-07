@@ -89,7 +89,7 @@ public sealed class DoorwayTests
 
         Assert.Equal((HttpStatusCode.Forbidden, Capabilities.TimedOut.Word, Capabilities.TimedOutUntil(until).Text),
             (refused.Status, refused.Word, refused.Json.GetProperty("detail").GetString()));
-        Assert.Contains("until " + PeopleView.Until(until), System.Net.WebUtility.HtmlDecode(page.Body));
+        Assert.Contains("until " + Tangent.Render.Wording.Until(until), System.Net.WebUtility.HtmlDecode(page.Body));
     }
 
     [Fact]

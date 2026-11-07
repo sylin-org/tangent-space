@@ -7,12 +7,13 @@ namespace Tangent.Participants;
 /// current, and one bounded page of <see cref="People"/>, in handle order, each with what the reader may do to them;
 /// <see cref="Next"/> is the address of the page after this one, null on the last, and <see cref="First"/> the first
 /// page's, for a page that <see cref="Continued"/> from a cursor. <see cref="Handle"/> is the start of a handle the page
-/// is narrowed to, empty for none, and <see cref="Search"/> where the search form asks, by the <c>handle</c> parameter.
-/// <see cref="Forms"/> are the forms of the verbs, present only where the reader may read the people.
-/// <see cref="Can"/> is what the reader holds in the place, and
-/// <see cref="Gate"/> why they may not read the people, null when they may, when the list is empty whoever is here;
-/// <see cref="SignIn"/> is where a visitor signs in, coming back here. <see cref="Day"/> is the UTC day the times are
-/// written for. After a refusal the page says why above the list.</summary>
+/// is narrowed to, <see cref="Standing"/> the standing (<c>timed-out</c> or <c>banned</c>) and <see cref="Role"/> the word
+/// of the role whose holders it lists, each empty for none, with <see cref="RoleName"/> the role's name, null where no
+/// role here has that word; <see cref="Search"/> is where the search form asks, by the <c>handle</c> parameter, and where
+/// everyone is listed. Only whoever holds <c>ManageStanding</c> or <c>ManageRoles</c> reads it. <see cref="Forms"/> are the
+/// forms of the verbs the reader may use. <see cref="Can"/> is what the reader holds in the place, and <see cref="Day"/>
+/// the UTC day the times are written for. After a refusal the page says why above the list.</summary>
+[Render.Page(Render.Layout.Settings)]
 public sealed record PeoplePage(
     IReadOnlyList<SettingsSection> Sections,
     IReadOnlyList<PeoplePage.Listed> People,
@@ -20,11 +21,12 @@ public sealed record PeoplePage(
     bool Continued,
     string First,
     string Handle,
+    string Standing,
+    string Role,
+    string? RoleName,
     string Search,
     PeopleForms? Forms,
     IReadOnlyList<string> Can,
-    string? Gate,
-    string? SignIn,
     string Place,
     string Door,
     Who? Who,
@@ -37,8 +39,83 @@ public sealed record PeoplePage(
     /// ends, the roles they hold by name, highest first, and what the reader may do to them: the standing verbs in
     /// <see cref="Can"/> (<c>time-out</c>, <c>ban</c>, <c>lift</c>) and the roles they may <see cref="Give"/> and
     /// <see cref="Take"/>, lowest first. Nothing is offered that the reader may not do.</summary>
-    public sealed record Listed(string Id, string Name, string Handle, string Profile, string Kind, string Standing, DateTimeOffset? Until,
-        IReadOnlyList<string> Roles, IReadOnlyList<string> Can, IReadOnlyList<Offered> Give, IReadOnlyList<Offered> Take);
+    public sealed record Listed(Render.Person Person, string Standing, DateTimeOffset? Until, IReadOnlyList<string> Roles, IReadOnlyList<string> Can,
+        IReadOnlyList<Offered> Give, IReadOnlyList<Offered> Take)
+    {
+        /// <summary>Where they stand, in words, with when a timeout ends.</summary>
+        [Newtonsoft.Json.JsonIgnore]
+        public string Stands => Until is { } until ? "timed out until " + Render.Wording.Until(until) : Standing;
+    }
+
+    [Render.Slot(Render.Slot.Rail), Newtonsoft.Json.JsonIgnore]
+    public Render.SettingsRail Rail => new(Sections);
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.PanelTitle Heading => new(Space.TangentSpaceSettingsController.PeopleSection, "Settings of " + Render.Sentence.Link(Place, Door));
+
+    /// <summary>Whose holders the page lists, where it lists a role's, with the way back to everyone.</summary>
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.Sentence? Holding => RoleName is not { } name ? null
+        : new("Those who hold the " + Render.Sentence.Strong(name) + " role. " + Render.Sentence.Link("Everyone here", Search));
+
+    /// <summary>The box that finds people by the start of their handle, within the standing and the role the page is
+    /// narrowed to.</summary>
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.Form Finding => Narrowing(Render.Form.Reading(Search,
+            new Render.Form.Field(PeopleController.HandleQuery, "", Handle, Render.Form.Input.Search) { Label = "Find by handle", Placeholder = "The start of a handle", Limit = 253 })
+        with { Tool = "people-search read-people", Submit = "Find" }, PeopleController.HandleQuery);
+
+    /// <summary>The standings the page narrows to, one press each, the one it stands at pressed, keeping the handle and the
+    /// role it is narrowed to.</summary>
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.Form Standings => Narrowing(Render.Form.Reading(Search,
+            new Render.Form.Field(PeopleController.StandingQuery, "", Standing, Render.Form.Input.Switch)
+            {
+                Choices = [new("", "Every standing"), new(Participants.People.Word(Participants.Standing.TimedOut), "Timed out"), new(Participants.People.Word(Participants.Standing.Banned), "Banned")]
+            })
+        with { Tool = "people-standing read-people", Key = "people-standing" }, PeopleController.StandingQuery);
+
+    /// <summary><paramref name="form"/> carrying what the page is narrowed to but its own field, <paramref name="own"/>.</summary>
+    private Render.Form Narrowing(Render.Form form, string own)
+    {
+        foreach (var (name, value) in new[] { (PeopleController.HandleQuery, Handle), (PeopleController.StandingQuery, Standing), (PeopleController.RoleQuery, Role) })
+        {
+            if (name != own && value.Length > 0) form = form.Given(name, value);
+        }
+
+        return form;
+    }
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.Notice? Refused => Render.Notice.Of(null, Failure, null);
+
+    /// <summary>The people, each with their kind, where they stand and their roles, and what the reader may change of them.</summary>
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.EntryList Listing => new(People.Select(person => new Render.Entry(null, Forms?.For(person))
+    {
+        Subject = person.Person,
+        Detail = Render.Sentence.Plain("@" + person.Person.Handle + " · " + person.Person.Kind + " · " + person.Stands + (person.Roles.Count > 0 ? " · " + string.Join(", ", person.Roles) : ""))
+    }).ToList(), Empty: Role.Length > 0 && RoleName is null
+        ? "No role here has the word " + Render.Sentence.Plain(Role) + "."
+        : Narrowed() is { Count: > 0 } narrowed ? "No one here " + Render.Wording.Joined(narrowed) + "."
+        : Continued ? "No one further." : "No one is here yet.");
+
+    /// <summary>What the page is narrowed to, as what no one here does where it lists no one.</summary>
+    private List<string> Narrowed()
+    {
+        var said = new List<string>();
+        if (Standing.Length > 0) said.Add(Standing == Participants.People.Word(Participants.Standing.Banned) ? "is banned" : "is timed out");
+        if (RoleName is { } name) said.Add("holds the " + Render.Sentence.Plain(name) + " role");
+        if (Handle.Length > 0) said.Add("has a handle that starts with " + Render.Sentence.Plain(Handle));
+        return said;
+    }
+
+    [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Render.Pager Pages => new("More people", Continued ? new Render.Onward("First page", First) : null,
+        Next is { } next ? new Render.Onward("Next page", next) : null);
+
+    /// <summary>The frame the shell draws around the page: its settings as its one crumb, and who reads.</summary>
+    public static Render.Frame Frame(PeoplePage page) => new(page.Place, page.Door, [new Render.Crumb("Settings")], page.Who, null);
 
     /// <summary>A role the reader may give or take: its word, which a form sends and which never changes
     /// (<c>moderator</c>, <c>administrator</c>, or a word of the place's own), and its name as the place now calls it.</summary>
@@ -50,4 +127,50 @@ public sealed record PeoplePage(
 /// of <see cref="Durations"/>, <see cref="Ban"/> and <see cref="Lift"/>, present where the reader holds
 /// <c>ManageStanding</c>; <see cref="Give"/> and <see cref="Take"/>, with the role in <c>role</c>, present where they hold
 /// <c>ManageRoles</c>. A participant's own row says which of them the reader may use on them.</summary>
-public sealed record PeopleForms(Form? TimeOut, Form? Ban, Form? Lift, Form? Give, Form? Take, IReadOnlyList<string> Durations);
+public sealed record PeopleForms(Form? TimeOut, Form? Ban, Form? Lift, Form? Give, Form? Take, IReadOnlyList<string> Durations)
+{
+    /// <summary>What the reader may change of <paramref name="person"/>, inline, each change a form naming them: lift, at once;
+    /// time out, which opens in place to say what a timeout leaves and offers its durations; each role given or taken; and ban,
+    /// which opens in place to say what a ban does, confirmed there.</summary>
+    public IReadOnlyList<Render.IPart> For(PeoplePage.Listed person)
+    {
+        var answers = new List<Render.IPart>();
+        Form Naming(Form form) => form.Value(PeopleController.BackField) is { } back
+            ? form.Given(PeopleController.ParticipantField, person.Person.Id).Given(PeopleController.BackField, back)
+            : form.Given(PeopleController.ParticipantField, person.Person.Id);
+        if (person.Can.Contains(People.Verb.Lift) && Lift is { } lift)
+            answers.Add(Naming(lift) with { Tool = "lift", Submit = person.Standing == People.Word(Standing.Banned) ? "Lift the ban" : "Lift the timeout" });
+        if (person.Can.Contains(People.Verb.TimeOut) && TimeOut is { } timeOut)
+            answers.Add(Naming(timeOut).Changing(PeopleController.ForField, item => item with
+            {
+                As = Form.Input.Switch,
+                Choices = Durations.Select(duration => new Form.Choice(duration, duration switch
+                {
+                    "hour" => "For an hour",
+                    "day" => "For a day",
+                    "week" => "For a week",
+                    _ => "For a " + duration
+                })).ToList()
+            }) with
+            {
+                Tool = "time-out", Opens = "Time out",
+                Confirm = "They keep reading and reporting here, and post, reply and start nothing until it ends; you can lift it sooner."
+            });
+        if (Give is { } give)
+            answers.AddRange(person.Give.Select(role => (Render.IPart)(Naming(give).Given(PeopleController.RoleField, role.Word) with
+            {
+                Tool = "give-role", Submit = "Give " + role.Name + " role", Quiet = true
+            })));
+        if (Take is { } take)
+            answers.AddRange(person.Take.Select(role => (Render.IPart)(Naming(take).Given(PeopleController.RoleField, role.Word) with
+            {
+                Tool = "take-role", Submit = "Take " + role.Name + " role", Quiet = true
+            })));
+        if (person.Can.Contains(People.Verb.Ban) && Ban is { } ban)
+            answers.Add(Naming(ban) with
+            {
+                Tool = "ban", Opens = "Ban", Submit = "Ban", Confirm = "This place disappears for them, every page and every stream, until you lift the ban."
+            });
+        return answers;
+    }
+}

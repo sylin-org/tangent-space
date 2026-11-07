@@ -1,9 +1,13 @@
 using System.ComponentModel;
 using Koan.Data.Core.Commands;
+using Koan.Identity.Management;
 using Koan.Identity.Roles;
 using Koan.Web.Attributes;
+using Koan.Web.Auth.Connector.Atproto.Protocol;
+using Koan.Web.Auth.Extensions;
 using Koan.Web.Controllers;
 using Koan.Web.Hosting;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
@@ -36,19 +40,28 @@ public sealed record TakeRoleInput(
     [Description(Holds.TakenRole)] string? Role = null,
     [Description(Holds.Back)] string? Back = null);
 
+/// <summary>What choosing one's own kind sends, as a form or one JSON object.</summary>
+public sealed record ChooseKindInput([Description(Holds.Kind)] string? Kind = null);
+
 /// <summary>The place's people, a section of its settings at <c>/settings/people</c>, for whoever holds
 /// <see cref="Bit.ManageStanding"/> or <see cref="Bit.ManageRoles"/>. Its <c>GET</c> is one bounded page of them
 /// (<see cref="People.Read"/>), one resource both ways (<see cref="PeoplePage"/>), continued from the sealed cursor in
-/// <c>after</c> and narrowed to the handles that start with <c>handle</c>; a cursor this server did not seal is refused
-/// with <c>400</c>, and a reader who may not read them is refused with the gate, <c>401</c> to sign in and <c>403</c>
-/// otherwise: a page reads it with no one listed, and a JSON request as its problem. Its <c>POST</c>s take the participant's id in <c>participant</c>, as a form or a JSON
+/// <c>after</c>, narrowed to the handles that start with <c>handle</c> and to the standing in <c>standing</c>, and, given a
+/// role's word in <c>role</c>, read among those who hold it (<see cref="People.Holding"/>) under a cursor of its own; a
+/// cursor this server did not seal for the page's order, or a standing that is not one, is refused with <c>400</c>. The
+/// Doorway refuses the page, before the action runs, to whoever holds neither bit, with the gate of
+/// <see cref="Bit.ManageStanding"/>, and each change to whoever does not hold the bit it needs, <c>401</c> to sign in and
+/// <c>403</c> otherwise, a page as the refusal's page and a JSON request as its problem, and answers a reader for whom the
+/// place does not exist what an address with nothing there receives. Its <c>POST</c>s take the participant's id in <c>participant</c>, as a form or a JSON
 /// object, and send one command: <c>time-out</c> sends <see cref="TimeOut"/> for the duration in <c>for</c>;
 /// <c>ban</c>, <see cref="Ban"/>; <c>lift</c>, <see cref="Lift"/>, after which the participant joins the member role
 /// where they lack it (<see cref="MemberRole"/>); <c>give</c> and <c>take</c>, <see cref="ChangeRole"/> for the role in
 /// <c>role</c>. A form is sent back to the page in <c>back</c> — this one, the participant's profile, where the same
 /// forms are, or the page their card was opened on — and a JSON request reads the participant as this page now lists them; a refusal reads the page again with
-/// the reason above the list, or a problem. A reader for whom the place does not exist receives what an address with
-/// nothing there receives.</summary>
+/// the reason above the list, or a problem. Two changes are a participant's own, offered on their own profile: <c>/leave</c> ends the
+/// place's grant to write as the account they hold now, sends <see cref="LeavePlace"/> and has Koan erase their person,
+/// signing them out, a form sent on to the door; <c>/kind</c> sends <see cref="ChooseKind"/> for the kind in <c>kind</c>,
+/// a form sent back to their profile; a JSON request reads where each left them.</summary>
 [Managing]
 public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection roles, IDataProtectionProvider protection) : ControllerBase
 {
@@ -63,6 +76,25 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
     public const string GivePath = Path + "/give";
 
     public const string TakePath = Path + "/take";
+
+    /// <summary>Where a participant leaves the place.</summary>
+    public const string LeavePath = "/leave";
+
+    /// <summary>Where a participant chooses how the place shows them.</summary>
+    public const string KindPath = "/kind";
+
+    /// <summary>The field that carries the kind chosen: <c>person</c> or <c>agent</c>.</summary>
+    public const string KindField = "kind";
+
+    /// <summary>The refusal of a kind that is neither.</summary>
+    public static readonly Reason NotAKind = Reason.Invalid(KindField, "Choose person or agent.");
+
+    /// <summary>What leaving answers as JSON: the door, where whoever left arrives signed out.</summary>
+    public sealed record Left(string Door);
+
+    /// <summary>A kind as a choice leaves it: <c>person</c> or <c>agent</c>, whether the account's own bot label holds it
+    /// so, and the profile it shows on.</summary>
+    public sealed record ChosenKind(string Kind, bool Labelled, string Profile);
 
     /// <summary>The field that names the participant changed.</summary>
     public const string ParticipantField = "participant";
@@ -83,30 +115,56 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
     /// <summary>The query parameter that carries the start of a handle the page is narrowed to.</summary>
     public const string HandleQuery = "handle";
 
+    /// <summary>The query parameter that narrows the page to a standing: one of <see cref="People.Narrowing"/>.</summary>
+    public const string StandingQuery = "standing";
+
+    /// <summary>The query parameter that narrows the page to those who hold a role, by its word.</summary>
+    public const string RoleQuery = "role";
+
+    /// <summary>The address of the people who hold the role with <paramref name="word"/>, under <paramref name="baseAddress"/>.</summary>
+    public static string Holding(string baseAddress, string word) => baseAddress + Path + "?" + RoleQuery + "=" + Uri.EscapeDataString(word);
+
     [HttpGet(Path)]
     [Tool(Name = "read_people")]
-    [Description("Find the participants admitted here, a page at a time, with what you may change of each, for whoever holds ManageStanding or ManageRoles. Follow with time_out, ban, lift, give_role or take_role where one's entry allows it.")]
+    [Description("Find the participants admitted here, a page at a time, by the start of a handle, by standing or by a role they hold, with what you may change of each, for whoever holds ManageStanding or ManageRoles. Then call time_out, ban, lift, give_role or take_role where one's entry allows it.")]
+    [Needs(Bit.ManageStanding, AnyOf = Bit.ManageRoles)]
     public async Task<IActionResult> Get([FromQuery(Name = After), Description(Holds.After)] string? after, [FromQuery(Name = HandleQuery), Description(Holds.HandleStart)] string? handle,
+        [FromQuery(Name = StandingQuery), Description(Holds.PeopleStanding)] string? standing, [FromQuery(Name = RoleQuery), Description(Holds.PeopleRole)] string? role,
         CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
-        if (ReadGate(place) is { } refused && PostWrites.WantsJson(Request)) return this.Refused(refused);
-
+        var place = Here.Of(HttpContext).Around;
+        if (!People.TryStanding(standing, out var stands))
+            return new Problem(StatusCodes.Status400BadRequest,
+                $"The {StandingQuery} parameter is {Wording.Joined(People.Narrowing.Select(People.Word).ToList(), "or")}, or left out for every standing.") { Title = "Not a standing" }.ToResult();
+        var narrowed = new Narrowed(People.Start(handle), stands, string.IsNullOrEmpty(role) ? null : role);
         People.Cursor? cursor = null;
-        if (after is not null && (cursor = People.Cursor.Open(after, protection)) is null)
+        string? members = null;
+        if (after is not null && (narrowed.Role is null ? (cursor = People.Cursor.Open(after, protection)) is null : (members = People.Holders.Open(after, protection)) is null))
             return new Problem(StatusCodes.Status400BadRequest,
                 $"The {After} parameter is the cursor a page of the people names as its next.") { Title = "Not a page of the people" }.ToResult();
 
-        var page = await Page(place, personId, People.Start(handle), cursor, ct);
-        return ReadGate(place) is { } gate ? new ObjectResult(page) { StatusCode = Answers.Status(HttpContext, gate) } : Ok(page);
+        return Ok(await Page(place, personId, narrowed, after, cursor, members, ct));
+    }
+
+    /// <summary>What a page of the people is narrowed to: the start of a handle, a standing and a role's word, each null for
+    /// none.</summary>
+    private sealed record Narrowed(string? Start, Standing? Standing, string? Role)
+    {
+        public static readonly Narrowed None = new(null, null, null);
+
+        /// <summary>The narrowing as a query carries it.</summary>
+        public string Query() => PeopleController.Query(
+            Start is null ? "" : HandleQuery + "=" + Uri.EscapeDataString(Start),
+            Standing is { } standing ? StandingQuery + "=" + People.Word(standing) : "",
+            Role is null ? "" : RoleQuery + "=" + Uri.EscapeDataString(Role)).TrimStart('?');
     }
 
     [HttpPost(TimeOutPath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "time_out", Destructive = true, Idempotent = false, OpenWorld = false)]
+    [Needs(Bit.ManageStanding)]
     [Description("Time a participant out for an hour, a day or a week, for whoever holds ManageStanding: they read and report, and post nothing, and they are told. lift ends it early.")]
     public Task<IActionResult> PostTimeOut(TimeOutInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) =>
         People.Length(input.For) is { } length
@@ -116,18 +174,21 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
     [HttpPost(BanPath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "ban", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Needs(Bit.ManageStanding)]
     [Description("Ban a participant, for whoever holds ManageStanding: the place disappears for them, every page and every stream, as an address with nothing at it answers. lift reverses it.")]
     public Task<IActionResult> PostBan(StandingInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) => new Ban(actor, participant), null, ct);
 
     [HttpPost(LiftPath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "lift", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Needs(Bit.ManageStanding)]
     [Description("Lift a participant's timeout or ban, so they take part again, for whoever holds ManageStanding.")]
     public Task<IActionResult> PostLift(StandingInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) => new Lift(actor, participant), null, ct);
 
     [HttpPost(GivePath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "give_role", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Needs(Bit.ManageRoles)]
     [Description("Give a participant a role listed in their give in read_people, for whoever holds ManageRoles and manages the role. They hold what it grants at once, power over others among it.")]
     public Task<IActionResult> PostGive(GiveRoleInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) =>
         Roles.KeyOf(input.Role) is { } role ? new ChangeRole(actor, participant, role, Give: true) : null,
@@ -136,21 +197,106 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
     [HttpPost(TakePath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "take_role", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Needs(Bit.ManageRoles)]
     [Description("Take from a participant a role listed in their take in read_people, for whoever holds ManageRoles and manages the role. They lose what it granted at once.")]
     public Task<IActionResult> PostTake(TakeRoleInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) =>
         Roles.KeyOf(input.Role) is { } role ? new ChangeRole(actor, participant, role, Give: false) : null,
         People.NotARole, ct);
 
-    /// <summary>One change: the place; the command <paramref name="command"/> builds for who sent it and
+    [HttpPost(LeavePath)]
+    [RequestSizeLimit(PostWrites.RequestLimit)]
+    [Tool(Name = "leave_place", Destructive = true, Idempotent = true, OpenWorld = true)]
+    [Description("Leave this Tangent Space for good: you are signed out everywhere, your roles, checkpoints, Connection and asks go, and the place's grant to write as the Bluesky account you hold now ends. Your Posts stay, each under the account you wrote it as, and read as someone who left. Signing in again later arrives anew. An applicant who leaves ends their application. The operator cannot leave.")]
+    [Needs(Bit.View, Participant = true, Applicant = true)]
+    public async Task<IActionResult> Leave(CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-store";
+        var personId = PostWrites.PersonId(User)!;
+        if (Here.Of(HttpContext).Rows is { Participant: { } participant } rows)
+        {
+            if (LeavePlace.Refusal(participant, rows.Space, DateTimeOffset.UtcNow) is { } refused) return this.Refused(refused);
+            if (participant.Did.Length > 0) await EndGrant(participant.Did, ct);
+        }
+
+        var outcome = await new LeavePlace(personId).Send();
+        if (outcome is Outcome<LeavePlace.Gone>.Refused { Reason: var reason }) return this.Refused(reason);
+        if (outcome is not Outcome<LeavePlace.Gone>.Done) return Answers.NotDone(HttpContext, outcome);
+        if (!await Erased(personId, CancellationToken.None))
+            return new Problem(StatusCodes.Status500InternalServerError, "Leaving may not have finished, so send it again to finish it.").ToResult();
+
+        await HttpContext.SignOutAsync(AuthenticationExtensions.CookieScheme);
+        var door = BaseAddress() + "/";
+        if (PostWrites.WantsJson(Request)) return Ok(new Left(door));
+        Response.Headers.Location = door;
+        return StatusCode(StatusCodes.Status303SeeOther);
+    }
+
+    [HttpPost(KindPath)]
+    [RequestSizeLimit(PostWrites.RequestLimit)]
+    [Tool(Name = "choose_kind", Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Choose how this place shows you: person or agent. Nothing behaves differently for an agent; others see the agent tag beside your name. An account that labels itself a bot on Bluesky stays an agent here.")]
+    [Needs(Bit.View, Participant = true)]
+    public async Task<IActionResult> Choose(ChooseKindInput input, CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-store";
+        ParticipantKind? kind = input.Kind switch { "person" => ParticipantKind.Person, "agent" => ParticipantKind.Agent, _ => null };
+        if (kind is not { } chosen) return this.Refused(NotAKind);
+        var outcome = await new ChooseKind(PostWrites.PersonId(User) ?? "", chosen).Send();
+        if (outcome is Outcome<Participant>.Refused { Reason: var reason }) return this.Refused(reason);
+        if (outcome is not Outcome<Participant>.Done { Result: var participant }) return Answers.NotDone(HttpContext, outcome);
+
+        var profile = ProfilePage.AddressOf(BaseAddress(), participant.ShownHandle());
+        if (PostWrites.WantsJson(Request))
+            return Ok(new ChosenKind(participant.Kind.ToString().ToLowerInvariant(), participant.Labelled, profile));
+        Response.Headers.Location = profile;
+        return StatusCode(StatusCodes.Status303SeeOther);
+    }
+
+    /// <summary>Ends the place's grant to write as the account <paramref name="did"/>: revoked at its issuer through Koan's
+    /// atproto sessions, outside any hold, before anything of the participant goes, so a leave cut short here leaves them
+    /// whole and its resend ends it again. One the place holds no grant for has nothing to end; one whose revocation cannot
+    /// be confirmed, a timeout at the issuer among them, is logged, and the participant leaves all the same. Only the
+    /// request's own cancellation stops the leave.</summary>
+    private async Task EndGrant(string did, CancellationToken ct)
+    {
+        try
+        {
+            await HttpContext.RequestServices.GetRequiredService<AtprotoSessions>().Disconnect(did, ct);
+        }
+        catch (AtprotoAuthorizationRequiredException)
+        {
+        }
+        catch (Exception failed) when (!ct.IsCancellationRequested)
+        {
+            HttpContext.RequestServices.GetRequiredService<ILogger<PeopleController>>()
+                .LogWarning(failed, "The grant to write as {Did} could not be ended as its participant left.", did);
+        }
+    }
+
+    /// <summary>Has Koan erase the person <paramref name="personId"/> (<see cref="IdentityLifecycleService.EraseAsync"/>):
+    /// their sessions, links, roles and overwrites go, and their person. Sent once their row is gone, it runs to its end
+    /// whatever the request's cancellation, so a closed tab never leaves a person a later sign-in would find again. False
+    /// where it did not complete, logged.</summary>
+    private async Task<bool> Erased(string personId, CancellationToken ct)
+    {
+        try
+        {
+            return (await HttpContext.RequestServices.GetRequiredService<IdentityLifecycleService>().EraseAsync(personId, ct)).Complete;
+        }
+        catch (InvalidOperationException blocked)
+        {
+            HttpContext.RequestServices.GetRequiredService<ILogger<PeopleController>>().LogError(blocked, "Erasing {Person} as they left was blocked.", personId);
+            return false;
+        }
+    }
+
+    /// <summary>One change, for a reader the Doorway let in: the command <paramref name="command"/> builds for who sent it and
     /// whom it names, or <paramref name="unsent"/> where what was sent names none; then the command's outcome.</summary>
     private async Task<IActionResult> Change(string? named, string? back, Func<string, string, ICommand<Participant>?> command, Reason? unsent, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
-        var personId = PostWrites.PersonId(User);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
-
-        if (command(personId ?? "", named ?? "") is not { } sent) return await Refused(personId, unsent!, ct);
+        var personId = Here.Of(HttpContext).PersonId!;
+        if (command(personId, named ?? "") is not { } sent) return await Refused(personId, unsent!, ct);
         var outcome = await sent.Send();
         switch (outcome)
         {
@@ -179,42 +325,56 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
         return new ObjectResult(await lister.Row(participant, ct)) { ContentTypes = { "application/json" } };
     }
 
-    /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the page again, read afresh,
-    /// with the reason above the list.</summary>
+    /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the page again, read afresh
+    /// for the reader the Doorway let in, with the reason above the list.</summary>
     private async Task<IActionResult> Refused(string? personId, Reason reason, CancellationToken ct)
     {
         if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
 
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
-        var page = await Page(place, personId, null, null, ct);
-        if (page.Gate is null) page = page with { Failure = reason.Text };
+        var page = await Page(Here.Of(HttpContext).Around, personId, Narrowed.None, null, null, null, ct) with { Failure = reason.Text };
         return new ObjectResult(page) { StatusCode = Answers.Status(HttpContext, reason) };
     }
 
-    private async Task<PeoplePage> Page(Capabilities place, string? personId, string? start, People.Cursor? cursor, CancellationToken ct)
+    /// <summary>One page of the people as <paramref name="narrowed"/> says, continued from <paramref name="after"/> as it was
+    /// sent, which opened as <paramref name="cursor"/> in handle order or as Koan's <paramref name="members"/> among a role's
+    /// members: those who hold the role a word names, where it names one, and no one where it names none here.</summary>
+    private async Task<PeoplePage> Page(Capabilities place, string? personId, Narrowed narrowed, string? after, People.Cursor? cursor, string? members,
+        CancellationToken ct)
     {
         var baseAddress = BaseAddress();
-        var narrowed = start is null ? "" : HandleQuery + "=" + Uri.EscapeDataString(start);
-        var here = baseUrl.PathBase + Path + Query(narrowed, cursor is null ? "" : After + "=" + Uri.EscapeDataString(cursor.Seal(protection)));
+        var query = narrowed.Query();
+        var here = baseUrl.PathBase + Path + Query(query, after is null ? "" : After + "=" + Uri.EscapeDataString(after));
         var people = baseAddress + Path;
-        var gate = ReadGate(place)?.Word;
-        var read = gate is null ? await People.Read(start, cursor, ct) : new People.Page([], null);
         var lister = await Lister.Load(roles, place, personId, baseAddress, ct);
-        var listed = new List<PeoplePage.Listed>(read.Participants.Count);
-        foreach (var participant in read.Participants) listed.Add(await lister.Row(participant, ct));
+        var held = narrowed.Role is { } word && Roles.KeyOf(word) is { } key ? await lister.RoleOf(key, ct) : null;
+        IReadOnlyList<Participant> read = [];
+        string? next = null;
+        if (held is not null)
+        {
+            var holders = await People.Holding(roles, held.Key, narrowed.Start, narrowed.Standing, members, ct);
+            (read, next) = (holders.Participants, holders.Next is { } more ? People.Holders.Seal(more, protection) : null);
+        }
+        else if (narrowed.Role is null)
+        {
+            var page = await People.Read(narrowed.Start, cursor, ct, narrowed.Standing);
+            (read, next) = (page.Participants, page.Next?.Seal(protection));
+        }
+
+        var listed = new List<PeoplePage.Listed>(read.Count);
+        foreach (var participant in read) listed.Add(await lister.Row(participant, ct));
         return new PeoplePage(
             TangentSpaceSettingsController.Sections(place, baseAddress, TangentSpaceSettingsController.PeopleSection),
             listed,
-            read.Next is { } next ? people + Query(narrowed, After + "=" + Uri.EscapeDataString(next.Seal(protection))) : null,
-            cursor is not null,
-            people + Query(narrowed, ""),
-            start ?? "",
+            next is null ? null : people + Query(query, After + "=" + Uri.EscapeDataString(next)),
+            after is not null,
+            people + Query(query, ""),
+            narrowed.Start ?? "",
+            narrowed.Standing is { } standing ? People.Word(standing) : "",
+            narrowed.Role ?? "",
+            held?.Name,
             people,
             Forms(place, baseAddress, here),
             place.Can,
-            gate,
-            personId is null ? baseAddress + SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,
             lister.Space.Name,
             baseAddress + "/",
             await PostWrites.Reader(personId, place, baseAddress, here, ct),
@@ -243,17 +403,13 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
             new Form.Field(BackField, Holds.Back, back)
         ]);
         return new PeopleForms(
-            standing ? Changing(TimeOutPath, "time-out in their can", new Form.Field(ForField, "How long the timeout lasts: " + Words(durations) + ".")) : null,
+            standing ? Changing(TimeOutPath, "time-out in their can", new Form.Field(ForField, "How long the timeout lasts: " + Wording.Joined(durations, "or") + ".")) : null,
             standing ? Changing(BanPath, "ban in their can") : null,
             standing ? Changing(LiftPath, "lift in their can") : null,
             roles ? Changing(GivePath, "the role in their give", new Form.Field(RoleField, Holds.GivenRole)) : null,
             roles ? Changing(TakePath, "the role in their take", new Form.Field(RoleField, Holds.TakenRole)) : null,
             durations);
     }
-
-    /// <summary>Words joined as a sentence joins them: "hour, day or week".</summary>
-    private static string Words(IReadOnlyList<string> words)
-        => words.Count < 2 ? string.Concat(words) : string.Join(", ", words.Take(words.Count - 1)) + " or " + words[^1];
 
     /// <summary>The page a form returns to: the path it sent in <c>back</c> where that is under the base URL's, of visible
     /// characters, without scheme or authority — the people, a profile, or the page a person's card was opened on; the
@@ -320,7 +476,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
             var names = new List<(int Position, string Name)>(held.Count);
             foreach (var key in held)
             {
-                var role = await Read(key, ct);
+                var role = await RoleOf(key, ct);
                 names.Add((role?.Position ?? 0, role?.Name ?? key));
             }
 
@@ -328,11 +484,8 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
             var standing = participant.StandingAt(_now);
             var handle = participant.ShownHandle();
             return new PeoplePage.Listed(
-                participant.Id,
-                participant.ShownName(),
-                handle,
-                ProfilePage.AddressOf(_baseAddress, handle),
-                participant.Kind.ToString().ToLowerInvariant(),
+                new Render.Person(participant.Id, handle, participant.ShownName(), participant.Kind.ToString().ToLowerInvariant(), participant.Profile.Avatar,
+                    ProfilePage.AddressOf(_baseAddress, handle)),
                 People.Word(standing),
                 standing == Standing.TimedOut ? participant.StandingUntil : null,
                 names.OrderByDescending(name => name.Position).ThenBy(name => name.Name, StringComparer.Ordinal).Select(name => name.Name).ToList(),
@@ -342,7 +495,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
         }
 
         /// <summary>A role's row, read once per role; null where the role is gone.</summary>
-        private async Task<Role?> Read(string key, CancellationToken ct)
+        public async Task<Role?> RoleOf(string key, CancellationToken ct)
         {
             if (_read.TryGetValue(key, out var role)) return role;
             role = await _roles.Get(key, ct);

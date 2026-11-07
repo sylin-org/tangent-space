@@ -34,14 +34,16 @@ public sealed class TangentSpaceSettingsTests
         // The account menu offers the settings on every page, and the door names them for an agent.
         Assert.Contains($"<a class=\"account-item\" href=\"{settings}\">", (await Send(leo.Client, HttpMethod.Get, "/")).Body);
         Assert.Contains($"<a class=\"account-item\" href=\"{settings}\">", (await Send(leo.Client, HttpMethod.Get, "/t/workshop")).Body);
+        Assert.Contains($"<a class=\"account-item\" href=\"{settings}\">", (await Send(leo.Client, HttpMethod.Get, "/p/" + Persona.Handle(Leo))).Body);
         Assert.Equal(settings, (await Send(leo.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("who").GetProperty("settings").GetString());
+        Assert.Equal(settings, (await Send(leo.Client, HttpMethod.Get, "/p/" + Persona.Handle(Leo), json: true)).Json.GetProperty("who").GetProperty("settings").GetString());
 
         var page = await Send(leo.Client, HttpMethod.Get, TangentSpaceSettingsController.Path, json: true);
         Assert.Equal(HttpStatusCode.OK, page.Status);
         Assert.Equal("Field notes", page.Json.GetProperty("name").GetString());
         Assert.Contains(nameof(Bit.ManageSpace), page.Json.GetProperty("can").EnumerateArray().Select(verb => verb.GetString()));
         Assert.False(page.Json.TryGetProperty("gate", out _));
-        Assert.Equal([("General", settings, true), ("Admission", settings + "/admission", false), ("Applications", settings + "/applications", false),
+        Assert.Equal([("General", settings, true), ("Admission", settings + "/admission", false), ("Applications", settings + "/applications?state=waiting", false),
                 ("Appearance", settings + "/appearance", false), ("People", settings + "/people", false), ("Roles", settings + "/roles", false), ("Export", settings + "/export", false)],
             page.Json.GetProperty("sections").EnumerateArray().Select(section =>
                 (section.GetProperty("name").GetString(), section.GetProperty("address").GetString(), section.GetProperty("current").GetBoolean())));
@@ -56,7 +58,7 @@ public sealed class TangentSpaceSettingsTests
         var logged = Assert.Single(await Event.All(Cancellation), e => e.Seq > before);
         Assert.Equal((EventKind.SpaceChanged, Leo), (logged.Kind, logged.ActorId));
         var door = await Send(leo.Client, HttpMethod.Get, "/");
-        Assert.Contains("<h1 id=\"door-title\" class=\"tangent-title\">Lantern Works</h1>", door.Body);
+        Assert.Contains("<span class=\"masthead-name\">Lantern Works</span>", door.Body);
 
         // The description is one of the place's words, written with its appearance, drawn on the door as Markdown.
         var described = await Json(leo, TangentSpaceSettingsController.Path, TangentSpaceSettingsController.AppearancePath, new { description = "Fired *weekly*." });
@@ -87,6 +89,43 @@ public sealed class TangentSpaceSettingsTests
     }
 
     [Fact]
+    public async Task An_administrator_who_did_not_set_the_place_up_finds_its_address_and_its_sites_pointers_in_general_where_first_steps_send_them()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
+        using var leo = await SignedIn(tangentSpace, Leo);
+        var general = BaseUrl + TangentSpaceSettingsController.Path;
+
+        // First steps say the pointers stay in the settings, and send there; first run is the setter's alone.
+        var steps = (await Send(leo.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("firstSteps");
+        Assert.Equal(general + "#" + Render.Pointing.Anchor, steps.GetProperty("site").GetString());
+        Assert.Equal(HttpStatusCode.NotFound, (await Send(leo.Client, HttpMethod.Get, FirstRunController.Path)).Status);
+
+        // read_settings carries the address the place answers at and the pointers, as first run does.
+        var read = await Send(leo.Client, HttpMethod.Get, TangentSpaceSettingsController.Path, json: true);
+        Assert.Equal(BaseUrl, read.Json.GetProperty("baseUrl").GetString());
+        Assert.Equal([Pointers.Link, Pointers.WellKnown, Pointers.Txt],
+            read.Json.GetProperty("pointers").EnumerateArray().Select(pointer => pointer.GetProperty("kind").GetString()));
+        Assert.Equal($"<link rel=\"tangent\" href=\"{BaseUrl}\">", read.Json.GetProperty("pointers")[0].GetProperty("text").GetString());
+        Assert.False(read.Json.TryGetProperty("pointersLater", out _));
+
+        // The page shows them under the form, at the anchor first steps link to.
+        var page = WebUtility.HtmlDecode(PageContent((await Send(leo.Client, HttpMethod.Get, TangentSpaceSettingsController.Path)).Body));
+        Assert.Contains($"id=\"{Render.Pointing.Anchor}\">Your site</h2>", page);
+        Assert.Contains($"<link rel=\"tangent\" href=\"{BaseUrl}\">", page);
+        Assert.Contains("_tangent.tangent.test. IN TXT", page);
+        Assert.True(page.IndexOf("space-settings", StringComparison.Ordinal) < page.IndexOf("id=\"pointers\"", StringComparison.Ordinal));
+
+        // Whoever may not change the general settings reads neither.
+        using var ada = await SignedIn(tangentSpace, Ada);
+        var hers = await Send(ada.Client, HttpMethod.Get, TangentSpaceSettingsController.Path, json: true);
+        Assert.False(hers.Json.TryGetProperty("baseUrl", out _));
+        Assert.False(hers.Json.TryGetProperty("pointers", out _));
+        Assert.DoesNotContain("rel=\"tangent\"", WebUtility.HtmlDecode(PageContent((await Send(ada.Client, HttpMethod.Get, TangentSpaceSettingsController.Path)).Body)));
+    }
+
+    [Fact]
     public async Task A_participant_without_manage_space_has_no_settings_entry_and_is_refused_with_the_gate_and_a_visitor_is_told_to_sign_in()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
@@ -102,7 +141,7 @@ public sealed class TangentSpaceSettingsTests
         Assert.DoesNotContain(nameof(Bit.ManageSpace), page.Json.GetProperty("can").EnumerateArray().Select(verb => verb.GetString()));
         var html = await Send(ada.Client, HttpMethod.Get, TangentSpaceSettingsController.Path);
         Assert.Contains($"data-gate=\"{gate}\"", html.Body);
-        Assert.DoesNotContain("type=\"submit\"", html.Body);
+        Assert.DoesNotContain("type=\"submit\"", PageContent(html.Body));
 
         var before = await Event.Count.Exact(Cancellation);
         // The settings offer Ada no form, so her session's token comes from the workshop's page, which carries one.
@@ -130,7 +169,7 @@ public sealed class TangentSpaceSettingsTests
         var mod = Persona.Id("mo4place");
         await Given.AParticipant(tangentSpace, mod, [Roles.Member, Roles.Moderator], ct: Cancellation);
         using var mo = await SignedIn(tangentSpace, mod);
-        var applications = BaseUrl + ApplicationsController.Path;
+        var applications = ApplicationsController.WaitingAddress(BaseUrl);
 
         Assert.Equal((HttpStatusCode.SeeOther, applications), Sent(await Send(mo.Client, HttpMethod.Get, TangentSpaceSettingsController.Path)));
         Assert.Equal((HttpStatusCode.SeeOther, applications), Sent(await Send(mo.Client, HttpMethod.Get, TangentSpaceSettingsController.AdmissionPath)));

@@ -9,8 +9,9 @@ namespace Tangent.Posts;
 
 /// <summary>Starts a Topic: a root Post in the named Tangent, with a slug derived from the title and made unique in that
 /// Tangent by a suffix that never changes — a slug a Tangent's own pages hold (<see cref="Slug.Reserved"/>) takes the
-/// suffix too — the Tangent's Topic count raised and <see cref="EventKind.PostCreated"/> appended in the same commit, with
-/// one <see cref="EventKind.Mention"/> per participant the body mentions (<see cref="Mentions.Notify"/>).
+/// suffix too — the Tangent's Topic count raised, in all, in its month and by its author, and
+/// <see cref="EventKind.PostCreated"/> appended in the same commit, with one <see cref="EventKind.Mention"/> per
+/// participant the body mentions (<see cref="Mentions.Notify"/>); its author follows it (<see cref="Follow.Wrote"/>).
 /// The Tangent exists for the author, who holds <see cref="Bit.View"/> in it, or the command answers that no Tangent
 /// has the slug; the author holds <see cref="Bit.Topic"/> there, or is refused with the gate word. A Topic takes the
 /// Tangent's <see cref="Tangents.Tangent.DefaultKind"/>, so a Topic started in an articles Tangent is an article. Idempotent by Id: the same Id with the same request answers with the existing Post,
@@ -58,8 +59,8 @@ public sealed record StartTopic(
         if (existing is not null) return new Outcome<Post>.Refused(Post.IdTaken);
 
         var at = At ?? DateTimeOffset.UtcNow;
-        Post.CheckTitle(Title);
-        var root = Post.Root(Id, TangentId, Title, await UniqueSlug(TangentId, Title, Id, ct), kind, Body, AuthorId, at, origin?.Id);
+        var root = new Post { Id = Id, Title = Title, OriginId = origin?.Id };
+        root.StartIn(tangent, await UniqueSlug(TangentId, Slug.From(Title), Id, ct), Body, AuthorId, at);
         root.AuthorDid = await Participant.DidOf(AuthorId, ct);
         if (CoverId is not null)
         {
@@ -67,16 +68,7 @@ public sealed record StartTopic(
             root.Cover(CoverId);
         }
 
-        var created = await Event.Append(EventKind.PostCreated, at, ct,
-            tangentId: root.TangentId, topicId: root.TopicId, postId: root.Id, actorId: root.AuthorId,
-            targetId: origin is null || origin.AuthorId == root.AuthorId ? null : origin.AuthorId, version: root.Version);
-        root.Logged(created.Seq, root);
-        await root.Save(ct);
-        await MediaUse.Record(root, AuthorId, [], ct);
-        tangent.TopicStarted();
-        await tangent.Save(ct);
-        await Seen.Wrote(root.AuthorId, root, root.Sequence, ct);
-        await Mentions.Notify(root, root.AuthorId, [], at, ct);
+        await PostWriting.Wrote(root, root, tangent, origin is null || origin.AuthorId == root.AuthorId ? null : origin.AuthorId, at, ct);
         return new Outcome<Post>.Done(root);
     }
 
@@ -87,12 +79,11 @@ public sealed record StartTopic(
         && existing.Kind == kind && existing.SentHash == Body.SentHash && existing.AuthorId == AuthorId
         && existing.OriginId == OriginId && existing.CoverId == CoverId;
 
-    /// <summary>The slug of <paramref name="title"/> for a Topic whose root is <paramref name="id"/>, or the first numbered
-    /// suffix of it that no Topic in <paramref name="tangentId"/> holds; each try is one counted query. Past the bound, the
-    /// Post's own Id is the suffix, and the whole still stays within the limit.</summary>
-    internal static async Task<string> UniqueSlug(string tangentId, string title, string id, CancellationToken ct)
+    /// <summary><paramref name="slug"/> for a Topic whose root is <paramref name="id"/>, or the first numbered suffix of it
+    /// that no Topic in <paramref name="tangentId"/> holds; each try is one counted query. Past the bound, the Post's own Id
+    /// is the suffix, and the whole still stays within the limit.</summary>
+    internal static async Task<string> UniqueSlug(string tangentId, string slug, string id, CancellationToken ct)
     {
-        var slug = Slug.From(title);
         for (var suffix = 1; suffix <= SuffixBound; suffix++)
         {
             if (suffix == 1 && Slug.Reserved.Contains(slug)) continue;

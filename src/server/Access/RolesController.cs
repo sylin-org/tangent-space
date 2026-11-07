@@ -31,15 +31,16 @@ public sealed record DeleteRoleInput([Description(Holds.DeletedRole)] string? Ro
 
 /// <summary>The place's roles, a section of its settings at <c>/settings/roles</c>, for whoever holds
 /// <see cref="Bit.ManageRoles"/>. Its <c>GET</c> is one page of the roles in Koan's order (<see cref="RolesPage"/>), the
-/// highest first, one resource both ways, by <c>page</c>; a reader who may not shape them is refused with the gate,
-/// <c>401</c> to sign in and <c>403</c> otherwise: a page reads it with no role listed, and a JSON request as its problem.
-/// Its <c>POST</c>s take their fields as a form or a JSON
+/// highest first, one resource both ways, by <c>page</c>. The Doorway refuses every route here, before the action runs, to
+/// whoever does not hold <see cref="Bit.ManageRoles"/>, <c>401</c> to sign in and <c>403</c> otherwise, a page as the
+/// refusal's page and a JSON request as its problem, and answers a reader for whom the place does not exist what an
+/// address with nothing there receives. Its <c>POST</c>s take their fields as a form or a JSON
 /// object and send one command: <c>/settings/roles</c> creates a role (<see cref="CreateRole"/>) from <c>name</c> and
 /// <c>permissions</c>; <c>/change</c> changes the role whose word <c>role</c> names (<see cref="ReviseRole"/>) by any of
 /// <c>name</c>, <c>permissions</c> and <c>move</c>; <c>/delete</c> deletes it (<see cref="DeleteRole"/>). A form is sent
 /// back to the roles; a JSON request reads the role as the page now lists it, created (<c>201</c>) or changed
 /// (<c>200</c>), or nothing for a deletion (<c>204</c>); a refusal reads the page again with the reason above the list, or
-/// a problem. A reader for whom the place does not exist receives what an address with nothing there receives.</summary>
+/// a problem.</summary>
 [Managing]
 public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles) : ControllerBase
 {
@@ -78,22 +79,19 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
 
     [HttpGet(Path)]
     [Tool(Name = "read_roles")]
-    [Description("Read the roles in their order, the highest first, a page at a time, for whoever holds ManageRoles. Follow with create_role, change_role or delete_role where one's can allows it.")]
+    [Description("Read the roles in their order, the highest first, a page at a time, for whoever holds ManageRoles. Then call create_role, change_role or delete_role where one's can allows it.")]
+    [Needs(Bit.ManageRoles)]
     public async Task<IActionResult> Get([FromQuery(Name = PageQuery), Description(Holds.Number)] string? page, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
-        var personId = PostWrites.PersonId(User);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
-        if (place.Gate(Bit.ManageRoles) is { } refused && PostWrites.WantsJson(Request)) return this.Refused(refused);
-        var read = await Page(place, personId, Numbered(page), ct);
-        return place.Gate(Bit.ManageRoles) is { } gate ? new ObjectResult(read) { StatusCode = Answers.Status(HttpContext, gate) } : Ok(read);
+        return Ok(await Page(Here.Of(HttpContext).Around, PostWrites.PersonId(User), Numbered(page), ct));
     }
 
     [HttpPost(Path)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "create_role", Destructive = false, Idempotent = false, OpenWorld = false)]
-    [Description("Create a role by naming it and choosing what it grants, for whoever holds ManageRoles; no one is in it yet. Sending it again makes a second role. Follow with give_role.")]
+    [Needs(Bit.ManageRoles)]
+    [Description("Create a role by naming it and choosing what it grants, for whoever holds ManageRoles; no one is in it yet. Sending it again makes a second role. Then call give_role.")]
     public Task<IActionResult> Create(CreateRoleInput input, CancellationToken ct) => Write(input.Name, input.Permissions,
         Granted(input.Permissions, out var bits) is { } refused
             ? refused
@@ -102,6 +100,7 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
     [HttpPost(ChangePath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "change_role", Destructive = true, Idempotent = false, OpenWorld = false)]
+    [Needs(Bit.ManageRoles)]
     [Description("Rename a role, change what it grants or move it one place, for whoever holds ManageRoles and manages the role. What it grants changes for everyone in it, and sending a move again moves it again.")]
     public Task<IActionResult> Change(ChangeRoleInput input, CancellationToken ct) => Write(input.Name, input.Permissions, Revising(input), created: false, ct);
 
@@ -117,6 +116,7 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
     [HttpPost(DeletePath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "delete_role", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Needs(Bit.ManageRoles)]
     [Description("Delete a role the place created, for whoever holds ManageRoles, manages it and holds what it grants. Everyone in it loses what it granted.")]
     public Task<IActionResult> Delete(DeleteRoleInput input, CancellationToken ct) => Write(null, null,
         Roles.KeyOf(input.Role) is { } key
@@ -133,15 +133,12 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
         return bits is null ? RoleSettings.PermissionsRule : null;
     }
 
-    /// <summary>One change: the place; then <paramref name="built"/>, the command to send or the refusal
+    /// <summary>One change, for a reader the Doorway let in: <paramref name="built"/>, the command to send or the refusal
     /// of what was sent, whose name and permissions a form keeps; then the command's outcome.</summary>
     private async Task<IActionResult> Write(string? name, string[]? permissions, object built, bool created, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
-
         if (built is Reason refused) return await Refused(personId, name, permissions, refused, created, ct);
         var sent = (ICommand<Role>)built;
         var outcome = await sent.Send();
@@ -157,7 +154,8 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
                 if (sent is DeleteRole) return NoContent();
                 var reader = await Capabilities.Load(personId, null, null, ct);
                 var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
-                var listed = Listed(await roles.Get(role.Key, ct) ?? role, reader, personId, space, (await roles.Page(pageSize: 1, ct: ct)).TotalCount);
+                var listed = Listed(await roles.Get(role.Key, ct) ?? role, reader, personId, space, (await roles.Page(pageSize: 1, ct: ct)).TotalCount,
+                    BaseAddress());
                 return new ObjectResult(listed)
                 {
                     StatusCode = created ? StatusCodes.Status201Created : StatusCodes.Status200OK,
@@ -170,26 +168,21 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
         }
     }
 
-    /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the page again, read afresh,
-    /// with the reason above the list, keeping a new role's name and permissions as they were sent.</summary>
+    /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the page again, read afresh
+    /// for the reader the Doorway let in, with the reason above the list, keeping a new role's name and permissions as they
+    /// were sent.</summary>
     private async Task<IActionResult> Refused(string? personId, string? name, string[]? permissions, Reason reason, bool created, CancellationToken ct)
     {
         if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
 
-        var place = await Capabilities.Load(personId, null, null, ct);
-        if (!place.Exists) return this.Refused(place.Gate(Bit.View)!);
-        var page = await Page(place, personId, 1, ct);
-        if (page.Gate is null)
+        var page = await Page(Here.Of(HttpContext).Around, personId, 1, ct) with { Failure = reason.Text };
+        if (created)
         {
-            page = page with { Failure = reason.Text };
-            if (created)
+            page = page with
             {
-                page = page with
-                {
-                    Name = name ?? "",
-                    Chosen = (permissions ?? []).OfType<string>().SelectMany(word => word.Split([' ', ','], StringSplitOptions.RemoveEmptyEntries)).ToList()
-                };
-            }
+                Name = name ?? "",
+                Chosen = (permissions ?? []).OfType<string>().SelectMany(word => word.Split([' ', ','], StringSplitOptions.RemoveEmptyEntries)).ToList()
+            };
         }
 
         return new ObjectResult(page) { StatusCode = Answers.Status(HttpContext, reason) };
@@ -199,20 +192,17 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
     {
         var baseAddress = BaseAddress();
         var here = baseUrl.PathBase + Path + (number > 1 ? "?" + PageQuery + "=" + number : "");
-        var gate = place.Gate(Bit.ManageRoles)?.Word;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
-        var read = gate is null ? await roles.Page(page: number, pageSize: PageSize, ct: ct) : null;
-        var listed = read is null ? [] : read.Items.Select(role => Listed(role, place, personId, space, read.TotalCount)).ToList();
+        var read = await roles.Page(page: number, pageSize: PageSize, ct: ct);
+        var listed = read.Items.Select(role => Listed(role, place, personId, space, read.TotalCount, baseAddress)).ToList();
         return new RolesPage(
             TangentSpaceSettingsController.Sections(place, baseAddress, TangentSpaceSettingsController.RolesSection),
             listed,
             Bits.Each.Select(bit => new RolesPage.Permission(bit.ToString(), RoleSettings.Plain(bit), People.Holds(place, bit))).ToList(),
-            read is not null && (long)number * PageSize < read.TotalCount ? baseAddress + Path + "?" + PageQuery + "=" + (number + 1) : null,
+            (long)number * PageSize < read.TotalCount ? baseAddress + Path + "?" + PageQuery + "=" + (number + 1) : null,
             number > 1 ? baseAddress + Path + (number > 2 ? "?" + PageQuery + "=" + (number - 1) : "") : null,
-            gate is null ? Forms(baseAddress) : null,
+            Forms(baseAddress),
             place.Can,
-            gate,
-            personId is null ? baseAddress + SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,
             space.Name,
             baseAddress + "/",
             await PostWrites.Reader(personId, place, baseAddress, here, ct));
@@ -220,8 +210,9 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
 
     /// <summary>One role as the reader of the roles finds it, the order holding <paramref name="count"/> roles: what they
     /// may do to it by <see cref="People.Manages"/>, nothing to everyone, never a move past either end, and never a
-    /// deletion of a seeded role or of one granting a permission they do not hold.</summary>
-    public static RolesPage.Listed Listed(Role role, Capabilities reader, string? readerId, TangentSpace space, long count)
+    /// deletion of a seeded role or of one granting a permission they do not hold; and where, under
+    /// <paramref name="baseAddress"/>, the people who hold it are listed.</summary>
+    public static RolesPage.Listed Listed(Role role, Capabilities reader, string? readerId, TangentSpace space, long count, string baseAddress)
     {
         var can = new List<string>();
         if (role.Key != Roles.Everyone && reader.Holds(Bit.ManageRoles) && People.Manages(reader, readerId, space, role))
@@ -233,7 +224,7 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
         }
 
         return new RolesPage.Listed(Roles.Word(role.Key), role.Name, Bits.Names(Bits.InTokens(role.Permissions)),
-            Roles.Seeded(role.Key), can);
+            Roles.Seeded(role.Key), can, role.Key.StartsWith(RoleTokens.RolePrefix, StringComparison.Ordinal) ? PeopleController.Holding(baseAddress, Roles.Word(role.Key)) : null);
     }
 
     /// <summary>The forms that shape the roles, under <paramref name="baseAddress"/>.</summary>
@@ -241,15 +232,16 @@ public sealed class RolesController(KoanWebBaseUrl baseUrl, RoleCollection roles
     {
         return new RoleForms(
             Form.Posting(baseAddress + Path,
-                new Form.Field(NameField, Holds.RoleName),
-                new Form.Field(PermissionsField, Holds.RolePermissions + " Left out, none.")),
+                new Form.Field(NameField, Holds.RoleName) { Label = "Name", Limit = RoleSettings.NameLimit, Required = true },
+                new Form.Field(PermissionsField, Holds.RolePermissions + " Left out, none.", As: Form.Input.Check) { Label = "What it grants" })
+                with { Tool = "create-role", Submit = "Create role", Busy = "Creating…", Island = "submitting" },
             Form.Posting(baseAddress + ChangePath,
                 new Form.Field(RoleField, Holds.ChangedRole),
-                new Form.Field(NameField, Holds.ChangedRoleName),
-                new Form.Field(PermissionsField, Holds.RolePermissions + " Left out, they stay."),
-                new Form.Field(MoveField, Holds.RoleMove)),
+                new Form.Field(NameField, Holds.ChangedRoleName) { Label = "Name", Limit = RoleSettings.NameLimit, Required = true },
+                new Form.Field(PermissionsField, Holds.RolePermissions + " Left out, they stay.", As: Form.Input.Check) { Label = "What it grants" },
+                new Form.Field(MoveField, Holds.RoleMove)) with { Tool = "change-role" },
             Form.Posting(baseAddress + DeletePath,
-                new Form.Field(RoleField, Holds.DeletedRole)));
+                new Form.Field(RoleField, Holds.DeletedRole)) with { Tool = "delete-role" });
     }
 
     private string BaseAddress() => baseUrl.Resolve(HttpContext);

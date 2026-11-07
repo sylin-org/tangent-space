@@ -82,8 +82,8 @@ public sealed record LeaveTangent(string Slug, string ActorId) : ICommand<Tangen
 /// their own overwrite and ends their ask, replacing any overwrite that kept them out; keeping out declines a waiting ask,
 /// or else writes their own overwrite denying <see cref="Bit.View"/> (<see cref="Inside.KeepOut"/>), which wins over their
 /// roles, only where it keeps them out (<see cref="Inside.NotKept"/>): not the actor, not in a public Tangent, and not
-/// someone who administers. Deciding an ask appends one <see cref="EventKind.TangentLet"/> with the participant as its
-/// target, so their door tells them.</summary>
+/// someone who administers. Letting in someone not in yet, whether or not they asked, and declining a waiting ask each
+/// append one <see cref="EventKind.TangentLet"/> with the participant as its target, so their door tells them.</summary>
 public sealed record LetIn(string Slug, string ActorId, string PersonId, bool In, DateTimeOffset? At = null) : ICommand<Tangent>
 {
     public async Task<Outcome<Tangent>> Run(CancellationToken ct)
@@ -125,7 +125,8 @@ public sealed record LetIn(string Slug, string ActorId, string PersonId, bool In
 }
 
 /// <summary>Whoever manages the Tangent <see cref="Slug"/> sets how a participant outside it comes in
-/// (<see cref="Joining"/>); the moderators' Tangent keeps its access.</summary>
+/// (<see cref="Joining"/>), which a public Tangent keeps for when it is private; the moderators' Tangent keeps its
+/// access.</summary>
 public sealed record ChangeJoining(string Slug, string ActorId, Joining Joining) : ICommand<Tangent>
 {
     public async Task<Outcome<Tangent>> Run(CancellationToken ct)

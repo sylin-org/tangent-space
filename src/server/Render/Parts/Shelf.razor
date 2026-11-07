@@ -1,0 +1,45 @@
+@* One Tangent's shelf on the front page, in its tone: its tile, its name and line, the way to the rest of it with how many it
+   holds, and its latest Topics — articles as cards with their covers, discussions as rows of the table. *@
+<section class="door-shelf tone-@Model.Tile.Tone" aria-labelledby="@("shelf-" + Model.Slug)">
+    <div class="door-shelf-head">
+        <a class="door-shelf-tile" href="@Model.Address" tabindex="-1" aria-hidden="true"><Draw Part="@Tangent" As="Shape.Tile" /></a>
+        <div class="door-shelf-text">
+            <h2 id="@("shelf-" + Model.Slug)" class="door-shelf-name"><a href="@Model.Address">@Model.Name</a></h2>
+            @if (Model.Description.Length > 0)
+            {
+                <p class="door-shelf-line">@Model.Description</p>
+            }
+        </div>
+        <a class="door-shelf-all" href="@Model.Address">@All</a>
+    </div>
+    @if (Model.Kind == "article")
+    {
+        <div class="article-list door-shelf-articles">
+            @foreach (var topic in Model.Topics)
+            {
+                <Draw Part="@(topic with { In = Tangent })" As="Shape.Card" />
+            }
+        </div>
+    }
+    else if (Model.Topics.Count > 0)
+    {
+        <div class="topic-table">
+            <ul class="topic-rows list">
+                @foreach (var topic in Model.Topics)
+                {
+                    <li @key="topic.Id"><Draw Part="@topic" /></li>
+                }
+            </ul>
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public Space.Door.Shelf Model { get; set; } = default!;
+
+    private Render.TangentEntry Tangent => new(Model.Slug, Model.Name, Model.Kind, Model.Address, Model.TopicCount) { Tile = Model.Tile };
+
+    private string All => Model.Kind == "article"
+        ? "All " + Wording.Count(Model.TopicCount, "article", "articles", "articles")
+        : "All " + Wording.Count(Model.TopicCount, "topic", "topics", "topics");
+}

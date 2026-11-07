@@ -15,7 +15,8 @@ namespace Tangent.Participants;
 /// page of them, newest application first, through <c>ix_participant_applications</c>
 /// (<see cref="Participant.AppliedAt"/>), continued from a <see cref="Cursor"/>. <see cref="Waiting"/> reads those that
 /// wait, by where they arrived in the log, through <c>ix_participant_waiting</c> (<see cref="Participant.WaitingSeq"/>),
-/// which is how they reach whoever decides them; nothing is counted past what one bounded read holds.</summary>
+/// which is how they reach whoever decides them, and <see cref="ReadWaiting"/> is one bounded page of them alone, newest
+/// first, continued from the sequence the last held; nothing is counted past what one bounded read holds.</summary>
 public static class Applications
 {
     /// <summary>The most applications one page holds.</summary>
@@ -85,6 +86,21 @@ public static class Applications
         return applicants.Count > PageSize
             ? new Page(applicants.GetRange(0, PageSize), Cursor.After(applicants[PageSize - 1]))
             : new Page(applicants, null);
+    }
+
+    /// <summary>A page of the applications that wait and the log's sequence the next page reads before; <see cref="Next"/>
+    /// is null on the last page.</summary>
+    public sealed record WaitingPage(IReadOnlyList<Participant> Applicants, long? Next);
+
+    /// <summary>The page of the applications that wait whose arrival lies before the log's sequence
+    /// <paramref name="before"/>, or the first page: one range of <see cref="Waiting"/>, limited to the page and one more,
+    /// which says whether a next page exists.</summary>
+    public static async Task<WaitingPage> ReadWaiting(long? before, CancellationToken ct)
+    {
+        var applicants = (await Waiting(0, before ?? long.MaxValue, PageSize + 1, ct)).ToList();
+        return applicants.Count > PageSize
+            ? new WaitingPage(applicants.GetRange(0, PageSize), applicants[PageSize - 1].WaitingSeq)
+            : new WaitingPage(applicants, null);
     }
 
     /// <summary>At most <paramref name="limit"/> of the applications that wait, newest first: those whose arrival lies

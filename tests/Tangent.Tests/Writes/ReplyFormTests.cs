@@ -101,7 +101,7 @@ public sealed partial class ReplyFormTests
     }
 
     [Fact]
-    public async Task A_topics_root_tid_under_its_tangent_answers_a_redirect_to_the_topic_while_a_slug_that_looks_like_a_tid_names_its_own_topic()
+    public async Task A_topics_root_tid_under_any_tangent_names_it_and_each_of_its_posts_the_page_moving_to_where_it_stands_while_a_slug_that_looks_like_a_tid_names_its_own_topic()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
@@ -120,12 +120,28 @@ public sealed partial class ReplyFormTests
 
         Assert.Equal((HttpStatusCode.Found, BaseUrl + TopicPath(root)), (found.Status, found.Location));
         Assert.Equal(HttpStatusCode.NotFound, ofReply.Status);
-        Assert.Equal(HttpStatusCode.NotFound, ofOtherTangent.Status);
+        // A Topic named by its root's TID under another Tangent is found where it stands, as one that moved is.
+        Assert.Equal((HttpStatusCode.Found, BaseUrl + TopicPath(elsewhere)), (ofOtherTangent.Status, ofOtherTangent.Location));
         Assert.Equal(HttpStatusCode.NotFound, unknown.Status);
         Assert.True(Tid.IsValid(lookalike.Slug));
         Assert.Equal((HttpStatusCode.OK, lookalike.Id), (bySlug.Status, bySlug.Json.GetProperty("id").GetString()));
         var landed = await Send(visitor, HttpMethod.Get, new Uri(found.Location!).AbsolutePath, json: true);
         Assert.Equal(root.Id, landed.Json.GetProperty("id").GetString());
+
+        // The log names a Topic by its root's id: a Post's address under it moves to the same Post under the slug, and its history
+        // and a reply sent to it answer as at the slug's.
+        using var bea = await SignedIn(tangentSpace, Bea);
+        var logged = (await Send(bea.Client, HttpMethod.Get, Events.EventsController.Path + "?since=0", json: true)).Json.GetProperty("events")
+            .EnumerateArray().Single(row => row.GetProperty("post").GetString() == reply.Id);
+        var underId = "/t/" + logged.GetProperty("tangent").GetString() + "/" + logged.GetProperty("topic").GetString() + "/" + reply.Id;
+        var atPost = await Send(visitor, HttpMethod.Get, underId, json: true);
+        var history = await Send(visitor, HttpMethod.Get, underId + "/" + PostHistoryController.Segment, json: true);
+        var answered = await Json(bea, underId, underId, new { body = "Noted twice." });
+        Assert.Equal((HttpStatusCode.Found, AddressOf(root, reply)), (atPost.Status, atPost.Location));
+        Assert.Equal((HttpStatusCode.OK, reply.Id), (history.Status, history.Json.GetProperty("postId").GetString()));
+        Assert.Equal(HttpStatusCode.Created, answered.Status);
+        var written = (await Post.Get(answered.Json.GetProperty("id").GetString()!, Cancellation))!;
+        Assert.Equal((root.Id, reply.Id, AddressOf(root, written)), (written.TopicId, written.ParentId, answered.Location));
     }
 
     [Fact]
@@ -145,11 +161,11 @@ public sealed partial class ReplyFormTests
         var (removed, _) = await Page(bea.Client, TopicPath(closed));
 
         Assert.DoesNotContain("class=\"reply-form reply\"", visiting);
-        Assert.Contains($"<p class=\"topic-closed\" data-gate=\"{Capabilities.SignIn.Word}\">", visiting);
+        Assert.Contains($"<p class=\"reply-gate\" data-gate=\"{Capabilities.SignIn.Word}\">", visiting);
         Assert.Matches(Regex.Escape(Capabilities.SignIn.Text) + " <a href=\"[^\"]*/sign-in\\?return=[^\"]+\">Sign in</a>", visiting);
         Assert.DoesNotContain("class=\"reply-form reply\"", removed);
-        Assert.Contains($"<p class=\"topic-closed\" data-gate=\"{Capabilities.Removed.Word}\">", removed);
-        Assert.Contains(Capabilities.Removed.Text, System.Net.WebUtility.HtmlDecode(removed));
+        Assert.Contains($"<p class=\"reply-gate\" data-gate=\"{Capabilities.RootRemoved.Word}\">", removed);
+        Assert.Contains(Capabilities.RootRemoved.Text, System.Net.WebUtility.HtmlDecode(removed));
     }
 
     /// <summary>A page as a browser reads it: its HTML and its <c>Cache-Control</c>.</summary>

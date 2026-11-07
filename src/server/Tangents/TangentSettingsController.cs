@@ -21,6 +21,9 @@ public sealed record ChangeTangentInput(
     [Description(Holds.TangentAccent)] string? Accent = null,
     [Description(Holds.TangentImage)] string? Image = null);
 
+/// <summary>What deleting a Tangent sends, as a form or one JSON object.</summary>
+public sealed record DeleteTangentInput([Description(Holds.DeletedTopics)] int? Topics = null);
+
 /// <summary>A Tangent's settings: <c>/t/{tangent}/settings</c>. Its <c>GET</c> is the form, one resource both ways
 /// (<see cref="TangentSettingsPage"/>). Its <c>POST</c> takes <c>name</c>, <c>description</c>, <c>kind</c>,
 /// <c>audience</c>, <c>move</c>, <c>accent</c> and <c>image</c>, as a form or a JSON object, each left as it is when not sent, and sends
@@ -29,21 +32,34 @@ public sealed record ChangeTangentInput(
 /// does; a JSON
 /// request reads the Tangent (<c>200</c>); a refusal reads the form again with the reason inline, or a problem with the
 /// gate. Both resolve the address as the Tangent page does (<see cref="Here.Find"/>) before anything else is
-/// judged, so a Tangent the reader may not view and one no row has answer alike.</summary>
+/// judged, so a Tangent the reader may not view and one no row has answer alike. <c>/t/{tangent}/settings/image</c> takes
+/// <c>file</c>, an image of the sender's own as the file of a multipart form, and wears it as the Tangent's image
+/// (<see cref="TakeImage"/>), which an agent does as <c>bring_in</c> then <c>change_tangent</c>. <c>/t/{tangent}/settings/delete</c>
+/// takes <c>topics</c>, as a form or a JSON object, and sends <see cref="DeleteTangent"/>: a form is sent on to where its
+/// <c>return</c> names, or to the Tangents (<see cref="TangentsController"/>), where it is gone, and a JSON request reads
+/// the Tangent as it stood (<c>200</c>); a refusal reads the settings again with the reason in the delete's warning,
+/// opened, or a problem.</summary>
 [Managing]
 public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
     public const string Route = "/t/{tangent}/" + TangentWrites.SettingsSegment;
 
+    public const string DeleteRoute = Route + "/" + TangentWrites.DeleteSegment;
+
+    public const string ImageRoute = Route + "/" + TangentWrites.ImageSegment;
+
+    /// <summary>The most copies on Bluesky the delete's warning counts; past it, it says "at least".</summary>
+    public const int CopyLimit = 100;
+
     [HttpGet(Route)]
     [Tool(Name = "read_tangent_settings")]
-    [Description("Read a Tangent's name, description, default kind, audience, accent and image, for whoever may change them. Call this before change_tangent.")]
+    [Description("Read a Tangent's name, description, default kind, audience, accent and image, for whoever may change them, and, for whoever holds ManageSpace, what deleting it takes along. Call this before change_tangent or delete_tangent.")]
+    [Needs(Bit.View)]
     public async Task<IActionResult> Get([Description(Holds.Tangent)] string tangent, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var (found, refused) = await Here.Find(personId, tangent, null, null, ct);
-        if (refused is not null) return this.Refused(refused);
+        var found = Here.Of(HttpContext);
         return Ok(await Page(found, personId, ct));
     }
 
@@ -51,12 +67,12 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
     [RequestSizeLimit(PostWrites.RequestLimit)]
     [Tool(Name = "change_tangent", Destructive = true, Idempotent = false, OpenWorld = false)]
     [Description("Change a Tangent's name, description, default kind, audience, accent or image, or move it among the Tangents, for whoever holds ManageTangent there or ManageSpace. What you send replaces what stood, and sending a move again moves it again.")]
+    [Needs(Bit.ManageTangent)]
     public async Task<IActionResult> Change([FromRoute, Description(Holds.Tangent)] string tangent, ChangeTangentInput input, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User);
-        var (found, refused) = await Here.Find(personId, tangent, null, null, ct);
-        if (refused is not null) return this.Refused(refused);
+        var found = Here.Of(HttpContext);
 
         var kind = TangentWrites.Choice(input.Kind, TangentWrites.Kinds, out var kindValid);
         if (!kindValid) return await Refused(found, personId, input, TangentWrites.KindRule, ct);
@@ -84,6 +100,70 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
                     move is null ? address : address + "/" + TangentWrites.SettingsSegment, ct);
             case Outcome<Tangent>.Refused { Reason: { Kind: not ReasonKind.Absent } reason }:
                 return await Refused(found, personId, input, reason, ct);
+            default:
+                return Answers.NotDone(HttpContext, outcome);
+        }
+    }
+
+    /// <summary>An image of the reader's own, sent as the file of a multipart form, kept as every image is
+    /// (<see cref="Media.KeepFile"/>) and worn at once as the Tangent's image, for whoever may change it; the form is sent on
+    /// to the settings, or as its <c>return</c> says, and a refusal reads the settings again with the reason above the form.</summary>
+    [HttpPost(ImageRoute)]
+    [RequestSizeLimit(NewMediaController.RequestLimit)]
+    [RequestFormLimits(MultipartBodyLengthLimit = NewMediaController.RequestLimit)]
+    [Needs(Bit.ManageTangent)]
+    public async Task<IActionResult> TakeImage([FromRoute] string tangent, CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-store";
+        var found = Here.Of(HttpContext);
+        var personId = found.PersonId!;
+        var sent = new ChangeTangentInput();
+
+        Media media;
+        try
+        {
+            media = await Media.KeepFile(Request.HasFormContentType ? await Request.ReadFormAsync(ct) : null, NewMediaController.FileField, ct);
+        }
+        catch (Refusal refusal)
+        {
+            return await Refused(found, personId, sent, refusal.Reason, ct);
+        }
+
+        await new BringMedia(media.Id, personId).Send();
+        return await new ChangeTangent(found.Tangent!.Id, personId, Image: Media.Reference(media.Id)).Send() switch
+        {
+            Outcome<Tangent>.Done { Result: var changed } => await TangentWrites.Written(HttpContext, changed, BaseAddress(), personId, created: false,
+                PostWrites.TangentAddress(BaseAddress(), changed.Id) + "/" + TangentWrites.SettingsSegment, ct),
+            Outcome<Tangent>.Refused { Reason: { Kind: not ReasonKind.Absent } reason } => await Refused(found, personId, sent, reason, ct),
+            var outcome => Answers.NotDone(HttpContext, outcome)
+        };
+    }
+
+    [HttpPost(DeleteRoute)]
+    [RequestSizeLimit(PostWrites.RequestLimit)]
+    [Tool(Name = "delete_tangent", Destructive = true, Idempotent = true, OpenWorld = false)]
+    [Needs(Bit.ManageSpace, Place = true)]
+    [Description("Delete a Tangent and everything in it, for whoever holds ManageSpace: its Topics and their replies go for good and no tombstone stays, and copies of its articles on Bluesky are taken down wherever their authors’ accounts still let this place. An empty Tangent goes as it is; one that holds Topics goes only when topics says how many, as read_tangent_settings counts them, and /settings/export/{tangent}.zip keeps a copy first. The moderators’ Tangent stays.")]
+    public async Task<IActionResult> Delete([FromRoute, Description(Holds.Tangent)] string tangent, DeleteTangentInput input, CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-store";
+        var personId = PostWrites.PersonId(User);
+        var found = Here.Of(HttpContext);
+        var outcome = await new DeleteTangent(found.Tangent!.Id, personId ?? "", input.Topics ?? 0).Send();
+        switch (outcome)
+        {
+            case Outcome<Tangent>.Done { Result: var deleted }:
+                var tangents = BaseAddress() + TangentsController.Route;
+                if (PostWrites.WantsJson(Request)) return Ok(new DeletedTangent(deleted.Id, deleted.Name, deleted.TopicCount, tangents));
+                Response.Headers.Location = PostWrites.Onward(HttpContext, BaseAddress(), tangents);
+                return StatusCode(StatusCodes.Status303SeeOther);
+            case Outcome<Tangent>.Refused { Reason: { Kind: not ReasonKind.Absent and not ReasonKind.Gated } reason } when !PostWrites.WantsJson(Request):
+                var (again, gone) = await Here.Find(personId, found.Tangent!.Id, null, null, ct);
+                if (gone is not null) return this.Refused(gone);
+                var page = await Page(again, personId, ct);
+                return page.Delete is null
+                    ? this.Refused(reason)
+                    : new ObjectResult(page with { DeleteFailure = reason.Text }) { StatusCode = Answers.Status(HttpContext, reason) };
             default:
                 return Answers.NotDone(HttpContext, outcome);
         }
@@ -140,6 +220,8 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
         var moderators = space.ModeratorsTangentId == row.Id;
         var movable = personId is not null && (await Capabilities.Load(personId, null, null, ct)).Holds(Bit.ManageSpace);
         var neighbours = movable && !moderators;
+        var deletable = movable && !moderators;
+        var (copies, more) = deletable && row.TopicCount > 0 ? await Connections.Receipt.Out(row.Id, CopyLimit, ct) : (0, false);
         return new TangentSettingsPage(
             row.Id,
             row.Name,
@@ -166,7 +248,14 @@ public sealed class TangentSettingsController(KoanWebBaseUrl baseUrl) : Controll
             personId is null ? baseAddress + Participants.SignInController.Path + "?return=" + Uri.EscapeDataString(here) : null,
             space.Name,
             baseAddress + "/",
-            await PostWrites.Reader(personId, capabilities, baseAddress, here, ct));
+            await PostWrites.Reader(personId, capabilities, baseAddress, here, ct))
+        {
+            Delete = deletable ? TangentWrites.DeleteForm(baseAddress, row.Id, row.TopicCount) : null,
+            Topics = row.TopicCount,
+            OnBluesky = deletable && row.TopicCount > 0 ? copies : null,
+            OnBlueskyAtLeast = more,
+            Export = deletable && row.TopicCount > 0 ? Lifecycle.ExportController.ZipOf(baseAddress, row.Id) : null
+        };
     }
 
     /// <summary>The nearest Tangent before or after <paramref name="tangent"/> in the Tangents' order that the reader may

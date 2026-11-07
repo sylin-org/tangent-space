@@ -13,12 +13,13 @@ namespace Tangent.Access;
 /// <summary>What one participant holds on one resource, and the one reason for each verb they do not. Discord's model
 /// on Koan's roles and overwrites, resolved by <see cref="For"/> in this order: standing; <see cref="Bit.View"/> on the
 /// Tangent, from the place's audience, the bag and the overwrites, without which the resource is absent to the reader and
-/// nothing else is said; the Post's state; the bag and the overwrites for every other bit; authorship; and what a bit
-/// implies, <see cref="Bit.ManageSpace"/> every Tangent's <see cref="Bit.ManageTangent"/> and <see cref="Bit.Moderate"/>
+/// nothing else is said; the Topic's state and the Post's, a Topic whose root is removed taking no reply and one its
+/// moderators closed none from whoever does not hold <see cref="Bit.Moderate"/> there; the bag and the overwrites for every
+/// other bit; authorship; and what a bit implies, <see cref="Bit.ManageSpace"/> every Tangent's <see cref="Bit.ManageTangent"/> and <see cref="Bit.Moderate"/>
 /// <see cref="Bit.EditOwn"/> and <see cref="Bit.RemoveOwn"/> on any Post, so every action asks one bit. Koan resolves the
 /// bag and the overwrites (<see cref="RoleBag.On"/>) and names the fact that decided each missing bit; the first step
 /// that drops a verb names its gate, which puts the words in their precedence: <see cref="SignIn"/>, <see cref="Apply"/>,
-/// <see cref="Declined"/>, <see cref="TimedOut"/>, <see cref="Absent"/>, <see cref="Removed"/>. Standing words
+/// <see cref="Declined"/>, <see cref="TimedOut"/>, <see cref="Absent"/>, <see cref="RootRemoved"/> or <see cref="Closed"/>, <see cref="Removed"/>. Standing words
 /// <see cref="Bit.View"/> for reading (<see cref="SignInToRead"/>, <see cref="ApplyToRead"/>, <see cref="DeclinedToRead"/>).
 /// Computed per request from a few small rows; nothing stores it.</summary>
 public sealed class Capabilities
@@ -42,13 +43,21 @@ public sealed class Capabilities
 
     /// <summary>Why a timed-out participant reads and reports and posts nothing, saying until when, as their door does.</summary>
     public static Reason TimedOutUntil(DateTimeOffset until)
-        => Reason.Gated(TimedOut.Word, $"You’re timed out until {Participants.PeopleView.Until(until)}: you can read and report here, and post again then.");
+        => Reason.Gated(TimedOut.Word, $"You’re timed out until {Render.Wording.Until(until)}: you can read and report here, and post again then.");
 
     /// <summary>The resource does not exist for this reader: banned, or without <see cref="Bit.View"/> where they
     /// stand. Every verb carries this one reason, and a command answers what it answers for a missing resource, which
     /// says <see cref="Answers.Nothing"/>.</summary>
     public static readonly Reason Absent = Reason.Absent("absent");
     public static readonly Reason Removed = Reason.Gated("removed", "This post is removed, so nothing changes it now.");
+
+    /// <summary>Why a Topic its moderators closed takes no reply from whoever does not hold <see cref="Bit.Moderate"/> there:
+    /// every word stays, and its reply box says who closed it and when.</summary>
+    public static readonly Reason Closed = Reason.Gated("closed", "This topic is closed: every word stays, and it takes no new replies.");
+
+    /// <summary>Why a Topic whose root is removed takes no reply, from anyone: its replies stay, and it takes no more. It says
+    /// <see cref="Closed"/>'s word in a sentence of its own.</summary>
+    public static readonly Reason RootRemoved = Reason.Gated(Closed.Word, "This topic is closed: its opening post was removed, so it takes no more replies.");
 
     /// <summary>The reason <see cref="Bit.EditOwn"/> and <see cref="Bit.RemoveOwn"/> are missing on a Post that is
     /// not the participant's own, for anyone who does not hold <see cref="Bit.Moderate"/> there.</summary>
@@ -61,7 +70,8 @@ public sealed class Capabilities
     private const string NotOpenHeading = "Not open to you";
 
     /// <summary>What a person reads of each gate standing, audience or state decides, by its word: its sentence, and the
-    /// heading above it where it is the whole page.</summary>
+    /// heading above it where it is the whole page. <see cref="Closed"/> and <see cref="RootRemoved"/> share their word, whose
+    /// sentence is the removed root's: wherever a Topic its moderators closed is drawn, it says who closed it and when.</summary>
     private static readonly IReadOnlyDictionary<string, (string Sentence, string Heading)> Words = new (Reason Gate, string Heading)[]
     {
         (SignIn, "Sign in first"),
@@ -69,6 +79,7 @@ public sealed class Capabilities
         (Declined, "Not admitted"),
         (TimedOut, "Timed out"),
         (Removed, "Removed"),
+        (RootRemoved, "Closed"),
         (NotYours, "Not yours")
     }.ToDictionary(worded => worded.Gate.Word, worded => (worded.Gate.Text, worded.Heading), StringComparer.Ordinal);
 
@@ -105,11 +116,21 @@ public sealed class Capabilities
     /// <summary>The verbs the participant holds here, by name: the value every resource carries.</summary>
     public IReadOnlyList<string> Can => Bits.Names(Held);
 
+    /// <summary>Where the Tangent's own rows of the log begin, from its row (<see cref="Tangents.Tangent.LogSeq"/>), as
+    /// <see cref="LoadEach"/> answers: a row of its slug before it, that no move took into it, belongs to a Tangent deleted
+    /// before this one took the slug. Past every row for a Tangent with no row of its own; zero for the place and wherever <see cref="LoadEach"/>
+    /// did not answer.</summary>
+    public long Since { get; private init; }
+
+    /// <summary>Whether <paramref name="row"/>, a row of the log that names this Tangent, is one of its own: written since
+    /// the Tangent began (<see cref="Since"/>), or taken into it by a move of its Topic (<see cref="Events.Event.Into"/>).</summary>
+    public bool Owns(Events.Event row) => row.Seq >= Since || row.Into == Since;
+
     public bool Holds(Bit verb) => (Held & verb) == verb;
 
     /// <summary>Null when the verb is held; otherwise the one reason it is not: <see cref="SignIn"/>,
-    /// <see cref="Apply"/>, <see cref="Declined"/>, <see cref="TimedOut"/>, <see cref="Absent"/> or <see cref="Removed"/>
-    /// where standing, audience or state decided, or the deciding overwrite or the absence of a role where the bag and
+    /// <see cref="Apply"/>, <see cref="Declined"/>, <see cref="TimedOut"/>, <see cref="Absent"/>, <see cref="RootRemoved"/>,
+    /// <see cref="Closed"/> or <see cref="Removed"/> where standing, audience or state decided, or the deciding overwrite or the absence of a role where the bag and
     /// the overwrites decided.</summary>
     public Reason? Gate(Bit verb)
     {
@@ -143,7 +164,8 @@ public sealed class Capabilities
     /// timeout or an overwrite has ended. <paramref name="post"/> is the Topic's root for a question about the Topic, the
     /// Post itself for a question about that Post, and null for a Tangent or the place. <paramref name="root"/> is the
     /// Topic's root for a question about a reply: a removed root drops <see cref="Bit.Post"/> on every reply of
-    /// its Topic with that gate, while the reply's own removal governs everything else.</summary>
+    /// its Topic, and a closed one drops it for whoever does not hold <see cref="Bit.Moderate"/> there, while the reply's
+    /// own removal governs everything else.</summary>
     public static Capabilities For(Participant? participant, IEnumerable<string> tokens, TangentSpace space, string? tangentId,
         IReadOnlyList<PermissionOverwrite> overwrites, DateTimeOffset now, Post? post = null, Post? root = null)
     {
@@ -194,11 +216,13 @@ public sealed class Capabilities
             return new Capabilities(Bit.None, false, missing, resolved.RoleIds, resolved.Bag);
         }
 
-        // Replying is judged by the Topic, whose state lives on its root; everything else by the Post itself.
+        // Replying is judged by the Topic, whose state lives on its root: a Topic whose root is removed is closed to every
+        // reply, and one its moderators closed to whoever does not moderate there; everything else by the Post itself.
         // Nothing applies to a tombstone but removing it again, which changes nothing and is judged as the Post stood.
         var topic = root ?? post;
         var tombstone = post is { Removed: true };
-        if (topic is { Removed: true }) Drop(Bit.Post, Removed);
+        if (topic is { Removed: true }) Drop(Bit.Post, RootRemoved);
+        if (topic is { Closed: true } && !resolved.Granted.HasFlag(Bit.Moderate)) Drop(Bit.Post, Closed);
         if (tombstone) Drop(Bits.All & ~(Bit.RemoveOwn | Bit.Moderate), Removed);
 
         // Whoever may not remove a tombstone again is told it is removed.
@@ -304,18 +328,51 @@ public sealed class Capabilities
         return new Rows(reader.Participant, reader.Space, Resolve(reader.Participant, reader.Bag, reader.Space, tangentId, overwrites, now), now);
     }
 
-    /// <summary>What one participant holds on each of several Tangents, from the reads <see cref="LoadRows"/> makes once
-    /// and the overwrites of each from Koan's cache, by Tangent id.</summary>
+    /// <summary>What one participant holds on each of several Tangents, by Tangent id: one keyed read of their rows, the
+    /// reads <see cref="LoadRows"/> makes once, and the overwrites of each from Koan's cache, each answer saying where its
+    /// Tangent's own rows of the log begin (<see cref="Since"/>). Every caller names Tangents that other rows name — rows
+    /// of the log, asks, origins — so a Tangent with no row of its own exists for no one, administrators among them: it
+    /// holds nothing, and no row of the log is its own.</summary>
     public static async Task<IReadOnlyDictionary<string, Capabilities>> LoadEach(string? participantId, IReadOnlyList<string> tangentIds,
         CancellationToken ct)
     {
+        var ids = tangentIds.Distinct(StringComparer.Ordinal).ToList();
+        if (ids.Count == 0) return new Dictionary<string, Capabilities>(StringComparer.Ordinal);
+        var rows = await Tangents.Tangent.Get(ids, ct);
+        return await Judge(participantId, ids, rows, ct);
+    }
+
+    /// <summary>What one participant holds on each of the Tangents whose rows a read already holds, by Tangent id, as
+    /// <see cref="LoadEach(string?, IReadOnlyList{string}, CancellationToken)"/> answers it with no read of the rows.</summary>
+    public static Task<IReadOnlyDictionary<string, Capabilities>> LoadEach(string? participantId, IReadOnlyList<Tangents.Tangent> tangents,
+        CancellationToken ct)
+    {
+        var rows = tangents.DistinctBy(row => row.Id, StringComparer.Ordinal).ToList();
+        return rows.Count == 0
+            ? Task.FromResult<IReadOnlyDictionary<string, Capabilities>>(new Dictionary<string, Capabilities>(StringComparer.Ordinal))
+            : Judge(participantId, rows.Select(row => row.Id).ToList(), rows, ct);
+    }
+
+    /// <summary>What one participant holds on each Tangent of <paramref name="ids"/>, from its row in
+    /// <paramref name="rows"/> at the same index, a missing row holding nothing.</summary>
+    private static async Task<IReadOnlyDictionary<string, Capabilities>> Judge(string? participantId, IReadOnlyList<string> ids,
+        IReadOnlyList<Tangents.Tangent?> rows, CancellationToken ct)
+    {
+        var each = new Dictionary<string, Capabilities>(StringComparer.Ordinal);
         var reader = await Reader(participantId, ct);
         var now = DateTimeOffset.UtcNow;
-        var each = new Dictionary<string, Capabilities>(StringComparer.Ordinal);
-        foreach (var id in tangentIds.Distinct(StringComparer.Ordinal))
+        for (var index = 0; index < ids.Count; index++)
         {
+            var id = ids[index];
+            if (rows[index] is not { } row)
+            {
+                each[id] = new Capabilities(Bit.None, false, Bits.Each.ToDictionary(bit => bit, _ => Absent), [], reader.Bag) { Since = long.MaxValue };
+                continue;
+            }
+
             var overwrites = await OverwritesOf(reader, id, ct);
-            each[id] = For(reader.Participant, reader.Space, Resolve(reader.Participant, reader.Bag, reader.Space, id, overwrites, now), now, null, null);
+            var held = For(reader.Participant, reader.Space, Resolve(reader.Participant, reader.Bag, reader.Space, id, overwrites, now), now, null, null);
+            each[id] = new Capabilities(held.Held, held.Exists, held._missing, held.RoleIds, held.Bag) { Since = row.LogSeq };
         }
 
         return each;

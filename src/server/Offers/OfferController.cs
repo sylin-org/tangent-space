@@ -33,12 +33,12 @@ public sealed class OfferController(KoanWebBaseUrl baseUrl, AddressOffers offers
     public const string Field = "origin";
 
     /// <summary>The form that uses the Offer of <paramref name="origin"/>, under <paramref name="baseAddress"/>.</summary>
-    public static Form UseForm(string baseAddress, string origin) => Form.Posting(baseAddress + UsePath, Named(origin));
+    public static Form UseForm(string baseAddress, string origin) => Form.Posting(baseAddress + UsePath, Named(origin)) with { Tool = "use-offer", Submit = "Use it" };
 
     /// <summary>The form that declines the Offer of <paramref name="origin"/>, under <paramref name="baseAddress"/>.</summary>
-    public static Form DeclineForm(string baseAddress, string origin) => Form.Posting(baseAddress + DeclinePath, Named(origin));
+    public static Form DeclineForm(string baseAddress, string origin) => Form.Posting(baseAddress + DeclinePath, Named(origin)) with { Tool = "decline-offer", Submit = "Not this one", Quiet = true };
 
-    private static Form.Field Named(string origin) => new(Field, Holds.Origin, origin);
+    private static Form.Field Named(string origin) => new(Field, Holds.Origin, origin, Form.Input.Hidden);
 
     [HttpPost(UsePath)]
     [Tool(Name = "use_offer", Destructive = true, Idempotent = true, OpenWorld = false)]

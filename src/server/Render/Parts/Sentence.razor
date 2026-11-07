@@ -1,0 +1,48 @@
+@* A sentence the page says, as a note of its own or, inline, inside another part's line: its words, its code in the mono
+   face, its stressed words, and its links. *@
+@if (As == Shape.Inline)
+{
+    @Said
+}
+else
+{
+    <p class="post-form-note">@Said</p>
+}
+
+@code {
+    [Parameter, EditorRequired] public Render.Sentence Model { get; set; } = default!;
+
+    [Parameter] public Shape As { get; set; }
+
+    private RenderFragment Said => builder =>
+    {
+        var sequence = 0;
+        foreach (var piece in Model.Pieces())
+        {
+            switch (piece.Kind)
+            {
+                case Render.Sentence.Kind.Code:
+                    builder.OpenRegion(sequence++);
+                    Draw.One(builder, new Render.Code(piece.Words));
+                    builder.CloseRegion();
+                    break;
+                case Render.Sentence.Kind.Strong:
+                    builder.OpenElement(sequence++, "strong");
+                    builder.AddContent(sequence++, piece.Words);
+                    builder.CloseElement();
+                    break;
+                case Render.Sentence.Kind.Link:
+                    builder.OpenElement(sequence++, "a");
+                    builder.AddAttribute(sequence++, "href", piece.Address);
+                    builder.OpenRegion(sequence++);
+                    Draw.One(builder, new Render.Sentence(piece.Words), Shape.Inline);
+                    builder.CloseRegion();
+                    builder.CloseElement();
+                    break;
+                default:
+                    builder.AddContent(sequence++, piece.Words);
+                    break;
+            }
+        }
+    };
+}

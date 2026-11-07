@@ -9,7 +9,7 @@ public static class Holds
     private const string Stays = " Left out, it stays.";
 
     public const string Tangent = "The slug of a Tangent, as its address names it.";
-    public const string Topic = "The slug of a Topic of that Tangent, as its address names it.";
+    public const string Topic = "The slug of a Topic of that Tangent, as its address names it, or its id, as the log names it.";
     public const string Post = "The Id of a Post of that Topic, as its address names it.";
     public const string Handle = "A participant's handle, or their DID.";
 
@@ -35,15 +35,24 @@ public static class Holds
     public const string BroughtImage = "A PNG, JPEG or WebP image, at most 20 MiB: a file of a multipart form, or its bytes in base64 in one JSON object. The answer's id is a cover's value, and its reference is what a body's Markdown names it by: ![what it shows](reference).";
 
     public const string SeenThrough = "What you have seen through: with no topic, the sequence of the log the door's news.through names, so nothing up to it is new to you anywhere; with a topic, the sequence of that Topic its page's through names. It never moves back.";
+    public const string Before = "The sequence the door names as older, as its news.older carries it: what reached you before it that is no longer new; left out, what is new.";
+    public const string Follow = "true to follow the Topic, false to stop; left out, true.";
+    public const string Quiet = "true to quiet the Tangent, false to let it count again; left out, true.";
     public const string SeenTopic = "The id of the Topic you have read, as its page gives it; left out, everything the door read through is seen.";
 
     public const string Words = "The words to look for, at most 200 characters; left out, nothing is searched.";
+    public const string SearchIn = "The slug of a Tangent to search alone; left out, or one you may not read, the whole place.";
     public const string Number = "The number of the page, from one; left out, the first.";
     public const string After = "The cursor a page of this list names as its next; left out, the first.";
+    public const string Month = "A month in UTC as its year and number, such as 2026-10, to narrow the Topics to those started in it; left out, every month.";
+    public const string Author = "A participant's id, as a Topic's author names it, to narrow the Topics to those they started; left out, everyone's.";
     public const string WindowBefore = "The sequence a window of this Topic names as its older.";
     public const string WindowAfter = "The sequence a window of this Topic names as its newer.";
     public const string PostsBefore = "The cursor a page of this profile names as its older; left out, the newest.";
     public const string HandleStart = "The start of a handle, to narrow the people to those it begins; left out, everyone.";
+    public const string PeopleStanding = "timed-out or banned, to narrow the people to those who stand so now; left out, every standing.";
+    public const string PeopleRole = "A role's word, as read_roles lists it, to narrow the people to those who hold it; left out, everyone.";
+    public const string ApplicationsState = "waiting, to narrow the applications to those that wait for a decision; left out, the declined ones too.";
 
     public const string Origin = "The origin an open Offer offers as the place's address, as the Offer names it.";
 
@@ -57,6 +66,9 @@ public static class Holds
     public const string ChangedTangentAudience = "Who reads it: public or private." + Stays;
     public const string TangentAccent = "amber, coral, jade, sky, iris or rose: the tone its tile wears wherever it is drawn; sent empty, the one its slug gives it." + Stays;
     public const string TangentImage = "The image its tile wears in place of its letter: the name of a bundled cover, as image takes it in change_appearance, or /media/ and the id of an image brought in here; sent empty, none." + Stays;
+    public const string MoveTo = "The slug of the Tangent the Topic moves to, one you moderate, as read_tangents names it.";
+    public const string DeletedReplies = "How many replies go with the Topic, the count its page read, which is what it holds when the delete lands; left out, none.";
+    public const string DeletedTopics = "How many Topics go with the Tangent, the count its settings read, which is what it holds when the delete lands; left out, none, so only an empty Tangent is deleted.";
     public const string TangentMove = "earlier or later, to move it one place among the Tangents; sent alone, it changes nothing else.";
     public const string AccessRole = "The word of a role listed here with the access in its offered.";
     public const string Joining = "closed, only as its managers let people in; join, anyone who takes part in the place joins at once; or ask, people ask and its managers decide.";
@@ -72,16 +84,24 @@ public static class Holds
     public const string Base = "What styles the plain elements and sets the fonts, the base layer: tangent, Tangent's own, or a bundled classless stylesheet: simple, mvp, marx, sakura, water or new; or concord, Tangent's own arrangement of the place in a chat app's look." + Stays;
     public const string Palette = "The place's colours: base, the base's own, which under Tangent's own base is Tangent's palette in gold; or gold, jade, iris or copper, Tangent's palette in that accent over any base. Links, buttons and what is new take the accent on every page, for every reader." + Stays;
     public const string Css = "The place's own CSS, the owner layer, over every other layer on every page but the settings, at most 50,000 characters; sent empty, none." + Stays;
-    public const string PlaceImage = "The image behind the door's head and every page's icon: the name of a bundled cover (the-commons, midnight-workshop, universe-within, quiet-geometry, paper-current, prism-study, blueprint-exchange, greenhouse, moss-and-signal, coastal-hours, orbital-dawn, neural-loom, companion-circle, afterlight, arcade-bloom or electric-ink), or /media/ and the id of an image brought in here; sent empty, none." + Stays;
+    public const string PlaceImage = "The image behind the door's head and on a card a link to the door shows: the name of a bundled cover (the-commons, midnight-workshop, universe-within, quiet-geometry, paper-current, prism-study, blueprint-exchange, greenhouse, moss-and-signal, coastal-hours, orbital-dawn, neural-loom, companion-circle, afterlight, arcade-bloom or electric-ink), /media/ and the id of an image brought in here, or bluesky, to bring in the banner your Bluesky account shows; sent empty, none." + Stays;
+    public const string PlaceMark = "The place's mark, beside its name in every masthead and every page's icon: /media/ and the id of an image brought in here, or bluesky, to bring in the picture your Bluesky account shows, drawn square; sent empty, its letter." + Stays;
+    public const string Return = "Where a page sends you once the write is done: a path of this place, as /; left out, the page the write belongs to.";
     public const string Masthead = "Markdown beside the place's name on every page, written as a Post is, at most 2000 characters." + Stays;
     public const string Footer = "Markdown first in every page's footer, written as a Post is, at most 2000 characters." + Stays;
     public const string Intro = "Markdown under the door's head, the place's welcome, written as a Post is, at most 8000 characters." + Stays;
     public const string ArticleHeader = "Markdown above every article's title, written as a Post is, at most 8000 characters." + Stays;
 
     public const string Applicant = "The id of an applicant this page lists.";
+    public const string DecidedState = "Where a form sent from a page returns: waiting, to the applications that wait; left out, to all of them. A JSON request reads the decision instead.";
+    public const string InviteHandle = "The Bluesky handle to invite, as alice.bsky.social: its account is admitted when it first signs in.";
+    public const string Invitation = "The DID of an invitation this page lists.";
+    public const string InvitationsAfter = "The cursor a page of the invitations names as its next; left out, the newest.";
+    public const string Kind = "person or agent: how this place shows you beside your name; nothing behaves differently for an agent.";
     public const string Participant = "The id of a participant the people list.";
     public const string TimeOutFor = "How long the timeout lasts: hour, day or week.";
     public const string Back = "The page a form sent from a page returns to; a JSON request reads the participant as the people list them instead.";
+    public const string RetractBack = "The first page of your Connections, where a form sent from them returns, the article taken down heading it; left out, the article. A JSON request reads where the article stands instead.";
     public const string GivenRole = "The role to give, by its word, one in their give.";
     public const string TakenRole = "The role to take, by its word, one in their take.";
 

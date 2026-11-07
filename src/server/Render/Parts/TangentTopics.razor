@@ -1,0 +1,101 @@
+@* A page of a Tangent's Topics, newest first, whole or narrowed to a month or an author: discussions as rows of a table, by
+   latest activity, and articles as cards, by when each started, the first that stands leading on the first page with the
+   Tangent's own tile where it has no cover, and a removed one never; where none are, one sentence and, on the whole list,
+   one next step; and the way to older ones and back to the latest. *@
+@if (Model.Topics.Count == 0)
+{
+    <div class="topic-empty">
+        <p class="topic-empty-title">@Empty</p>
+        @if (Whole && Model.NewTopic is { } first)
+        {
+            <a class="tangent-new" href="@first">@Plus@(Articles ? "New article" : "New topic")</a>
+        }
+        else if (Whole && Model.SignIn is { } signIn)
+        {
+            <a class="topic-empty-link" href="@signIn">Sign in to start one</a>
+        }
+    </div>
+}
+else
+{
+    <div class="@(Articles ? "topic-list-head topic-list-head-ruled" : "topic-list-head")">
+        <h2 class="topic-list-title">@Title</h2>
+        <span class="topic-list-order">@(Articles ? "newest first" : "latest activity first")</span>
+        @if (Model.NewTopic is { } start)
+        {
+            <a class="tangent-new" href="@start">@Plus@(Articles ? "New article" : "New topic")</a>
+        }
+    </div>
+    @if (Articles)
+    {
+        <div class="article-list">
+            @if (Lead is { } lead)
+            {
+                <Draw Part="@(lead with { In = Model.Tangent })" As="Shape.Lead" />
+            }
+            @foreach (var article in Model.Topics.Where(topic => topic.Id != Lead?.Id))
+            {
+                <Draw Part="@(article with { In = Model.Tangent })" As="Shape.Card" />
+            }
+        </div>
+    }
+    else
+    {
+        <div class="topic-table">
+            <div class="topic-table-heading" aria-hidden="true">
+                <span class="topic-table-topic">Topic</span>
+                <span class="topic-table-people">People</span>
+                <span class="topic-table-replies">Replies</span>
+                <span class="topic-table-latest">Latest</span>
+            </div>
+            <ul class="topic-rows list">
+                @foreach (var topic in Model.Topics)
+                {
+                    <li><Draw Part="@topic" /></li>
+                }
+            </ul>
+        </div>
+    }
+}
+@if (Model.Next is not null || Model.Continued)
+{
+    <nav class="topic-pages" aria-label="More @(Articles ? "articles" : "topics")">
+        @if (Model.Continued)
+        {
+            <a href="@(Model.To?.First ?? Model.Tangent.Address)">Back to the latest</a>
+        }
+        @if (Model.Next is { } next)
+        {
+            <a class="topic-pages-next" href="@next">Older @(Articles ? "articles" : "topics") →</a>
+        }
+    </nav>
+}
+
+@code {
+    [Parameter, EditorRequired] public Render.TangentTopics Model { get; set; } = default!;
+
+    private bool Articles => Model.Tangent.Kind == "article";
+
+    /// <summary>The article that leads the first page: the first whose root stands.</summary>
+    private Render.TopicEntry? Lead => Model.Continued ? null : Model.Topics.FirstOrDefault(topic => topic.Removed is null);
+
+    /// <summary>Whether the page is the whole list's first.</summary>
+    private bool Whole => !Model.Continued && Model.To is null;
+
+    private string Many => Articles ? "articles" : "topics";
+
+    private string Empty => Model.Continued ? "Nothing further back."
+        : Model.To is { } to ? "No " + Many + " " + to.Words + "."
+        : Articles ? "No articles yet." : "No topics yet.";
+
+    private string Title => Model.To is { } to
+        ? (Model.Continued ? "Older " + Many
+            : to.Count is { } count ? Wording.Count(count, Articles ? "article" : "topic", Many, Many)
+            : Articles ? "Articles" : "Topics") + " " + to.Words
+        : Model.Continued
+            ? "Older " + Many
+            : Wording.Count(Model.Tangent.TopicCount, Articles ? "article" : "topic", Many, "");
+
+    private static RenderFragment Plus => builder => builder.AddMarkupContent(0,
+        "<svg width=\"15\" height=\"15\" viewBox=\"0 0 20 20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M10 4.5v11M4.5 10h11\"></path></svg>");
+}

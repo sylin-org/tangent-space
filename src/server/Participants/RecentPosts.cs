@@ -3,15 +3,20 @@ using Koan.Data.Abstractions;
 using Koan.Data.Abstractions.Filtering;
 using Koan.Data.Core.Sorting;
 using Tangent.Posts;
+using Tangent.Tangents;
 
 namespace Tangent.Participants;
 
-/// <summary>One bounded page of a participant's Posts, newest first, read through <c>ix_post_authors</c>
-/// (<c>AuthorId</c>, <c>CreatedAt</c>): only Posts in the Tangents the reader may view and none removed, so a Post the
-/// reader may not view is never read and nothing past it is said. The store is told the smaller of the two sets the caller
-/// names, the Tangents the reader may view or the others, to keep or to leave out, and nothing where none is left out. A page holds at most <see cref="PageSize"/> Posts and continues
-/// from a <see cref="Cursor"/>, the place of the last Post a page held, so a Post present for the whole read is on
-/// exactly one page. Nothing is counted. Reads only and takes no lock.</summary>
+/// <summary>One page of a participant's Posts, newest first and none removed, read through <c>ix_post_authors</c>
+/// (<c>AuthorId</c>, <c>CreatedAt</c>) one more than a page at a time, each read continuing by seek from the last Post
+/// the one before read, and kept only in the Tangents the reader may view, each Tangent judged once as a read names it
+/// (<see cref="ViewableTangents.Met"/>), so no Post the reader may not view is shown and none names a Tangent of theirs.
+/// Each read after the first leaves out the Tangents met so far that the reader may not view, so it fills the page or meets
+/// a Tangent no earlier read met. The reading stops once the page is full and one more is kept, or after
+/// <see cref="ViewableTangents.Met.ReadLimit"/> reads: a page that bound ends holds what it kept, and continues from the
+/// last Post it read, which is the one place a page names a Post the reader may not view, by when it was written and its
+/// Id. A page holds at most <see cref="PageSize"/> Posts and continues from a <see cref="Cursor"/>, so a Post present for
+/// the whole read is on exactly one page. Nothing is counted. Reads only and takes no lock.</summary>
 public static class RecentPosts
 {
     /// <summary>The most Posts one page holds.</summary>
@@ -40,28 +45,29 @@ public static class RecentPosts
         public override string ToString() => At.UtcTicks.ToString(CultureInfo.InvariantCulture) + "." + Id;
     }
 
-    /// <summary>The page of <paramref name="authorId"/>'s Posts in <paramref name="viewable"/>, the Tangents the reader
-    /// may view, and in none of <paramref name="others"/>, every other Tangent, after <paramref name="after"/>, or the first
-    /// page: one read, limited to one more than the page, which says whether a next page exists. Whatever the store
-    /// answers, the page keeps only Posts in <paramref name="viewable"/> and continues from the last of those, so a
-    /// Tangent that changed while the sets were read never shows and is never named; such a page can be short. No Tangent
-    /// viewable reads nothing.</summary>
-    public static async Task<Page> Read(string authorId, IReadOnlySet<string> viewable, IReadOnlyCollection<string> others, Cursor? after,
-        CancellationToken ct)
+    /// <summary>The page of <paramref name="authorId"/>'s Posts in the Tangents <paramref name="met"/> says its reader may
+    /// view, after <paramref name="after"/>, or the first page.</summary>
+    public static async Task<Page> Read(string authorId, ViewableTangents.Met met, Cursor? after, CancellationToken ct)
     {
-        if (viewable.Count == 0) return new Page([], null);
-        var tangent = FieldPath.Of(nameof(Post.TangentId));
-        var filters = new List<Filter>();
-        if (others.Count > 0)
-            filters.Add(viewable.Count <= others.Count
-                ? Filter.On(tangent, FilterOperator.In, FilterValue.Many([.. viewable]))
-                : Filter.On(tangent, FilterOperator.Nin, FilterValue.Many([.. others])));
-        if (after is not null) filters.Add(Seek(after));
-        var query = new QueryDefinition { Filter = filters.Count == 0 ? null : Filter.All([.. filters]), Page = 1, PageSize = PageSize + 1 }
-            .WithSort<Post>(sort => sort.OrderByDescending(post => post.CreatedAt).ThenByDescending(post => post.Id));
-        var rows = await Post.Query(post => post.AuthorId == authorId && !post.Removed, query, ct);
-        var kept = rows.Take(PageSize).Where(post => viewable.Contains(post.TangentId)).ToList();
-        return new Page(kept, rows.Count > PageSize && kept.Count > 0 ? Cursor.After(kept[^1]) : null);
+        var kept = new List<Post>();
+        for (var reads = 1; ; reads++)
+        {
+            var query = new QueryDefinition
+                {
+                    Filter = Filter.And(after is null ? null : Seek(after), met.LeavingOut(nameof(Post.TangentId))), Page = 1, PageSize = PageSize + 1
+                }
+                .WithSort<Post>(sort => sort.OrderByDescending(post => post.CreatedAt).ThenByDescending(post => post.Id));
+            var rows = await Post.Query(post => post.AuthorId == authorId && !post.Removed, query, ct);
+            foreach (var post in await met.Keep(rows, post => post.TangentId, ct))
+            {
+                if (kept.Count == PageSize) return new Page(kept, Cursor.After(kept[^1]));
+                kept.Add(post);
+            }
+
+            if (rows.Count <= PageSize) return new Page(kept, null);
+            after = Cursor.After(rows[^1]);
+            if (reads == ViewableTangents.Met.ReadLimit) return new Page(kept, after);
+        }
     }
 
     /// <summary>The Posts after the cursor in the order a page reads them: written no later than the cursor's Post,

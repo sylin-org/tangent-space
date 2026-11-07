@@ -1,0 +1,34 @@
+@using System.Globalization
+@* The ways a Tangent's page lists its Topics: all of them, current on their first page; and in an articles Tangent, where
+   its articles started in more than one month or were started by more than one author, each month and the authors who
+   started the most, each with how many, a link to the list narrowed to it, the one the list is narrowed to current. *@
+<h2 class="rail-heading">@(Articles ? "Articles" : "Topics")</h2>
+<ul class="rail-views list">
+    <li><a href="@Model.Tangent.Address" aria-current="@(Model.All ? "page" : null)">@(Articles ? "All articles" : "All topics")</a></li>
+</ul>
+@if (Articles && !Standalone)
+{
+    @Choices("By month", Model.Months, Model.Month)
+    @Choices("By author", Model.Authors, Model.Author)
+}
+
+@code {
+    [Parameter, EditorRequired] public Render.TopicViews Model { get; set; } = default!;
+
+    [CascadingParameter(Name = nameof(Shell.Standalone))] public bool Standalone { get; set; }
+
+    private bool Articles => Model.Tangent.Kind == "article";
+
+    private static RenderFragment Choices(string heading, IReadOnlyList<Render.TopicViews.Choice> choices, string? current) => @<text>
+        @if (choices.Count > 1)
+        {
+            <h2 class="rail-heading rail-heading-spaced">@heading</h2>
+            <ul class="rail-views list">
+                @foreach (var choice in choices)
+                {
+                    <li><a class="topic-view" href="@choice.Address" aria-current="@(choice.Key == current ? "page" : null)">@choice.Name<span class="topic-view-count">@choice.Count.ToString(CultureInfo.InvariantCulture)</span></a></li>
+                }
+            </ul>
+        }
+    </text>;
+}

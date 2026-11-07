@@ -1,0 +1,8 @@
+@* The one way onward from a panel, as its main button, or the way back, quietly under it. *@
+<div class="post-form-actions post-form-closed">
+    <a class="@(Model.Back ? "post-form-cancel" : "sign-in-submit post-form-submit")" href="@Model.Address">@Model.Label</a>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Render.Onward Model { get; set; } = default!;
+}

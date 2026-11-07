@@ -7,13 +7,13 @@
    a management page leaves out — and the two scripts every page loads, absolute from the base URL. The theme script blocks in <head> so the reader's theme applies before the first paint; the
    page script is a module, deferred by nature, that mounts the islands once the document is parsed. A standalone page
    opens with no server and no script: the device decides its theme, and no island answers on it. A resource
-   that names a frame is drawn inside it: the masthead with the place's mark and name, the search box, a form that works without JavaScript and suggests as someone types with it, and, for someone signed in, how
+   that names a frame is drawn inside it: the masthead with the place's mark, its letter or its picture, and its name, the search box, a form that works without JavaScript and suggests as someone types with it, and, for someone signed in, how
    many things are for them and new, shown only while there are some, which the page's stream raises as new ones
-   arrive, a link to the door where they are read, and their account opening in the page with their name, handle and
-   role, the place's settings for whoever may change them, and the way to sign out, or for a visitor the way to
-   sign in; the path bar whose elbow hangs from the mark, with a Tangent's crumb opening the list of Tangents
-   in the page, and where a new one is created for whoever may; and the footer with the theme a visitor can choose. A page a visitor may
-   read carries in its head the card a link to it previews, and every page the place's image as its icon. A page of the place's archive opens with the one line that says it is retired. The place's
+   arrive, a link to the door where they are read, and their account opening in the page with their mark, an agent's as
+   an agent's, their name, handle and role, the theme they choose, their own profile, the place's settings for whoever may
+   change them, and the way to sign out, or for a visitor the way to sign in; the path bar whose elbow hangs from the mark, with a Tangent's crumb opening the list of Tangents
+   in the page, and where a new one is created for whoever may; and the footer. A page a visitor may
+   read carries in its head the card a link to it previews, and every page the place's mark as its icon, where it is a picture. A page of the place's archive opens with the one line that says it is retired. The place's
    words come through here, Markdown drawn as a Post's body is: its masthead line after the place's name and its footer line first in the footer, each adding nothing while it is empty.
    Every framed page carries the person island, which opens a participant's card beside any name, mark or mention of
    them. Nothing here is a dialog. *@
@@ -52,7 +52,7 @@
     {
         @((MarkupString)Card)
     }
-    @if (Appearance.ImageAt(BaseUrl + "/", Images) is { } icon)
+    @if (Appearance.MarkAt(BaseUrl + "/", Images) is { } icon)
     {
         <link rel="icon" href="@icon">
     }
@@ -64,21 +64,26 @@
 }
 @if (Frame is { } frame)
 {
+    <CascadingValue Name="@Page.ReaderValue" Value="@frame.Who?.Id" IsFixed="true">
     <header class="masthead bar place">
         <a class="masthead-place chip place" href="@frame.Door">
-            <span class="masthead-mark" aria-hidden="true">@frame.Initial</span>
+            <span class="masthead-mark" aria-hidden="true">@if (Appearance.MarkAt(BaseUrl + "/", Images) is { } mark)
+            {
+                <img class="masthead-mark-picture" src="@mark" alt="">
+            }
+            else
+            {
+                @frame.Initial
+            }</span>
             <span class="masthead-name">@frame.Place</span>
         </a>
         @if (PlaceWords.Html(Appearance.MastheadPart, Appearance.Masthead, Images) is { } masthead)
         {
             <div class="masthead-line">@((MarkupString)masthead)</div>
         }
-        @if (frame.Searchable && !Standalone)
+        @if (!Standalone)
         {
-            <form class="masthead-search search" role="search" method="get" action="@frame.Search" data-island="search">
-                <svg class="masthead-search-icon" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="9" r="5.5"></circle><path d="M13 13l3.5 3.5"></path></svg>
-                <input class="masthead-search-field" type="search" name="q" value="@frame.Searched" placeholder="Search" aria-label="Search this place" maxlength="200" autocomplete="off">
-            </form>
+            <Draw Part="@frame.Searching" As="Shape.Inline" />
         }
         <div class="masthead-actions">
             @if (frame.Who is { } who)
@@ -93,19 +98,15 @@
                 }
                 <details class="account menu participant is-you">
                     <summary class="account-button" aria-label="@("Account, " + who.Name)">
-                        @Mark(who)
+                        <Draw Part="@who.Person" />
                         <svg class="account-chevron" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"></path></svg>
                     </summary>
                     <div class="account-panel panel">
                         <div class="account-who">
-                            @Mark(who)
-                            <span class="account-names">
-                                <span class="account-name">@who.Name</span>
-                                <span class="who-handle">@("@" + who.Handle + (who.Role is { } role ? " · " + role : ""))</span>
-                            </span>
+                            <Draw Part="@who.Person" As="Shape.Row" />
                         </div>
                         <div class="account-appearance appearance" data-island="appearance">
-                            <span class="account-appearance-label" id="account-appearance-label">@Icon(ThemeIcon)Theme</span>
+                            <span class="account-appearance-label" id="account-appearance-label"><Draw Part="@(new Render.Icon("theme"))" />Theme</span>
                             <div class="segmented" role="group" aria-labelledby="account-appearance-label">
                                 <button type="button" data-theme-choice="system" aria-pressed="true">System</button>
                                 <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
@@ -113,16 +114,20 @@
                             </div>
                         </div>
                         <ul class="account-items list">
+                            @if (who.Profile is { } profile)
+                            {
+                                <li><a class="account-item" href="@profile"><Draw Part="@(new Render.Icon("profile"))" />Your profile</a></li>
+                            }
                             @if (who.Settings is { } settings)
                             {
-                                <li><a class="account-item" href="@settings">@Icon(SettingsIcon)Settings</a></li>
+                                <li><a class="account-item" href="@settings"><Draw Part="@(new Render.Icon("settings"))" />Settings</a></li>
                             }
-                            <li><a class="account-item" href="@(frame.Door.TrimEnd('/') + Participants.BringYourAgentController.Path)">@Icon(AgentIcon)Bring your agent</a></li>
-                            <li><a class="account-item" href="@(frame.Door.TrimEnd('/') + Connections.ConnectionsController.Path)">@Icon(ConnectionsIcon)Connections</a></li>
+                            <li><a class="account-item" href="@(frame.Door.TrimEnd('/') + Participants.BringYourAgentController.Path)"><Draw Part="@(new Render.Icon("agent"))" />Bring your agent</a></li>
+                            <li><a class="account-item" href="@(frame.Door.TrimEnd('/') + Connections.ConnectionsController.Path)"><Draw Part="@(new Render.Icon("connections"))" />Connections</a></li>
                             <li>
-                                <Tangent.Participants.AnotherAccountForm Model="@Participants.AnotherAccount.For(who)" Id="account-another" SummaryClass="account-item another-account-toggle">@Icon(SwitchIcon)</Tangent.Participants.AnotherAccountForm>
+                                <Draw Part="@who.Another" As="Shape.Menu" />
                             </li>
-                            <li><form method="post" action="@who.SignOut"><button class="account-item account-action">@Icon(SignOutIcon)Sign out</button></form></li>
+                            <li><Draw Part="@who.SigningOut" As="Shape.Menu" /></li>
                         </ul>
                     </div>
                 </details>
@@ -133,6 +138,9 @@
             }
         </div>
     </header>
+    </CascadingValue>
+    @if (frame.Crumbs.Count > 0)
+    {
     <nav class="path" aria-label="You are here">
         <span class="path-elbow" aria-hidden="true"></span>
         <ol class="path-crumbs">
@@ -145,7 +153,7 @@
                     {
                         <details class="switcher menu tangent">
                             <summary class="switcher-button" aria-current="@(last ? "page" : null)" aria-label="@(crumb.Label + ", switch Tangent")">
-                                <TangentTile Tile="@switcher.Tile" />
+                                <Draw Part="@switcher.Current" As="Shape.Tile" />
                                 <span class="switcher-label">@crumb.Label</span>
                                 <svg class="switcher-chevron" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"></path></svg>
                             </summary>
@@ -154,25 +162,13 @@
                                 <ul class="switcher-items list">
                                     @foreach (var item in switcher.Tangents)
                                     {
-                                        <li>
-                                            <a class="@(item.Current ? "switcher-item row tangent is-current" : "switcher-item row tangent")" href="@item.Address" aria-current="@(item.Current ? "page" : null)">
-                                                <TangentTile Tile="@item.Tile" Size="menu" />
-                                                <span class="switcher-item-text">
-                                                    <span class="switcher-item-name">@item.Name</span>
-                                                    <span class="switcher-item-detail">@item.Detail</span>
-                                                </span>
-                                                @if (item.Current)
-                                                {
-                                                    <span class="switcher-check">@Icon(CheckIcon)<span class="visually-hidden">Current</span></span>
-                                                }
-                                            </a>
-                                        </li>
+                                        <li><Draw Part="@item" /></li>
                                     }
                                 </ul>
-                                <a class="switcher-all" href="@switcher.All">@Icon(AllIcon)All Tangents</a>
+                                <a class="switcher-all" href="@switcher.All"><Draw Part="@(new Render.Icon("all"))" />All Tangents</a>
                                 @if (switcher.New is { } created)
                                 {
-                                    <a class="switcher-all" href="@created">@Icon(NewIcon)New Tangent</a>
+                                    <a class="switcher-all" href="@created"><Draw Part="@(new Render.Icon("new"))" />New Tangent</a>
                                 }
                             </div>
                         </details>
@@ -190,6 +186,7 @@
             }
         </ol>
     </nav>
+    }
     <CascadingValue Name="@nameof(Standalone)" Value="@Standalone" IsFixed="true">@ChildContent</CascadingValue>
     <footer class="footer bar">
         @if (PlaceWords.Html(Appearance.FooterPart, Appearance.Footer, Images) is { } footer)
@@ -197,17 +194,6 @@
             <div class="footer-line">@((MarkupString)footer)</div>
         }
         <span class="footer-powered">Powered by Tangent Space</span>
-        @if (!Standalone)
-        {
-            <div class="footer-end appearance" data-island="appearance">
-                <span id="appearance-label">Theme</span>
-                <div class="segmented" role="group" aria-labelledby="appearance-label">
-                    <button type="button" data-theme-choice="system" aria-pressed="true">System</button>
-                    <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
-                    <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
-                </div>
-            </div>
-        }
     </footer>
     @if (!Standalone)
     {
@@ -226,7 +212,7 @@ else
 
     [Parameter, EditorRequired] public string BaseUrl { get; set; } = "";
 
-    /// <summary>How the place looks: the stylesheet of each of its layers, its accent, its own CSS, its image and its words.</summary>
+    /// <summary>How the place looks: the stylesheet of each of its layers, its accent, its own CSS, its mark and its words.</summary>
     [Parameter, EditorRequired] public Appearance Appearance { get; set; } = new();
 
     /// <summary>Whether the page is one of the place's management pages, which leave out the owner layer, so no stylesheet
@@ -252,38 +238,5 @@ else
 
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
-    private const string ThemeIcon = "<circle cx=\"10\" cy=\"10\" r=\"6.5\"></circle><path d=\"M10 3.5v13a6.5 6.5 0 0 0 0-13z\" fill=\"currentColor\" stroke=\"none\"></path>";
-    private const string SettingsIcon = "<circle cx=\"10\" cy=\"10\" r=\"2.5\"></circle><path d=\"M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4\"></path>";
-    private const string SignOutIcon = "<path d=\"M8 4.5H5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h3\"></path><path d=\"M12.5 6.5L16 10l-3.5 3.5\"></path><path d=\"M16 10H8\"></path>";
     private const string ForYouIcon = "<path d=\"M5.5 13.5V9a4.5 4.5 0 0 1 9 0v4.5l1.5 1.5H4z\"></path><path d=\"M8.5 17a1.5 1.5 0 0 0 3 0\"></path>";
-    private const string AgentIcon = "<rect x=\"4\" y=\"7\" width=\"12\" height=\"9\" rx=\"2\"></rect><path d=\"M10 7V3.5\"></path><path d=\"M7.5 11.5h.01M12.5 11.5h.01\"></path>";
-    private const string SwitchIcon = "<path d=\"M4 7h11.5\"></path><path d=\"M12.5 4l3 3-3 3\"></path><path d=\"M16 13H4.5\"></path><path d=\"M7.5 10l-3 3 3 3\"></path>";
-    private const string ConnectionsIcon = "<path d=\"M8.5 11.5a3 3 0 0 0 4.2 0l2.6-2.6a3 3 0 0 0-4.2-4.2l-.9.9\"></path><path d=\"M11.5 8.5a3 3 0 0 0-4.2 0l-2.6 2.6a3 3 0 0 0 4.2 4.2l.9-.9\"></path>";
-    private const string CheckIcon = "<path d=\"M5 10.5l3.2 3.2L15 7\"></path>";
-    private const string NewIcon = "<path d=\"M10 4.5v11M4.5 10h11\"></path>";
-    private const string AllIcon = "<rect x=\"3.5\" y=\"3.5\" width=\"5\" height=\"5\" rx=\"1\"></rect><rect x=\"11.5\" y=\"3.5\" width=\"5\" height=\"5\" rx=\"1\"></rect><rect x=\"3.5\" y=\"11.5\" width=\"5\" height=\"5\" rx=\"1\"></rect><rect x=\"11.5\" y=\"11.5\" width=\"5\" height=\"5\" rx=\"1\"></rect>";
-
-    /// <summary>A menu item's 16px icon, drawn in the text's colour and hidden from assistive technology.</summary>
-    private static RenderFragment Icon(string paths) => builder => builder.AddMarkupContent(0,
-        "<svg class=\"menu-icon\" width=\"16\" height=\"16\" viewBox=\"0 0 20 20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\">" + paths + "</svg>");
-
-    /// <summary>A participant's mark in the masthead: their avatar, or two letters of their handle on their own tint.</summary>
-    private static RenderFragment Mark(Who who) => builder =>
-    {
-        if (Monogram.Avatar(who.Avatar) is { } avatar)
-        {
-            builder.OpenElement(0, "img");
-            builder.AddAttribute(1, "class", "who-mark chip participant is-you");
-            builder.AddAttribute(2, "src", avatar);
-            builder.AddAttribute(3, "alt", "");
-            builder.CloseElement();
-            return;
-        }
-
-        builder.OpenElement(4, "span");
-        builder.AddAttribute(5, "class", "who-mark chip participant is-you tone-" + Monogram.Tone(who.Id));
-        builder.AddAttribute(6, "aria-hidden", "true");
-        builder.AddContent(7, Monogram.Letters(who.Handle));
-        builder.CloseElement();
-    };
 }

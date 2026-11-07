@@ -159,8 +159,8 @@ public sealed class ProfileTests
         var door = await Send(visitor, HttpMethod.Get, "/");
         var doorJson = await Send(visitor, HttpMethod.Get, "/", json: true);
 
-        Assert.Contains($"<a class=\"post-author\" href=\"{BaseUrl}/p/{AdaHandle}\" data-account=\"{Persona.Did(Ada)}\">", topic.Body);
-        Assert.Contains($"<a class=\"around-name\" href=\"{BaseUrl}/p/{AdaHandle}\">", door.Body);
+        Assert.Contains($"<a class=\"participant-name\" href=\"{BaseUrl}/p/{AdaHandle}\" data-account=\"{Persona.Did(Ada)}\">", topic.Body);
+        Assert.Contains($"<a class=\"participant-name\" href=\"{BaseUrl}/p/{AdaHandle}\">", door.Body);
         Assert.Equal(BaseUrl + "/p/" + AdaHandle, doorJson.Json.GetProperty("around").GetProperty("people")[0].GetProperty("profile").GetString());
     }
 
@@ -191,8 +191,9 @@ public sealed class ProfileTests
         Assert.Equal(HttpStatusCode.BadRequest, refused.Status);
     }
 
-    /// <summary>A page reads only the Tangents the reader may view: however many Posts lie in the others, a page is
-    /// full of those the reader may view, and neither its length nor its cursor says anything of the rest.</summary>
+    /// <summary>A page reads only the Tangents the reader may view: however many Posts lie in another, more than its bound of
+    /// reads would read past, each read after the first leaves that Tangent out, so a page is full of those the reader may
+    /// view, and neither its length nor its cursor says anything of the rest.</summary>
     [Fact]
     public async Task Posts_in_a_tangent_the_reader_may_not_view_leave_no_trace_on_a_page()
     {
@@ -204,7 +205,7 @@ public sealed class ProfileTests
         var older = new List<string>();
         for (var index = 0; index < 2; index++) older.Add((await Started(Leo, "Older " + index, "Body.")).Id);
         var hidden = new List<string>();
-        for (var index = 0; index < 101; index++) hidden.Add((await Started(Leo, "Studio " + index, "Body.", Studio)).Id);
+        for (var index = 0; index < Tangents.ViewableTangents.Met.ReadLimit * (RecentPosts.PageSize + 1); index++) hidden.Add((await Started(Leo, "Studio " + index, "Body.", Studio)).Id);
         var newer = new List<string>();
         for (var index = 0; index < 3; index++) newer.Add((await Started(Leo, "Newer " + index, "Body.")).Id);
         older.Reverse();
@@ -222,24 +223,60 @@ public sealed class ProfileTests
         Assert.Contains(Ids(asLeo)[^1], asLeo.GetProperty("older").GetString()!);
     }
 
-    /// <summary>Your own approvals page: past one page of them, the rest are a link away, and nothing is left out.</summary>
+    /// <summary>A page reads past the Posts its reader may not view, holds a page of those they may, and continues from the
+    /// last it holds, never from one it read past.</summary>
     [Fact]
-    public async Task A_page_keeps_only_viewable_posts_and_continues_from_the_last_it_keeps()
+    public async Task A_page_reads_past_posts_its_reader_may_not_view_and_continues_from_the_last_it_keeps()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
-        await Started(Leo, "Older", "Body.");
+        await Given.AParticipant(tangentSpace, Ada, [Roles.Member], ct: Cancellation);
+        var oldest = await Started(Leo, "Older", "Body.");
         for (var index = 0; index < RecentPosts.PageSize + 5; index++) await Started(Leo, "Studio " + index, "Body.", Studio);
-        var newest = await Started(Leo, "Newest", "Body.");
-        var viewable = new HashSet<string>([Workshop], StringComparer.Ordinal);
+        var newer = new List<string>();
+        for (var index = 0; index < RecentPosts.PageSize; index++) newer.Add((await Started(Leo, "Newer " + index, "Body.")).Id);
+        newer.Reverse();
 
-        var first = await RecentPosts.Read(Leo, viewable, [], null, Cancellation);
-        Assert.Equal([newest.Id], first.Posts.Select(post => post.Id));
-        Assert.Equal(newest.Id, first.Next?.Id);
-        var second = await RecentPosts.Read(Leo, viewable, [], first.Next, Cancellation);
-        Assert.Empty(second.Posts);
+        var first = await RecentPosts.Read(Leo, new Tangents.ViewableTangents.Met(Ada), null, Cancellation);
+        Assert.Equal(newer, first.Posts.Select(post => post.Id));
+        Assert.Equal(newer[^1], first.Next?.Id);
+        var second = await RecentPosts.Read(Leo, new Tangents.ViewableTangents.Met(Ada), first.Next, Cancellation);
+        Assert.Equal([oldest.Id], second.Posts.Select(post => post.Id));
         Assert.Null(second.Next);
+    }
+
+    /// <summary>Each read past the first leaves out the Tangents met that the reader may not view, so where every read meets
+    /// a Tangent no earlier one met, a page stops at its bound of reads, holds what it kept and continues from the last Post
+    /// it read: the reading stays bounded and loses nothing.</summary>
+    [Fact]
+    public async Task A_page_reads_at_most_its_bound_and_an_older_page_continues_from_the_last_post_it_read()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
+        using var ada = await SignedIn(tangentSpace, Ada);
+        var oldest = await Started(Leo, "Older", "Body.");
+        for (var tangent = 0; tangent < Tangents.ViewableTangents.Met.ReadLimit; tangent++)
+        {
+            var slug = "back-room-" + tangent;
+            await Given.ATangent(tangentSpace, slug, Audience.Private, Cancellation);
+            for (var index = 0; index <= RecentPosts.PageSize; index++) await Started(Leo, slug + " " + index, "Body.", slug);
+        }
+
+        var first = await RecentPosts.Read(Leo, new Tangents.ViewableTangents.Met(Ada), null, Cancellation);
+        Assert.Empty(first.Posts);
+        Assert.NotNull(first.Next);
+        var second = await RecentPosts.Read(Leo, new Tangents.ViewableTangents.Met(Ada), first.Next, Cancellation);
+        Assert.Equal([oldest.Id], second.Posts.Select(post => post.Id));
+        Assert.Null(second.Next);
+
+        // The page says what lies further back, and its older page holds what Ada may read.
+        var page = await Send(ada.Client, HttpMethod.Get, "/p/" + LeoHandle);
+        Assert.Contains("Nothing you can read here; older posts lie further back.", page.Body);
+        var json = (await Send(ada.Client, HttpMethod.Get, "/p/" + LeoHandle, json: true)).Json;
+        var older = (await Send(ada.Client, HttpMethod.Get, new Uri(json.GetProperty("older").GetString()!).PathAndQuery, json: true)).Json;
+        Assert.Equal([oldest.Id], Ids(older));
     }
 
     /// <summary>Whether the answer leaves the member out, as a null one is.</summary>

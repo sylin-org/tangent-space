@@ -51,6 +51,18 @@ public static class PostWrites
     public static string? PersonId(ClaimsPrincipal user)
         => user.Identity?.IsAuthenticated == true ? user.FindFirst(ClaimTypes.NameIdentifier)?.Value : null;
 
+    /// <summary>The field a form carries to say where it is sent on once its write is done.</summary>
+    public const string ReturnField = "return";
+
+    /// <summary>Where a form whose write is done is sent: the path of this place its <see cref="ReturnField"/> names, under
+    /// <paramref name="baseAddress"/>, so a write offered on the door returns there; otherwise <paramref name="fallback"/>,
+    /// the page the write belongs to. A path is one segment or more after a single slash, never another host's.</summary>
+    public static string Onward(HttpContext http, string baseAddress, string fallback)
+        => http.Request.HasFormContentType && http.Request.Form[ReturnField].ToString() is { Length: > 0 } path
+           && path[0] == '/' && !path.StartsWith("//", StringComparison.Ordinal) && !path.Contains('\\') && !path.Any(char.IsControl)
+            ? baseAddress + path
+            : fallback;
+
     /// <summary>Whether the sender reads JSON: it sent a JSON body, or its <c>Accept</c> names JSON and not HTML.</summary>
     public static bool WantsJson(HttpRequest request)
     {
@@ -118,14 +130,34 @@ public static class PostWrites
             : Form.Posting(action, from, body);
     }
 
-    /// <summary>The form that removes a Post at <paramref name="action"/>, which carries no field.</summary>
-    public static Form RemoveForm(string action) => Form.Posting(action);
+    /// <summary>The form that removes <paramref name="post"/> at <paramref name="action"/>, which carries no field, confirmed
+    /// in the page with what removing it does: its words go and a tombstone stays, and removing a Topic's root closes the
+    /// Topic, whose replies stay. It opens behind <paramref name="opens"/>.</summary>
+    public static Form RemoveForm(string action, Post post, string opens) => Form.Posting(action) with
+    {
+        Tool = "remove", Submit = "Remove", Opens = opens,
+        Confirm = "Its words leave the page and a tombstone stays in their place" + (post.ParentId is not null ? "."
+            : "; the " + Word(post.Kind) + " keeps its replies and takes no more.")
+    };
+
+    /// <summary>The form that undoes the removal of <paramref name="post"/> at <paramref name="action"/>, which carries no field:
+    /// one press, since it destroys nothing, saying on an opening whose Topic its moderators have not closed that the Topic takes
+    /// replies again.</summary>
+    public static Form UndoForm(string action, Post post) => Form.Posting(action) with
+    {
+        Tool = "undo-removal", Submit = "Undo removal", Busy = "Bringing it back…", Quiet = true,
+        Note = post.ParentId is null && !post.Closed ? "The " + Word(post.Kind) + " takes replies again." : null
+    };
 
     /// <summary>The form that reports a Post at <paramref name="action"/>, with the TID <paramref name="minted"/> for it, and
     /// the reason.</summary>
     public static Form ReportForm(string action, string minted) => Form.Posting(action,
         Form.Minted(IdField, minted),
-        new Form.Field(BodyField, Holds.Reason));
+        new Form.Field(BodyField, Holds.Reason, As: Form.Input.Area)
+        {
+            Label = "Anything the moderators should know? (optional)",
+            Note = "Only the moderators read it, and its author is never told. It removes nothing by itself."
+        }) with { Tool = "report", Submit = "Send the report", Busy = "Sending…", Key = "report-" + minted };
 
     public static string TangentAddress(string baseUrl, string tangent) => baseUrl + "/t/" + Uri.EscapeDataString(tangent);
 
@@ -168,10 +200,14 @@ public static class PostWrites
 
     /// <summary>A write that committed: a form is sent on to the Post's address; a JSON request reads the Post with the
     /// sender's <c>can</c> on it — a reply's judged by its Topic's <paramref name="root"/> — created (<c>201</c>) or
-    /// changed (<c>200</c>), with that address as its <c>Location</c>.</summary>
+    /// changed (<c>200</c>), with that address as its <c>Location</c>. The writer's profile, from the row the Doorway
+    /// loaded, is read again where it is older than its lifetime (<see cref="ProfileCapture.SubmitWhenStale"/>), so the
+    /// name and picture their words show follow their Bluesky account while they stay signed in.</summary>
     public static async Task<IActionResult> Written(HttpContext http, Post post, Post root, string address, string? personId, bool created,
         CancellationToken ct)
     {
+        if (http.Features.Get<Here>()?.Rows.Participant is { } writer)
+            await ProfileCapture.SubmitWhenStale(writer, http.RequestServices.GetRequiredService<ILogger<Participant>>(), ct);
         http.Response.Headers.CacheControl = "no-store";
         http.Response.Headers.Location = address;
         if (!WantsJson(http.Request)) return new StatusCodeResult(StatusCodes.Status303SeeOther);
@@ -186,12 +222,13 @@ public static class PostWrites
     /// <summary>Who is signed in, as the shell's account menu shows them, signing out back to <paramref name="back"/>, a
     /// path under the base URL, with the place's settings where they hold <see cref="Bit.ManageSpace"/>,
     /// <see cref="Bit.ManageStanding"/> or <see cref="Bit.ManageRoles"/>, and how many things are for them
-    /// and new; null for a visitor.</summary>
+    /// and new; null for a visitor. Someone signed in whose arrival has not landed, which a sign-in never fails for, reads
+    /// as their id.</summary>
     public static async Task<Who?> Reader(string? personId, Capabilities capabilities, string baseUrl, string back, CancellationToken ct)
     {
         if (personId is null) return null;
         var participant = await Participant.Get(personId, ct);
-        return new Who(personId, participant?.ShownName() ?? personId, participant?.ShownHandle() ?? personId, Roles.Word(capabilities.RoleIds), participant?.Profile.Avatar,
+        return Who.Of(participant is null ? new Render.Person(personId, personId, personId, "person", null) : Render.Person.Of(participant, baseUrl), Roles.Word(capabilities.RoleIds),
             baseUrl + AuthConstants.Routes.Logout + "?return=" + Uri.EscapeDataString(back), await SettingsFor(personId, baseUrl, ct),
             await Events.Unread.BadgeFor(personId, baseUrl, ct));
     }

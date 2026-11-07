@@ -172,11 +172,6 @@
     margin: 0;
   }
 
-  & .rail .article-filter-choice {
-    width: 100%;
-    margin: 0;
-  }
-
   & .rail li > a,
   & .rail a.row,
   & .rail .rail-new {
@@ -556,7 +551,7 @@
   }
 
   & .topic-main > .topic-reply,
-  & .topic-main > .topic-closed {
+  & .topic-main > .reply-gate {
     margin: auto 0 16px;
     padding: 11px 16px;
     background: var(--ts-raised);

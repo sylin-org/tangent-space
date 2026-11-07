@@ -14,7 +14,8 @@ using static Tangent.Posts.Writing;
 namespace Tangent.Participants;
 
 /// <summary>The people here: whoever holds ManageStanding or ManageRoles finds the place's participants at
-/// <c>/settings/people</c>, a page at a time from a sealed cursor and by the start of a handle through the handle index;
+/// <c>/settings/people</c>, a page at a time from a sealed cursor, by the start of a handle through the handle index and
+/// by standing through the standing index;
 /// a moderator times a member out, who reads and posts nothing until it is lifted or passes, and bans one, for whom the
 /// place is absent on a page and on an open stream; an administrator gives and takes the moderator role; nobody acts on
 /// someone whose role is not below theirs, on themselves or on the operator; each change is one event that targets the
@@ -56,7 +57,7 @@ public sealed class PeopleTests
 
     /// <summary>The row a page of the people lists for <paramref name="id"/>.</summary>
     private static JsonElement Row(JsonElement page, string id)
-        => page.GetProperty("people").EnumerateArray().Single(row => row.GetProperty("id").GetString() == id);
+        => page.GetProperty("people").EnumerateArray().Single(row => row.GetProperty("person").GetProperty("id").GetString() == id);
 
     private static async Task<IReadOnlyList<Event>> Since(long before)
         => (await Event.All(Cancellation)).Where(e => e.Seq > before).OrderBy(e => e.Seq).ToList();
@@ -82,7 +83,7 @@ public sealed class PeopleTests
         Assert.Equal(HttpStatusCode.OK, listed.Status);
         Assert.Contains("People", listed.Json.GetProperty("sections").EnumerateArray().Select(section => section.GetProperty("name").GetString()));
         var adaRow = Row(listed.Json, Ada);
-        Assert.Equal(("admitted", "person"), (adaRow.GetProperty("standing").GetString(), adaRow.GetProperty("kind").GetString()));
+        Assert.Equal(("admitted", "person"), (adaRow.GetProperty("standing").GetString(), adaRow.GetProperty("person").GetProperty("kind").GetString()));
         Assert.Equal([People.Verb.TimeOut, People.Verb.Ban], Strings(adaRow, "can"));
         Assert.Empty(Offered(adaRow, "give"));
         Assert.Equal(["Member"], Strings(adaRow, "roles"));
@@ -354,7 +355,7 @@ public sealed class PeopleTests
         var path = PeopleController.Path;
 
         var first = await Send(mo.Client, HttpMethod.Get, path, json: true);
-        var firstHandles = first.Json.GetProperty("people").EnumerateArray().Select(row => row.GetProperty("handle").GetString()!).ToList();
+        var firstHandles = first.Json.GetProperty("people").EnumerateArray().Select(row => row.GetProperty("person").GetProperty("handle").GetString()!).ToList();
         Assert.Equal(People.PageSize, firstHandles.Count);
         Assert.Equal(firstHandles.Order(StringComparer.Ordinal), firstHandles);
         Assert.False(first.Json.GetProperty("continued").GetBoolean());
@@ -365,7 +366,7 @@ public sealed class PeopleTests
         var second = await Send(mo.Client, HttpMethod.Get, new Uri(next).PathAndQuery, json: true);
         Assert.Equal(HttpStatusCode.OK, second.Status);
         Assert.True(second.Json.GetProperty("continued").GetBoolean());
-        var secondHandles = second.Json.GetProperty("people").EnumerateArray().Select(row => row.GetProperty("handle").GetString()!).ToList();
+        var secondHandles = second.Json.GetProperty("people").EnumerateArray().Select(row => row.GetProperty("person").GetProperty("handle").GetString()!).ToList();
         var all = firstHandles.Concat(secondHandles).ToList();
         // Every admitted participant once, in handle order, and no applicant.
         Assert.Equal(People.PageSize + 2 + 3, all.Count);
@@ -382,14 +383,19 @@ public sealed class PeopleTests
         // The start of a handle, typed as a person types it, finds those whose handles start with it.
         var found = await Send(mo.Client, HttpMethod.Get, path + "?handle=" + Uri.EscapeDataString(" @Person2"), json: true);
         Assert.Equal(Enumerable.Range(20, People.PageSize + 2 - 20).Select(i => Persona.Id($"person{i:D2}")),
-            found.Json.GetProperty("people").EnumerateArray().Select(row => row.GetProperty("id").GetString()));
+            found.Json.GetProperty("people").EnumerateArray().Select(row => row.GetProperty("person").GetProperty("id").GetString()));
         Assert.Equal("person2", found.Json.GetProperty("handle").GetString());
         Assert.Empty((await Send(mo.Client, HttpMethod.Get, path + "?handle=nobody", json: true)).Json.GetProperty("people").EnumerateArray());
         Assert.Contains("No one here has a handle that starts with nobody.", (await Send(mo.Client, HttpMethod.Get, path + "?handle=nobody")).Body);
 
-        // The range a start reads is one search of the handle index.
-        var plan = HandlePlan(tangentSpace.DatabasePath, "person2", "person3");
-        Assert.Contains(plan, detail => detail.StartsWith("SEARCH", StringComparison.Ordinal) && detail.Contains("USING INDEX ix_participant_handles", StringComparison.Ordinal));
+        // The range a start reads is one search of the handle index, and everyone, among the people as People.Among asks,
+        // is read in that index's order, never sorted.
+        var plans = Plans(tangentSpace.DatabasePath,
+            (handle, standing) => $"{AmongThePeople(standing)} AND {handle} >= 'person2' AND {handle} < 'person3'",
+            (_, standing) => AmongThePeople(standing));
+        Assert.Contains(plans[0], detail => detail.StartsWith("SEARCH", StringComparison.Ordinal) && detail.Contains("USING INDEX ix_participant_handles (", StringComparison.Ordinal));
+        Assert.Contains(plans[1], detail => detail.StartsWith("SCAN", StringComparison.Ordinal) && detail.Contains("USING INDEX ix_participant_handles", StringComparison.Ordinal));
+        Assert.All(plans, plan => Assert.DoesNotContain("USE TEMP B-TREE FOR ORDER BY", plan));
 
         // A member reads no one, and is refused with the gate: as a tool reads it, its problem.
         using var ada = await SignedIn(tangentSpace, Ada);
@@ -398,6 +404,89 @@ public sealed class PeopleTests
         Assert.False(refused.Json.TryGetProperty("people", out _));
         Assert.DoesNotContain("People", (await Send(ada.Client, HttpMethod.Get, TangentSpaceSettingsController.Path, json: true)).Json
             .GetProperty("sections").EnumerateArray().Select(section => section.GetProperty("name").GetString()));
+    }
+
+    /// <summary>The ids a page of the people lists, in order.</summary>
+    private static IReadOnlyList<string?> Ids(JsonElement page)
+        => page.GetProperty("people").EnumerateArray().Select(row => row.GetProperty("person").GetProperty("id").GetString()).ToList();
+
+    [Fact]
+    public async Task The_people_narrow_to_who_is_timed_out_or_banned_and_to_who_holds_a_role_each_kept_as_the_others_change()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Keepers(tangentSpace);
+        var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
+        using var leo = await SignedIn(tangentSpace, Leo);
+        var path = PeopleController.Path;
+        Assert.IsType<Outcome<Participant>.Done>(await new TimeOut(Mo, Ada, DateTimeOffset.UtcNow.AddHours(1)).Send(Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new Ban(Mo, Bea).Send(Cancellation));
+        // A timeout that has run its course counts as none.
+        var cy = Persona.Id("cy4people");
+        Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(new Participant
+        {
+            Id = cy, Did = Persona.Did(cy), Handle = "cy4people.example", Standing = Standing.TimedOut, StandingUntil = DateTimeOffset.UtcNow.AddMinutes(-5)
+        }).Send(Cancellation));
+
+        // By standing, in handle order: the page says which it stands at, and a word that is no standing is refused.
+        Assert.Equal([Ada], Ids((await Send(leo.Client, HttpMethod.Get, path + "?standing=timed-out", json: true)).Json));
+        var banned = await Send(leo.Client, HttpMethod.Get, path + "?standing=banned", json: true);
+        Assert.Equal([Bea], Ids(banned.Json));
+        Assert.Equal("banned", banned.Json.GetProperty("standing").GetString());
+        Assert.Empty(Ids((await Send(leo.Client, HttpMethod.Get, path + "?standing=banned&handle=ada", json: true)).Json));
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(leo.Client, HttpMethod.Get, path + "?standing=applied", json: true)).Status);
+        var html = WebUtility.HtmlDecode((await Send(leo.Client, HttpMethod.Get, path + "?standing=banned&handle=ada")).Body);
+        Assert.Contains("aria-pressed=\"true\" disabled>Banned</button>", html);
+        Assert.Contains("No one here is banned and has a handle that starts with ada.", html);
+        Assert.Contains("<input type=\"hidden\" name=\"standing\" value=\"banned\" />", html);
+
+        // Who stands as one standing is one range of the standing index, in handle order, with the start of a handle or without.
+        var plans = Plans(tangentSpace.DatabasePath,
+            (_, standing) => $"({standing} = 'Banned')",
+            (handle, standing) => $"({standing} = 'Banned') AND {handle} >= 'ada' AND {handle} < 'adb'");
+        Assert.Contains(plans[0], detail => detail.StartsWith("SEARCH", StringComparison.Ordinal) && detail.Contains("USING INDEX ix_participant_standings (<expr>=?)", StringComparison.Ordinal));
+        Assert.Contains(plans[1], detail => detail.StartsWith("SEARCH", StringComparison.Ordinal) && detail.Contains("USING INDEX ix_participant_standings (<expr>=? AND <expr>>? AND <expr><?)", StringComparison.Ordinal));
+        Assert.All(plans, plan => Assert.DoesNotContain("USE TEMP B-TREE FOR ORDER BY", plan));
+
+        // By role: Koan's members of it, each once, the role named on the page, with its standing kept.
+        var moderators = await Send(leo.Client, HttpMethod.Get, path + "?role=moderator", json: true);
+        Assert.Equal(new[] { Mia, Mo }.Order(StringComparer.Ordinal), Ids(moderators.Json));
+        Assert.Equal(("moderator", "Moderator"), (moderators.Json.GetProperty("role").GetString(), moderators.Json.GetProperty("roleName").GetString()));
+        Assert.Equal([Mia], Ids((await Send(leo.Client, HttpMethod.Get, path + "?role=moderator&handle=mia", json: true)).Json));
+        Assert.Equal([Ada], Ids((await Send(leo.Client, HttpMethod.Get, path + "?role=member&standing=timed-out", json: true)).Json));
+        var named = WebUtility.HtmlDecode((await Send(leo.Client, HttpMethod.Get, path + "?role=moderator")).Body);
+        Assert.Contains("Those who hold the <strong>Moderator</strong> role.", named);
+        Assert.Contains("<input type=\"hidden\" name=\"role\" value=\"moderator\" />", named);
+        var nobody = await Send(leo.Client, HttpMethod.Get, path + "?role=night-shift");
+        Assert.Equal(HttpStatusCode.OK, nobody.Status);
+        Assert.Contains("No role here has the word night-shift.", nobody.Body);
+
+        // A role's members a page at a time, under a cursor of their own: every member once, and a cursor of the other order refused.
+        for (var i = 0; i < People.PageSize + 2; i++)
+        {
+            var id = Persona.Id($"member{i:D2}");
+            Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(new Participant { Id = id, Did = Persona.Did(id), Handle = $"member{i:D2}.example" }).Send(Cancellation));
+            await roles.Add(Roles.Member, id, Cancellation);
+        }
+
+        var first = await Send(leo.Client, HttpMethod.Get, path + "?role=member", json: true);
+        var next = first.Json.GetProperty("next").GetString()!;
+        Assert.Contains("role=member", next);
+        var second = await Send(leo.Client, HttpMethod.Get, new Uri(next).PathAndQuery, json: true);
+        Assert.True(second.Json.GetProperty("continued").GetBoolean());
+        var members = new List<string>();
+        string? after = null;
+        do
+        {
+            var page = await roles.Members(Roles.Member, after, 50, Cancellation);
+            members.AddRange(page.Items.Select(member => member.PersonId));
+            after = page.Next;
+        }
+        while (after is not null);
+
+        Assert.Equal(members, Ids(first.Json).Concat(Ids(second.Json)).ToList());
+        var handleOrder = (await Send(leo.Client, HttpMethod.Get, path, json: true)).Json.GetProperty("next").GetString()!;
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(leo.Client, HttpMethod.Get, path + "?role=member&" + new Uri(handleOrder).Query.TrimStart('?'), json: true)).Status);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(leo.Client, HttpMethod.Get, path + "?" + new Uri(next).Query.Split('&').Single(part => part.StartsWith("after=", StringComparison.Ordinal)), json: true)).Status);
     }
 
     [Fact]
@@ -434,29 +523,59 @@ public sealed class PeopleTests
         Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + PeopleController.Path), (elsewhere.Status, elsewhere.Location));
     }
 
-    /// <summary>The plan SQLite gives the read of a range of handles as Koan's connector composes it: the handle read as
-    /// the index declares it, the range, its order and a limit.</summary>
-    private static List<string> HandlePlan(string database, string from, string to)
+    /// <summary>The plan SQLite gives each statement, as its detail lines, each composed as Koan's connector composes a read
+    /// of the people: from the table they are on, the handle and the standing read as <c>ix_participant_handles</c> and
+    /// <c>ix_participant_standings</c> declare them, a condition, the handle order and a limit.</summary>
+    private static List<List<string>> Plans(string database, params Func<string, string, string>[] conditions)
     {
         using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = database, Pooling = false, Mode = SqliteOpenMode.ReadOnly }.ToString());
         connection.Open();
-        using var find = connection.CreateCommand();
-        find.CommandText = "SELECT tbl_name, sql FROM sqlite_master WHERE type = 'index' AND name = 'ix_participant_handles'";
-        string table, handle;
-        using (var row = find.ExecuteReader())
+        var (table, handles) = Index(connection, "ix_participant_handles");
+        var (_, standings) = Index(connection, "ix_participant_standings");
+        Assert.Equal(handles[0], standings[1]);
+        var plans = new List<List<string>>();
+        foreach (var condition in conditions)
         {
-            Assert.True(row.Read(), "No index is named ix_participant_handles.");
-            table = row.GetString(0);
-            var sql = row.GetString(1);
-            var open = sql.IndexOf(" (", sql.IndexOf(" ON ", StringComparison.Ordinal), StringComparison.Ordinal) + 2;
-            handle = sql[open..^1].Trim();
+            using var explain = connection.CreateCommand();
+            explain.CommandText = $"EXPLAIN QUERY PLAN SELECT * FROM \"{table}\" WHERE {condition(handles[0], standings[0])} ORDER BY {handles[0]}, \"Id\" LIMIT {People.PageSize + 1}";
+            using var reader = explain.ExecuteReader();
+            var details = new List<string>();
+            while (reader.Read()) details.Add(reader.GetString(3));
+            plans.Add(details);
         }
 
-        using var explain = connection.CreateCommand();
-        explain.CommandText = $"EXPLAIN QUERY PLAN SELECT * FROM \"{table}\" WHERE {handle} >= '{from}' AND {handle} < '{to}' ORDER BY {handle} LIMIT {People.PageSize + 1}";
-        using var reader = explain.ExecuteReader();
-        var details = new List<string>();
-        while (reader.Read()) details.Add(reader.GetString(3));
-        return details;
+        return plans;
+    }
+
+    /// <summary><see cref="People.Among"/> as Koan's connector composes it on the standing read as the index declares it:
+    /// each inequality true for a missing value too.</summary>
+    private static string AmongThePeople(string standing)
+        => $"({standing} IS NULL OR {standing} <> 'Applied') AND ({standing} IS NULL OR {standing} <> 'Declined')";
+
+    /// <summary>The table an index is on and the expressions it is declared on, which are the dialect's reads of the
+    /// fields without the row's alias.</summary>
+    private static (string Table, List<string> Expressions) Index(SqliteConnection connection, string name)
+    {
+        using var find = connection.CreateCommand();
+        find.CommandText = "SELECT tbl_name, sql FROM sqlite_master WHERE type = 'index' AND name = $name";
+        find.Parameters.AddWithValue("$name", name);
+        using var row = find.ExecuteReader();
+        Assert.True(row.Read(), $"No index is named {name}.");
+        var (table, sql) = (row.GetString(0), row.GetString(1));
+        var list = sql[(sql.IndexOf(" (", sql.IndexOf(" ON ", StringComparison.Ordinal), StringComparison.Ordinal) + 2)..^1];
+        var expressions = new List<string>();
+        var (depth, quoted, from) = (0, '\0', 0);
+        for (var index = 0; index < list.Length; index++)
+        {
+            var character = list[index];
+            if (quoted != '\0') { if (character == quoted) quoted = '\0'; continue; }
+            if (character is '\'' or '"') quoted = character;
+            else if (character == '(') depth++;
+            else if (character == ')') depth--;
+            else if (character == ',' && depth == 0) { expressions.Add(list[from..index].Trim()); from = index + 1; }
+        }
+
+        expressions.Add(list[from..].Trim());
+        return (table, expressions);
     }
 }

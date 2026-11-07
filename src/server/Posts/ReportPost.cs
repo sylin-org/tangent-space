@@ -22,10 +22,11 @@ namespace Tangent.Posts;
 /// reaches everyone who may view the moderators' Tangent among what is for them on their door, without one row written
 /// for each of them (<see cref="Unread"/>); and one <see cref="EventKind.Mention"/> goes to each participant
 /// the reason mentions who may view the moderators' Tangent (<see cref="Mentions.Notify"/>). A participant who reports
-/// the same Post again while their earlier report stands — its root not removed — replies in that
+/// the same Post again while their earlier report stands — its root neither removed nor closed — replies in that
 /// report's Topic with the new reason, so the moderators keep one Topic per reporter and Post with every reason in
-/// order, and with no reason answers with that report and writes nothing; once the moderators remove it, the next
-/// report starts a Topic of its own. Idempotent by Id: the same
+/// order, and with no reason answers with that report and writes nothing; once the moderators close or remove it, the
+/// next report starts a Topic of its own; a reason that replies is new to whoever follows that report's Topic
+/// (<see cref="Follow.Moved"/>), while the reporter, who mostly may not view it, follows nothing. Idempotent by Id: the same
 /// Id from the same reporter about the same Post answers with the Post it wrote, whatever reason is sent and whatever
 /// the moderators have done with it since, so a resend says nothing of the report's state; any other Post holding it is
 /// refused with <see cref="Post.IdTaken"/>, which says nothing of that Post. The reason is judged where the command is built
@@ -87,38 +88,27 @@ public sealed record ReportPost(
         Post written;
         if (earlier is not null)
         {
-            written = earlier.Reply(Id, Reason, ReporterId, earlier.Id, at);
+            written = new Post { Id = Id, ParentId = earlier.Id };
+            written.ReplyTo(earlier, Reason, ReporterId, at);
         }
         else
         {
             var title = Title(await ModeratorsTangent.MayView(reported.TangentId, rows.Space, ct) ? topic.Title ?? "" : said ? FirstWords(Reason.Sent) : Unsaid);
-            written = Post.Root(Id, into.Id, title, await StartTopic.UniqueSlug(into.Id, title, Id, ct), into.DefaultKind, Opening ?? Reason, ReporterId, at,
-                reported.Id);
-            into.TopicStarted();
-            await into.Save(ct);
+            written = new Post { Id = Id, Title = title, OriginId = reported.Id };
+            written.StartIn(into, await StartTopic.UniqueSlug(into.Id, Slug.From(title), Id, ct), Opening ?? Reason, ReporterId, at);
         }
 
         written.AuthorDid = await Participants.Participant.DidOf(ReporterId, ct);
-
-        var root = earlier ?? written;
-        var created = await Event.Append(EventKind.PostCreated, at, ct,
-            tangentId: written.TangentId, topicId: written.TopicId, postId: written.Id, actorId: ReporterId, version: written.Version,
-            report: true);
-        written.Logged(created.Seq, root);
-        await written.Save(ct);
-        if (earlier is not null) await earlier.Save(ct);
-        await Seen.Wrote(ReporterId, root, written.Sequence, ct);
-        await MediaUse.Record(written, ReporterId, [], ct);
-        await Mentions.Notify(written, ReporterId, [], at, ct);
+        await PostWriting.Wrote(written, earlier ?? written, into, null, at, ct, report: true);
         return new Outcome<Post>.Done(written);
     }
 
     /// <summary>What a report's Topic opens with: the reason as sent, then what was reported as the moderators may know it.
     /// Where the moderator role may view the reported Tangent (<see cref="ModeratorsTangent.MayView"/>), the reported Post's
-    /// opening words, quoted and linked to it; elsewhere who wrote it, linked to their profile, and the Tangent's name, never
-    /// its words. Built where the command is built, as the reason is, and written as a body is
-    /// (<see cref="PostBody.Written"/>), which reads none of what was reported for mentions, every word of it inside a
-    /// link; null where the whole would not be written, or there are no words to quote, when the report opens with the
+    /// opening words, quoted and linked to it; elsewhere who wrote it, linked to their profile, or someone who left
+    /// (<see cref="Render.Person.LeftName"/>), unlinked, and the Tangent's name, never its words. Built where the command
+    /// is built, as the reason is, and written as a body is (<see cref="PostBody.Written"/>), which reads none of what was
+    /// reported for mentions, every word of it inside a link; null where the whole would not be written, or there are no words to quote, when the report opens with the
     /// reason alone. The reported Post's author and whoever it mentions in one keyed read, and what
     /// <see cref="ModeratorsTangent.MayView"/> reads.</summary>
     public static async Task<PostBody?> OpeningOf(string? reason, Post reported, Post topic, Tangents.Tangent tangent, TangentSpace space,
@@ -134,9 +124,10 @@ public sealed record ReportPost(
         }
         else
         {
-            var handle = people.TryGetValue(reported.AuthorId, out var author) ? author.Handle : reported.AuthorId;
-            what = "*A post by [" + Escaped("@" + handle) + "](" + Participants.ProfilePage.AddressOf(baseAddress, handle) + ") in "
-                   + Escaped(tangent.Name) + ", which moderators can’t read.*";
+            var by = people.TryGetValue(reported.AuthorId, out var author)
+                ? "[" + Escaped("@" + author.Handle) + "](" + Participants.ProfilePage.AddressOf(baseAddress, author.Handle) + ")"
+                : Escaped(Render.Person.LeftName);
+            what = "*A post by " + by + " in " + Escaped(tangent.Name) + ", which moderators can’t read.*";
         }
 
         var body = await PostBody.Written(string.IsNullOrWhiteSpace(reason) ? what : reason.TrimEnd() + "\n\n" + what, ct);
@@ -175,13 +166,13 @@ public sealed record ReportPost(
     }
 
     /// <summary>The reporter's earlier report of this Post that still stands — a root of the moderators' Tangent that is
-    /// not removed — or null: one read of <c>ix_post_origins</c>'s range for the Post, which holds the Topics
-    /// taken from it and nothing else.</summary>
+    /// neither removed nor closed, a row that holds no word of closing counted open — or null: one read of
+    /// <c>ix_post_origins</c>'s range for the Post, which holds the Topics taken from it and nothing else.</summary>
     private async Task<Post?> Standing(string moderators, CancellationToken ct)
     {
         var (postId, reporterId) = (PostId, ReporterId);
         var found = await Post.Query(post => post.OriginId == postId && post.TangentId == moderators && post.AuthorId == reporterId
-                                             && post.ParentId == null && post.Removed == false,
+                                             && post.ParentId == null && post.Removed == false && post.Closed != true,
             new QueryDefinition { Page = 1, PageSize = 1 }, ct);
         return found.Count > 0 ? found[0] : null;
     }

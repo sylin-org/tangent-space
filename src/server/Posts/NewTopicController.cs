@@ -169,7 +169,7 @@ public sealed class NewTopicController(KoanWebBaseUrl baseUrl, IDataProtectionPr
         return page with
         {
             Choices = tangents.Select(choice => new NewTopicPage.Choice(choice.Id, choice.Name, PostWrites.Word(choice.DefaultKind),
-                PostWrites.TangentAddress(baseAddress, choice.Id) + form, choice.Id == row.Id)).ToList(),
+                PostWrites.TangentAddress(baseAddress, choice.Id) + form, choice.Id == row.Id, Tile.For(choice, baseAddress + "/"))).ToList(),
             More = listed.Next is { } next ? address + form + "&" + After + "=" + Uri.EscapeDataString(next.Seal(protection)) : null,
             First = after is null ? null : address + form
         };

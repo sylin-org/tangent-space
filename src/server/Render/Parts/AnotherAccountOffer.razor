@@ -1,0 +1,22 @@
+@* Use another Bluesky account, as a disclosure that opens into its form in the page, never a dialog: in a menu, one of its
+   items with its icon. Where a sign-in is not fresh enough, the one step that answers it stands above the form, signing in
+   again as the account held now, which comes back here with the handle kept. *@
+<details class="another-account" id="@Key" open="@Model.Open">
+    <summary class="@(As == Shape.Menu ? "account-item another-account-toggle" : "another-account-toggle")">@if (As == Shape.Menu)
+    {
+        <Draw Part="@(new Render.Icon("switch"))" />
+    }<span>Use another Bluesky account</span></summary>
+    <div class="another-account-body">
+        <Draw Part="@Model.Again(Key)" />
+        <Draw Part="@Model.Binding(Key)" />
+    </div>
+</details>
+
+@code {
+    [Parameter, EditorRequired] public Participants.AnotherAccount.Offer Model { get; set; } = default!;
+
+    [Parameter] public Shape As { get; set; }
+
+    /// <summary>What sets its ids apart: the menu's from the page's, which can stand on one page.</summary>
+    private string Key => As == Shape.Menu ? "account-another" : "another";
+}

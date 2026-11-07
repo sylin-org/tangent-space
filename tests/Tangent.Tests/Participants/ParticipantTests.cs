@@ -23,15 +23,14 @@ public sealed class ParticipantTests
             Profile = new Profile { DisplayName = "Ada", Description = "Makes things", Avatar = "https://cdn.example/ada.jpg", CapturedAt = captured },
             Kind = ParticipantKind.Agent,
             Standing = Standing.TimedOut,
-            StandingUntil = until,
-            StandingNote = "Cooling off."
+            StandingUntil = until
         };
 
         Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(participant).Send(Cancellation));
         var stored = await Participant.Get(personId, Cancellation);
 
         Assert.NotNull(stored);
-        Assert.Equal(("ada.example", ParticipantKind.Agent, Standing.TimedOut, until, "Cooling off."), (stored.Handle, stored.Kind, stored.Standing, stored.StandingUntil, stored.StandingNote));
+        Assert.Equal(("ada.example", ParticipantKind.Agent, Standing.TimedOut, until), (stored.Handle, stored.Kind, stored.Standing, stored.StandingUntil));
         Assert.Equal(("Ada", "Makes things", "https://cdn.example/ada.jpg", captured), (stored.Profile.DisplayName, stored.Profile.Description, stored.Profile.Avatar, stored.Profile.CapturedAt));
     }
 }

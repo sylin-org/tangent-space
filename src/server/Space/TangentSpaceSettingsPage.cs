@@ -7,10 +7,13 @@ namespace Tangent.Space;
 /// <see cref="Audiences"/>: <c>public</c>, read by anyone, or <c>private</c>, read by its participants alone.
 /// <see cref="Change"/>, present only where the reader may change them, takes <c>name</c> and <c>audience</c>, each left as
 /// it is when not sent.
-/// <see cref="Can"/> is what the reader holds in
+/// For whoever holds <c>ManageSpace</c>, the <see cref="BaseUrl"/> the place answers at and the <see cref="Pointers"/> its site
+/// places to point at it, as first run shows them: none while the base URL is local, and <see cref="PointersLater"/> says
+/// instead when they appear. <see cref="Can"/> is what the reader holds in
 /// the place, and <see cref="Gate"/> why they may not change its settings, null when they may; <see cref="SignIn"/> is
 /// where a visitor signs in, coming back here. After a refusal the form keeps what was sent and says why: under the
 /// name, or above the form.</summary>
+[Page(Layout.Settings)]
 public sealed record TangentSpaceSettingsPage(
     IReadOnlyList<SettingsSection> Sections,
     string Name,
@@ -24,7 +27,54 @@ public sealed record TangentSpaceSettingsPage(
     string Door,
     Who? Who,
     string? Failure = null,
-    string? NameFailure = null);
+    string? NameFailure = null)
+{
+    [Slot(Slot.Rail), Newtonsoft.Json.JsonIgnore]
+    public SettingsRail Rail => new(Sections);
+
+    [Slot(Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public PanelTitle Heading => new(Sections.FirstOrDefault(section => section.Current)?.Name ?? TangentSpaceSettingsController.General, "Settings of " + Render.Sentence.Link(Place, Door));
+
+    [Slot(Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Notice? Line => Notice.Of(Gate, Failure, SignIn);
+
+    /// <summary>The form as the page draws it: the reader's to send, or read only where it is not.</summary>
+    [Slot(Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Form Shown
+    {
+        get
+        {
+            var form = Change ?? (TangentSpaceSettingsController.GeneralForm(Door.TrimEnd('/')) with { ReadOnly = true });
+            return form with
+            {
+                Fields = form.Fields.Select(each => each.Name == TangentSpaceSettingsController.NameField ? each with { Value = Name, Failure = NameFailure }
+                    : each.Name == TangentSpaceSettingsController.AudienceField ? each with { Value = Audience }
+                    : each).ToList()
+            };
+        }
+    }
+
+    public string? BaseUrl { get; init; }
+
+    public IReadOnlyList<Pointer>? Pointers { get; init; }
+
+    public string? PointersLater { get; init; }
+
+    /// <summary>Under the form, for whoever holds <c>ManageSpace</c>: the address the place answers at and the pointers its
+    /// site places, or when they appear, at the anchor first steps link to.</summary>
+    [Slot(Slot.Column), Newtonsoft.Json.JsonIgnore]
+    public Pointing? Site => BaseUrl is not { } address ? null : new(Pointers ?? [])
+    {
+        Heading = "Your site",
+        Lede = "It answers at " + Render.Sentence.CodeLink(address, Door) + (PointersLater is { } later
+            ? ", which only this machine reaches. " + later
+            : ". Any one of these on your site says where this place is, so people and their agents find it.")
+    };
+
+    /// <summary>The frame the shell draws around the page: its settings as its one crumb, and who reads, or where a visitor
+    /// signs in.</summary>
+    public static Frame Frame(TangentSpaceSettingsPage page) => new(page.Place, page.Door, [new Crumb("Settings")], page.Who, page.SignIn);
+}
 
 /// <summary>One section of the place's settings: its name, its address, and whether it is the one the page shows.</summary>
 public sealed record SettingsSection(string Name, string Address, bool Current);
@@ -33,4 +83,4 @@ public sealed record SettingsSection(string Name, string Address, bool Current);
 /// (<c>join</c> or <c>apply</c>), its audience (<c>public</c> or <c>private</c>), its base, its palette, its own CSS, its image,
 /// its words in Markdown, its door, its settings, and what the sender <see cref="Can"/> do in it.</summary>
 public sealed record WrittenTangentSpace(string Name, string Description, string Admission, string Audience, string Base, string Palette,
-    string Css, string Image, string Intro, string Masthead, string Footer, string ArticleHeader, string Door, string Settings, IReadOnlyList<string> Can);
+    string Css, string Image, string Mark, string Intro, string Masthead, string Footer, string ArticleHeader, string Door, string Settings, IReadOnlyList<string> Can);

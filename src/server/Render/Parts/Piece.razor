@@ -1,0 +1,13 @@
+@* An article as its Topic opens: its head, where it was taken on a tangent from, its body, and, under it, where it stands on
+   its author's own account and what the network says about it. *@
+<article class="article">
+    <Draw Part="@Model.Head" />
+    <Draw Part="@Model.From" />
+    <Draw Part="@Model.Root" />
+    <Draw Part="@Model.Publishing" />
+    <Draw Part="@Model.Elsewhere" />
+</article>
+
+@code {
+    [Parameter, EditorRequired] public Render.Piece Model { get; set; } = default!;
+}

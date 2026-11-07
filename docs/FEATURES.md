@@ -7,6 +7,8 @@ A row is something the place does not do yet, said by what someone gets, and it 
 | Work | Koan | Size |
 | --- | --- | --- |
 | The protocol contract recorded from code in an ADR of its own: `IConnectionAdapter`, `IReferenceSource`, `IAsserter`; the three events as a filter over the log | — | S |
+| Every copy that can be retracted comes down however many an author published: a Connection compares only its 500 newest receipts (`Syndication.ReceiptLimit`), so an audience change, a removal or a deleted Tangent misses an older copy | — | S |
+| An article's inline images travel with its document in the Tangent Space's own content type, where its text alone goes now | — | S |
 | Webmention: send on `post.created`, receive at an endpoint; Bridgy Fed opt-in | — | S |
 | The Mastodon package: a status under the participant's own account; replies as references | — | M |
 
@@ -27,12 +29,13 @@ A row is something the place does not do yet, said by what someone gets, and it 
 
 | Work | Koan | Size |
 | --- | --- | --- |
-| The published `site.standard.theme.basic`, from the first four tokens | — | S |
+| The publication says how the place looks, as `site.standard.publication` holds it: `basicTheme`, from the first four tokens, and `icon`, the place's mark where it is a picture, a blob in the proprietor's repository | — | S |
+| The place's image and mark brought in by dropping a file on their choice, and the part of a wide image a narrow head keeps, chosen on the head itself | — | S |
 
 ## The polish stage
 
 | Work | Koan | Size |
 | --- | --- | --- |
-| Phone layouts for the door and the Tangent; under 1024 a Tangent's rail stands under its Topics, so an author or a month pressed in its articles filter narrows a list above it, out of view | — | S |
+| Phone layouts for the door and the Tangent | — | S |
 | Phone layout for the topic | — | S |
-| The visual gate: every screen holds a mean of 8.5 with no dimension below 7, scored by an independent reviewer, at 1440, 1024 and 390 in Light and Dark. Owing it: sign-in, first-run, tangent, door, bring-your-agent, topic, article-editor, article, connections, new-topic, edit, take-this-on-a-tangent, new-tangent, tangent-settings-details, tangent-space-settings-general, tangent-space-settings-admission, tangent-space-settings-appearance, tangent-space-settings-export, tangent-space-settings-applications, profile, tangent-space-settings-people, tangent-space-settings-roles, tangent-settings-access, tangents, search, suggestions, the person card and another-account (the account menu's "Use another Bluesky account" panel and the Connections page it lands on when Koan refuses); and, named in words since the capture registry has no screen for them, every screen under each bundled base, every screen under Concord, the archive's pages, which owe the placement of their retired line, and a report. Seen at 390: a long Topic title overlaps the path bar's separator, and a report's path bar crumbs overlap. Seen under the bundled bases: MVP.css reaches past Tangent's parts in its button margins and table box, and Marx in its scrollbar gutter | — | L |
+| The visual gate: the gallery of parts (`/capture/gallery`) and each layout — home, reading, settings and panel — hold a mean of 8.5 with no dimension below 7, scored by an independent reviewer, at 1440, 1024 and 390 in Light and Dark; a screen is its layout holding parts the gallery scored. Owing it: the gallery and the four layouts, and each screen below until it is its layout holding parts the gallery scored: sign-in, first-run, tangent, door, door-older, bring-your-agent, topic, article-editor, article, elsewhere, connections, new-topic, edit, take-this-on-a-tangent, new-tangent, tangent-settings-details, tangent-space-settings-general, tangent-space-settings-admission, tangent-space-settings-appearance, tangent-space-settings-export, tangent-space-settings-applications, profile, tangent-space-settings-people, tangent-space-settings-roles, tangent-settings-access, tangent-settings-people, tangents, tangents-members-only, search, suggestions, the person card and another-account (the account menu's "Use another Bluesky account" panel and the Connections page it lands on when Koan refuses); and, named in words since the capture registry has no screen for them, every screen under each bundled base, every screen under Concord, the archive's pages, which owe the placement of their retired line, a report, a members-only Tangent's own address as someone outside it reads it, a Topic's move page (`move-topic`), and a Topic's root footer with its move and its delete, and a tombstone's undo. Seen at 390: a long Topic title overlaps the path bar's separator, and a report's path bar crumbs overlap. Seen under the bundled bases: MVP.css reaches past Tangent's parts in its button margins and table box, and Marx in its scrollbar gutter | — | L |

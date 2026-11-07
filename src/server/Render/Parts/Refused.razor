@@ -1,0 +1,95 @@
+@using Koan.Web.Auth.Infrastructure
+@using Koan.Web.Controllers
+@using Koan.Web.Hosting
+@using Tangent.Access
+@inject IHttpContextAccessor Http
+@inject KoanWebBaseUrl BaseUrl
+@* A refusal as a person reads it: one panel in the place's frame, its heading, its sentence, what each field sent was
+   refused for and, where its word is signing in, the way to sign in and come back. A signed-in person the place is closed
+   to — waiting to be admitted, declined, or meeting nothing at an address, as a ban does everywhere — reads which account
+   they are signed in with and the way to sign out, coming back here, so they can sign in with another; one whose
+   application waits or was declined also reads the way to leave the place, which ends it. The frame's masthead is the
+   way back to the door. *@
+<div class="refusal" data-word="@Model.Problem.Word" data-kind="@Model.Problem.Kind">
+            <h1 id="problem-heading" class="sign-in-title">@Heading(Model.Problem)</h1>
+            @if (Model.Problem.Detail is { } detail)
+            {
+                <p class="sign-in-lede">@detail</p>
+            }
+            @foreach (var (field, refused) in Model.Problem.Errors ?? new Dictionary<string, string[]>())
+            {
+                @if (string.Join(" ", refused) != Model.Problem.Detail)
+                {
+                    <p class="sign-in-lede">@(field.Length > 0 ? field + ": " : "")@string.Join(" ", refused)</p>
+                }
+            }
+            @if (Model.SignIn is { } signIn)
+            {
+                <div class="post-form-actions post-form-closed">
+                    <a class="sign-in-submit post-form-submit" href="@signIn">Sign in</a>
+                </div>
+            }
+            @if (_account is { } account)
+            {
+                <div class="sign-in-foot problem-account">
+                    <span>Signed in as @(account.Name == account.Handle ? "@" + account.Handle : account.Name + " (@" + account.Handle + ")")</span>
+                    <Draw Part="@(Render.Form.Posting(account.SignOut) with { Tool = "sign-out", Submit = "Sign out", Quiet = true })" />
+                </div>
+                @if (account.Leave is { } leave)
+                {
+                    <Draw Part="@leave" />
+                }
+            }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Render.Refused Model { get; set; } = default!;
+
+    /// <summary>The account a signed-in person was kept out with: the name they show, their handle, where they sign out, and,
+    /// where their application is why, leaving the place.</summary>
+    private sealed record Account(string Name, string Handle, string SignOut, Render.Form? Leave);
+
+    private Account? _account;
+
+    /// <summary>For a refusal of someone signed in that the place answers by who they are — their application waiting or
+    /// declined, or nothing at the address, as a ban answers everywhere — their participant's row, one keyed read: the
+    /// account they are signed in with, signing out back to the address of a <c>GET</c>, or to the door from any other
+    /// request, and, where their application is why, leaving the place (<see cref="Participants.ProfilePage.Leaving"/>).</summary>
+    protected override async Task OnInitializedAsync()
+    {
+        if (!(Model.Problem.Kind == "absent" || Model.Problem.Word == Capabilities.Apply.Word || Model.Problem.Word == Capabilities.Declined.Word) || Http.HttpContext is not { } http
+            || Posts.PostWrites.PersonId(http.User) is not { } personId) return;
+        var participant = await Participants.Participant.Get(personId, http.RequestAborted);
+        var handle = participant?.ShownHandle() ?? personId;
+        var back = HttpMethods.IsGet(http.Request.Method) || HttpMethods.IsHead(http.Request.Method)
+            ? http.Request.PathBase + http.Request.Path + http.Request.QueryString
+            : http.Request.PathBase + "/";
+        var applied = participant is not null && (Model.Problem.Word == Capabilities.Apply.Word || Model.Problem.Word == Capabilities.Declined.Word);
+        _account = new Account(participant?.ShownName() ?? personId, handle,
+            BaseUrl.Resolve(http) + AuthConstants.Routes.Logout + "?return=" + Uri.EscapeDataString(back),
+            applied ? Participants.ProfilePage.Leaving(BaseUrl.Resolve(http)) : null);
+    }
+
+    /// <summary>The heading of a refusal: the place's own title, where it gave one; its word's, where standing, audience or
+    /// state decided it; and otherwise what a person reads of its kind and status: a value that could not bind is not
+    /// accepted, a body past its limit too large, any other invalid write or one that failed not written, and one that
+    /// never ran is to try again.</summary>
+    public static string Heading(Problem problem) => !string.Equals(problem.Title, problem.Kind, StringComparison.OrdinalIgnoreCase) ? problem.Title
+        : Capabilities.Worded(problem.Word) ? Capabilities.Heading(problem.Word)
+        : problem switch
+        {
+            { Errors.Count: > 0 } => "Not accepted",
+            { Status: StatusCodes.Status413PayloadTooLarge } => "Too large",
+            { Status: StatusCodes.Status401Unauthorized } => "Sign in first",
+            { Kind: "gated" } => "Not open to you",
+            { Kind: "absent" } => "Not found",
+            { Kind: "conflict" } => "Nothing changed",
+            { Status: StatusCodes.Status503ServiceUnavailable } => "Try again",
+            _ => "Not written"
+        };
+
+    /// <summary>The frame the shell draws around a refusal: the place at <paramref name="door"/>, the refusal as the one crumb,
+    /// and for a visitor the way to sign in. Who is signed in is not read again for it, so the masthead shows no account; the
+    /// panel names it, with the way to sign out.</summary>
+    public static Frame Frame(Problem problem, string place, string door, string? signIn) => new(place, door, [new Crumb(Heading(problem))], SignIn: signIn);
+}

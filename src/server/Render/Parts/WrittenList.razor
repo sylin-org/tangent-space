@@ -1,0 +1,43 @@
+@* What a participant wrote, newest first: each Post a row of the table — its Topic, a reply said as one, who else edited it
+   where someone did, its first words, its Tangent and when — or one sentence where there is none, which says where older ones
+   lie further back, and the way to older ones and back to the latest. *@
+<section aria-labelledby="profile-posts-title">
+    <div class="topic-list-head">
+        <h2 id="profile-posts-title" class="topic-list-title">@(Model.Continued ? "Older posts" : "Recent posts")</h2>
+        <span class="topic-list-order">newest first</span>
+    </div>
+    @if (Model.Posts.Count == 0)
+    {
+        <div class="topic-empty">
+            <p class="topic-empty-title">@(Model.Older is not null ? "Nothing you can read here; older posts lie further back." : Model.Continued ? "Nothing further back." : "Nothing written here yet.")</p>
+        </div>
+    }
+    else
+    {
+        <div class="topic-table">
+            <ul class="topic-rows list">
+                @foreach (var post in Model.Posts)
+                {
+                    <li @key="post.Id"><Draw Part="@post" /></li>
+                }
+            </ul>
+        </div>
+    }
+    @if (Model.Older is not null || Model.Continued)
+    {
+        <nav class="topic-pages" aria-label="More posts">
+            @if (Model.Continued)
+            {
+                <a href="@Model.Address">Back to the latest</a>
+            }
+            @if (Model.Older is { } older)
+            {
+                <a class="topic-pages-next" href="@older">Older posts →</a>
+            }
+        </nav>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public Render.WrittenList Model { get; set; } = default!;
+}
