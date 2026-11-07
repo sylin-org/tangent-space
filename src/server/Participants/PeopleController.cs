@@ -57,8 +57,8 @@ public sealed record ChooseKindInput([Description(Holds.Kind)] string? Kind = nu
 /// <c>role</c>. A form is sent back to the page in <c>back</c> — this one, the participant's profile, where the same
 /// forms are, or the page their card was opened on — and a JSON request reads the participant as this page now lists them; a refusal reads the page again with
 /// the reason above the list, or a problem. A reader for whom the place does not exist receives what an address with
-/// nothing there receives. Two changes are a participant's own, offered on their own profile: <c>/leave</c> sends
-/// <see cref="LeavePlace"/>, ends the place's grant to write as the account they hold now and has Koan erase their person,
+/// nothing there receives. Two changes are a participant's own, offered on their own profile: <c>/leave</c> ends the
+/// place's grant to write as the account they hold now, sends <see cref="LeavePlace"/> and has Koan erase their person,
 /// signing them out, a form sent on to the door; <c>/kind</c> sends <see cref="ChooseKind"/> for the kind in <c>kind</c>,
 /// a form sent back to their profile; a JSON request reads where each left them.</summary>
 [Managing]
@@ -209,11 +209,16 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
     {
         Response.Headers.CacheControl = "no-store";
         var personId = PostWrites.PersonId(User)!;
+        if (Here.Of(HttpContext).Rows is { Participant: { } participant } rows)
+        {
+            if (LeavePlace.Refusal(participant, rows.Space, DateTimeOffset.UtcNow) is { } refused) return this.Refused(refused);
+            if (participant.Did.Length > 0) await EndGrant(participant.Did, ct);
+        }
+
         var outcome = await new LeavePlace(personId).Send();
         if (outcome is Outcome<LeavePlace.Gone>.Refused { Reason: var reason }) return this.Refused(reason);
-        if (outcome is not Outcome<LeavePlace.Gone>.Done { Result: var gone }) return Answers.NotDone(HttpContext, outcome);
-        if (gone.Did.Length > 0) await EndGrant(gone.Did, ct);
-        if (!await Erased(personId, ct))
+        if (outcome is not Outcome<LeavePlace.Gone>.Done) return Answers.NotDone(HttpContext, outcome);
+        if (!await Erased(personId, CancellationToken.None))
             return new Problem(StatusCodes.Status500InternalServerError, "Leaving may not have finished, so send it again to finish it.").ToResult();
 
         await HttpContext.SignOutAsync(AuthenticationExtensions.CookieScheme);
@@ -245,8 +250,10 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
     }
 
     /// <summary>Ends the place's grant to write as the account <paramref name="did"/>: revoked at its issuer through Koan's
-    /// atproto sessions, outside any hold. One the place holds no grant for has nothing to end; one whose revocation cannot
-    /// be confirmed is logged, and the participant leaves all the same.</summary>
+    /// atproto sessions, outside any hold, before anything of the participant goes, so a leave cut short here leaves them
+    /// whole and its resend ends it again. One the place holds no grant for has nothing to end; one whose revocation cannot
+    /// be confirmed, a timeout at the issuer among them, is logged, and the participant leaves all the same. Only the
+    /// request's own cancellation stops the leave.</summary>
     private async Task EndGrant(string did, CancellationToken ct)
     {
         try
@@ -256,7 +263,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
         catch (AtprotoAuthorizationRequiredException)
         {
         }
-        catch (Exception failed) when (failed is not OperationCanceledException)
+        catch (Exception failed) when (!ct.IsCancellationRequested)
         {
             HttpContext.RequestServices.GetRequiredService<ILogger<PeopleController>>()
                 .LogWarning(failed, "The grant to write as {Did} could not be ended as its participant left.", did);
@@ -264,7 +271,9 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
     }
 
     /// <summary>Has Koan erase the person <paramref name="personId"/> (<see cref="IdentityLifecycleService.EraseAsync"/>):
-    /// their sessions, links, roles and overwrites go, and their person. False where it did not complete, logged.</summary>
+    /// their sessions, links, roles and overwrites go, and their person. Sent once their row is gone, it runs to its end
+    /// whatever the request's cancellation, so a closed tab never leaves a person a later sign-in would find again. False
+    /// where it did not complete, logged.</summary>
     private async Task<bool> Erased(string personId, CancellationToken ct)
     {
         try

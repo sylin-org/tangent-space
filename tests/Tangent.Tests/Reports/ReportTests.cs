@@ -326,6 +326,15 @@ public sealed partial class ReportTests
         Assert.Contains("which moderators can’t read", opening!.Text);
         Assert.DoesNotContain("kiln shop", opening.Text);
         Assert.DoesNotContain("/t/" + Studio, opening.Text);
+        Assert.Contains("/p/", opening.Text);
+        // Its author once they left reads as someone who left, with no profile to link to.
+        var theirs = await Started(Keeper, "Kiln inventory", "Three shelves of bisque.", Studio);
+        Assert.IsType<Outcome<Participants.LeavePlace.Gone>.Done>(await new Participants.LeavePlace(Keeper).Send(Cancellation));
+        var left = await ReportPost.OpeningOf(null, theirs, theirs, (await Tangents.Tangent.Get(Studio, Cancellation))!,
+            (await TangentSpace.Get(TangentSpace.SingleRow, Cancellation))!, BaseUrl, Cancellation);
+        Assert.Contains("A post by " + Render.Person.LeftName + " in ", left!.Text);
+        Assert.DoesNotContain("/p/", left.Text);
+        Assert.DoesNotContain(Keeper, left.Text);
         // Where the moderators may view the reported Tangent, the title names the reported Topic.
         var open = await Started(Bea, "Lanterns at dusk", "Who lights theirs first?");
         Assert.Equal("Report: Lanterns at dusk", (await Reported(Ada, open, "Unkind.")).Title);

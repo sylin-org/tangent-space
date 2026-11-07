@@ -96,6 +96,27 @@ public sealed class LeaveTests
     }
 
     [Fact]
+    public async Task A_leave_that_stopped_after_their_row_went_finishes_when_sent_again()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        using var ada = await SignedIn(tangentSpace, Ada);
+        var did = (await Participant.Get(Ada, Cancellation))!.Did;
+        Assert.IsType<Outcome<LeavePlace.Gone>.Done>(await new LeavePlace(Ada).Send(Cancellation));
+        Assert.NotNull(await KoanPerson.Get(Ada, Cancellation));
+
+        var again = await Json(ada, "/", PeopleController.LeavePath, new { });
+
+        Assert.Equal(HttpStatusCode.OK, again.Status);
+        Assert.Null(await KoanPerson.Get(Ada, Cancellation));
+        Assert.Empty(await ExternalIdentityLink.Query(link => link.IdentityId == Ada, Cancellation));
+        Assert.False((await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json.TryGetProperty("who", out _));
+        using var returning = new Browser(tangentSpace);
+        (await returning.SignIn("ada4writes", did, Cancellation, handle: AdaHandle)).Dispose();
+        Assert.NotEqual(Ada, (await Persona.Arrived(did, Cancellation))!.Id);
+    }
+
+    [Fact]
     public async Task The_operator_stays_with_the_place_and_an_agent_leaves_through_leave_place()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);

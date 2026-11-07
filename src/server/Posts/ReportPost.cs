@@ -117,10 +117,10 @@ public sealed record ReportPost(
 
     /// <summary>What a report's Topic opens with: the reason as sent, then what was reported as the moderators may know it.
     /// Where the moderator role may view the reported Tangent (<see cref="ModeratorsTangent.MayView"/>), the reported Post's
-    /// opening words, quoted and linked to it; elsewhere who wrote it, linked to their profile, and the Tangent's name, never
-    /// its words. Built where the command is built, as the reason is, and written as a body is
-    /// (<see cref="PostBody.Written"/>), which reads none of what was reported for mentions, every word of it inside a
-    /// link; null where the whole would not be written, or there are no words to quote, when the report opens with the
+    /// opening words, quoted and linked to it; elsewhere who wrote it, linked to their profile, or someone who left
+    /// (<see cref="Render.Person.LeftName"/>), unlinked, and the Tangent's name, never its words. Built where the command
+    /// is built, as the reason is, and written as a body is (<see cref="PostBody.Written"/>), which reads none of what was
+    /// reported for mentions, every word of it inside a link; null where the whole would not be written, or there are no words to quote, when the report opens with the
     /// reason alone. The reported Post's author and whoever it mentions in one keyed read, and what
     /// <see cref="ModeratorsTangent.MayView"/> reads.</summary>
     public static async Task<PostBody?> OpeningOf(string? reason, Post reported, Post topic, Tangents.Tangent tangent, TangentSpace space,
@@ -136,9 +136,10 @@ public sealed record ReportPost(
         }
         else
         {
-            var handle = people.TryGetValue(reported.AuthorId, out var author) ? author.Handle : reported.AuthorId;
-            what = "*A post by [" + Escaped("@" + handle) + "](" + Participants.ProfilePage.AddressOf(baseAddress, handle) + ") in "
-                   + Escaped(tangent.Name) + ", which moderators can’t read.*";
+            var by = people.TryGetValue(reported.AuthorId, out var author)
+                ? "[" + Escaped("@" + author.Handle) + "](" + Participants.ProfilePage.AddressOf(baseAddress, author.Handle) + ")"
+                : Escaped(Render.Person.LeftName);
+            what = "*A post by " + by + " in " + Escaped(tangent.Name) + ", which moderators can’t read.*";
         }
 
         var body = await PostBody.Written(string.IsNullOrWhiteSpace(reason) ? what : reason.TrimEnd() + "\n\n" + what, ct);
