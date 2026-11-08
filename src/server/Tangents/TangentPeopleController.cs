@@ -18,31 +18,25 @@ public sealed record LetInInput(
     [Description(Holds.Member)] string? Person = null,
     [Description(Holds.Letting)] string? Choice = null);
 
-/// <summary>What setting a Tangent's joining sends, as a form or one JSON object.</summary>
-public sealed record JoiningInput([Description(Holds.Joining)] string? Joining = null);
-
 /// <summary>A Tangent's people at <c>/t/{tangent}/settings/people</c>, for whoever holds <see cref="Bit.ManageTangent"/>
 /// there (<see cref="TangentPeoplePage"/>). Its <c>GET</c> is one page of who is in by role and by person, from Koan's
 /// overwrites on the Tangent's resource, continued by <c>after</c>, with the asks that wait (<see cref="Inside.AsksWait"/>)
 /// and, by <c>find</c>, the participants whose handles start with it, each with the choices the reader may send for them.
-/// Its <c>POST</c> takes <c>person</c> and <c>choice</c> and sends <see cref="LetIn"/>; <c>POST /t/{tangent}/settings/joining</c>
-/// takes <c>joining</c> and sends <see cref="ChangeJoining"/>, its form offered while the Tangent is private, and its tool
-/// on a public one too, which keeps it for when it is private. A form is sent back to
-/// the people; a JSON request reads the page as it now stands.</summary>
+/// Its <c>POST</c> takes <c>person</c> and <c>choice</c> and sends <see cref="LetIn"/>. How someone outside the Tangent comes in
+/// is its <c>joining</c>, which <c>change_tangent</c> changes at the Tangent's own address (<see cref="TangentsController"/>),
+/// its form here offered while the Tangent is private and sent back here; a public Tangent keeps it for when it is private.
+/// A form is sent back to the people; a JSON request reads the page as it now stands.</summary>
 [Managing]
 public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollection roles) : ControllerBase
 {
     public const string Segment = "people";
-    public const string JoiningSegment = "joining";
     public const string Route = TangentSettingsController.Route + "/" + Segment;
-    public const string JoiningRoute = TangentSettingsController.Route + "/" + JoiningSegment;
     public const string FindQuery = "find";
     public const string AfterQuery = "after";
     public const string PersonField = "person";
     public const string ChoiceField = "choice";
     public const string InChoice = "in";
     public const string OutChoice = "out";
-    public const string JoiningField = "joining";
 
     /// <summary>Where a person stands whose own overwrite keeps them out.</summary>
     public const string KeptOutState = "kept-out";
@@ -54,7 +48,6 @@ public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollecti
     public const int PageSize = 25;
 
     public static readonly Reason ChoiceRule = Reason.Invalid("Let a participant in or out: send in or out.");
-    public static readonly Reason JoiningRule = Reason.Invalid("A Tangent's joining is closed, join or ask.");
 
     /// <summary>How someone outside a Tangent comes in, as words.</summary>
     public static readonly IReadOnlyList<string> Joinings = Enum.GetValues<Joining>().Select(Word).ToList();
@@ -64,7 +57,7 @@ public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollecti
     [HttpGet(Route)]
     [Needs(Bit.ManageTangent)]
     [Tool(Name = "read_tangent_people")]
-    [Description("Read who reads and posts in a Tangent you manage, by role and by person, a page at a time, the asks to join that wait, and, with find, the participants whose handles start with it. Then call let_into_tangent or change_tangent_joining.")]
+    [Description("Read who reads and posts in a Tangent you manage, by role and by person, a page at a time, the asks to join that wait, and, with find, the participants whose handles start with it. Then call let_into_tangent, or change_tangent with joining.")]
     public async Task<IActionResult> Get([Description(Holds.Tangent)] string tangent, [FromQuery(Name = FindQuery), Description(Holds.Find)] string? find,
         [FromQuery(Name = AfterQuery), Description(Holds.After)] string? after, CancellationToken ct)
     {
@@ -86,20 +79,6 @@ public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollecti
         return await Answered(found, outcome, ct);
     }
 
-    [HttpPost(JoiningRoute)]
-    [RequestSizeLimit(PostWrites.RequestLimit)]
-    [Needs(Bit.ManageTangent)]
-    [Tool(Name = "change_tangent_joining", Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Set how someone outside a private Tangent you manage comes in: closed, join or ask. A public Tangent keeps it for when it is private.")]
-    public async Task<IActionResult> SetJoining([FromRoute, Description(Holds.Tangent)] string tangent, JoiningInput input, CancellationToken ct)
-    {
-        Response.Headers.CacheControl = "no-store";
-        var found = Here.Of(HttpContext);
-        if (TangentWrites.Choice(input.Joining, Joinings, out _) is not { } chosen) return await Refused(found, JoiningRule, ct);
-        var outcome = await new ChangeJoining(found.Tangent!.Id, found.PersonId!, Enum.GetValues<Joining>()[chosen]).Send();
-        return await Answered(found, outcome, ct);
-    }
-
     private async Task<IActionResult> Answered(Here found, Outcome<Tangent> outcome, CancellationToken ct)
     {
         switch (outcome)
@@ -113,7 +92,7 @@ public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollecti
 
                 var (again, gone) = await Here.Find(found.PersonId, found.Tangent!.Id, null, null, ct);
                 return gone is not null ? this.Refused(gone) : Ok(await Page(again, null, null, ct));
-            case Outcome<Tangent>.Refused { Reason: var reason } when reason != ChangeTangent.NoTangent:
+            case Outcome<Tangent>.Refused { Reason: var reason } when reason != Tangent.NoTangent:
                 return await Refused(found, reason, ct);
             default:
                 return Answers.NotDone(HttpContext, outcome);
@@ -201,7 +180,7 @@ public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollecti
             Joinings,
             isFixed || audience != Audience.Private
                 ? null
-                : Form.Posting(settings + "/" + JoiningSegment, new Form.Field(JoiningField, Holds.Joining, Word(row.Joining), Form.Input.Switch)
+                : Form.Patching(address, new Form.Field(TangentWrites.JoiningField, Holds.Joining, Word(row.Joining), Form.Input.Switch)
                 {
                     Choices = Enum.GetValues<Joining>().Select(way => new Form.Choice(Word(way), way switch
                     {
@@ -209,7 +188,7 @@ public sealed class TangentPeopleController(KoanWebBaseUrl baseUrl, RoleCollecti
                         Joining.Ask => "People ask to join",
                         _ => "Only who you let in"
                     })).ToList()
-                }) with { Tool = "change-tangent-joining" },
+                }) with { Tool = "change-tangent", Return = "/t/" + Uri.EscapeDataString(row.Id) + "/" + TangentWrites.SettingsSegment + "/" + Segment },
             asks.Where(ask => named.ContainsKey(ask.PersonId)).Select(ask => Shown(ask.PersonId, Joined.AskedState)).ToList(),
             roleRows,
             personal.Where(o => named.ContainsKey(o.SubjectId)).Select(o => Shown(o.SubjectId, Inside.Out(o) ? KeptOutState : Joined.InState)).ToList(),

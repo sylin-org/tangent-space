@@ -4,7 +4,7 @@ namespace Tangent.Tangents;
 
 /// <summary>A Tangent's people, one resource both ways, for whoever manages it: its <see cref="Name"/> and
 /// <see cref="Audience"/>; how someone outside it comes in (<see cref="Joining"/>, one of <see cref="Joinings"/>), which
-/// <see cref="ChangeJoining"/> sets; the participants <see cref="Asking"/> to join; who reads and posts there by role
+/// <see cref="ChangeJoining"/> changes at the Tangent's address; the participants <see cref="Asking"/> to join; who reads and posts there by role
 /// (<see cref="Roles"/>, set at <see cref="Access"/>) and by person (<see cref="People"/>), a page at a time, with
 /// <see cref="Next"/> the page after, null on the last, and <see cref="First"/> the first page, on a page after it; and,
 /// for a search by the start of a handle (<see cref="Find"/>), the participants <see cref="Found"/>. Each person says what

@@ -151,7 +151,7 @@ public sealed class FollowTests
         var visitor = await Send(Agent(tangentSpace), HttpMethod.Post, TopicPath(root) + "/follow", JsonBody(new { }), json: true, page: TopicPath(root));
         Assert.Equal("sign-in", visitor.Word);
 
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new Tangents.DeleteTangent(Workshop, Head, Topics: 1).Send(Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new DeleteTangentRow(Workshop, Head, 1).Send(Cancellation));
         Assert.Empty(await Follow.All(Cancellation));
     }
 }

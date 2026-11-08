@@ -33,7 +33,7 @@ public sealed class ArticleSeedController(RoleCollection roles) : ControllerBase
         await Person(Mara, "mara.bsky.social", "Mara Lind", Roles.Member, ct);
         await Person(Persona, "ada.bsky.social", "Ada Okafor", Roles.Member, ct);
 
-        await Write(new CreateTangent("articles", "Articles", "Long pieces on repair, systems and the things that outlast them.", PostKind.Article, 1, Audience.Public, Leo), ct);
+        await Write(new OpenTangent("articles", "Articles", "Long pieces on repair, systems and the things that outlast them.", PostKind.Article, 1, Audience.Public, Leo), ct);
 
         var cover = await Brought(Bowl(2000, 1125, 0.5, 0.52, 0.31), Persona, ct);
         var inline = await Brought(Bowl(1360, 900, 0.34, 0.5, 0.26), Persona, ct);

@@ -32,10 +32,10 @@ public sealed class NewTangentTests
         Assert.Contains("Description, kind and audience", WebUtility.HtmlDecode(form.Body));
         Assert.DoesNotContain("data-gate", form.Body);
 
-        var created = await Form(leo, "/t/new", "/t/new", new() { ["name"] = "The garden" });
+        var created = await Form(leo, "/t/new", "/t", new() { ["name"] = "The garden" });
 
         Assert.Equal(HttpStatusCode.SeeOther, created.Status);
-        Assert.Equal(BaseUrl + "/t/the-garden", created.Location);
+        Assert.Equal("/t/the-garden", created.Location);
         var row = await Tangent.Get("the-garden", Cancellation);
         Assert.NotNull(row);
         Assert.Equal(("The garden", "", PostKind.Topic, 3), (row.Name, row.Description, row.DefaultKind, row.Order));
@@ -47,8 +47,8 @@ public sealed class NewTangentTests
         Assert.Contains("<h1 id=\"tangent-title\" class=\"tangent-title\">The garden</h1>", landed.Body);
 
         // A name another Tangent's slug holds takes a numbered suffix, and no name takes the form's own address.
-        Assert.Equal(BaseUrl + "/t/workshop-2", (await Form(leo, "/t/new", "/t/new", new() { ["name"] = "Workshop" })).Location);
-        Assert.Equal(BaseUrl + "/t/new-2", (await Form(leo, "/t/new", "/t/new", new() { ["name"] = "New" })).Location);
+        Assert.Equal("/t/workshop-2", (await Form(leo, "/t/new", "/t", new() { ["name"] = "Workshop" })).Location);
+        Assert.Equal("/t/new-2", (await Form(leo, "/t/new", "/t", new() { ["name"] = "New" })).Location);
         Assert.Equal((4, 5), ((await Tangent.Get("workshop-2", Cancellation))!.Order, (await Tangent.Get("new-2", Cancellation))!.Order));
     }
 
@@ -60,7 +60,7 @@ public sealed class NewTangentTests
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         using var leo = await SignedIn(tangentSpace, Leo);
         using var ada = await SignedIn(tangentSpace, Ada);
-        Assert.Equal(HttpStatusCode.SeeOther, (await Form(leo, "/t/new", "/t/new", new() { ["name"] = "The garden" })).Status);
+        Assert.Equal(HttpStatusCode.SeeOther, (await Form(leo, "/t/new", "/t", new() { ["name"] = "The garden" })).Status);
 
         var door = (await Send(ada.Client, HttpMethod.Get, "/", json: true)).Json;
         Assert.Contains("the-garden", Slugs(door.GetProperty("tangents")));
@@ -83,10 +83,10 @@ public sealed class NewTangentTests
         Assert.Contains($"data-gate=\"{gate}\"", offered.Body);
         Assert.DoesNotContain("type=\"submit\"", PageContent(offered.Body));
         // The create declares ManageSpace, so the Doorway refuses it before anything is bound: the refusal's page, with its gate.
-        var refused = await Form(ada, "/t/workshop", "/t/new", new() { ["name"] = "Mine" });
+        var refused = await Form(ada, "/t/workshop", "/t", new() { ["name"] = "Mine" });
         Assert.Equal(HttpStatusCode.Forbidden, refused.Status);
         Assert.Contains($"class=\"refusal\" data-word=\"{gate}\"", refused.Body);
-        var asJson = await Json(ada, "/t/workshop", "/t/new", new { name = "Mine" });
+        var asJson = await Json(ada, "/t/workshop", "/t", new { name = "Mine" });
         Assert.Equal((HttpStatusCode.Forbidden, gate), (asJson.Status, asJson.Word));
         Assert.Null(await Tangent.Get("mine", Cancellation));
         Assert.Equal(Capabilities.SignIn.Word, (await Send(Agent(tangentSpace), HttpMethod.Get, "/t/new", json: true)).Json.GetProperty("gate").GetString());
@@ -100,12 +100,12 @@ public sealed class NewTangentTests
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         using var leo = await SignedIn(tangentSpace, Leo);
 
-        var empty = await Form(leo, "/t/new", "/t/new", new()
+        var empty = await Form(leo, "/t/new", "/t", new()
         {
             ["name"] = "   ", ["description"] = "Short pieces from the road.", ["kind"] = "article", ["audience"] = "private"
         });
         var tooLong = new string('a', Tangent.NameLimit + 1);
-        var long_ = await Form(leo, "/t/new", "/t/new", new() { ["name"] = tooLong });
+        var long_ = await Form(leo, "/t/new", "/t", new() { ["name"] = tooLong });
 
         Assert.Equal(HttpStatusCode.BadRequest, empty.Status);
         Assert.Contains($"<p class=\"field-failure\" id=\"new-tangent-name-failure\">{Tangent.NeedsName}</p>", empty.Body);
@@ -129,7 +129,7 @@ public sealed class NewTangentTests
         using var ada = await SignedIn(tangentSpace, Ada);
 
         var form = (await Send(leo.Client, HttpMethod.Get, "/t/new", json: true)).Json;
-        Assert.Equal(BaseUrl + "/t/new", form.GetProperty("create").GetProperty("action").GetString());
+        Assert.Equal(BaseUrl + "/t", form.GetProperty("create").GetProperty("action").GetString());
         Assert.Equal(["name", "description", "kind", "audience"], FieldNames(form.GetProperty("create")));
         Assert.Contains("ManageSpace", Strings(form.GetProperty("can")));
         Assert.False(form.TryGetProperty("gate", out _));
@@ -142,16 +142,18 @@ public sealed class NewTangentTests
         Assert.DoesNotContain("ManageSpace", Strings(member.GetProperty("can")));
         Assert.False(member.TryGetProperty("create", out _));
 
-        var created = await Json(leo, "/t/new", "/t/new", new { name = "Field guides", kind = "article", audience = "private" });
+        var created = await Json(leo, "/t/new", "/t", new { name = "Field guides", kind = "article", audience = "private" });
 
         Assert.Equal(HttpStatusCode.Created, created.Status);
-        Assert.Equal(BaseUrl + "/t/field-guides", created.Location);
+        Assert.Equal("/t/field-guides", created.Location);
         Assert.Equal(("field-guides", "Field guides", "article", "private", BaseUrl + "/t/field-guides/settings"),
             (created.Json.GetProperty("slug").GetString(), created.Json.GetProperty("name").GetString(), created.Json.GetProperty("kind").GetString(),
                 created.Json.GetProperty("audience").GetString(), created.Json.GetProperty("settings").GetString()));
         Assert.Contains("ManageTangent", Strings(created.Json.GetProperty("can")));
-        var refused = await Json(leo, "/t/new", "/t/new", new { name = "Field guides", kind = "gallery" });
-        Assert.Equal((HttpStatusCode.BadRequest, TangentWrites.KindRule.Text), (refused.Status, refused.Json.GetProperty("detail").GetString()));
+        var refused = await Json(leo, "/t/new", "/t", new { name = "Field guides", kind = "gallery" });
+        // A kind no Tangent takes cannot bind, and the refusal names the field.
+        Assert.Equal(HttpStatusCode.BadRequest, refused.Status);
+        Assert.True(refused.Json.GetProperty("errors").TryGetProperty(TangentWrites.KindField, out _), refused.Body);
     }
 
     private static List<string?> Slugs(JsonElement tangents) => tangents.EnumerateArray().Select(tangent => tangent.GetProperty("slug").GetString()).ToList();

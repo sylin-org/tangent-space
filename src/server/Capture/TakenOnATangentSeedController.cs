@@ -34,9 +34,9 @@ public sealed class TakenOnATangentSeedController(RoleCollection roles) : Contro
         await Person(Mara, "mara.bsky.social", "Mara Lind", Roles.Member, ct);
         await Person(Persona, "ada.bsky.social", "Ada Okafor", Roles.Member, ct);
 
-        await Write(new CreateTangent("discussions", "Discussions", "Open questions, half-ideas and the loose threads of the work.", PostKind.Topic, 1, Audience.Public, Leo), ct);
-        await Write(new CreateTangent("workshop", "The workshop", "What happens at the bench, written down.", PostKind.Topic, 2, Audience.Public, Leo), ct);
-        await Write(new CreateTangent("off-the-record", "Off the record", "Where the administrators plan.", PostKind.Topic, 3, Audience.Private, Leo), ct);
+        await Write(new OpenTangent("discussions", "Discussions", "Open questions, half-ideas and the loose threads of the work.", PostKind.Topic, 1, Audience.Public, Leo), ct);
+        await Write(new OpenTangent("workshop", "The workshop", "What happens at the bench, written down.", PostKind.Topic, 2, Audience.Public, Leo), ct);
+        await Write(new OpenTangent("off-the-record", "Off the record", "Where the administrators plan.", PostKind.Topic, 3, Audience.Private, Leo), ct);
 
         var glue = await Write(new Started(Tid(At(26, 9, 0), 1), "discussions", "Where should the glue notes live?",
             "Every repair this month has a note about which glue held. Where should those notes go?", Mara, At: At(26, 9, 0)), ct);

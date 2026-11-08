@@ -140,7 +140,7 @@ public sealed class PublishTests
 
         // Ada's grant lapses, and the article's Tangent is deleted: the copy stays out, and her Connections say so.
         repository.Holding = _ => false;
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new Tangents.DeleteTangent(Articles, leo, Topics: 1).Send(Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new DeleteTangentRow(Articles, leo, 1).Send(Cancellation));
         await Until(async () => (await Connection.Get(Ada, Cancellation))?.NeedsGrant == true);
         Assert.Contains(document, repository.Records.Keys);
         var listed = (await Send(ada.Client, HttpMethod.Get, ConnectionsController.Path, json: true)).Json;

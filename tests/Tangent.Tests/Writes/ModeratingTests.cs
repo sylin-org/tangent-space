@@ -26,7 +26,7 @@ public sealed class ModeratingTests
         var inline = "(edited by " + Name(await Send(mo.Client, HttpMethod.Get, "/", json: true)) + ")";
         var visitor = Agent(tangentSpace);
 
-        var written = await Patch(mo, PostPath(root, reply) + "/edit", PostPath(root, reply), new { body = "From a hook, says the moderator.", version = 1 });
+        var written = await Json(mo, PostPath(root, reply) + "/edit", HttpMethod.Patch, PostPath(root, reply), new { body = "From a hook, says the moderator.", version = 1 });
         Assert.IsType<Outcome<Post>.Done>(await new Edited(root.Id, 1, "How do you hang yours, and where?", null, Mo).Send(Cancellation));
 
         // The write's own answer says who.
@@ -106,7 +106,7 @@ public sealed class ModeratingTests
         var reply = await Replied(root, Ada, "From the porch beam.");
         using var ada = await SignedIn(tangentSpace, Ada);
 
-        var own = await Patch(ada, PostPath(root, root) + "/edit", PostPath(root, root), new { body = "How do you hang yours, and where?", version = 1 });
+        var own = await Json(ada, PostPath(root, root) + "/edit", HttpMethod.Patch, PostPath(root, root), new { body = "How do you hang yours, and where?", version = 1 });
         Assert.IsType<Outcome<Post>.Done>(await new RemovePost(reply.Id, Ada).Send(Cancellation));
 
         Assert.False(own.Json.TryGetProperty("editedBy", out var editedBy) && editedBy.ValueKind != JsonValueKind.Null);

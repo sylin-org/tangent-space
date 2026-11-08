@@ -38,7 +38,7 @@ public sealed class ManyTangentsSeedController(RoleCollection roles) : Controlle
         for (var index = 1; index <= Count; index++)
         {
             var number = index.ToString("00", CultureInfo.InvariantCulture);
-            await Write(new CreateTangent("tangent-" + number, "Tangent " + number, "", index % 5 == 0 ? PostKind.Article : PostKind.Topic,
+            await Write(new OpenTangent("tangent-" + number, "Tangent " + number, "", index % 5 == 0 ? PostKind.Article : PostKind.Topic,
                 order + index - 1, Audience.Public, Leo), ct);
         }
 

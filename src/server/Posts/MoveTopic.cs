@@ -11,7 +11,7 @@ namespace Tangent.Posts;
 /// the Tangent it moves to holds none of it, else takes the first numbered suffix there (<see cref="Slug.Unique"/>);
 /// its address where it stood becomes a <see cref="FormerAddress"/>, which forwards. Every Post of it, each Post's media uses
 /// and every row of the log about it, one range of <c>ix_event_topics</c>, take the new Tangent a page of
-/// <see cref="Tangents.DeleteTangent.PostPage"/> at a time, each read finding what the last left, so every reader of the log
+/// <see cref="DeleteTopic.PostPage"/> at a time, each read finding what the last left, so every reader of the log
 /// stays right and none changes; each row also takes where the new Tangent's own rows begin (<see cref="Event.Into"/>), so a
 /// row older than the new Tangent itself is still its own and reaches its readers (<see cref="Capabilities.Owns"/>). The
 /// Tangent it leaves counts it no longer and pins it no more, the one it enters counts
@@ -57,11 +57,11 @@ public sealed record MoveTopic(string TopicId, string To, string ActorId, DateTi
         await root.Save(ct);
         await Uses([root], ct);
 
-        var read = Tangents.DeleteTangent.PostPage;
-        while (read == Tangents.DeleteTangent.PostPage)
+        var read = DeleteTopic.PostPage;
+        while (read == DeleteTopic.PostPage)
         {
             var posts = await Post.Query(post => post.TopicId == root.Id && post.TangentId == from,
-                new QueryDefinition { Page = 1, PageSize = Tangents.DeleteTangent.PostPage }, ct);
+                new QueryDefinition { Page = 1, PageSize = DeleteTopic.PostPage }, ct);
             read = posts.Count;
             if (read == 0) break;
             foreach (var post in posts) post.TangentId = To;

@@ -62,9 +62,9 @@ public static class Holds
 
     public const string Origin = "The origin an open Offer offers as the place's address, as the Offer names it.";
 
-    public const string TangentName = "The Tangent's name, 1 to 80 characters; its address derives from it and never changes.";
-    public const string TangentDescription = "What it is for, at most 1000 characters; left out, none.";
-    public const string TangentKind = "The kind a Topic started there takes: topic or article; left out, topic.";
+    public const string TangentName = "The Tangent's name, 1 to 80 characters; a new Tangent's address derives from it, and an address never changes. Left out of a change, it stays.";
+    public const string TangentDescription = "What it is for, at most 1000 characters. Left out, a new Tangent has none and a changed one keeps its own.";
+    public const string TangentKind = "The kind a Topic started there takes: topic or article. Left out, a new Tangent takes topic and a changed one keeps its own.";
     public const string TangentAudience = "Who reads it: public, everyone who reads the place, where members post, or private; left out, public.";
     public const string ChangedTangentName = "The Tangent's name, 1 to 80 characters. Its address never changes." + Stays;
     public const string ChangedTangentDescription = "What it is for, at most 1000 characters." + Stays;
@@ -77,7 +77,7 @@ public static class Holds
     public const string DeletedTopics = "How many Topics go with the Tangent, the count its settings read, which is what it holds when the delete lands; left out, none, so only an empty Tangent is deleted.";
     public const string TangentMove = "earlier or later, to move it one place among the Tangents; sent alone, it changes nothing else.";
     public const string AccessRole = "The word of a role listed here with the access in its offered.";
-    public const string Joining = "closed, only as its managers let people in; join, anyone who takes part in the place joins at once; or ask, people ask and its managers decide.";
+    public const string Joining = "closed, only as its managers let people in; join, anyone who takes part in the place joins at once; or ask, people ask and its managers decide." + Stays;
     public const string Member = "The id of the participant, as the people tab lists them.";
     public const string Letting = "in, to let them in, or out, to decline their ask or take them out.";
     public const string Find = "The start of a participant's handle.";

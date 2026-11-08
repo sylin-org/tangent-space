@@ -141,7 +141,7 @@ public sealed class TwoDoorsTests
         var root = doors.Root;
 
         // A word and a sentence.
-        var http = await doors.Posted("/t/new", new { name = "Mine" });
+        var http = await doors.Posted("/t", new { name = "Mine" });
         var tool = await doors.AdaTools.Call("create_tangent", new { name = "Mine" });
         Assert.Equal(HttpStatusCode.Forbidden, http.Status);
         Assert.False(string.IsNullOrEmpty(http.Word));
@@ -313,11 +313,11 @@ public sealed class TwoDoorsTests
         Assert.Equal("", await Description());
 
         await tools.Call("change_tangent", new { tangent = Workshop, description = "For the bench." });
-        var form = await Form(leo, settings, settings, new Dictionary<string, string> { ["description"] = "" });
+        var form = await Form(leo, settings, "/t/" + Workshop, As(HttpMethod.Patch, new Dictionary<string, string> { ["description"] = "" }));
         Assert.Equal(HttpStatusCode.SeeOther, form.Status);
         Assert.Equal("", await Description());
         await tools.Call("change_tangent", new { tangent = Workshop, description = "For the bench." });
-        var json = await Send(leo.Client, HttpMethod.Post, settings, JsonBody(new { description = "" }), json: true);
+        var json = await Send(leo.Client, HttpMethod.Patch, "/t/" + Workshop, JsonBody(new { description = "" }), json: true);
         Assert.Equal(HttpStatusCode.OK, json.Status);
         Assert.Equal("", await Description());
     }

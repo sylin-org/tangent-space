@@ -79,7 +79,7 @@ public sealed class EntityWritesTests
         using var mo = await SignedIn(tangentSpace, Mo);
         var image = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(mo, ArticleMediaTests.Jpeg(30), Workshop, TopicPath(root)));
 
-        var edited = await Patch(mo, PostPath(root, reply) + "/edit", PostPath(root, reply), new { body = "From the porch beam. ![The beam](/media/" + image + ")", version = 1 });
+        var edited = await Json(mo, PostPath(root, reply) + "/edit", HttpMethod.Patch, PostPath(root, reply), new { body = "From the porch beam. ![The beam](/media/" + image + ")", version = 1 });
 
         Assert.Equal((HttpStatusCode.OK, Mo, 2L), (edited.Status, edited.Json.GetProperty("editedBy").GetString(), edited.Json.GetProperty("version").GetInt64()));
         Assert.NotNull(await MediaUse.Get(MediaUse.Key(image, reply.Id), Cancellation));

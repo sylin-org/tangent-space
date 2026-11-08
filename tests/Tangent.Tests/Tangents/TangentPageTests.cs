@@ -140,7 +140,7 @@ public sealed class TangentPageTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Place(tangentSpace);
-        Assert.IsType<Outcome<Tangent>.Done>(await new CreateTangent("garden", "The garden", "Where things grow.", PostKind.Topic, 2, Audience.Public, "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Tangent>.Done>(await new OpenTangent("garden", "The garden", "Where things grow.", PostKind.Topic, 2, Audience.Public, "leo").Send(Cancellation));
         var all = new List<Post>();
         for (var index = 0; index < TopicList.PageSize + 5; index++)
             all.Add(await Started("Topic " + index, Start.AddMinutes(index)));
@@ -251,7 +251,7 @@ public sealed class TangentPageTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
         await Place(tangentSpace);
-        Assert.IsType<Outcome<Tangent>.Done>(await new CreateTangent("studio", "The studio", "", PostKind.Topic, 2, Audience.Private, "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Tangent>.Done>(await new OpenTangent("studio", "The studio", "", PostKind.Topic, 2, Audience.Private, "leo").Send(Cancellation));
         await Given.AParticipant(tangentSpace, Reader, [Roles.Member], ct: Cancellation);
         using var browser = new Browser(tangentSpace);
         (await browser.SignIn("reader", Reader, Cancellation)).Dispose();
@@ -342,7 +342,7 @@ public sealed class TangentPageTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
         await Place(tangentSpace);
-        Assert.IsType<Outcome<Tangent>.Done>(await new CreateTangent("studio", "The studio", "", PostKind.Article, 2, Audience.Private, "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Tangent>.Done>(await new OpenTangent("studio", "The studio", "", PostKind.Article, 2, Audience.Private, "leo").Send(Cancellation));
         await Given.AParticipant(tangentSpace, Reader, [Roles.Member], ct: Cancellation);
         var topic = await Started("A question", Start);
         var reply = Tids.Mint();
@@ -403,7 +403,7 @@ public sealed class TangentPageTests
         Assert.Single(Regex.Matches(html, "is-removed"));
 
         // In a Tangent of articles the newest is removed: the next leads, and the removed one follows as a card.
-        Assert.IsType<Outcome<Tangent>.Done>(await new CreateTangent("essays", "Essays", "", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Tangent>.Done>(await new OpenTangent("essays", "Essays", "", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
         Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), "essays", "An older essay", "Words that stay.", "ada", At: Start.AddMinutes(3)).Send(Cancellation));
         var newer = Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), "essays", "A newer essay", "Words that go.", "ada", At: Start.AddMinutes(4)).Send(Cancellation)).Result;
         Assert.IsType<Outcome<Post>.Done>(await new RemovePost(newer.Id, "ada", Start.AddMinutes(5)).Send(Cancellation));
@@ -424,7 +424,7 @@ public sealed class TangentPageTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Place(tangentSpace);
-        Assert.IsType<Outcome<Tangent>.Done>(await new CreateTangent("essays", "Essays", "", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Tangent>.Done>(await new OpenTangent("essays", "Essays", "", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
         // Leo's two September essays lie past the first page, behind more October essays of Ada's than a page holds.
         var september = new List<string>();
         foreach (var day in new[] { 10, 12 })
@@ -497,7 +497,7 @@ public sealed class TangentPageTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Place(tangentSpace);
-        Assert.IsType<Outcome<Tangent>.Done>(await new CreateTangent("essays", "Essays", "", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Tangent>.Done>(await new OpenTangent("essays", "Essays", "", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
         var older = Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), "essays", "The older essay", "Words of old.", "leo", At: Start).Send(Cancellation)).Result;
         var newer = Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), "essays", "The newer essay", "Words of new.", "leo", At: Start.AddMinutes(1)).Send(Cancellation)).Result;
         Assert.IsType<Outcome<Post>.Done>(await new Replied(Tids.Mint(), older.Id, "A late reply.", "ada", At: Start.AddMinutes(2)).Send(Cancellation));
@@ -527,7 +527,7 @@ public sealed class TangentPageTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Place(tangentSpace);
-        Assert.IsType<Outcome<Tangent>.Done>(await new CreateTangent("essays", "Essays", "", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Tangent>.Done>(await new OpenTangent("essays", "Essays", "", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
         var started = new List<string>();
         for (var index = 0; index < TopicList.PageSize + 1; index++)
             started.Add(Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), "essays", "Essay " + index, "Words.", "leo",
@@ -556,7 +556,7 @@ public sealed class TangentPageTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Place(tangentSpace);
-        Assert.IsType<Outcome<Tangent>.Done>(await new CreateTangent("essays", "Essays", "", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Tangent>.Done>(await new OpenTangent("essays", "Essays", "", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
         // More writers than the rail offers: the first ones each start two essays, the last two one each.
         var writers = Enumerable.Range(0, TopicsController.AuthorLimit + 2).Select(index => $"writer{index:D2}").ToList();
         foreach (var (writer, index) in writers.Select((writer, index) => (writer, index)))
@@ -633,7 +633,7 @@ public sealed class TangentPageTests
         await Given.AnEstablishedTangentSpace(tangentSpace, ct: Cancellation);
         await Given.AParticipant(tangentSpace, "leo", [Roles.Administrator], ct: Cancellation);
         await Given.AParticipant(tangentSpace, "ada", [Roles.Member], ct: Cancellation);
-        Assert.IsType<Outcome<Tangent>.Done>(await new CreateTangent(Workshop, "The workshop", "Where things get made.", PostKind.Topic, 1, Audience.Public, "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Tangent>.Done>(await new OpenTangent(Workshop, "The workshop", "Where things get made.", PostKind.Topic, 1, Audience.Public, "leo").Send(Cancellation));
     }
 
     private static async Task<Post> Started(string title, DateTimeOffset at)

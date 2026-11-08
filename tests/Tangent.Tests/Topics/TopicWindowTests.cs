@@ -270,7 +270,7 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
         await Place(tangentSpace);
         await Given.AParticipant(tangentSpace, Reader, [Roles.Member], ct: Cancellation);
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent("studio", "The studio", "", PostKind.Topic, 2, Audience.Private, Leo).Send(Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new OpenTangent("studio", "The studio", "", PostKind.Topic, 2, Audience.Private, Leo).Send(Cancellation));
         var hidden = Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), "studio", "Behind the door", "Not for everyone.", Leo, At: Start).Send(Cancellation)).Result;
         using var browser = new Browser(tangentSpace);
         (await browser.SignIn("reader", Reader, Cancellation)).Dispose();
@@ -372,7 +372,7 @@ public sealed class TopicWindowTests(ITestOutputHelper output)
         await Given.AnEstablishedTangentSpace(tangentSpace, ct: Cancellation);
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         await Given.AParticipant(tangentSpace, Ada, [Roles.Member], ct: Cancellation);
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent(Workshop, "The workshop", "Where things get made.", PostKind.Topic, 1, Audience.Public, Leo).Send(Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new OpenTangent(Workshop, "The workshop", "Where things get made.", PostKind.Topic, 1, Audience.Public, Leo).Send(Cancellation));
     }
 
     private static async Task<Post> Started(string title, string body)

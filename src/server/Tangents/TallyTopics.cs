@@ -16,7 +16,7 @@ public sealed record TallyTopics(string Slug) : ICommand<Tangent>
 
     public async Task<Outcome<Tangent>> Run(CancellationToken ct)
     {
-        if (await Tangent.Get(Slug, ct) is not { } tangent) return new Outcome<Tangent>.Refused(ChangeTangent.NoTangent);
+        if (await Tangent.Get(Slug, ct) is not { } tangent) return new Outcome<Tangent>.Refused(Tangent.NoTangent);
         if (tangent.Tallied()) return new Outcome<Tangent>.Done(tangent);
 
         var roots = new List<Posts.Post>();

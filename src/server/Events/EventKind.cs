@@ -23,7 +23,7 @@ public static class EventKind
     public const string RoleChanged = "role.changed";
     public const string TangentChanged = "tangent.changed";
 
-    /// <summary>Someone who holds <c>ManageSpace</c> deleted a Tangent with everything in it (<see cref="Tangents.DeleteTangent"/>):
+    /// <summary>Someone who holds <c>ManageSpace</c> deleted a Tangent with everything in it (<see cref="Tangents.TangentWriting.Deleting"/>):
     /// with its Tangent gone, it reaches no one, as no row of that Tangent does.</summary>
     public const string TangentDeleted = "tangent.deleted";
 

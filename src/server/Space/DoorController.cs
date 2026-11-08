@@ -167,7 +167,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
                 forYou is null ? null : new Unread.Badge(forYou.Count, forYou.AtLeast, door, forYou.Through, forYou.Applications)),
             DateOnly.FromDateTime(DateTime.UtcNow),
             Resume(baseAddress, through > 0 ? through : window.Count > 0 ? window[0].Seq : 0),
-            place.Holds(Bit.ManageSpace) ? baseAddress + NewTangentController.Route : null)
+            place.Holds(Bit.ManageSpace) ? baseAddress + TangentsController.NewRoute : null)
         {
             Around = Around(writers, people, window.Count >= LogWindow.Size),
             News = news,
@@ -388,7 +388,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             door,
             listed.Select(tangent => TangentEntry.Of(tangent, Address(tangent.Id), door)).ToList(),
             page.Next is not null || place.Holds(Bit.Post) ? baseAddress + TangentsController.Route : null,
-            place.Holds(Bit.ManageSpace) ? baseAddress + NewTangentController.Route : null,
+            place.Holds(Bit.ManageSpace) ? baseAddress + TangentsController.NewRoute : null,
             Who.Of(Person(people, reader.Id), Roles.Word(place.RoleIds), baseAddress + AuthConstants.Routes.Logout + "?return=" + back,
                 TangentSpaceSettingsController.Entry(place, baseAddress),
                 new Unread.Badge(forYou.Count, forYou.AtLeast, door, forYou.Through, forYou.Applications)),

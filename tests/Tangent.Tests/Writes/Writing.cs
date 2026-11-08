@@ -123,14 +123,14 @@ internal static partial class Writing
     public static Task<Answered> Json(Browser browser, string page, string action, object fields)
         => Send(browser.Client, HttpMethod.Post, action, JsonBody(fields), json: true, page: page);
 
-    /// <summary>Sends a change as JSON from the page at <paramref name="page"/>, as a signed-in browser's script does.</summary>
-    public static Task<Answered> Patch(Browser browser, string page, string action, object fields)
-        => Send(browser.Client, HttpMethod.Patch, action, JsonBody(fields), json: true, page: page);
+    /// <summary>Sends JSON by <paramref name="method"/> from the page at <paramref name="page"/>, as a signed-in browser's script
+    /// does.</summary>
+    public static Task<Answered> Json(Browser browser, string page, HttpMethod method, string action, object? fields = null)
+        => Send(browser.Client, method, action, fields is null ? null : JsonBody(fields), json: true, page: page);
 
-    /// <summary>Posts the form that changes what <paramref name="action"/> names from the page at <paramref name="page"/>, as its
-    /// browser does: a <c>POST</c> naming <c>PATCH</c> in its <c>_method</c> field.</summary>
-    public static Task<Answered> Change(Browser browser, string page, string action, Dictionary<string, string> fields)
-        => Form(browser, page, action, new Dictionary<string, string>(fields) { ["_method"] = "PATCH" });
+    /// <summary>A browser's form's fields, naming <paramref name="method"/>, which a form cannot send, as Koan reads it.</summary>
+    public static Dictionary<string, string> As(HttpMethod method, Dictionary<string, string> fields)
+        => new(fields) { [Render.Form.MethodField] = method.Method };
 
     /// <summary>The value a form in a page's JSON gives the field named <paramref name="name"/>; null where it gives none.</summary>
     public static string? Valued(JsonElement form, string name)

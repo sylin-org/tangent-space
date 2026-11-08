@@ -119,8 +119,8 @@ public sealed record Here(Tangents.Tangent? Tangent, Capabilities.Rows Rows, Pos
 /// found. It defers on a route that declares nothing, on a listing, which asks with no address, before first run, which
 /// <see cref="FirstRunGate"/> answers, and to a visitor of a private place, whom <see cref="PrivatePlaceGate"/> answers the
 /// sign-in; both answer before anything is bound. A command judges again inside its hold; an entity write, a Topic started, a reply or an
-/// edit (<see cref="TopicsController"/>, <see cref="PostsController"/>), is judged here alone, and its own hook reads in its hold only
-/// what its rows need.</summary>
+/// edit (<see cref="TopicsController"/>, <see cref="PostsController"/>), and a Tangent created, changed or deleted
+/// (<see cref="Tangents.TangentsController"/>), is judged here alone, and a Post's own hook reads in its hold only what its rows need.</summary>
 public sealed class Doorway : IAuthorizationProvider
 {
     public const string TangentValue = "tangent";

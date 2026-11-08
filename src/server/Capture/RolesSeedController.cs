@@ -22,9 +22,9 @@ public sealed class RolesSeedController(RoleCollection roles) : ControllerBase
     public async Task<IActionResult> RolesScreen(CancellationToken ct)
     {
         var keeper = await Keeper(ct);
-        await Write(new CreateTangent("discussions", "Discussions", "Open questions, half-ideas and the loose threads of the work.", PostKind.Topic,
+        await Write(new OpenTangent("discussions", "Discussions", "Open questions, half-ideas and the loose threads of the work.", PostKind.Topic,
             1, Audience.Public, keeper), ct);
-        await Write(new CreateTangent("studio", "The studio", "Work in progress, for members.", PostKind.Topic, 2, Audience.Private, keeper), ct);
+        await Write(new OpenTangent("studio", "The studio", "Work in progress, for members.", PostKind.Topic, 2, Audience.Private, keeper), ct);
         await Write(new CreateRole(keeper, "Night shift", Bit.Moderate | Bit.ManageStanding), ct);
         await Write(new CreateRole(keeper, "Patrons", Bit.None), ct);
         await Write(new ChangeAccess("studio", keeper, Access.Roles.Member, RoleAccess.Post), ct);
@@ -37,7 +37,7 @@ public sealed class RolesSeedController(RoleCollection roles) : ControllerBase
     public async Task<IActionResult> PrivatePlace(CancellationToken ct)
     {
         var keeper = await Keeper(ct);
-        await Write(new CreateTangent("discussions", "Discussions", "Open questions, half-ideas and the loose threads of the work.", PostKind.Topic,
+        await Write(new OpenTangent("discussions", "Discussions", "Open questions, half-ideas and the loose threads of the work.", PostKind.Topic,
             1, Audience.Public, keeper), ct);
         await Write(new ChangeTangentSpace(keeper, "Kintsugi Architecture", Audience: Audience.Private), ct);
         return NoContent();

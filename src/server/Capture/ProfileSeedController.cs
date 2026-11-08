@@ -37,9 +37,9 @@ public sealed class ProfileSeedController(RoleCollection roles) : ControllerBase
         await Person(Mara, "mara.bsky.social", "Mara Lind", null, ParticipantKind.Person, Roles.Member, ct);
         await Person(Persona, "ada.bsky.social", "Ada Okafor", null, ParticipantKind.Person, Roles.Member, ct);
 
-        await Write(new CreateTangent("discussions", "Discussions", "Open questions, half-ideas and the loose threads of the work.", PostKind.Topic, 1, Audience.Public, Leo), ct);
-        await Write(new CreateTangent("workshop", "The workshop", "Where things get made.", PostKind.Topic, 2, Audience.Public, Leo), ct);
-        await Write(new CreateTangent("studio", "The studio", "", PostKind.Topic, 3, Audience.Private, Leo), ct);
+        await Write(new OpenTangent("discussions", "Discussions", "Open questions, half-ideas and the loose threads of the work.", PostKind.Topic, 1, Audience.Public, Leo), ct);
+        await Write(new OpenTangent("workshop", "The workshop", "Where things get made.", PostKind.Topic, 2, Audience.Public, Leo), ct);
+        await Write(new OpenTangent("studio", "The studio", "", PostKind.Topic, 3, Audience.Private, Leo), ct);
 
         var rules = await Topic("discussions", "House rules, in plain words", "Be kind, be specific, and say when you are guessing.", Leo, At(20, 9, 0), 1, ct);
         await Answer(rules, "Thank you for writing these down.", Mara, At(20, 10, 12), 2, ct);

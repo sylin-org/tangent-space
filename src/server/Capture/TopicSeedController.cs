@@ -40,7 +40,7 @@ public sealed class TopicSeedController(RoleCollection roles) : ControllerBase
         await Person(Mara, "mara.bsky.social", "Mara Lind", ParticipantKind.Person, Roles.Member, ct);
         await Person(Persona, "ada.bsky.social", "Ada Okafor", ParticipantKind.Person, Roles.Member, ct);
 
-        await Write(new CreateTangent("discussions", "Discussions", "Open questions, half-ideas and the loose threads of the work.", PostKind.Topic, 1, Audience.Public, Leo), ct);
+        await Write(new OpenTangent("discussions", "Discussions", "Open questions, half-ideas and the loose threads of the work.", PostKind.Topic, 1, Audience.Public, Leo), ct);
 
         var kinds = await Topic("What kind of discussions?", "So! Thoughts?\n\nAnything goes for now; we can **sort it out later**.", Leo, At(29, 11, 48), 1, ct);
         var opener = await Answer(kinds, "To get us started, this is for anything that isn’t an article yet:\n\n- half-ideas\n- open questions\n- links worth arguing over\n\n"

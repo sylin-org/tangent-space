@@ -63,7 +63,7 @@ public sealed class DeleteTopicTests
         Assert.DoesNotContain(reply.Id, (await Send(visitor, HttpMethod.Get, "/search?q=edited", json: true)).Body);
         Assert.Equal(HttpStatusCode.NotFound, (await Json(mo, TopicPath(root), TopicPath(root) + "/" + TopicPageController.DeleteSegment, new { replies = 1 })).Status);
         // The workshop counts what it holds, so deleting it with that count lands.
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new DeleteTangent(Workshop, leo, Topics: after.TopicCount).Send(Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new DeleteTangentRow(Workshop, leo, after.TopicCount).Send(Cancellation));
     }
 
     [Fact]

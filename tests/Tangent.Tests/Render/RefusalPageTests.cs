@@ -29,7 +29,7 @@ public sealed class RefusalPageTests
         using var ada = await SignedIn(tangentSpace, Ada);
         var edit = PostPath(root, root) + "/edit";
 
-        var page = await Change(ada, edit, PostPath(root, root), new Dictionary<string, string> { ["body"] = "New words.", ["version"] = "not-a-number" });
+        var page = await Form(ada, edit, PostPath(root, root), As(HttpMethod.Patch, new Dictionary<string, string> { ["body"] = "New words.", ["version"] = "not-a-number" }));
 
         Assert.Equal((HttpStatusCode.BadRequest, "text/html"), (page.Status, page.MediaType));
         Assert.Contains(Masthead, page.Body);
@@ -41,7 +41,7 @@ public sealed class RefusalPageTests
         Assert.Contains("cannot take this value.", page.Body);
         Assert.Contains("<footer class=\"footer bar\"", page.Body);
 
-        var json = await Patch(ada, edit, PostPath(root, root), new { body = "New words.", version = "not-a-number" });
+        var json = await Json(ada, edit, HttpMethod.Patch, PostPath(root, root), new { body = "New words.", version = "not-a-number" });
         Assert.Equal((HttpStatusCode.BadRequest, "application/problem+json"), (json.Status, json.MediaType));
     }
 

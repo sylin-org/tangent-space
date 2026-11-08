@@ -63,7 +63,7 @@ public sealed partial class SocialCardTests
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(ct: Cancellation);
         await Established(tangentSpace);
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent("articles", "Articles", "Pieces.", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new OpenTangent("articles", "Articles", "Pieces.", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
         var article = Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), "articles", "A published piece", string.Concat(Enumerable.Repeat("word ", 100)), "ada", Start).Send(Cancellation)).Result;
 
         var html = await Page(tangentSpace.Client, $"/t/articles/{article.Slug}");
@@ -203,7 +203,7 @@ public sealed partial class SocialCardTests
         await Given.AnEstablishedTangentSpace(tangentSpace, Place, ct: Cancellation);
         await Given.AParticipant(tangentSpace, "leo", [Roles.Administrator], ct: Cancellation);
         await Given.AParticipant(tangentSpace, "ada", [Roles.Member], ct: Cancellation);
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent(Workshop, "The workshop", "Where things get made.", PostKind.Topic, 1, Audience.Public, "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new OpenTangent(Workshop, "The workshop", "Where things get made.", PostKind.Topic, 1, Audience.Public, "leo").Send(Cancellation));
     }
 
     private static async Task<Post> Started(string title, string body)

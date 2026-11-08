@@ -156,7 +156,7 @@ public sealed class DoorTests(ITestOutputHelper output)
             Assert.Equal(BaseUrl + FirstStepsController.ClosePath, steps.GetProperty("close").GetProperty("action").GetString());
             var purposes = steps.GetProperty("purposes").EnumerateArray().ToDictionary(purpose => purpose.GetProperty("name").GetString()!, purpose => purpose);
             Assert.Equal(BaseUrl + "/t/" + Workshop, purposes["The workshop"].GetProperty("address").GetString());
-            Assert.Equal(BaseUrl + "/t/new", purposes["Off the record"].GetProperty("add").GetProperty("action").GetString());
+            Assert.Equal(BaseUrl + "/t", purposes["Off the record"].GetProperty("add").GetProperty("action").GetString());
         }
         Assert.Contains("Make it yours.", WebUtility.HtmlDecode(await Html(browser.Client, "/")));
 
@@ -168,11 +168,11 @@ public sealed class DoorTests(ITestOutputHelper output)
         using (var away = await browser.Client.PostAsync(TangentSpaceSettingsController.AppearancePath,
                    Form(new() { [TangentSpaceSettingsController.PaletteField] = "iris", [PostWrites.ReturnField] = "//elsewhere.example/" }), Cancellation))
             Assert.Equal(BaseUrl + TangentSpaceSettingsController.AppearancePath, away.Headers.Location?.OriginalString);
-        using (var created = await browser.Client.PostAsync("/t/new", Form(new()
+        using (var created = await browser.Client.PostAsync("/t", Form(new()
                {
                    ["name"] = "Off the record", ["description"] = "For whoever is let in.", ["kind"] = "topic", ["audience"] = "private", [PostWrites.ReturnField] = "/"
                }), Cancellation))
-            Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + "/"), (created.StatusCode, created.Headers.Location?.OriginalString));
+            Assert.Equal((HttpStatusCode.SeeOther, "/"), (created.StatusCode, created.Headers.Location?.OriginalString));
 
         using (var closed = await browser.Client.PostAsync(FirstStepsController.ClosePath, Form(new()), Cancellation))
             Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + "/"), (closed.StatusCode, closed.Headers.Location?.OriginalString));
@@ -275,7 +275,7 @@ public sealed class DoorTests(ITestOutputHelper output)
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
         await Place(tangentSpace);
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent("studio", "The studio", "", PostKind.Topic, 3, Audience.Private, "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new OpenTangent("studio", "The studio", "", PostKind.Topic, 3, Audience.Private, "leo").Send(Cancellation));
         var mine = await Started(Workshop, "My question", Reader);
         await Mark(Reader);
 
@@ -474,7 +474,7 @@ public sealed class DoorTests(ITestOutputHelper output)
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
         await Place(tangentSpace);
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent("studio", "The studio", "", PostKind.Topic, 3, Audience.Private, "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new OpenTangent("studio", "The studio", "", PostKind.Topic, 3, Audience.Private, "leo").Send(Cancellation));
         var since = await Mark(Reader);
         using var browser = await SignedIn(tangentSpace);
 
@@ -495,7 +495,7 @@ public sealed class DoorTests(ITestOutputHelper output)
         await Place(tangentSpace);
         for (var index = 2; index < DoorController.TangentLimit; index++) await Given.ATangent(tangentSpace, "tangent-" + index, ct: Cancellation);
         // A Tangent the reader may not view, last by order: the one row past the limit, which claims nothing.
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent("hidden", "Hidden", "", PostKind.Topic, 99, Audience.Private, "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new OpenTangent("hidden", "Hidden", "", PostKind.Topic, 99, Audience.Private, "leo").Send(Cancellation));
 
         using (var json = await Json(tangentSpace.Client, "/"))
         {
@@ -526,8 +526,8 @@ public sealed class DoorTests(ITestOutputHelper output)
         space.ProprietorId = "leo";
         space.OperatorId = "leo";
         Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(Cancellation));
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent(Workshop, "The workshop", "Where things get made.", PostKind.Topic, 2, Audience.Public, "leo").Send(Cancellation));
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent(Articles, "Articles", "", PostKind.Article, 1, Audience.Public, "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new OpenTangent(Workshop, "The workshop", "Where things get made.", PostKind.Topic, 2, Audience.Public, "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new OpenTangent(Articles, "Articles", "", PostKind.Article, 1, Audience.Public, "leo").Send(Cancellation));
     }
 
     private static async Task<Post> Started(string tangent, string title, string author)

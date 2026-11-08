@@ -33,7 +33,7 @@ public sealed class ReportedSeedController(RoleCollection roles) : ControllerBas
         await Person(Mara, "mara.bsky.social", "Mara Lind", Roles.Member, ct);
         await Person(Persona, "ada.bsky.social", "Ada Okafor", Roles.Member, ct);
 
-        await Write(new CreateTangent("discussions", "Discussions", "Open questions, half-ideas and the loose threads of the work.", PostKind.Topic, 1, Audience.Public, Leo), ct);
+        await Write(new OpenTangent("discussions", "Discussions", "Open questions, half-ideas and the loose threads of the work.", PostKind.Topic, 1, Audience.Public, Leo), ct);
 
         var glazes = await Write(new Started(Tid(At(23, 9, 0), 1), "discussions", "Glazes we keep coming back to",
             "Which glaze would you keep if the studio could only keep one?", Leo, At: At(23, 9, 0)), ct);

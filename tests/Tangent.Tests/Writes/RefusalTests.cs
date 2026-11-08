@@ -59,8 +59,8 @@ public sealed class RefusalTests
 
         var page = await Send(bea.Client, HttpMethod.Get, edit);
         // The edit page offers Bea no form, so her session's token comes from the Topic's page, which carries one.
-        var editJson = await Patch(bea, TopicPath(root), PostPath(root, root), new { title = "Mine", body = "Mine now.", version = 1 });
-        var editForm = await Change(bea, TopicPath(root), PostPath(root, root), new Dictionary<string, string> { ["title"] = "Mine", ["body"] = "Mine now.", ["version"] = "1" });
+        var editJson = await Json(bea, TopicPath(root), HttpMethod.Patch, PostPath(root, root), new { title = "Mine", body = "Mine now.", version = 1 });
+        var editForm = await Form(bea, TopicPath(root), PostPath(root, root), As(HttpMethod.Patch, new Dictionary<string, string> { ["title"] = "Mine", ["body"] = "Mine now.", ["version"] = "1" }));
         var removeJson = await Json(bea, TopicPath(root), remove, new { });
         var removeForm = await Form(bea, TopicPath(root), remove, new Dictionary<string, string>());
 
@@ -139,7 +139,7 @@ public sealed class RefusalTests
         var startNowhere = await Json(ada, page, "/t/nowhere/new", new { id = Tids.Mint(), title = "In here", body = "Let me in." });
         var startForm = await Form(ada, page, "/t/" + Studio, new Dictionary<string, string> { ["id"] = Tids.Mint(), ["title"] = "In here", ["body"] = "Let me in." });
         var reply = await Json(ada, page, TopicPath(hidden), new { id = Tids.Mint(), body = "Let me in." });
-        var edit = await Patch(ada, page, PostPath(hidden, hidden), new { body = "Let me in.", version = 1 });
+        var edit = await Json(ada, page, HttpMethod.Patch, PostPath(hidden, hidden), new { body = "Let me in.", version = 1 });
         var editPage = await Send(ada.Client, HttpMethod.Get, PostPath(hidden, hidden) + "/edit", json: true);
         var remove = await Json(ada, page, PostPath(hidden, hidden) + "/remove", new { });
         var removeForm = await Form(ada, page, PostPath(hidden, hidden) + "/remove", new Dictionary<string, string>());

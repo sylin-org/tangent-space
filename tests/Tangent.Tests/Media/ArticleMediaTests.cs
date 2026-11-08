@@ -587,13 +587,13 @@ public sealed class ArticleMediaTests
         Assert.Contains("name=\"" + PostWrites.CoverField + "\" value=\"" + cover + "\"", page.Body);
 
         Assert.Contains("name=\"_method\" value=\"PATCH\"", page.Body);
-        var saved = await Change(ada, path, TopicPath(article) + "/" + article.Id, new()
+        var saved = await Form(ada, path, TopicPath(article) + "/" + article.Id, As(HttpMethod.Patch, new()
         {
             [PostWrites.VersionField] = "1",
             [PostWrites.TitleField] = "Lanterns",
             [PostWrites.BodyField] = "Second words.",
             [PostWrites.CoverField] = cover
-        });
+        }));
         Assert.Equal(HttpStatusCode.SeeOther, saved.Status);
         var row = await Post.Get(article.Id, Cancellation);
         Assert.Equal(("Second words.", cover), (row!.Body, row.CoverId));

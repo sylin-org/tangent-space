@@ -160,9 +160,9 @@ public sealed class GalleryController : ControllerBase
         return new FirstSteps(
             [
                 new("General", "Conversations, open to everyone", door + "t/general", null),
-                new("Articles", "Long pieces you publish", null, Press("/t/new", "name", "Articles", "Add")),
-                new("The workshop", "Code and experiments", null, Press("/t/new", "name", "The workshop", "Add")),
-                new("Off the record", "Private, for whoever you let in", null, Press("/t/new", "name", "Off the record", "Add"))
+                new("Articles", "Long pieces you publish", null, Press("/t", "name", "Articles", "Add")),
+                new("The workshop", "Code and experiments", null, Press("/t", "name", "The workshop", "Add")),
+                new("Off the record", "Private, for whoever you let in", null, Press("/t", "name", "Off the record", "Add"))
             ],
             Press("/settings/appearance", "description", "Repairs, systems and the things that outlast them.", "Use it"),
             door + "settings/appearance#space-appearance-description",

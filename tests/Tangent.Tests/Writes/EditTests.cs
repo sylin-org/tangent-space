@@ -32,8 +32,8 @@ public sealed class EditTests
         Assert.Equal(HttpStatusCode.OK, page.Status);
         Assert.Contains("<input type=\"hidden\" name=\"version\" value=\"1\" />", page.Body);
         Assert.Contains("<input type=\"hidden\" name=\"_method\" value=\"PATCH\" />", page.Body);
-        var byForm = await Change(ada, PostPath(root, root) + "/edit", PostPath(root, root),
-            new Dictionary<string, string> { ["title"] = "Lanterns, again", ["body"] = "How do you hang yours, and where?", ["version"] = "1" });
+        var byForm = await Form(ada, PostPath(root, root) + "/edit", PostPath(root, root), As(HttpMethod.Patch,
+            new Dictionary<string, string> { ["title"] = "Lanterns, again", ["body"] = "How do you hang yours, and where?", ["version"] = "1" }));
 
         Assert.Equal((HttpStatusCode.SeeOther, AddressOf(root, root)), (byForm.Status, byForm.Location));
         var edited = await Post.Get(root.Id, Cancellation);
@@ -45,7 +45,7 @@ public sealed class EditTests
         var editedEvent = Assert.Single(await Event.Query(e => e.Kind == EventKind.PostEdited, Cancellation));
         Assert.Equal((root.Id, root.Id, Workshop, Ada, 2L), (editedEvent.PostId, editedEvent.TopicId, editedEvent.TangentId, editedEvent.ActorId, editedEvent.Version));
 
-        var byJson = await Patch(mo, PostPath(root, reply) + "/edit", PostPath(root, reply),
+        var byJson = await Json(mo, PostPath(root, reply) + "/edit", HttpMethod.Patch, PostPath(root, reply),
             new { body = "From the porch beam, on a hook.", version = 1 });
 
         Assert.Equal((HttpStatusCode.OK, AddressOf(root, reply)), (byJson.Status, byJson.Location));
@@ -71,9 +71,9 @@ public sealed class EditTests
 
         using var bea = await SignedIn(tangentSpace, Bea);
 
-        var edited = await Patch(bea, PostPath(root, root), PostPath(root, root), new { body = "How do you hang yours? (moderated)", version = 1 });
+        var edited = await Json(bea, PostPath(root, root), HttpMethod.Patch, PostPath(root, root), new { body = "How do you hang yours? (moderated)", version = 1 });
         var removed = await new RemovePost(reply.Id, Bea).Send(Cancellation);
-        var notThere = await Patch(bea, PostPath(elsewhere, elsewhere), PostPath(elsewhere, elsewhere), new { body = "Not mine to change.", version = 1 });
+        var notThere = await Json(bea, PostPath(elsewhere, elsewhere), HttpMethod.Patch, PostPath(elsewhere, elsewhere), new { body = "Not mine to change.", version = 1 });
         var notThereEither = await new RemovePost(elsewhere.Id, Bea).Send(Cancellation);
 
         Assert.Equal((HttpStatusCode.OK, 2L, Bea), (edited.Status, edited.Json.GetProperty("version").GetInt64(), edited.Json.GetProperty("editedBy").GetString()));
@@ -97,8 +97,8 @@ public sealed class EditTests
         using var ada = await SignedIn(tangentSpace, Ada);
         var edit = PostPath(root, root) + "/edit";
 
-        var asJson = await Patch(ada, edit, PostPath(root, root), new { title = "Lanterns", body = "Mine hang from the porch.", version = 1 });
-        var onForm = await Change(ada, edit, PostPath(root, root), new Dictionary<string, string> { ["title"] = "Lanterns", ["body"] = "Mine hang from the porch.", ["version"] = "1" });
+        var asJson = await Json(ada, edit, HttpMethod.Patch, PostPath(root, root), new { title = "Lanterns", body = "Mine hang from the porch.", version = 1 });
+        var onForm = await Form(ada, edit, PostPath(root, root), As(HttpMethod.Patch, new Dictionary<string, string> { ["title"] = "Lanterns", ["body"] = "Mine hang from the porch.", ["version"] = "1" }));
         var repeat = await new Edited(root.Id, 1, "Hung from the beam, says the moderator.", null, Mo).Send(Cancellation);
 
         Assert.Equal((HttpStatusCode.Conflict, "application/problem+json", Post.StaleWord), (asJson.Status, asJson.MediaType, asJson.Word));

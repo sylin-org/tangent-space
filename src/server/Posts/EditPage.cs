@@ -95,7 +95,7 @@ public sealed record EditPage(
             CoverId = CoverId, Minutes = Tangents.TangentPage.ReadTime(Body), Failure = Failure, FailureGate = FailureGate, TitleFailure = TitleFailure,
             BodyFailure = BodyFailure, Hidden =
             [
-                .. writing.MethodField is { } method ? new[] { new Render.Form.Field(Koan.Web.Infrastructure.KoanWebConstants.Form.Method, "", method, Render.Form.Input.Hidden) } : [],
+                .. writing.Sent != writing.Method.ToLowerInvariant() ? new[] { new Render.Form.Field(Render.Form.MethodField, "", writing.Method, Render.Form.Input.Hidden) } : [],
                 new(PostWrites.VersionField, "", writing.Value(PostWrites.VersionField), Render.Form.Input.Hidden)
             ],
             EditedBy = Edited?.By.Name, SentTitle = SentTitle, SentBody = SentBody, Cancel = new Render.Onward("Cancel", Address), Submit = "Save", Busy = "Saving…"

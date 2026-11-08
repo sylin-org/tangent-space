@@ -224,20 +224,30 @@ public sealed record Form(string Action, string Method, IReadOnlyList<Form.Field
     [Newtonsoft.Json.JsonIgnore]
     public bool Multipart { get; init; }
 
+    /// <summary>The path of this place a browser's form is sent on to once its write is done, in place of the address of what
+    /// it wrote; the page's alone, so its JSON leaves it out.</summary>
+    [Newtonsoft.Json.JsonIgnore]
+    public string? Return { get; init; }
+
+    /// <summary>The method the browser's form element sends: <c>get</c> to read, and <c>post</c> otherwise, a change or a
+    /// delete naming its own <see cref="Method"/> in the field Koan reads it from (<see cref="MethodField"/>).</summary>
+    [Newtonsoft.Json.JsonIgnore]
+    public string Sent => Method == HttpMethods.Get ? "get" : "post";
+
+    /// <summary>The field a browser's form names a method it cannot send in: <c>PATCH</c> or <c>DELETE</c>.</summary>
+    public const string MethodField = Koan.Web.Infrastructure.KoanWebConstants.Form.Method;
+
+    /// <summary>The field a browser's form names where it is sent on to.</summary>
+    public const string ReturnField = Koan.Web.Infrastructure.KoanWebConstants.Form.Return;
+
     /// <summary>A form that posts to <paramref name="action"/> with these fields.</summary>
     public static Form Posting(string action, params Field[] fields) => new(action, HttpMethods.Post, fields);
 
-    /// <summary>A form that changes what <paramref name="action"/> names with these fields: its JSON says <c>PATCH</c>, and its
-    /// HTML, which a browser sends only as a <c>POST</c>, names the method in Koan's <c>_method</c> field.</summary>
+    /// <summary>A form that changes what <paramref name="action"/> names with these fields.</summary>
     public static Form Patching(string action, params Field[] fields) => new(action, HttpMethods.Patch, fields);
 
-    /// <summary>The method a browser sends the form with: <c>get</c> for a read, <c>post</c> for every write.</summary>
-    [Newtonsoft.Json.JsonIgnore]
-    public string HtmlMethod => HttpMethods.IsGet(Method) ? "get" : "post";
-
-    /// <summary>The method a browser cannot send, which the form names in its <c>_method</c> field; null for a read and a post.</summary>
-    [Newtonsoft.Json.JsonIgnore]
-    public string? MethodField => HttpMethods.IsGet(Method) || HttpMethods.IsPost(Method) ? null : Method;
+    /// <summary>A form that deletes what <paramref name="action"/> names, sending these fields.</summary>
+    public static Form Deleting(string action, params Field[] fields) => new(action, HttpMethods.Delete, fields);
 
     /// <summary>A form that reads <paramref name="action"/> with these fields.</summary>
     public static Form Reading(string action, params Field[] fields) => new(action, HttpMethods.Get, fields);

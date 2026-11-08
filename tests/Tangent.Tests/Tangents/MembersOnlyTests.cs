@@ -31,7 +31,7 @@ public sealed class MembersOnlyTests
         // Leo opens the private studio to asks; Ada's door leads her to all the Tangents, however few the place holds,
         // where she finds it listed with the way in, and still cannot read it. A visitor's door, which can join nothing,
         // has no such link.
-        Assert.Equal(HttpStatusCode.OK, (await Json(leo, people, "/t/" + Studio + "/settings/joining", new { joining = "ask" })).Status);
+        Assert.Equal(HttpStatusCode.OK, (await Json(leo, people, HttpMethod.Patch, "/t/" + Studio, new { joining = "ask" })).Status);
         var door = await Send(ada.Client, HttpMethod.Get, "/", json: true);
         Assert.Equal((false, BaseUrl + TangentsController.Route), (door.Json.GetProperty("moreTangents").GetBoolean(), door.Json.GetProperty("allTangents").GetString()));
         Assert.Contains($"<a class=\"rail-new\" href=\"{BaseUrl + TangentsController.Route}\">All Tangents</a>", (await Send(ada.Client, HttpMethod.Get, "/")).Body);
@@ -43,7 +43,7 @@ public sealed class MembersOnlyTests
         // Leo brings the studio a picture of its own, which reaches only its members, so the card Ada reads carries none.
         var picture = await Media.Keep(ArticleMediaTests.Jpeg(), Cancellation);
         Assert.IsType<Outcome<MediaUse>.Done>(await new BringMedia(picture.Id, Leo).Send(Cancellation));
-        Assert.IsType<Outcome<Tangent>.Done>(await new ChangeTangent(Studio, Leo, Image: Media.Reference(picture.Id)).Send(Cancellation));
+        Assert.IsType<Outcome<Tangent>.Done>(await new ChangeTangentRow(Studio, Leo, row => row.Image = Media.Reference(picture.Id)).Send(Cancellation));
         Assert.Equal(HttpStatusCode.NotFound, (await Send(ada.Client, HttpMethod.Get, Media.Reference(picture.Id))).Status);
         listed = Listed((await Send(ada.Client, HttpMethod.Get, "/t", json: true)).Json, Studio);
         Assert.Null(Image(listed));
@@ -85,11 +85,11 @@ public sealed class MembersOnlyTests
         Assert.Equal("ask", (await Send(ada.Client, HttpMethod.Get, "/t/" + Studio, json: true)).Json.GetProperty("tangent").GetProperty("joining").GetString());
 
         // Closed, the studio is absent to her at its address.
-        Assert.Equal(HttpStatusCode.OK, (await Json(leo, people, "/t/" + Studio + "/settings/joining", new { joining = "closed" })).Status);
+        Assert.Equal(HttpStatusCode.OK, (await Json(leo, people, HttpMethod.Patch, "/t/" + Studio, new { joining = "closed" })).Status);
         Assert.Equal(HttpStatusCode.NotFound, (await Send(ada.Client, HttpMethod.Get, "/t/" + Studio)).Status);
 
         // Opened to anyone, then Leo keeps her out: she cannot join again, and the studio is no longer listed to her.
-        Assert.Equal(HttpStatusCode.OK, (await Json(leo, people, "/t/" + Studio + "/settings/joining", new { joining = "join" })).Status);
+        Assert.Equal(HttpStatusCode.OK, (await Json(leo, people, HttpMethod.Patch, "/t/" + Studio, new { joining = "join" })).Status);
         var keptOut = await Json(leo, people, people, new { person = Ada, choice = "out" });
         Assert.Equal("kept-out", keptOut.Json.GetProperty("people").EnumerateArray().Single().GetProperty("state").GetString());
         Assert.Equal(HttpStatusCode.NotFound, (await Json(ada, "/t", "/t/" + Studio + "/join", new { })).Status);
@@ -135,7 +135,7 @@ public sealed class MembersOnlyTests
         const string kiln = "kiln";
         await Given.ATangent(tangentSpace, kiln, Audience.Private, ct: Cancellation);
         foreach (var slug in new[] { Studio, kiln })
-            Assert.IsType<Outcome<Tangent>.Done>(await new ChangeJoining(slug, Leo, Joining.Ask).Send(Cancellation));
+            Assert.IsType<Outcome<Tangent>.Done>(await new ChangeTangentRow(slug, Leo, row => row.Joining = Joining.Ask).Send(Cancellation));
         var at = DateTimeOffset.UtcNow.AddHours(-2);
         await new Ask { Id = Ask.Key(kiln, "early"), TangentId = kiln, PersonId = "early", AskedAt = at }.Save(Cancellation);
         for (var index = 0; index <= Ask.ReadSize; index++)

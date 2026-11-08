@@ -2,6 +2,7 @@ using Koan.Data.Core;
 using Koan.Data.Core.Commands;
 using Tangent.Access;
 using Tangent.Posts;
+using Tangent.Space;
 
 namespace Tangent.Capture;
 
@@ -50,5 +51,19 @@ public sealed record Edited(string PostId, long Version, PostBody Body, string? 
         var post = await Post.Get(PostId, ct) ?? throw new Refusal(Post.NoPost);
         if (await PostWriting.Edit(post, post, Version, Body, Title, CoverId, EditorId, At ?? DateTimeOffset.UtcNow, ct)) await post.Save(ct);
         return new Outcome<Post>.Done(post);
+    }
+}
+
+/// <summary>A Tangent as creating one writes it, with its audience and the row of the log that begins it
+/// (<see cref="Tangents.TangentWriting.Opened"/>), on the slug and at the order the seed names, at a time it names.</summary>
+public sealed record OpenTangent(string Slug, string Name, string Description, PostKind DefaultKind, int Order, Audience Audience, string ActorId,
+    DateTimeOffset? At = null) : ICommand<Tangents.Tangent>
+{
+    public async Task<Outcome<Tangents.Tangent>> Run(CancellationToken ct)
+    {
+        var tangent = Tangents.Tangent.Create(Slug, Name, Description, DefaultKind, Order);
+        await Tangents.TangentWriting.Opened(tangent, Audience, ActorId, At ?? DateTimeOffset.UtcNow, ct);
+        await tangent.Save(ct);
+        return new Outcome<Tangents.Tangent>.Done(tangent);
     }
 }

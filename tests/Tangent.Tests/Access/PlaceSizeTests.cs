@@ -3,6 +3,7 @@ using System.Net;
 using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
+using Tangent.Capture;
 using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
@@ -40,7 +41,7 @@ public sealed class PlaceSizeTests(ITestOutputHelper output)
         for (var index = 1; index <= count; index++)
         {
             var audience = index == count ? Audience.Private : Audience.Public;
-            Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent(Slug(index), "Tangent " + index, "", PostKind.Topic, index, audience, Leo).Send(Cancellation));
+            Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new OpenTangent(Slug(index), "Tangent " + index, "", PostKind.Topic, index, audience, Leo).Send(Cancellation));
         }
 
         output.WriteLine($"{count} Tangents created in {clock.Elapsed}");
@@ -62,7 +63,7 @@ public sealed class PlaceSizeTests(ITestOutputHelper output)
         Assert.Equal((true, Capabilities.SignIn.Word), (visitor.Exists, visitor.Gate(Bit.Post)?.Word));
 
         // A move of the last Tangent reads past the first thousand and changes the places of two.
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new ChangeTangent(last, Leo, Move: Move.Earlier).Send(Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new ChangeTangentRow(last, Leo, Move: Move.Earlier).Send(Cancellation));
         Assert.Equal((count - 1, count), ((await Tangents.Tangent.Get(last, Cancellation))!.Order, (await Tangents.Tangent.Get(beside, Cancellation))!.Order));
         Assert.Equal(1, (await Tangents.Tangent.Get(Slug(1), Cancellation))!.Order);
     }
@@ -101,11 +102,11 @@ public sealed class PlaceSizeTests(ITestOutputHelper output)
         for (var index = 1; index <= count; index++) await Given.ATangent(tangentSpace, Slug(index), ct: Cancellation);
         var expected = Enumerable.Range(1, count).Select(Slug).ToList();
 
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new ChangeTangent(Slug(20), Leo, Move: Move.Earlier).Send(Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new ChangeTangentRow(Slug(20), Leo, Move: Move.Earlier).Send(Cancellation));
         (expected[18], expected[19]) = (expected[19], expected[18]);
         Assert.Equal(expected, await InOrder());
 
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new ChangeTangent(Slug(120), Leo, Move: Move.Later).Send(Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new ChangeTangentRow(Slug(120), Leo, Move: Move.Later).Send(Cancellation));
         (expected[119], expected[120]) = (expected[120], expected[119]);
         Assert.Equal(expected, await InOrder());
 
@@ -125,7 +126,7 @@ public sealed class PlaceSizeTests(ITestOutputHelper output)
         await Given.AParticipant(tangentSpace, Ada, [Roles.Member], ct: Cancellation);
         // Orders dense from one: sixty Tangents Ada may not view, then sixty she may.
         for (var index = 1; index <= 120; index++)
-            Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent(Slug(index), "Tangent " + index, "", PostKind.Topic,
+            Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new OpenTangent(Slug(index), "Tangent " + index, "", PostKind.Topic,
                 index, index <= 60 ? Audience.Private : Audience.Public, Leo).Send(Cancellation));
         using var ada = await SignedIn(tangentSpace, Ada);
 

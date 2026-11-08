@@ -62,8 +62,8 @@ public sealed class ReadingTests
         await Given.AnEstablishedTangentSpace(tangentSpace, ct: Cancellation);
         await Given.AParticipant(tangentSpace, "leo", [Roles.Administrator], ct: Cancellation);
         await Given.AParticipant(tangentSpace, "ada", [Roles.Member], ct: Cancellation);
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent(Workshop, "The workshop", "Where things get made.", PostKind.Topic, 1, Audience.Public, "leo").Send(Cancellation));
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new CreateTangent(Articles, "Articles", "Pieces.", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new OpenTangent(Workshop, "The workshop", "Where things get made.", PostKind.Topic, 1, Audience.Public, "leo").Send(Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new OpenTangent(Articles, "Articles", "Pieces.", PostKind.Article, 2, Audience.Public, "leo").Send(Cancellation));
     }
 
     private static async Task<string> Read(HttpClient client, string path, string accept)

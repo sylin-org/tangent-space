@@ -68,7 +68,7 @@ else
     private RenderFragment Element => @<text>
         @if (!Model.Fields.Any(Shown) && Model.Cancel is null)
         {
-            <form class="@Classes(Model.Main ? "sign-in-form" : null, Model.Tool)" method="@Model.HtmlMethod" action="@Model.Action" data-island="@Island" data-props="@(Island is null ? null : Model.IslandProps)">
+            <form class="@Classes(Model.Main ? "sign-in-form" : null, Model.Tool)" method="@Model.Sent" action="@Model.Action" data-island="@Island" data-props="@(Island is null ? null : Model.IslandProps)">
                 @if (Model.Failure is { } refused)
                 {
                     <p class="sign-in-failure" id="@((Model.Key ?? Model.Tool ?? "form") + "-failure")" role="alert">@refused</p>
@@ -135,7 +135,7 @@ else
         }
         else
         {
-            <form class="@Classes("sign-in-form", Model.Tool)" method="@Model.HtmlMethod" action="@(Model.ReadOnly ? null : Model.Action)"
+            <form class="@Classes("sign-in-form", Model.Tool)" method="@Model.Sent" action="@(Model.ReadOnly ? null : Model.Action)"
                   enctype="@(Model.Multipart ? "multipart/form-data" : null)" data-island="@Island" data-props="@(Island is null ? null : Model.IslandProps)">
                 @if (Model.Failure is { } failure)
                 {
@@ -214,10 +214,15 @@ else
         if (run is { } last) yield return last;
     }
 
-    private static RenderFragment Hidden(Render.Form form) => @<text>@if (form.MethodField is { } named)
+    private static RenderFragment Hidden(Render.Form form) => @<text>@if (form.Sent != form.Method.ToLowerInvariant())
         {
-            <input type="hidden" name="@Koan.Web.Infrastructure.KoanWebConstants.Form.Method" value="@named">
-        }@foreach (var given in form.Fields.Where(each => each.As == Render.Form.Input.Hidden))
+            <input type="hidden" name="@Render.Form.MethodField" value="@form.Method">
+        }
+        @if (form.Return is { } onward)
+        {
+            <input type="hidden" name="@Render.Form.ReturnField" value="@onward">
+        }
+        @foreach (var given in form.Fields.Where(each => each.As == Render.Form.Input.Hidden))
         {
             <input type="hidden" name="@given.Name" value="@given.Value" data-carry="@given.Carries?.From" data-carry-as="@given.Carries?.As">
         }</text>;

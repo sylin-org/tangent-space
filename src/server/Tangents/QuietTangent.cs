@@ -15,7 +15,7 @@ public sealed record QuietTangent(string ParticipantId, string Slug, bool On = t
     public async Task<Outcome<Participant>> Run(CancellationToken ct)
     {
         if (await Participant.Get(ParticipantId, ct) is not { } participant || !(await Capabilities.Load(ParticipantId, Slug, null, ct)).Exists)
-            return new Outcome<Participant>.Refused(ChangeTangent.NoTangent);
+            return new Outcome<Participant>.Refused(Tangent.NoTangent);
         if (participant.Quieten(Slug, On)) await participant.Save(ct);
         return new Outcome<Participant>.Done(participant);
     }

@@ -172,7 +172,7 @@ public sealed class TopicsController(KoanWebBaseUrl baseUrl, IDataProtectionProv
                 await unread!.BadgeNow(baseAddress + "/", ct)),
             DateOnly.FromDateTime(DateTime.UtcNow),
             capabilities.Holds(Bit.ManageTangent) ? address + "/" + TangentWrites.SettingsSegment : null,
-            creates ? baseAddress + NewTangentController.Route : null,
+            creates ? baseAddress + TangentsController.NewRoute : null,
             audience == Audience.Public ? Feeds.TangentLinks(baseAddress, row.Id, row.Name, space.Name) : null,
             reader is not null && Inside.In(await Inside.Own(row.Id, reader.Id, ct))
                 ? Render.Form.Posting(address + "/" + JoinController.LeaveSegment)
