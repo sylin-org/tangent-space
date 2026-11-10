@@ -35,7 +35,7 @@ public sealed class NewTangentTests
         var created = await Form(leo, "/t/new", "/t", new() { ["name"] = "The garden" });
 
         Assert.Equal(HttpStatusCode.SeeOther, created.Status);
-        Assert.Equal("/t/the-garden", created.Location);
+        Assert.Equal(BaseUrl + "/t/the-garden", created.Location);
         var row = await Tangent.Get("the-garden", Cancellation);
         Assert.NotNull(row);
         Assert.Equal(("The garden", "", PostKind.Topic, 3), (row.Name, row.Description, row.DefaultKind, row.Order));
@@ -47,8 +47,8 @@ public sealed class NewTangentTests
         Assert.Contains("<h1 id=\"tangent-title\" class=\"tangent-title\">The garden</h1>", landed.Body);
 
         // A name another Tangent's slug holds takes a numbered suffix, and no name takes the form's own address.
-        Assert.Equal("/t/workshop-2", (await Form(leo, "/t/new", "/t", new() { ["name"] = "Workshop" })).Location);
-        Assert.Equal("/t/new-2", (await Form(leo, "/t/new", "/t", new() { ["name"] = "New" })).Location);
+        Assert.Equal(BaseUrl + "/t/workshop-2", (await Form(leo, "/t/new", "/t", new() { ["name"] = "Workshop" })).Location);
+        Assert.Equal(BaseUrl + "/t/new-2", (await Form(leo, "/t/new", "/t", new() { ["name"] = "New" })).Location);
         Assert.Equal((4, 5), ((await Tangent.Get("workshop-2", Cancellation))!.Order, (await Tangent.Get("new-2", Cancellation))!.Order));
     }
 
@@ -145,7 +145,7 @@ public sealed class NewTangentTests
         var created = await Json(leo, "/t/new", "/t", new { name = "Field guides", kind = "article", audience = "private" });
 
         Assert.Equal(HttpStatusCode.Created, created.Status);
-        Assert.Equal("/t/field-guides", created.Location);
+        Assert.Equal(BaseUrl + "/t/field-guides", created.Location);
         Assert.Equal(("field-guides", "Field guides", "article", "private", BaseUrl + "/t/field-guides/settings"),
             (created.Json.GetProperty("slug").GetString(), created.Json.GetProperty("name").GetString(), created.Json.GetProperty("kind").GetString(),
                 created.Json.GetProperty("audience").GetString(), created.Json.GetProperty("settings").GetString()));

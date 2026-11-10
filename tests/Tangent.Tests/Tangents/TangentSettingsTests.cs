@@ -60,7 +60,7 @@ public sealed class TangentSettingsTests
         Assert.Equal("workshop", (await Tangent.Get("workshop", Cancellation))!.Name);
 
         var renamed = await Form(bea, "/t/workshop", "/t/workshop", As(HttpMethod.Patch, Workshop("Bea's workshop")));
-        Assert.Equal((HttpStatusCode.SeeOther, "/t/workshop"), (renamed.Status, renamed.Location));
+        Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + "/t/workshop"), (renamed.Status, renamed.Location));
         Assert.Equal("Bea's workshop", (await Tangent.Get("workshop", Cancellation))!.Name);
     }
 
@@ -78,7 +78,7 @@ public sealed class TangentSettingsTests
             ["name"] = "The big workshop", ["description"] = "Where things get made.", ["kind"] = "article", ["audience"] = "public"
         }));
 
-        Assert.Equal((HttpStatusCode.SeeOther, "/t/workshop"), (renamed.Status, renamed.Location));
+        Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + "/t/workshop"), (renamed.Status, renamed.Location));
         var row = (await Tangent.Get("workshop", Cancellation))!;
         Assert.Equal(("workshop", "The big workshop", "Where things get made.", PostKind.Article), (row.Id, row.Name, row.Description, row.DefaultKind));
         Assert.Null(await Tangent.Get("the-big-workshop", Cancellation));
@@ -145,7 +145,7 @@ public sealed class TangentSettingsTests
 
         var moved = await Form(leo, "/t/articles/settings", "/t/articles", As(HttpMethod.Patch, new() { ["move"] = "earlier" }));
 
-        Assert.Equal((HttpStatusCode.SeeOther, "/t/articles/settings"), (moved.Status, moved.Location));
+        Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + "/t/articles/settings"), (moved.Status, moved.Location));
         Assert.Equal(["studio", "articles", "workshop"], await DoorOrder(leo));
         Assert.Equal((1, 2, 3), ((await Tangent.Get("studio", Cancellation))!.Order, (await Tangent.Get("articles", Cancellation))!.Order,
             (await Tangent.Get("workshop", Cancellation))!.Order));
@@ -192,7 +192,7 @@ public sealed class TangentSettingsTests
 
         var renamed = await Form(leo, Path, "/t/moderators", As(HttpMethod.Patch, new() { ["name"] = "Moderation", ["description"] = "Reports and talk.", ["kind"] = "topic" }));
 
-        Assert.Equal((HttpStatusCode.SeeOther, "/t/moderators"), (renamed.Status, renamed.Location));
+        Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + "/t/moderators"), (renamed.Status, renamed.Location));
         var row = (await Tangent.Get(ModeratorsTangent.Slug, Cancellation))!;
         Assert.Equal(("Moderation", "Reports and talk.", ModeratorsTangent.Order), (row.Name, row.Description, row.Order));
         Assert.Equal(Audience.Private, (await Event.All(Cancellation)).OrderBy(e => e.Seq).Last().Audience);
@@ -226,7 +226,7 @@ public sealed class TangentSettingsTests
 
         var described = await Json(leo, "/t/workshop/settings", HttpMethod.Patch, "/t/workshop", new { description = "Only this." });
 
-        Assert.Equal((HttpStatusCode.OK, "/t/workshop"), (described.Status, described.Location));
+        Assert.Equal((HttpStatusCode.OK, BaseUrl + "/t/workshop"), (described.Status, described.Location));
         Assert.Equal(("workshop", "Only this.", "public"), (described.Json.GetProperty("name").GetString(),
             described.Json.GetProperty("description").GetString(), described.Json.GetProperty("audience").GetString()));
         Assert.Contains("ManageTangent", Strings(described.Json.GetProperty("can")));
@@ -334,7 +334,7 @@ public sealed class TangentSettingsTests
         Assert.Contains("Delete this Tangent", corner);
         Assert.DoesNotContain("post-remove-note", corner);
         var pressed = await Form(leo, "/t/corner/settings", "/t/corner", As(HttpMethod.Delete, new() { ["topics"] = "0" }));
-        Assert.Equal((HttpStatusCode.SeeOther, "/t"), (pressed.Status, pressed.Location));
+        Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + "/t"), (pressed.Status, pressed.Location));
         Assert.Null(await Tangent.Get("corner", Cancellation));
         Assert.Equal(HttpStatusCode.NotFound, (await Form(leo, "/t/corner/settings", "/t/corner", As(HttpMethod.Delete, new() { ["topics"] = "0" }))).Status);
 
@@ -425,7 +425,7 @@ public sealed class TangentSettingsTests
 
         // Brought in, it is worn at once, and its settings open again with it chosen.
         var brought = await Send(leo.Client, HttpMethod.Post, bring, Picture(ArticleMediaTests.Jpeg()), page: settings);
-        Assert.Equal((HttpStatusCode.SeeOther, settings), (brought.Status, brought.Location));
+        Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + settings), (brought.Status, brought.Location));
         var image = (await Tangent.Get(Writing.Workshop, Cancellation))!.Image;
         var id = Media.IdIn(image)!;
         Assert.NotNull(await MediaUse.Get(MediaUse.Key(id, "tangent:" + Writing.Workshop), Cancellation));

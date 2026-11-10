@@ -74,7 +74,7 @@ public sealed class TangentsEndpointTests
         Assert.Contains($"<input type=\"hidden\" name=\"{Render.Form.MethodField}\" value=\"PATCH\" />", html);
         Assert.Contains($"<input type=\"hidden\" name=\"{Render.Form.ReturnField}\" value=\"{people}\" />", html);
         var pressed = await Form(leo, people, "/t/" + Studio, new() { [Render.Form.MethodField] = "PATCH", [Render.Form.ReturnField] = people, ["joining"] = "join" });
-        Assert.Equal((HttpStatusCode.SeeOther, people), (pressed.Status, pressed.Location));
+        Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + people), (pressed.Status, pressed.Location));
         Assert.Equal(Joining.Join, (await Tangent.Get(Studio, Cancellation))!.Joining);
 
         // The moderators' Tangent keeps its joining.
