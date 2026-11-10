@@ -11,7 +11,7 @@ using Tangent.Tangents;
 
 namespace Tangent.Capture;
 
-/// <summary>The rows the members-only captures show, sent as commands when the capture asks: three members-only
+/// <summary>The rows the members-only captures show, written when the capture asks: three members-only
 /// Tangents beside a public one — one anyone joins, one people ask to join, one where the persona's ask waits — and, for
 /// the people tab, the persona an administrator, with Leo let in to the workshop and Mara and Lumen asking. Compiled only
 /// into the capture host, like <see cref="CaptureSeedController"/>; fixed names.</summary>
@@ -40,12 +40,17 @@ public sealed class MembersOnlySeedController(RoleCollection roles) : Controller
         await Person(Persona, "ada.bsky.social", "Ada Okafor", manager ? [Roles.Member, Roles.Administrator] : [Roles.Member], ct);
 
         var order = await Tangents.Tangent.NextOrder(ct);
-        await Write(new CreateTangent("workshop", "The workshop", "Works in progress, shown to the people who are building them with us.", PostKind.Topic, order, Audience.Private, Leo), ct);
-        await Write(new CreateTangent("off-the-record", "Off the record", "Loose talk among regulars, kept out of search and feeds.", PostKind.Topic, order + 1, Audience.Private, Leo), ct);
-        await Write(new CreateTangent("reading-room", "The reading room", "Drafts of the long pieces before they go out.", PostKind.Article, order + 2, Audience.Private, Leo), ct);
-        await Write(new ChangeJoining("workshop", Leo, Joining.Ask), ct);
-        await Write(new ChangeJoining("off-the-record", Leo, Joining.Join), ct);
-        await Write(new ChangeJoining("reading-room", Leo, Joining.Ask), ct);
+        foreach (var (slug, name, description, kind, joining) in new[]
+                 {
+                     ("workshop", "The workshop", "Works in progress, shown to the people who are building them with us.", PostKind.Topic, Joining.Ask),
+                     ("off-the-record", "Off the record", "Loose talk among regulars, kept out of search and feeds.", PostKind.Topic, Joining.Join),
+                     ("reading-room", "The reading room", "Drafts of the long pieces before they go out.", PostKind.Article, Joining.Ask)
+                 })
+        {
+            var tangent = await Write(new OpenTangent(slug, name, description, kind, order++, Audience.Private, Leo), ct);
+            tangent.Joining = joining;
+            await Write(new Keep<Tangents.Tangent>(tangent), ct);
+        }
 
         if (manager)
         {

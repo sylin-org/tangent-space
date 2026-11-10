@@ -34,21 +34,21 @@ public sealed class TakenOnATangentSeedController(RoleCollection roles) : Contro
         await Person(Mara, "mara.bsky.social", "Mara Lind", Roles.Member, ct);
         await Person(Persona, "ada.bsky.social", "Ada Okafor", Roles.Member, ct);
 
-        await Write(new CreateTangent("discussions", "Discussions", "Open questions, half-ideas and the loose threads of the work.", PostKind.Topic, 1, Audience.Public, Leo), ct);
-        await Write(new CreateTangent("workshop", "The workshop", "What happens at the bench, written down.", PostKind.Topic, 2, Audience.Public, Leo), ct);
-        await Write(new CreateTangent("off-the-record", "Off the record", "Where the administrators plan.", PostKind.Topic, 3, Audience.Private, Leo), ct);
+        await Write(new OpenTangent("discussions", "Discussions", "Open questions, half-ideas and the loose threads of the work.", PostKind.Topic, 1, Audience.Public, Leo), ct);
+        await Write(new OpenTangent("workshop", "The workshop", "What happens at the bench, written down.", PostKind.Topic, 2, Audience.Public, Leo), ct);
+        await Write(new OpenTangent("off-the-record", "Off the record", "Where the administrators plan.", PostKind.Topic, 3, Audience.Private, Leo), ct);
 
-        var glue = await Write(new StartTopic(Tid(At(26, 9, 0), 1), "discussions", "Where should the glue notes live?",
+        var glue = await Write(new Started(Tid(At(26, 9, 0), 1), "discussions", "Where should the glue notes live?",
             "Every repair this month has a note about which glue held. Where should those notes go?", Mara, At: At(26, 9, 0)), ct);
-        var reply = await Write(new Reply(Tid(At(26, 9, 40), 2), glue.Id, "They deserve their own topic in the workshop: what we used, on what, and whether it held.",
+        var reply = await Write(new Replied(Tid(At(26, 9, 40), 2), glue.Id, "They deserve their own topic in the workshop: what we used, on what, and whether it held.",
             Leo, At: At(26, 9, 40)), ct);
-        await Write(new Reply(Tid(At(26, 10, 5), 3), glue.Id, "Agreed. A list we can keep adding to.", Persona, At: At(26, 10, 5)), ct);
-        await Write(new StartTopic(Tid(At(26, 11, 0), 4), "workshop", "Adhesives we trust",
+        await Write(new Replied(Tid(At(26, 10, 5), 3), glue.Id, "Agreed. A list we can keep adding to.", Persona, At: At(26, 10, 5)), ct);
+        await Write(new Started(Tid(At(26, 11, 0), 4), "workshop", "Adhesives we trust",
             "Starting the list Leo asked for. Urushi on ceramics: held after three firings.", Mara, At: At(26, 11, 0), OriginId: reply.Id), ct);
 
-        var plan = await Write(new StartTopic(Tid(At(25, 14, 0), 5), "off-the-record", "Next season’s spending",
+        var plan = await Write(new Started(Tid(At(25, 14, 0), 5), "off-the-record", "Next season’s spending",
             "The kiln needs new elements before winter.", Leo, At: At(25, 14, 0)), ct);
-        await Write(new StartTopic(Tid(At(25, 15, 0), 6), "workshop", "The kiln budget",
+        await Write(new Started(Tid(At(25, 15, 0), 6), "workshop", "The kiln budget",
             "The kiln gets new elements before winter. Tell us what you would fire first.", Leo, At: At(25, 15, 0), OriginId: plan.Id), ct);
         return NoContent();
     }

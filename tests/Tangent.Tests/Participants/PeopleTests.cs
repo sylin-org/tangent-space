@@ -43,7 +43,7 @@ public sealed class PeopleTests
     /// <summary>Starts a Topic in the workshop as JSON, with the session's token from the workshop's page, which carries a
     /// form for every signed-in reader, so a reader the new-topic page offers no form still sends one.</summary>
     private static Task<Answered> StartIn(Browser browser, string title)
-        => Json(browser, "/t/" + Workshop, "/t/" + Workshop + "/new", new { id = Tids.Mint(), title, body = "Hello, everyone." });
+        => Json(browser, "/t/" + Workshop + "/new", "/t/" + Workshop, new { id = Tids.Mint(), title, body = "Hello, everyone." });
 
     private static async Task<IReadOnlyList<string?>> Can(Browser browser, string path)
         => (await Send(browser.Client, HttpMethod.Get, path, json: true)).Json.GetProperty("can").EnumerateArray().Select(verb => verb.GetString()).ToList();

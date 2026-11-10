@@ -4,6 +4,7 @@ using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
+using Tangent.Capture;
 using Tangent.Events;
 using Tangent.Posts;
 using Tangent.Space;
@@ -12,7 +13,7 @@ using static Tangent.Posts.Writing;
 
 namespace Tangent.Tangents;
 
-/// <summary>A Tangent's settings at <c>/t/{tangent}/settings</c>: offered to whoever holds ManageTangent there, or
+/// <summary>A Tangent's settings at <c>/t/{tangent}/settings</c>, which change it at its own address: offered to whoever holds ManageTangent there, or
 /// ManageSpace; a rename keeps the slug; an audience change writes the everyone overwrite and appends tangent.changed,
 /// and decides who reads; a move reorders the door; the moderators' Tangent keeps its audience and its place; the
 /// settings answer JSON with <c>can</c> and <c>gate</c>; an image brought in on them and the accent are what the Tangent
@@ -53,12 +54,12 @@ public sealed class TangentSettingsTests
         Assert.Contains($"data-gate=\"{gate}\"", offered.Body);
         Assert.DoesNotContain("type=\"submit\"", PageContent(offered.Body));
         // The change declares ManageTangent, so the Doorway refuses it before anything is bound: the refusal's page, with its gate.
-        var refused = await Form(ada, "/t/workshop", "/t/workshop/settings", Workshop("Ada's workshop"));
+        var refused = await Form(ada, "/t/workshop", "/t/workshop", As(HttpMethod.Patch, Workshop("Ada's workshop")));
         Assert.Equal(HttpStatusCode.Forbidden, refused.Status);
         Assert.Contains($"class=\"refusal\" data-word=\"{gate}\"", refused.Body);
         Assert.Equal("workshop", (await Tangent.Get("workshop", Cancellation))!.Name);
 
-        var renamed = await Form(bea, "/t/workshop", "/t/workshop/settings", Workshop("Bea's workshop"));
+        var renamed = await Form(bea, "/t/workshop", "/t/workshop", As(HttpMethod.Patch, Workshop("Bea's workshop")));
         Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + "/t/workshop"), (renamed.Status, renamed.Location));
         Assert.Equal("Bea's workshop", (await Tangent.Get("workshop", Cancellation))!.Name);
     }
@@ -72,10 +73,10 @@ public sealed class TangentSettingsTests
         using var leo = await SignedIn(tangentSpace, Leo);
         var before = await Event.Count.Exact(Cancellation);
 
-        var renamed = await Form(leo, "/t/workshop/settings", "/t/workshop/settings", new()
+        var renamed = await Form(leo, "/t/workshop/settings", "/t/workshop", As(HttpMethod.Patch, new()
         {
             ["name"] = "The big workshop", ["description"] = "Where things get made.", ["kind"] = "article", ["audience"] = "public"
-        });
+        }));
 
         Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + "/t/workshop"), (renamed.Status, renamed.Location));
         var row = (await Tangent.Get("workshop", Cancellation))!;
@@ -87,15 +88,15 @@ public sealed class TangentSettingsTests
         Assert.Equal(("workshop", "The big workshop", "article"), (page.GetProperty("slug").GetString(), page.GetProperty("name").GetString(),
             page.GetProperty("kind").GetString()));
 
-        var again = await Form(leo, "/t/workshop/settings", "/t/workshop/settings", new()
+        var again = await Form(leo, "/t/workshop/settings", "/t/workshop", As(HttpMethod.Patch, new()
         {
             ["name"] = "The big workshop", ["description"] = "Where things get made.", ["kind"] = "article", ["audience"] = "public"
-        });
+        }));
         Assert.Equal(HttpStatusCode.SeeOther, again.Status);
         Assert.Equal(before + 1, await Event.Count.Exact(Cancellation));
 
         var tooLong = new string('w', Tangent.NameLimit + 1);
-        var refused = await Form(leo, "/t/workshop/settings", "/t/workshop/settings", Workshop(tooLong));
+        var refused = await Form(leo, "/t/workshop/settings", "/t/workshop", As(HttpMethod.Patch, Workshop(tooLong)));
         Assert.Equal(HttpStatusCode.BadRequest, refused.Status);
         Assert.Contains($"value=\"{tooLong}\"", refused.Body);
         Assert.Contains("id=\"settings-name-failure\"", refused.Body);
@@ -113,7 +114,7 @@ public sealed class TangentSettingsTests
         using var ada = await SignedIn(tangentSpace, Ada);
         Assert.Equal(HttpStatusCode.OK, (await Send(ada.Client, HttpMethod.Get, "/t/workshop", json: true)).Status);
 
-        var closed = await Form(leo, "/t/workshop/settings", "/t/workshop/settings", Workshop(audience: "private"));
+        var closed = await Form(leo, "/t/workshop/settings", "/t/workshop", As(HttpMethod.Patch, Workshop(audience: "private")));
 
         Assert.Equal(HttpStatusCode.SeeOther, closed.Status);
         Assert.Equal(Audience.Private, await Overwrites.AudienceOf("workshop", Cancellation));
@@ -126,7 +127,7 @@ public sealed class TangentSettingsTests
         Assert.Equal((HttpStatusCode.NotFound, "absent"), (absent.Status, absent.Kind));
         Assert.Equal(HttpStatusCode.OK, (await Send(leo.Client, HttpMethod.Get, "/t/workshop", json: true)).Status);
 
-        Assert.Equal(HttpStatusCode.SeeOther, (await Form(leo, "/t/workshop/settings", "/t/workshop/settings", Workshop(audience: "public"))).Status);
+        Assert.Equal(HttpStatusCode.SeeOther, (await Form(leo, "/t/workshop/settings", "/t/workshop", As(HttpMethod.Patch, Workshop(audience: "public")))).Status);
 
         Assert.Equal(Audience.Public, await Overwrites.AudienceOf("workshop", Cancellation));
         Assert.Equal(Audience.Public, (await Event.All(Cancellation)).OrderBy(e => e.Seq).Last().Audience);
@@ -142,7 +143,7 @@ public sealed class TangentSettingsTests
         using var leo = await SignedIn(tangentSpace, Leo);
         Assert.Equal(["studio", "workshop", "articles"], await DoorOrder(leo));
 
-        var moved = await Form(leo, "/t/articles/settings", "/t/articles/settings", new() { ["move"] = "earlier" });
+        var moved = await Form(leo, "/t/articles/settings", "/t/articles", As(HttpMethod.Patch, new() { ["move"] = "earlier" }));
 
         Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + "/t/articles/settings"), (moved.Status, moved.Location));
         Assert.Equal(["studio", "articles", "workshop"], await DoorOrder(leo));
@@ -152,9 +153,9 @@ public sealed class TangentSettingsTests
         Assert.Equal(("studio", "workshop"), (settings.GetProperty("before").GetString(), settings.GetProperty("after").GetString()));
         Assert.Contains("It comes after studio and before workshop.", WebUtility.HtmlDecode((await Send(leo.Client, HttpMethod.Get, "/t/articles/settings")).Body));
 
-        Assert.Equal(HttpStatusCode.SeeOther, (await Form(leo, "/t/studio/settings", "/t/studio/settings", new() { ["move"] = "later" })).Status);
+        Assert.Equal(HttpStatusCode.SeeOther, (await Form(leo, "/t/studio/settings", "/t/studio", As(HttpMethod.Patch, new() { ["move"] = "later" }))).Status);
         Assert.Equal(["articles", "studio", "workshop"], await DoorOrder(leo));
-        var first = await Form(leo, "/t/articles/settings", "/t/articles/settings", new() { ["move"] = "earlier" });
+        var first = await Form(leo, "/t/articles/settings", "/t/articles", As(HttpMethod.Patch, new() { ["move"] = "earlier" }));
         Assert.Equal(HttpStatusCode.SeeOther, first.Status);
         Assert.Equal(["articles", "studio", "workshop"], await DoorOrder(leo));
     }
@@ -179,17 +180,17 @@ public sealed class TangentSettingsTests
         Assert.DoesNotContain("name=\"audience\"", page);
         Assert.DoesNotContain("Move earlier", page);
 
-        var opened = await Form(leo, Path, Path, new() { ["name"] = "Moderation", ["description"] = "Reports and talk.", ["kind"] = "topic", ["audience"] = "public" });
+        var opened = await Form(leo, Path, "/t/moderators", As(HttpMethod.Patch, new() { ["name"] = "Moderation", ["description"] = "Reports and talk.", ["kind"] = "topic", ["audience"] = "public" }));
         Assert.Equal(HttpStatusCode.BadRequest, opened.Status);
-        Assert.Contains(ChangeTangent.Fixed.Text, WebUtility.HtmlDecode(opened.Body));
-        var asJson = await Json(leo, Path, Path, new { audience = "public" });
-        Assert.Equal((HttpStatusCode.BadRequest, ChangeTangent.Fixed.Text), (asJson.Status, asJson.Json.GetProperty("detail").GetString()));
-        var moved = await Json(leo, Path, Path, new { move = "earlier" });
-        Assert.Equal((HttpStatusCode.BadRequest, ChangeTangent.Fixed.Text), (moved.Status, moved.Json.GetProperty("detail").GetString()));
+        Assert.Contains(Tangent.Fixed.Text, WebUtility.HtmlDecode(opened.Body));
+        var asJson = await Json(leo, Path, HttpMethod.Patch, "/t/moderators", new { audience = "public" });
+        Assert.Equal((HttpStatusCode.BadRequest, Tangent.Fixed.Text), (asJson.Status, asJson.Json.GetProperty("detail").GetString()));
+        var moved = await Json(leo, Path, HttpMethod.Patch, "/t/moderators", new { move = "earlier" });
+        Assert.Equal((HttpStatusCode.BadRequest, Tangent.Fixed.Text), (moved.Status, moved.Json.GetProperty("detail").GetString()));
         Assert.Equal(Audience.Private, await Overwrites.AudienceOf(ModeratorsTangent.Slug, Cancellation));
         Assert.Equal(ModeratorsTangent.Name, (await Tangent.Get(ModeratorsTangent.Slug, Cancellation))!.Name);
 
-        var renamed = await Form(leo, Path, Path, new() { ["name"] = "Moderation", ["description"] = "Reports and talk.", ["kind"] = "topic" });
+        var renamed = await Form(leo, Path, "/t/moderators", As(HttpMethod.Patch, new() { ["name"] = "Moderation", ["description"] = "Reports and talk.", ["kind"] = "topic" }));
 
         Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + "/t/moderators"), (renamed.Status, renamed.Location));
         var row = (await Tangent.Get(ModeratorsTangent.Slug, Cancellation))!;
@@ -210,7 +211,7 @@ public sealed class TangentSettingsTests
         using var ada = await SignedIn(tangentSpace, Ada);
 
         var settings = (await Send(leo.Client, HttpMethod.Get, "/t/workshop/settings", json: true)).Json;
-        Assert.Equal(("workshop", "workshop", "topic", "public", BaseUrl + "/t/workshop/settings", false),
+        Assert.Equal(("workshop", "workshop", "topic", "public", BaseUrl + "/t/workshop", false),
             (settings.GetProperty("slug").GetString(), settings.GetProperty("name").GetString(), settings.GetProperty("kind").GetString(),
                 settings.GetProperty("audience").GetString(), settings.GetProperty("change").GetProperty("action").GetString(), settings.GetProperty("fixed").GetBoolean()));
         Assert.Equal(["name", "description", "accent", "image", "kind", "audience", "move"], FieldNames(settings.GetProperty("change")));
@@ -223,13 +224,13 @@ public sealed class TangentSettingsTests
         var studio = await Send(ada.Client, HttpMethod.Get, "/t/studio/settings", json: true);
         Assert.Equal((HttpStatusCode.NotFound, "absent"), (studio.Status, studio.Kind));
 
-        var described = await Json(leo, "/t/workshop/settings", "/t/workshop/settings", new { description = "Only this." });
+        var described = await Json(leo, "/t/workshop/settings", HttpMethod.Patch, "/t/workshop", new { description = "Only this." });
 
         Assert.Equal((HttpStatusCode.OK, BaseUrl + "/t/workshop"), (described.Status, described.Location));
         Assert.Equal(("workshop", "Only this.", "public"), (described.Json.GetProperty("name").GetString(),
             described.Json.GetProperty("description").GetString(), described.Json.GetProperty("audience").GetString()));
         Assert.Contains("ManageTangent", Strings(described.Json.GetProperty("can")));
-        var refused = await Json(ada, "/t/workshop", "/t/workshop/settings", new { description = "Mine." });
+        var refused = await Json(ada, "/t/workshop", HttpMethod.Patch, "/t/workshop", new { description = "Mine." });
         Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageTangent).Word), (refused.Status, refused.Word));
     }
 
@@ -260,7 +261,7 @@ public sealed class TangentSettingsTests
         var administrator = (await Send(leo.Client, HttpMethod.Get, "/t/workshop/settings", json: true)).Json;
         Assert.True(administrator.GetProperty("movable").GetBoolean());
         Assert.Equal(("studio", "Articles"), (administrator.GetProperty("before").GetString(), administrator.GetProperty("after").GetString()));
-        var moved = await Json(bea, "/t/workshop", "/t/workshop/settings", new { move = "earlier" });
+        var moved = await Json(bea, "/t/workshop", HttpMethod.Patch, "/t/workshop", new { move = "earlier" });
         Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageSpace).Word), (moved.Status, moved.Word));
         Assert.Equal(["studio", "workshop", "articles"], await DoorOrder(leo));
     }
@@ -275,7 +276,7 @@ public sealed class TangentSettingsTests
         using var bea = await SignedIn(tangentSpace, Bea);
         var before = await Event.Count.Exact(Cancellation);
 
-        var closed = await Form(bea, "/t/workshop/settings", "/t/workshop/settings", Workshop(audience: "private"));
+        var closed = await Form(bea, "/t/workshop/settings", "/t/workshop", As(HttpMethod.Patch, Workshop(audience: "private")));
 
         Assert.Equal(HttpStatusCode.OK, closed.Status);
         Assert.Contains("workshop is private now, and no longer shows for you.", WebUtility.HtmlDecode(closed.Body));
@@ -297,14 +298,14 @@ public sealed class TangentSettingsTests
         using var leo = await SignedIn(tangentSpace, Leo);
         using var bea = await SignedIn(tangentSpace, Bea);
 
-        var described = await Json(bea, "/t/workshop", "/t/workshop/settings", new { description = "x" });
+        var described = await Json(bea, "/t/workshop", HttpMethod.Patch, "/t/workshop", new { description = "x" });
         Assert.Equal(HttpStatusCode.OK, described.Status);
         Assert.Equal("x", described.Json.GetProperty("description").GetString());
         Assert.False(described.Json.TryGetProperty("order", out _));
-        var arranged = await Json(leo, "/t/workshop/settings", "/t/workshop/settings", new { description = "y" });
+        var arranged = await Json(leo, "/t/workshop/settings", HttpMethod.Patch, "/t/workshop", new { description = "y" });
         Assert.Equal(1, arranged.Json.GetProperty("order").GetInt32());
 
-        var closed = await Json(bea, "/t/workshop", "/t/workshop/settings", new { audience = "private" });
+        var closed = await Json(bea, "/t/workshop", HttpMethod.Patch, "/t/workshop", new { audience = "private" });
 
         Assert.Equal(HttpStatusCode.OK, closed.Status);
         Assert.Equal(("workshop is private now, and no longer shows for you.", BaseUrl + "/"),
@@ -328,22 +329,22 @@ public sealed class TangentSettingsTests
         using var bea = await SignedIn(tangentSpace, Bea);
 
         // An empty Tangent goes at one press, with nothing to warn of.
-        Assert.Equal(HttpStatusCode.Created, (await Json(leo, "/t/new", "/t/new", new { name = "Corner" })).Status);
+        Assert.Equal(HttpStatusCode.Created, (await Json(leo, "/t/new", "/t", new { name = "Corner" })).Status);
         var corner = PageContent((await Send(leo.Client, HttpMethod.Get, "/t/corner/settings")).Body);
         Assert.Contains("Delete this Tangent", corner);
         Assert.DoesNotContain("post-remove-note", corner);
-        var pressed = await Form(leo, "/t/corner/settings", "/t/corner/settings/delete", new() { ["topics"] = "0" });
+        var pressed = await Form(leo, "/t/corner/settings", "/t/corner", As(HttpMethod.Delete, new() { ["topics"] = "0" }));
         Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + "/t"), (pressed.Status, pressed.Location));
         Assert.Null(await Tangent.Get("corner", Cancellation));
-        Assert.Equal(HttpStatusCode.NotFound, (await Form(leo, "/t/corner/settings", "/t/corner/settings/delete", new() { ["topics"] = "0" })).Status);
+        Assert.Equal(HttpStatusCode.NotFound, (await Form(leo, "/t/corner/settings", "/t/corner", As(HttpMethod.Delete, new() { ["topics"] = "0" }))).Status);
 
         // A private Tangent with a Topic, an edited reply, an image, an ask and a person let in.
         var image = await Media.Keep(ArticleMediaTests.Jpeg(), Cancellation);
         Assert.IsType<Outcome<MediaUse>.Done>(await new BringMedia(image.Id, Leo).Send(Cancellation));
         var root = await Started(Leo, "Plans", "![A plan](/media/" + image.Id + ")", Studio);
         var reply = await Replied(root, Leo, "First draft.");
-        Assert.IsType<Outcome<Post>.Done>(await new EditPost(reply.Id, 1, PostBody.Of("Second draft."), null, Leo).Send(Cancellation));
-        Assert.IsType<Outcome<Tangent>.Done>(await new ChangeTangent(Studio, Leo, Image: "/media/" + image.Id).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Edited(reply.Id, 1, PostBody.Of("Second draft."), null, Leo).Send(Cancellation));
+        Assert.IsType<Outcome<Tangent>.Done>(await new ChangeTangentRow(Studio, Leo, row => row.Image = "/media/" + image.Id).Send(Cancellation));
         await Inside.LetIn(roles, Studio, Bea, Cancellation);
         Assert.IsType<Outcome<Ask>.Done>(await new Store<Ask>(new Ask { Id = Ask.Key(Studio, Ada), TangentId = Studio, PersonId = Ada, AskedAt = DateTimeOffset.UtcNow }).Send(Cancellation));
         Assert.NotNull(await AuditPartition.At<Post>(reply.Id, 1, Cancellation));
@@ -358,16 +359,16 @@ public sealed class TangentSettingsTests
         var settings = (await Send(leo.Client, HttpMethod.Get, "/t/studio/settings", json: true)).Json;
         Assert.Equal((1, 0, "1"), (settings.GetProperty("topics").GetInt32(), settings.GetProperty("onBluesky").GetInt32(), Valued(settings.GetProperty("delete"), "topics")));
 
-        var bare = await Json(leo, "/t/studio/settings", "/t/studio/settings/delete", new { });
-        Assert.Equal((HttpStatusCode.Conflict, DeleteTangent.HoldsTopicsWord), (bare.Status, bare.Word));
-        Assert.Equal(HttpStatusCode.Conflict, (await Json(leo, "/t/studio/settings", "/t/studio/settings/delete", new { topics = 1000 })).Status);
-        var stale = await Form(leo, "/t/studio/settings", "/t/studio/settings/delete", new() { ["topics"] = "0" });
+        var bare = await Json(leo, "/t/studio/settings", HttpMethod.Delete, "/t/studio");
+        Assert.Equal((HttpStatusCode.Conflict, TangentWriting.HoldsTopicsWord), (bare.Status, bare.Word));
+        Assert.Equal(HttpStatusCode.Conflict, (await Json(leo, "/t/studio/settings", HttpMethod.Delete, "/t/studio?topics=1000")).Status);
+        var stale = await Form(leo, "/t/studio/settings", "/t/studio", As(HttpMethod.Delete, new() { ["topics"] = "0" }));
         Assert.Equal(HttpStatusCode.Conflict, stale.Status);
-        Assert.Contains(DeleteTangent.HoldsTopics(1).Text, WebUtility.HtmlDecode(stale.Body));
+        Assert.Contains(TangentWriting.HoldsTopics(1).Text, WebUtility.HtmlDecode(stale.Body));
         Assert.NotNull(await Tangent.Get(Studio, Cancellation));
         Assert.NotNull(await Post.Get(root.Id, Cancellation));
 
-        var deleted = await Json(leo, "/t/studio/settings", "/t/studio/settings/delete", new { topics = 1 });
+        var deleted = await Json(leo, "/t/studio/settings", HttpMethod.Delete, "/t/studio?topics=1");
 
         Assert.Equal((HttpStatusCode.OK, Studio, 1), (deleted.Status, deleted.Json.GetProperty("slug").GetString(), deleted.Json.GetProperty("topics").GetInt32()));
         Assert.Null(await Tangent.Get(Studio, Cancellation));
@@ -383,7 +384,7 @@ public sealed class TangentSettingsTests
         Assert.DoesNotContain(await Polled(bea), row => row.Tangent == Studio);
 
         // The slug taken again starts clean: none of the deleted Tangent's rows reaches the new one's readers.
-        Assert.Equal(HttpStatusCode.Created, (await Json(leo, "/t/new", "/t/new", new { name = Studio })).Status);
+        Assert.Equal(HttpStatusCode.Created, (await Json(leo, "/t/new", "/t", new { name = Studio })).Status);
         var again = (await Tangent.Get(Studio, Cancellation))!;
         var reached = (await Polled(bea)).Where(row => row.Tangent == Studio).ToList();
         Assert.Contains(reached, row => row.Seq == again.LogSeq);
@@ -393,10 +394,10 @@ public sealed class TangentSettingsTests
 
         // The moderators' Tangent stays, and whoever manages a Tangent without ManageSpace is offered no delete.
         Assert.False((await Send(leo.Client, HttpMethod.Get, "/t/moderators/settings", json: true)).Json.TryGetProperty("delete", out _));
-        var kept = await Json(leo, "/t/moderators/settings", "/t/moderators/settings/delete", new { topics = 0 });
-        Assert.Equal((HttpStatusCode.BadRequest, DeleteTangent.Kept.Text), (kept.Status, kept.Json.GetProperty("detail").GetString()));
+        var kept = await Json(leo, "/t/moderators/settings", HttpMethod.Delete, "/t/moderators?topics=0");
+        Assert.Equal((HttpStatusCode.BadRequest, TangentWriting.Kept.Text), (kept.Status, kept.Json.GetProperty("detail").GetString()));
         Assert.False((await Send(bea.Client, HttpMethod.Get, "/t/workshop/settings", json: true)).Json.TryGetProperty("delete", out _));
-        var gated = await Json(bea, "/t/workshop/settings", "/t/workshop/settings/delete", new { topics = 0 });
+        var gated = await Json(bea, "/t/workshop/settings", HttpMethod.Delete, "/t/workshop?topics=0");
         Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageSpace).Word), (gated.Status, gated.Word));
         Assert.NotNull(await Tangent.Get("workshop", Cancellation));
     }
@@ -432,7 +433,7 @@ public sealed class TangentSettingsTests
         Assert.Contains($"value=\"{image}\" checked", PageContent((await Send(leo.Client, HttpMethod.Get, settings)).Body));
 
         // With an accent chosen too, the door, the list of Tangents and the Tangents a Topic may start in all wear both.
-        Assert.IsType<Outcome<Tangent>.Done>(await new ChangeTangent(Writing.Workshop, Leo, Accent: "rose").Send(Cancellation));
+        Assert.IsType<Outcome<Tangent>.Done>(await new ChangeTangentRow(Writing.Workshop, Leo, row => row.Accent = "rose").Send(Cancellation));
         var worn = BaseUrl + image;
         static (string?, string?) Tile(JsonElement tangents) => tangents.EnumerateArray().Single(tangent => tangent.GetProperty("slug").GetString() == Writing.Workshop)
             .GetProperty("tile") is var tile ? (tile.GetProperty("tone").GetString(), tile.GetProperty("image").GetString()) : default;

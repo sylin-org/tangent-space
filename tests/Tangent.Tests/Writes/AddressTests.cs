@@ -24,24 +24,24 @@ public sealed class AddressTests
         using var ada = await SignedIn(tangentSpace, Ada);
         var before = await Counted();
 
-        async Task<(HttpStatusCode, string?)> Asked(string path, HttpContent content)
+        async Task<(HttpStatusCode, string?)> Asked(string path, HttpContent content, HttpMethod? method = null)
         {
-            var answered = await Send(ada.Client, HttpMethod.Post, path, content, json: true);
+            var answered = await Send(ada.Client, method ?? HttpMethod.Post, path, content, json: true);
             return (answered.Status, answered.Kind);
         }
 
         static StringContent Array() => new("[]", Encoding.UTF8, "application/json");
         var missing = (HttpStatusCode.NotFound, "absent");
 
-        Assert.Equal(missing, await Asked("/t/studio/plans/" + hidden.Id + "/edit", JsonBody(new { body = "x" })));
-        Assert.Equal(missing, await Asked("/t/studio/plans/" + Tids.Mint() + "/edit", JsonBody(new { body = "x" })));
+        Assert.Equal(missing, await Asked("/t/studio/plans/" + hidden.Id, JsonBody(new { body = "x" }), HttpMethod.Patch));
+        Assert.Equal(missing, await Asked("/t/studio/plans/" + Tids.Mint(), JsonBody(new { body = "x" }), HttpMethod.Patch));
         // The address is judged before anything is read of the body, so a body that is not one JSON object, sent to an address
         // that holds something hidden or nothing, answers what a missing address answers.
-        Assert.Equal(missing, await Asked("/t/studio/plans/" + hidden.Id + "/edit", Array()));
+        Assert.Equal(missing, await Asked("/t/studio/plans/" + hidden.Id, Array(), HttpMethod.Patch));
         Assert.Equal(missing, await Asked("/t/studio/plans", Array()));
         Assert.Equal(missing, await Asked("/t/studio/nothing", Array()));
-        Assert.Equal(missing, await Asked("/t/studio/new", Array()));
-        Assert.Equal(missing, await Asked("/t/nowhere/new", Array()));
+        Assert.Equal(missing, await Asked("/t/studio", Array()));
+        Assert.Equal(missing, await Asked("/t/nowhere", Array()));
         // An address no Tangent has, and one whose slug no Tangent uses yet, answer as the hidden one does.
         var unused = await Send(ada.Client, HttpMethod.Get, "/t/unused-slug/new", json: true);
         var nowhere = await Send(ada.Client, HttpMethod.Get, "/t/nowhere/new", json: true);
@@ -71,13 +71,13 @@ public sealed class AddressTests
             (HttpMethod.Get, "/t/nowhere/nothing/" + Tids.Mint() + "/edit", null),
             (HttpMethod.Get, "/t/workshop/new", null),
             (HttpMethod.Get, "/t/nowhere/new", null),
-            (HttpMethod.Post, PostPath(root, root) + "/edit", JsonBody(new { body = "x", version = 1 })),
+            (HttpMethod.Patch, PostPath(root, root), JsonBody(new { body = "x", version = 1 })),
             (HttpMethod.Post, TopicPath(root) + "/" + Tids.Mint() + "/remove", JsonBody(new { })),
             (HttpMethod.Post, PostPath(root, root) + "/remove", JsonBody(new { })),
             (HttpMethod.Post, TopicPath(root), JsonBody(new { id = Tids.Mint(), body = "x" })),
             (HttpMethod.Post, "/t/workshop/nothing", JsonBody(new { id = Tids.Mint(), body = "x" })),
-            (HttpMethod.Post, "/t/workshop/new", JsonBody(new { id = Tids.Mint(), title = "x", body = "x" })),
-            (HttpMethod.Post, "/t/nowhere/new", JsonBody(new { id = Tids.Mint(), title = "x", body = "x" }))
+            (HttpMethod.Post, "/t/workshop", JsonBody(new { id = Tids.Mint(), title = "x", body = "x" })),
+            (HttpMethod.Post, "/t/nowhere", JsonBody(new { id = Tids.Mint(), title = "x", body = "x" }))
         };
         var answers = new List<(HttpStatusCode, string?, string?, string)>();
         foreach (var (method, path, content) in addresses)

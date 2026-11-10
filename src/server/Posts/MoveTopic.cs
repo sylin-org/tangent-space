@@ -8,10 +8,10 @@ using Tangent.Space;
 namespace Tangent.Posts;
 
 /// <summary>Moves a Topic to another Tangent, its replies with it, in one hold. Its root keeps its kind, and its slug where
-/// the Tangent it moves to holds none of it, else takes the first numbered suffix there (<see cref="StartTopic.UniqueSlug"/>);
+/// the Tangent it moves to holds none of it, else takes the first numbered suffix there (<see cref="Slug.Unique"/>);
 /// its address where it stood becomes a <see cref="FormerAddress"/>, which forwards. Every Post of it, each Post's media uses
 /// and every row of the log about it, one range of <c>ix_event_topics</c>, take the new Tangent a page of
-/// <see cref="Tangents.DeleteTangent.PostPage"/> at a time, each read finding what the last left, so every reader of the log
+/// <see cref="DeleteTopic.PostPage"/> at a time, each read finding what the last left, so every reader of the log
 /// stays right and none changes; each row also takes where the new Tangent's own rows begin (<see cref="Event.Into"/>), so a
 /// row older than the new Tangent itself is still its own and reaches its readers (<see cref="Capabilities.Owns"/>). The
 /// Tangent it leaves counts it no longer and pins it no more, the one it enters counts
@@ -37,10 +37,10 @@ public sealed record MoveTopic(string TopicId, string To, string ActorId, DateTi
 
     public async Task<Outcome<Post>> Run(CancellationToken ct)
     {
-        if (await Post.Get(TopicId, ct) is not { ParentId: null } root) return new Outcome<Post>.Refused(Reply.NoTopic);
+        if (await Post.Get(TopicId, ct) is not { ParentId: null } root) return new Outcome<Post>.Refused(Post.NoTopic);
         var from = root.TangentId;
         var here = await Capabilities.Load(ActorId, from, null, ct);
-        if (!here.Exists || await Tangents.Tangent.Get(from, ct) is not { } source) return new Outcome<Post>.Refused(Reply.NoTopic);
+        if (!here.Exists || await Tangents.Tangent.Get(from, ct) is not { } source) return new Outcome<Post>.Refused(Post.NoTopic);
         if (here.Gate(Bit.Moderate) is { } gate) return new Outcome<Post>.Refused(gate);
         if (To == from) return new Outcome<Post>.Done(root);
         var moderators = (await TangentSpace.Get(TangentSpace.SingleRow, ct))?.ModeratorsTangentId;
@@ -52,16 +52,16 @@ public sealed record MoveTopic(string TopicId, string To, string ActorId, DateTi
 
         var formerSlug = root.Slug ?? root.Id;
         await new FormerAddress { Id = FormerAddress.Key(from, formerSlug), TopicId = root.Id }.Save(ct);
-        root.Slug = await StartTopic.UniqueSlug(To, formerSlug, root.Id, ct);
+        root.Slug = await Slug.Unique(To, formerSlug, root.Id, ct);
         root.TangentId = To;
         await root.Save(ct);
         await Uses([root], ct);
 
-        var read = Tangents.DeleteTangent.PostPage;
-        while (read == Tangents.DeleteTangent.PostPage)
+        var read = DeleteTopic.PostPage;
+        while (read == DeleteTopic.PostPage)
         {
             var posts = await Post.Query(post => post.TopicId == root.Id && post.TangentId == from,
-                new QueryDefinition { Page = 1, PageSize = Tangents.DeleteTangent.PostPage }, ct);
+                new QueryDefinition { Page = 1, PageSize = DeleteTopic.PostPage }, ct);
             read = posts.Count;
             if (read == 0) break;
             foreach (var post in posts) post.TangentId = To;

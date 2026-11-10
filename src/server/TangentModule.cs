@@ -1,5 +1,6 @@
 using Koan.Core;
 using Koan.Core.Modules;
+using Koan.Data.Abstractions.Instructions;
 using Koan.Data.Connector.Sqlite;
 using Koan.Data.Core;
 using Koan.Identity.Roles;
@@ -7,6 +8,7 @@ using Koan.Media.Web.Routing;
 using Koan.Storage.Connector.Local;
 using Koan.Web.Extensions;
 using Koan.Web.Hosting;
+using Koan.Web.Options;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
@@ -50,6 +52,9 @@ public sealed class TangentModule : KoanModule
             .PostConfigure<IOptions<TangentSpaceOptions>, IHostEnvironment>((storage, tangent, environment) =>
                 storage.BasePath = tangent.Value.DataFolderPath(environment.ContentRootPath));
         services.AddHttpContextAccessor();
+
+        // A change writes what it sends: a member sent as null, like one left out, stays as it stands.
+        services.AddOptions<KoanWebOptions>().PostConfigure(web => web.PartialJsonNulls = PartialJsonNullPolicy.Ignore);
         services.Replace(ServiceDescriptor.Singleton<IMediaSource, Posts.GatedMedia>());
 
         // The data folder is marked in use while the Tangent Space runs, so a restore refuses it.
@@ -122,6 +127,7 @@ public sealed class TangentModule : KoanModule
             mvc.Filters.Add<ETagFilter>();
             mvc.Filters.Add<FirstRunGate>();
             mvc.Filters.Add<PrivatePlaceGate>();
+            mvc.Filters.Add<MarkedLinks>();
         });
         services.WithExceptionHandler();
         services.AddExceptionHandler(handler => handler.ExceptionHandler = ProblemExceptionHandler.Answer);

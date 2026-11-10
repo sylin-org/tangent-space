@@ -3,6 +3,7 @@ using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
+using Tangent.Capture;
 using Tangent.Events;
 using Tangent.Tangents;
 using Xunit;
@@ -64,7 +65,7 @@ public sealed class RemoveTests
         var again = Assert.IsType<Outcome<Post>.Done>(await new RemovePost(root.Id, Ada).Send(Cancellation)).Result;
         var byModerator = Assert.IsType<Outcome<Post>.Done>(await new RemovePost(root.Id, Mo).Send(Cancellation)).Result;
         var bySomeoneElse = await new RemovePost(root.Id, Bea).Send(Cancellation);
-        var answer = await new Reply(Tids.Mint(), root.Id, "Still here?", Bea).Send(Cancellation);
+        var answer = await new Replied(Tids.Mint(), root.Id, "Still here?", Bea).Send(Cancellation);
 
         Assert.Equal((first.Id, first.RemovedAt, Ada, first.Body), (again.Id, again.RemovedAt, again.RemovedBy, again.Body));
         Assert.Equal((first.Id, first.RemovedAt, Ada, first.Body), (byModerator.Id, byModerator.RemovedAt, byModerator.RemovedBy, byModerator.Body));

@@ -95,7 +95,7 @@ public sealed class TangentAccessController(KoanWebBaseUrl baseUrl, RoleCollecti
                 return role is null
                     ? this.Refused(Capabilities.Absent)
                     : new ObjectResult(await Listed(role, again, place, personId, space, ct)) { ContentTypes = { "application/json" } };
-            case Outcome<Tangent>.Refused { Reason: var reason } when reason != ChangeTangent.NoTangent:
+            case Outcome<Tangent>.Refused { Reason: var reason } when reason != Tangent.NoTangent:
                 return await Refused(found, personId, reason, ct);
             default:
                 return Answers.NotDone(HttpContext, outcome);

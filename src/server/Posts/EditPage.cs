@@ -93,10 +93,14 @@ public sealed record EditPage(
             TitleId = "edit-title", BodyId = "edit-body", Island = "submitting", Bring = Bring, Participant = Who?.Id,
             EditScope = "edit:" + Id + ":" + Version.ToString(System.Globalization.CultureInfo.InvariantCulture), Topic = TopicSlug, Title = Title, Body = Body,
             CoverId = CoverId, Minutes = Tangents.TangentPage.ReadTime(Body), Failure = Failure, FailureGate = FailureGate, TitleFailure = TitleFailure,
-            BodyFailure = BodyFailure, Hidden = [new(PostWrites.VersionField, "", writing.Value(PostWrites.VersionField), Render.Form.Input.Hidden)],
+            BodyFailure = BodyFailure, Hidden =
+            [
+                .. writing.Sent != writing.Method.ToLowerInvariant() ? new[] { new Render.Form.Field(Render.Form.MethodField, "", writing.Method, Render.Form.Input.Hidden) } : [],
+                new(PostWrites.VersionField, "", writing.Value(PostWrites.VersionField), Render.Form.Input.Hidden)
+            ],
             EditedBy = Edited?.By.Name, SentTitle = SentTitle, SentBody = SentBody, Cancel = new Render.Onward("Cancel", Address), Submit = "Save", Busy = "Saving…"
         }
-        : Removed ? null : new Render.Form(Edit?.Action ?? "", HttpMethods.Post,
+        : Removed ? null : new Render.Form(Edit?.Action ?? "", Edit?.Method ?? HttpMethods.Patch,
         [
             .. Edit is { } edit ? new[] { new Render.Form.Field(PostWrites.VersionField, "", edit.Value(PostWrites.VersionField), Render.Form.Input.Hidden) } : [],
             .. Root ? new[] { new Render.Form.Field(PostWrites.TitleField, "", Title) { Label = "Title", Limit = Post.TitleLimit, Required = true, Failure = TitleFailure, Focus = TitleFailure is not null || BodyFailure is null } } : [],

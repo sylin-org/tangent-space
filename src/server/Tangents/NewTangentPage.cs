@@ -3,10 +3,10 @@ using Tangent.Render;
 namespace Tangent.Tangents;
 
 /// <summary>The form that creates a Tangent, one resource both ways. It asks for a name; everything else stands at its
-/// default until the sender names another: an empty <see cref="Description"/>, the <see cref="Kind"/> <c>topic</c>
+/// default until the sender names another: an empty <see cref="Description"/>, the default kind (<see cref="Kind"/>) <c>topic</c>
 /// (discussions) and the <see cref="Audience"/> <c>public</c>, where everyone who reads the place reads it and members
 /// post. <see cref="Create"/>, present only where the reader may create a Tangent, takes <c>name</c>,
-/// <c>description</c>, <c>kind</c> (one of <see cref="Kinds"/>) and <c>audience</c> (one of <see cref="Audiences"/>); the
+/// <c>description</c>, <c>kind</c>, its default kind (one of <see cref="Kinds"/>) and <c>audience</c> (one of <see cref="Audiences"/>); the
 /// slug derives from the name and never changes, and the Tangent comes after the existing ones. <see cref="Can"/> is what the
 /// reader holds in the place, and <see cref="Gate"/> why they may not create a Tangent, null when they may;
 /// <see cref="SignIn"/> is where a visitor signs in, coming back here. After a refusal the form keeps what was sent and

@@ -9,7 +9,7 @@ namespace Tangent.Participants;
 public static class ProfileCapture
 {
     /// <summary>Submits the profile job for a participant whose cache is empty or older than its lifetime, at their
-    /// sign-in (<see cref="ParticipantSignIn"/>) and at each Post they write (<see cref="Posts.PostWrites.Written"/>),
+    /// sign-in (<see cref="ParticipantSignIn"/>) and at each Post they write (<see cref="Posts.PostWrites.Captured"/>),
     /// where their row is already loaded; never at a read. A submission that fails is logged, never thrown: what it
     /// follows has already happened, and the next sign-in or write submits again.</summary>
     public static async Task SubmitWhenStale(Participant participant, ILogger logger, CancellationToken ct)

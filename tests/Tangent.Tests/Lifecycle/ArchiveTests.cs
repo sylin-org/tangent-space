@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
+using Tangent.Capture;
 using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
@@ -119,7 +120,7 @@ public sealed partial class ArchiveTests
         await Given.AParticipant(tangentSpace, Persona.Id("leo4archive"), [Roles.Administrator], ct: Cancellation);
         await Started(Persona.Id("leo4archive"), "In the studio", "Words only the studio reads", Studio);
         var open = await Started(Ida, "In the open", "Words anyone reads");
-        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), members, "Taken in", "", Ida, OriginId: open.Id).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), members, "Taken in", "", Ida, OriginId: open.Id).Send(Cancellation));
         await Started(Ida, "A piece", "An article's words.", Articles);
         using var visitor = Agent(tangentSpace);
 
@@ -230,7 +231,7 @@ public sealed partial class ArchiveTests
         var hidden = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(62), Studio, "/t/" + Studio + "/new"));
         var unused = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(63)));
         await Started(Leo, "Plans", "![The plan](/media/" + hidden + ")", Studio);
-        var article = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Articles, "Lanterns", "![Lit](/media/" + inline + ")", Leo, CoverId: cover).Send(Cancellation)).Result;
+        var article = Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), Articles, "Lanterns", "![Lit](/media/" + inline + ")", Leo, CoverId: cover).Send(Cancellation)).Result;
         var live = new Dictionary<string, byte[]>();
         foreach (var id in new[] { cover, inline }) live[id] = await visitor.GetByteArrayAsync("/media/" + id, Cancellation);
 

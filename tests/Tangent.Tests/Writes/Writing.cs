@@ -7,6 +7,7 @@ using Koan.Data.Core;
 using Koan.Data.Core.Commands;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
+using Tangent.Capture;
 using Tangent.Participants;
 using Tangent.Space;
 using Xunit;
@@ -50,10 +51,10 @@ internal static partial class Writing
     }
 
     public static async Task<Post> Started(string author, string title, string body, string tangent = Workshop)
-        => Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), tangent, title, body, author).Send(Cancellation)).Result;
+        => Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), tangent, title, body, author).Send(Cancellation)).Result;
 
     public static async Task<Post> Replied(Post root, string author, string body)
-        => Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), root.Id, body, author).Send(Cancellation)).Result;
+        => Assert.IsType<Outcome<Post>.Done>(await new Replied(Tids.Mint(), root.Id, body, author).Send(Cancellation)).Result;
 
     /// <summary>A browser signed in as <paramref name="who"/>, a persona or an account's DID.</summary>
     public static async Task<Browser> SignedIn(TangentSpaceFixture tangentSpace, string who)
@@ -104,7 +105,9 @@ internal static partial class Writing
             request.Headers.Referrer = new Uri(BaseUrl + page);
         }
         using var response = await client.SendAsync(request, Cancellation);
-        return new Answered(response.StatusCode, response.Headers.Location?.ToString(), response.Content.Headers.ContentType?.MediaType,
+        // A Location under the place's own base reads as the address it names, as a client resolves it.
+        var location = response.Headers.Location is { IsAbsoluteUri: false } relative ? new Uri(new Uri(BaseUrl), relative).ToString() : response.Headers.Location?.ToString();
+        return new Answered(response.StatusCode, location, response.Content.Headers.ContentType?.MediaType,
             await response.Content.ReadAsStringAsync(Cancellation));
     }
 
@@ -119,6 +122,15 @@ internal static partial class Writing
     /// <summary>Posts JSON from the page at <paramref name="page"/>, as a signed-in browser's script does.</summary>
     public static Task<Answered> Json(Browser browser, string page, string action, object fields)
         => Send(browser.Client, HttpMethod.Post, action, JsonBody(fields), json: true, page: page);
+
+    /// <summary>Sends JSON by <paramref name="method"/> from the page at <paramref name="page"/>, as a signed-in browser's script
+    /// does.</summary>
+    public static Task<Answered> Json(Browser browser, string page, HttpMethod method, string action, object? fields = null)
+        => Send(browser.Client, method, action, fields is null ? null : JsonBody(fields), json: true, page: page);
+
+    /// <summary>A browser's form's fields, naming <paramref name="method"/>, which a form cannot send, as Koan reads it.</summary>
+    public static Dictionary<string, string> As(HttpMethod method, Dictionary<string, string> fields)
+        => new(fields) { [Render.Form.MethodField] = method.Method };
 
     /// <summary>The value a form in a page's JSON gives the field named <paramref name="name"/>; null where it gives none.</summary>
     public static string? Valued(JsonElement form, string name)
@@ -149,6 +161,7 @@ internal static partial class Writing
         var action = form.GetProperty("action").GetString()!;
         Assert.StartsWith(BaseUrl + "/", action);
         var method = new HttpMethod(form.GetProperty("method").GetString()!);
+        if (!json && method != HttpMethod.Get && method != HttpMethod.Post) (fields["_method"], method) = (method.Method, HttpMethod.Post);
         return json
             ? await Send(session.Client, method, action[BaseUrl.Length..], JsonBody(fields), json: true)
             : await Send(session.Client, method, action[BaseUrl.Length..], FormBody(fields));

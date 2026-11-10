@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Koan.Data.Core.Commands;
+using Tangent.Capture;
 using Tangent.Events;
 using Xunit;
 using static Tangent.Posts.Writing;
@@ -25,8 +26,8 @@ public sealed class ModeratingTests
         var inline = "(edited by " + Name(await Send(mo.Client, HttpMethod.Get, "/", json: true)) + ")";
         var visitor = Agent(tangentSpace);
 
-        var written = await Json(mo, PostPath(root, reply) + "/edit", PostPath(root, reply) + "/edit", new { body = "From a hook, says the moderator.", version = 1 });
-        Assert.IsType<Outcome<Post>.Done>(await new EditPost(root.Id, 1, "How do you hang yours, and where?", null, Mo).Send(Cancellation));
+        var written = await Json(mo, PostPath(root, reply) + "/edit", HttpMethod.Patch, PostPath(root, reply), new { body = "From a hook, says the moderator.", version = 1 });
+        Assert.IsType<Outcome<Post>.Done>(await new Edited(root.Id, 1, "How do you hang yours, and where?", null, Mo).Send(Cancellation));
 
         // The write's own answer says who.
         Assert.Equal(Mo, written.Json.GetProperty("editedBy").GetString());
@@ -72,7 +73,7 @@ public sealed class ModeratingTests
         await Place(tangentSpace);
         var root = await Started(Bea, "Lanterns", "How do you hang yours?");
         var reply = await Replied(root, Ada, "From the porch beam.");
-        Assert.IsType<Outcome<Post>.Done>(await new EditPost(reply.Id, 1, "From a hook, says the moderator.", null, Mo).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Edited(reply.Id, 1, "From a hook, says the moderator.", null, Mo).Send(Cancellation));
         using var ada = await SignedIn(tangentSpace, Ada);
 
         var removed = Assert.IsType<Outcome<Post>.Done>(await new RemovePost(reply.Id, Mo).Send(Cancellation)).Result;
@@ -105,7 +106,7 @@ public sealed class ModeratingTests
         var reply = await Replied(root, Ada, "From the porch beam.");
         using var ada = await SignedIn(tangentSpace, Ada);
 
-        var own = await Json(ada, PostPath(root, root) + "/edit", PostPath(root, root) + "/edit", new { body = "How do you hang yours, and where?", version = 1 });
+        var own = await Json(ada, PostPath(root, root) + "/edit", HttpMethod.Patch, PostPath(root, root), new { body = "How do you hang yours, and where?", version = 1 });
         Assert.IsType<Outcome<Post>.Done>(await new RemovePost(reply.Id, Ada).Send(Cancellation));
 
         Assert.False(own.Json.TryGetProperty("editedBy", out var editedBy) && editedBy.ValueKind != JsonValueKind.Null);
@@ -118,13 +119,13 @@ public sealed class ModeratingTests
 
         // A moderator's own Post is theirs like anyone's.
         var theirs = await Started(Mo, "On wicks", "Trim them.");
-        Assert.IsType<Outcome<Post>.Done>(await new EditPost(theirs.Id, 1, "Trim them short.", null, Mo).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Edited(theirs.Id, 1, "Trim them short.", null, Mo).Send(Cancellation));
         Assert.Null((await Post.Get(theirs.Id, Cancellation))?.EditedBy);
 
         // The moderator's words carry the mark until the author's own edit makes the words theirs again; the telling stays.
-        Assert.IsType<Outcome<Post>.Done>(await new EditPost(root.Id, 2, "Hung from the beam, says the moderator.", null, Mo).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Edited(root.Id, 2, "Hung from the beam, says the moderator.", null, Mo).Send(Cancellation));
         Assert.Equal(Mo, (await Post.Get(root.Id, Cancellation))?.EditedBy);
-        Assert.IsType<Outcome<Post>.Done>(await new EditPost(root.Id, 3, "Hung from the beam, I say.", null, Ada).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Edited(root.Id, 3, "Hung from the beam, I say.", null, Ada).Send(Cancellation));
         var mine = await Post.Get(root.Id, Cancellation);
         Assert.Equal((null, null), (mine?.EditedBy, mine?.EditedAt));
         Assert.DoesNotContain("post-edited", (await Send(Agent(tangentSpace), HttpMethod.Get, TopicPath(root))).Body);

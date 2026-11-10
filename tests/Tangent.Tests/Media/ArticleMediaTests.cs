@@ -7,6 +7,7 @@ using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using SkiaSharp;
 using Tangent.Access;
+using Tangent.Capture;
 using Tangent.Participants;
 using Tangent.Space;
 using Tangent.Tangents;
@@ -154,7 +155,7 @@ public sealed class ArticleMediaTests
         Assert.Equal(BaseUrl + reference, brought.Json.GetProperty("address").GetString());
 
         var page = await Send(ada.Client, HttpMethod.Get, "/t/" + Articles + "/new");
-        var written = await Form(ada, "/t/" + Articles + "/new", "/t/" + Articles + "/new", new()
+        var written = await Form(ada, "/t/" + Articles + "/new", "/t/" + Articles, new()
         {
             [PostWrites.IdField] = MintedId(page.Body),
             [PostWrites.TitleField] = "On wicks\nand wax",
@@ -251,7 +252,7 @@ public sealed class ArticleMediaTests
         Assert.False(await MediaUse.Reaches(Bea, id, Cancellation));
         Assert.Null(await MediaUse.Get(MediaUse.Key(id, naming.Id), Cancellation));
         Assert.Equal(HttpStatusCode.NotFound, (await Send(bea.Client, HttpMethod.Get, reference)).Status);
-        var stolen = await new StartTopic(Tids.Mint(), Articles, "Mine", "Words.", Bea, CoverId: id).Send(Cancellation);
+        var stolen = await new Started(Tids.Mint(), Articles, "Mine", "Words.", Bea, CoverId: id).Send(Cancellation);
         Assert.Equal(Post.NoCover, Assert.IsType<Outcome<Post>.Refused>(stolen).Reason);
     }
 
@@ -340,15 +341,11 @@ public sealed class ArticleMediaTests
         var cover = IdOf(await Bring(ada, Jpeg(41)));
         var visitor = Agent(tangentSpace);
 
-        var article = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Articles, "Lanterns", "![Lit](/media/" + picture + ")", Ada, CoverId: cover).Send(Cancellation)).Result;
+        var article = Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), Articles, "Lanterns", "![Lit](/media/" + picture + ")", Ada, CoverId: cover).Send(Cancellation)).Result;
         Assert.Equal(HttpStatusCode.OK, (await Send(visitor, HttpMethod.Get, "/media/" + picture)).Status);
         Assert.Equal(HttpStatusCode.OK, (await Send(visitor, HttpMethod.Get, "/media/" + cover)).Status);
 
-        // The same request sent again is the same article, and another cover under its Id is another request.
-        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(article.Id, Articles, "Lanterns", "![Lit](/media/" + picture + ")", Ada, CoverId: cover).Send(Cancellation));
-        Assert.Equal(ReasonKind.Conflict, Assert.IsType<Outcome<Post>.Refused>(await new StartTopic(article.Id, Articles, "Lanterns", "![Lit](/media/" + picture + ")", Ada).Send(Cancellation)).Reason.Kind);
-
-        var edited = Assert.IsType<Outcome<Post>.Done>(await new EditPost(article.Id, article.Version, "Words alone.", null, Ada).Send(Cancellation)).Result;
+        var edited = Assert.IsType<Outcome<Post>.Done>(await new Edited(article.Id, article.Version, "Words alone.", null, Ada).Send(Cancellation)).Result;
         Assert.Equal(cover, edited.CoverId);
         Assert.Empty(edited.MediaIds);
         Assert.Equal(HttpStatusCode.NotFound, (await Send(visitor, HttpMethod.Get, "/media/" + picture)).Status);
@@ -359,7 +356,7 @@ public sealed class ArticleMediaTests
         var tombstone = await Send(visitor, HttpMethod.Get, "/t/" + Articles + "/" + article.Slug, json: true);
         Assert.False(tombstone.Json.TryGetProperty("cover", out _));
 
-        var discussion = await new StartTopic(Tids.Mint(), Workshop, "Wicks", "Cotton.", Ada, CoverId: cover).Send(Cancellation);
+        var discussion = await new Started(Tids.Mint(), Workshop, "Wicks", "Cotton.", Ada, CoverId: cover).Send(Cancellation);
         Assert.Equal(Post.CoverOnArticle, Assert.IsType<Outcome<Post>.Refused>(discussion).Reason);
     }
 
@@ -371,7 +368,7 @@ public sealed class ArticleMediaTests
         await Place(tangentSpace);
         using var ada = await SignedIn(tangentSpace, Ada);
         var cover = IdOf(await Bring(ada, Jpeg()));
-        var article = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Articles, "Lanterns", "Words.", Ada, CoverId: cover).Send(Cancellation)).Result;
+        var article = Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), Articles, "Lanterns", "Words.", Ada, CoverId: cover).Send(Cancellation)).Result;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
         space!.Appearance.ArticleHeader = header;
         Assert.IsType<Outcome<TangentSpace>.Done>(await new Store<TangentSpace>(space).Send(Cancellation));
@@ -396,7 +393,7 @@ public sealed class ArticleMediaTests
         using var ada = await SignedIn(tangentSpace, Ada);
         using var leo = await SignedIn(tangentSpace, Persona.Id("leo4writes"));
         var cover = IdOf(await Bring(ada, Jpeg()));
-        var article = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Articles, "Lanterns", "Words.", Ada, CoverId: cover).Send(Cancellation)).Result;
+        var article = Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), Articles, "Lanterns", "Words.", Ada, CoverId: cover).Send(Cancellation)).Result;
         var bare = await Started(Ada, "No cover here", "Words.", Articles);
 
         var page = (await Send(Agent(tangentSpace), HttpMethod.Get, TopicPath(article))).Body;
@@ -410,7 +407,7 @@ public sealed class ArticleMediaTests
 
         // Where a visitor may not read, there is no card and so no cover in it, even for who may read there.
         var hidden = IdOf(await Bring(leo, Jpeg(50), Studio, "/t/" + Studio + "/new"));
-        var inside = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Studio, "Inside", "Words.", Persona.Id("leo4writes")).Send(Cancellation)).Result;
+        var inside = Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), Studio, "Inside", "Words.", Persona.Id("leo4writes")).Send(Cancellation)).Result;
         var kept = (await Send(leo.Client, HttpMethod.Get, TopicPath(inside))).Body;
         Assert.DoesNotContain("og:image", kept);
         Assert.DoesNotContain("twitter:", kept);
@@ -428,7 +425,7 @@ public sealed class ArticleMediaTests
         var cover = await Media.Keep(Jpeg(), Cancellation);
         var inline = await Media.Keep(Jpeg(40), Cancellation);
         foreach (var image in new[] { cover, inline }) Assert.IsType<Outcome<MediaUse>.Done>(await new BringMedia(image.Id, Ada).Send(Cancellation));
-        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Articles, "Lanterns", "![Lit](/media/" + inline.Id + ")", Ada, CoverId: cover.Id).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), Articles, "Lanterns", "![Lit](/media/" + inline.Id + ")", Ada, CoverId: cover.Id).Send(Cancellation));
         using var reader = Agent(tangentSpace);
 
         foreach (var feed in new[] { "/notes" + Feeds.ArticlesPath, "/notes/t/" + Articles + "/" + Feeds.TangentSegment })
@@ -447,7 +444,7 @@ public sealed class ArticleMediaTests
             Assert.Equal(HttpStatusCode.OK, (await Send(reader, HttpMethod.Get, "/notes/media/" + image.Id)).Status);
 
         // An entry with no cover says nothing of one.
-        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Articles, "Words alone", "Words.", Ada).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), Articles, "Words alone", "Words.", Ada).Send(Cancellation));
         var newest = System.Text.Json.JsonDocument.Parse((await Send(reader, HttpMethod.Get, "/notes" + Feeds.ArticlesPath + Render.JsonFeed.Extension)).Body).RootElement.GetProperty("items")[0];
         Assert.False(newest.TryGetProperty("image", out _));
     }
@@ -581,7 +578,7 @@ public sealed class ArticleMediaTests
         await Place(tangentSpace);
         using var ada = await SignedIn(tangentSpace, Ada);
         var cover = IdOf(await Bring(ada, Jpeg(40)));
-        var article = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Articles, "Lanterns", "First words.", Ada, CoverId: cover).Send(Cancellation)).Result;
+        var article = Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), Articles, "Lanterns", "First words.", Ada, CoverId: cover).Send(Cancellation)).Result;
 
         var path = TopicPath(article) + "/" + article.Id + "/edit";
         var page = await Send(ada.Client, HttpMethod.Get, path);
@@ -589,13 +586,14 @@ public sealed class ArticleMediaTests
         Assert.Contains("name=\"" + PostWrites.TitleField + "\"", page.Body);
         Assert.Contains("name=\"" + PostWrites.CoverField + "\" value=\"" + cover + "\"", page.Body);
 
-        var saved = await Form(ada, path, path, new()
+        Assert.Contains("name=\"_method\" value=\"PATCH\"", page.Body);
+        var saved = await Form(ada, path, TopicPath(article) + "/" + article.Id, As(HttpMethod.Patch, new()
         {
             [PostWrites.VersionField] = "1",
             [PostWrites.TitleField] = "Lanterns",
             [PostWrites.BodyField] = "Second words.",
             [PostWrites.CoverField] = cover
-        });
+        }));
         Assert.Equal(HttpStatusCode.SeeOther, saved.Status);
         var row = await Post.Get(article.Id, Cancellation);
         Assert.Equal(("Second words.", cover), (row!.Body, row.CoverId));

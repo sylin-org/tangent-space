@@ -35,7 +35,7 @@ public sealed class CaptureSeedController(RoleCollection roles) : ControllerBase
                 await TangentScreen(ct);
                 return NoContent();
             case "discussions-reopened":
-                await Write(new ChangeTangent("discussions", Leo, Audience: Audience.Public), ct);
+                await Overwrites.SetAudience(roles, "discussions", Audience.Public, ct);
                 return NoContent();
             case "tangent-manager":
                 await TangentScreen(ct);
@@ -56,7 +56,7 @@ public sealed class CaptureSeedController(RoleCollection roles) : ControllerBase
             case "tangent-dressed":
                 await TangentScreen(ct);
                 var discussions = await Tangents.Tangent.Get("discussions", ct) ?? throw new InvalidOperationException("The discussions Tangent is missing.");
-                discussions.Wear("rose", "midnight-workshop");
+                (discussions.Accent, discussions.Image) = ("rose", "midnight-workshop");
                 await Write(new Keep<Tangents.Tangent>(discussions), ct);
                 return NoContent();
             default:
@@ -127,10 +127,10 @@ public sealed class CaptureSeedController(RoleCollection roles) : ControllerBase
         await Person(Mara, "mara.bsky.social", "Mara Lind", ParticipantKind.Person, Roles.Member, ct);
         await Person(Persona, "ada.bsky.social", "Ada Okafor", ParticipantKind.Person, Roles.Member, ct);
 
-        await Write(new CreateTangent("articles", "Articles About Everything", "Make room for the next thought.", PostKind.Article, 1, Audience.Public, Leo), ct);
-        await Write(new CreateTangent("discussions", "Discussions", "Open questions, half-ideas and the loose threads of the work.", PostKind.Topic, 2, Audience.Public, Leo), ct);
-        await Write(new CreateTangent("workshop", "The workshop", "", PostKind.Topic, 3, Audience.Public, Leo), ct);
-        await Write(new CreateTangent("field-notes", "Field notes", "Short pieces from the road.", PostKind.Article, 4, Audience.Public, Leo), ct);
+        await Write(new OpenTangent("articles", "Articles About Everything", "Make room for the next thought.", PostKind.Article, 1, Audience.Public, Leo), ct);
+        await Write(new OpenTangent("discussions", "Discussions", "Open questions, half-ideas and the loose threads of the work.", PostKind.Topic, 2, Audience.Public, Leo), ct);
+        await Write(new OpenTangent("workshop", "The workshop", "", PostKind.Topic, 3, Audience.Public, Leo), ct);
+        await Write(new OpenTangent("field-notes", "Field notes", "Short pieces from the road.", PostKind.Article, 4, Audience.Public, Leo), ct);
 
         var rules = await Topic("discussions", "House rules, in plain words", "Be kind, be specific, and say when you are guessing. Agents are welcome here; the person who runs one answers for it.", Leo, At(20, 9, 0), 1, ct);
         await Answer(rules, "Thank you for writing these down. The part about guessing is my favourite.", Mara, At(20, 10, 12), 2, ct);
@@ -176,10 +176,10 @@ public sealed class CaptureSeedController(RoleCollection roles) : ControllerBase
     }
 
     private Task<Post> Topic(string tangent, string title, string body, string author, DateTimeOffset at, int clock, CancellationToken ct)
-        => Write(new StartTopic(Tid(at, clock), tangent, title, body, author, At: at), ct);
+        => Write(new Started(Tid(at, clock), tangent, title, body, author, At: at), ct);
 
     private Task<Post> Answer(Post topic, string body, string author, DateTimeOffset at, int clock, CancellationToken ct)
-        => Write(new Reply(Tid(at, clock), topic.Id, body, author, At: at), ct);
+        => Write(new Replied(Tid(at, clock), topic.Id, body, author, At: at), ct);
 
     private Task Seen(Post topic, long sequence, CancellationToken ct)
         => Write(new Keep<Checkpoint>(Checkpoint.At(Persona, Scope.Topic(topic.Id), sequence)), ct);

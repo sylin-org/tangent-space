@@ -1,4 +1,5 @@
 using Koan.Data.Core.Commands;
+using Tangent.Capture;
 using Tangent.Events;
 using Tangent.Posts;
 using Tangent.Space;
@@ -58,8 +59,8 @@ public sealed class RowRulesTests
         var reply = await Replied(root, Bea, "On a hook.");
         var events = await Event.Count.Exact(Cancellation);
 
-        var titled = await new EditPost(reply.Id, reply.Version, "On two hooks.", "A title", Bea).Send(Cancellation);
-        var edited = await new EditPost(root.Id, root.Version, "How do you hang them?", null, Ada).Send(Cancellation);
+        var titled = await new Edited(reply.Id, reply.Version, "On two hooks.", "A title", Bea).Send(Cancellation);
+        var edited = await new Edited(root.Id, root.Version, "How do you hang them?", null, Ada).Send(Cancellation);
         var removed = await new RemovePost(reply.Id, Bea).Send(Cancellation);
 
         Assert.Equal(Post.NoTitleOnReply, Assert.IsType<Outcome<Post>.Refused>(titled).Reason);

@@ -33,14 +33,14 @@ public sealed class ArticleSeedController(RoleCollection roles) : ControllerBase
         await Person(Mara, "mara.bsky.social", "Mara Lind", Roles.Member, ct);
         await Person(Persona, "ada.bsky.social", "Ada Okafor", Roles.Member, ct);
 
-        await Write(new CreateTangent("articles", "Articles", "Long pieces on repair, systems and the things that outlast them.", PostKind.Article, 1, Audience.Public, Leo), ct);
+        await Write(new OpenTangent("articles", "Articles", "Long pieces on repair, systems and the things that outlast them.", PostKind.Article, 1, Audience.Public, Leo), ct);
 
         var cover = await Brought(Bowl(2000, 1125, 0.5, 0.52, 0.31), Persona, ct);
         var inline = await Brought(Bowl(1360, 900, 0.34, 0.5, 0.26), Persona, ct);
         var second = await Brought(Bowl(1400, 900, 0.72, 0.4, 0.42), Mara, ct);
 
         // Her article is 3mwgqaw5is227 at /t/articles/mending-with-gold.
-        await Write(new StartTopic(Tid(At(26, 16, 45), 5), "articles", "Mending with gold", $"""
+        await Write(new Started(Tid(At(26, 16, 45), 5), "articles", "Mending with gold", $"""
             A cracked bowl tells you where it was weak. *Kintsugi* does not hide that: the seam is filled with lacquer and dusted with gold, so the repair becomes the part you look at first.
 
             ## What the seam remembers
@@ -66,9 +66,9 @@ public sealed class ArticleSeedController(RoleCollection roles) : ControllerBase
             None of this makes the bowl new. It makes it **yours**, and it will hold soup again by the weekend.
             """.Replace("\n            ", "\n"), Persona, At: At(26, 16, 45), CoverId: cover.Id), ct);
 
-        await Write(new StartTopic(Tid(At(24, 9, 10), 6), "articles", "The lacquer takes its time",
+        await Write(new Started(Tid(At(24, 9, 10), 6), "articles", "The lacquer takes its time",
             "Urushi cures in damp air, not dry. A workshop that hurries it gets a seam that looks finished and peels by spring.", Mara, At: At(24, 9, 10), CoverId: second.Id), ct);
-        await Write(new StartTopic(Tid(At(21, 14, 30), 7), "articles", "Why I keep the broken ones",
+        await Write(new Started(Tid(At(21, 14, 30), 7), "articles", "Why I keep the broken ones",
             "A shelf of cracked things is a better teacher than a shelf of whole ones.", Leo, At: At(21, 14, 30)), ct);
         return NoContent();
     }

@@ -84,14 +84,14 @@ public sealed record FirstSteps(
 
         var purposes = Offered.Select(offered =>
         {
-            var slug = Slug.From(offered.Name, NewTangentController.Unnamed);
+            var slug = Slug.From(offered.Name, TangentsController.Unnamed);
             return open.FirstOrDefault(tangent => tangent.Id == slug) is { } held
                 ? new Purpose(held.Name, offered.Detail, PostWrites.TangentAddress(baseAddress, held.Id), null,
-                    Back(TangentWrites.DeleteForm(baseAddress, held.Id, held.TopicCount) with { Quiet = true }))
-                : new Purpose(offered.Name, offered.Detail, null, Back(Form.Posting(baseAddress + NewTangentController.Route,
-                        Given("name", Holds.TangentName, offered.Name), Given("description", Holds.TangentDescription, offered.Description),
-                        Given("kind", Holds.TangentKind, PostWrites.Word(offered.Kind)), Given("audience", Holds.TangentAudience, TangentWrites.Word(offered.Audience)))
-                    with { Tool = "create-tangent", Submit = "Add", Busy = "Adding…", Quiet = true }));
+                    TangentWrites.DeleteForm(baseAddress, held.Id, held.TopicCount) with { Quiet = true, Return = "/" })
+                : new Purpose(offered.Name, offered.Detail, null, Form.Posting(baseAddress + TangentsController.Route,
+                        Given(TangentWrites.NameField, Holds.TangentName, offered.Name), Given(TangentWrites.DescriptionField, Holds.TangentDescription, offered.Description),
+                        Given(TangentWrites.KindField, Holds.TangentKind, PostWrites.Word(offered.Kind)), Given(TangentWrites.AudienceField, Holds.TangentAudience, TangentWrites.Word(offered.Audience)))
+                    with { Tool = "create-tangent", Submit = "Add", Busy = "Adding…", Quiet = true, Return = "/" });
         }).ToList();
 
         List<Form.Choice> images = [new("", "None")];
@@ -123,7 +123,7 @@ public sealed record FirstSteps(
                 [new(TangentSpaceSettingsController.Word(Admission.Join), "Join at once"), new(TangentSpaceSettingsController.Word(Admission.Apply), "Apply, and you admit them")]))
                 with { Tool = "change-admission", Key = "first-steps-arrival" }),
             baseAddress + TangentSpaceSettingsController.Path + "#" + Pointing.Anchor,
-            open.FirstOrDefault() is { } first ? PostWrites.TangentAddress(baseAddress, first.Id) + "/" + TangentPageController.NewTopicSegment : null,
+            open.FirstOrDefault() is { } first ? PostWrites.TangentAddress(baseAddress, first.Id) + "/" + TopicsController.NewTopicSegment : null,
             Form.Posting(baseAddress + FirstStepsController.ClosePath) with { Tool = "close-first-steps", Submit = "Done", Busy = "Closing…", Quiet = true })
         {
             Greeted = Greeting(shown),

@@ -6,6 +6,7 @@ using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
+using Tangent.Capture;
 using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Space;
@@ -94,7 +95,7 @@ public sealed partial class ExportTests
         var replies = new List<Post>();
         foreach (var number in Enumerable.Range(1, Export.WindowSize + 1))
             replies.Add(await Replied(long_, Bea, "Reply number " + number));
-        var answering = Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), long_.Id, "Back to the first", Ada, replies[0].Id).Send(Cancellation)).Result;
+        var answering = Assert.IsType<Outcome<Post>.Done>(await new Replied(Tids.Mint(), long_.Id, "Back to the first", Ada, replies[0].Id).Send(Cancellation)).Result;
         var taken = await Taken(replies[^1], Articles, "From the end of a long one");
 
         var zip = await Downloaded(leo, Path + ".zip");
@@ -288,7 +289,7 @@ public sealed partial class ExportTests
         var inline = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(ada, ArticleMediaTests.Jpeg(61)));
         var hidden = ArticleMediaTests.IdOf(await ArticleMediaTests.Bring(leo, ArticleMediaTests.Jpeg(62), Studio, "/t/" + Studio + "/new"));
         await Started(Leo, "Plans", "![The plan](/media/" + hidden + ")", Studio);
-        var article = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Articles, "Lanterns",
+        var article = Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), Articles, "Lanterns",
             "![Lit](/media/" + inline + ")\n\nAnd ![Lit again](/media/" + inline + ")\n\n![Not mine](/media/" + hidden + ")", Ada, CoverId: cover).Send(Cancellation)).Result;
         var space = await TangentSpace.Get(TangentSpace.SingleRow, Cancellation);
         space!.Appearance.ArticleHeader = "From the long reads.";
@@ -358,7 +359,7 @@ public sealed partial class ExportTests
     }
 
     private static async Task<Post> Taken(Post origin, string tangent, string title)
-        => Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), tangent, title, "", Leo, OriginId: origin.Id).Send(Cancellation)).Result;
+        => Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), tangent, title, "", Leo, OriginId: origin.Id).Send(Cancellation)).Result;
 
     /// <summary>The zip at <paramref name="path"/>, every file read as text but the fonts.</summary>
     private static async Task<Dictionary<string, string>> Downloaded(Browser browser, string path)

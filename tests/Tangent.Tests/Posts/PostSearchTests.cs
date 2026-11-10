@@ -10,6 +10,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Tangent.Capture;
 using Tangent.Lifecycle;
 using Tangent.Space;
 using Tangent.Tangents;
@@ -37,10 +38,10 @@ public sealed class PostSearchTests
     }
 
     private static async Task<Post> Topic(string title, string body) =>
-        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, title, body, "leo").Send(Cancellation)).Result;
+        Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), Workshop, title, body, "leo").Send(Cancellation)).Result;
 
     private static async Task<Post> Answer(string topicId, string body) =>
-        Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), topicId, body, "ada").Send(Cancellation)).Result;
+        Assert.IsType<Outcome<Post>.Done>(await new Replied(Tids.Mint(), topicId, body, "ada").Send(Cancellation)).Result;
 
     /// <summary>A search as a visitor reads it, who may view the public workshop.</summary>
     private static Task<PostSearch.Answer> Run(string? text, int page = 1, int size = 20)

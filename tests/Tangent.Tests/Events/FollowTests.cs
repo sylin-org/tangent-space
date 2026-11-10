@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 using Koan.Data.Core.Commands;
 using Tangent.Access;
+using Tangent.Capture;
 using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Tools;
@@ -25,7 +26,7 @@ public sealed class FollowTests
         => [.. door.GetProperty("news").GetProperty("following").GetProperty("topics").EnumerateArray()];
 
     private static async Task<Post> Answered(Post root, string author, string body, Post parent)
-        => Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), root.Id, body, author, parent.Id).Send(Cancellation)).Result;
+        => Assert.IsType<Outcome<Post>.Done>(await new Replied(Tids.Mint(), root.Id, body, author, parent.Id).Send(Cancellation)).Result;
 
     [Fact]
     public async Task Writing_follows_a_topic_its_new_replies_stand_in_the_news_once_each_reading_clears_them_and_stopping_holds()
@@ -150,7 +151,7 @@ public sealed class FollowTests
         var visitor = await Send(Agent(tangentSpace), HttpMethod.Post, TopicPath(root) + "/follow", JsonBody(new { }), json: true, page: TopicPath(root));
         Assert.Equal("sign-in", visitor.Word);
 
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new Tangents.DeleteTangent(Workshop, Head, Topics: 1).Send(Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new DeleteTangentRow(Workshop, Head, 1).Send(Cancellation));
         Assert.Empty(await Follow.All(Cancellation));
     }
 }

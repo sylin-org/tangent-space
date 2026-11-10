@@ -5,6 +5,7 @@ using Koan.Data.Abstractions;
 using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
+using Tangent.Capture;
 using Tangent.Participants;
 using Tangent.Posts;
 using Tangent.Tangents;
@@ -74,7 +75,7 @@ public sealed class OverwriteTests
     }
 
     [Fact]
-    public async Task The_gate_for_a_denied_verb_names_the_deciding_overwrite_to_a_command_and_on_the_page()
+    public async Task The_gate_for_a_denied_verb_names_the_deciding_overwrite_at_the_door_and_on_the_page()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
         var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
@@ -85,17 +86,20 @@ public sealed class OverwriteTests
         await Given.AParticipant(tangentSpace, Reader, [Roles.Member], ct: Cancellation);
         await Write(roles, "workshop", OverwriteSubjectKind.Role, Roles.Member, deny: Bit.Topic);
         await Write(roles, "workshop", OverwriteSubjectKind.Person, Reader, deny: Bit.Post);
-        var topic = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "workshop", "Open to replies", "Words.", "leo").Send(Cancellation)).Result;
+        var topic = Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), "workshop", "Open to replies", "Words.", "leo").Send(Cancellation)).Result;
 
-        var started = await new StartTopic(Tids.Mint(), "workshop", "Not here", "Words.", "bo").Send(Cancellation);
-        var replied = await new Reply(Tids.Mint(), topic.Id, "Not me.", Reader).Send(Cancellation);
-        Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), topic.Id, "Me, yes.", "bo").Send(Cancellation));
-
-        Assert.Equal("role:member denies Topic", Assert.IsType<Outcome<Post>.Refused>(started).Reason.Word);
-        Assert.Equal(Reader + " denies Post", Assert.IsType<Outcome<Post>.Refused>(replied).Reason.Word);
-
+        using var bo = new Browser(tangentSpace);
+        (await bo.SignIn(Persona.Did("bo").Split(':')[^1], "bo", Cancellation)).Dispose();
         using var browser = new Browser(tangentSpace);
         (await browser.SignIn("reader", Reader, Cancellation)).Dispose();
+
+        var started = await Writing.Json(bo, "/t/workshop/new", "/t/workshop", new { title = "Not here", body = "Words." });
+        var replied = await Writing.Json(browser, "/t/workshop/open-to-replies", "/t/workshop/open-to-replies", new { body = "Not me." });
+        var boReplied = await Writing.Json(bo, "/t/workshop/open-to-replies", "/t/workshop/open-to-replies", new { body = "Me, yes." });
+
+        Assert.Equal((HttpStatusCode.Forbidden, "role:member denies Topic"), (started.Status, started.Word));
+        Assert.Equal((HttpStatusCode.Forbidden, Reader + " denies Post"), (replied.Status, replied.Word));
+        Assert.Equal(HttpStatusCode.Created, boReplied.Status);
         using var request = new HttpRequestMessage(HttpMethod.Get, "/t/workshop/open-to-replies");
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         using var response = await browser.Client.SendAsync(request, Cancellation);

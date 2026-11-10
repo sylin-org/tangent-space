@@ -2,6 +2,7 @@ using Koan.Data.Abstractions.Failures;
 using Koan.Data.Core;
 using Koan.Data.Core.Commands;
 using Koan.Data.Core.Transactions;
+using Tangent.Capture;
 using Tangent.Commands;
 using Tangent.Events;
 using Xunit;
@@ -23,8 +24,8 @@ public sealed class AtomicityTests
         var before = (await Counted(), await Snapshots());
         var topicId = Tids.Mint();
 
-        var start = await new ThenThrow<Post>(new StartTopic(topicId, Workshop, "Never", "Not kept.", Ada)).Send(Cancellation);
-        var edit = await new ThenThrow<Post>(new EditPost(root.Id, 1, "Not kept.", null, Ada)).Send(Cancellation);
+        var start = await new ThenThrow<Post>(new Started(topicId, Workshop, "Never", "Not kept.", Ada)).Send(Cancellation);
+        var edit = await new ThenThrow<Post>(new Edited(root.Id, 1, "Not kept.", null, Ada)).Send(Cancellation);
         var remove = await new ThenThrow<Post>(new RemovePost(root.Id, Ada)).Send(Cancellation);
 
         foreach (var failed in new[] { start, edit, remove })

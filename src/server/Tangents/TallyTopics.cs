@@ -1,5 +1,6 @@
 using Koan.Data.Core;
 using Koan.Data.Core.Commands;
+using Koan.Data.Core.Querying;
 
 namespace Tangent.Tangents;
 
@@ -15,11 +16,11 @@ public sealed record TallyTopics(string Slug) : ICommand<Tangent>
 
     public async Task<Outcome<Tangent>> Run(CancellationToken ct)
     {
-        if (await Tangent.Get(Slug, ct) is not { } tangent) return new Outcome<Tangent>.Refused(ChangeTangent.NoTangent);
+        if (await Tangent.Get(Slug, ct) is not { } tangent) return new Outcome<Tangent>.Refused(Tangent.NoTangent);
         if (tangent.Tallied()) return new Outcome<Tangent>.Done(tangent);
 
         var roots = new List<Posts.Post>();
-        TopicList.Cursor? cursor = null;
+        KeysetKey? cursor = null;
         do
         {
             var page = await TopicList.Read(Slug, cursor, ct);

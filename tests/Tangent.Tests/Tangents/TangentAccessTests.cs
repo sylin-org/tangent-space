@@ -49,7 +49,7 @@ public sealed class TangentAccessTests
         Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + access), (opened.Status, opened.Location));
         Assert.Equal(RoleAccess.Post, Overwrites.AccessOf(await Overwrites.Of(Studio, Roles.Member, Cancellation)));
         Assert.Equal(HttpStatusCode.OK, (await Send(ada.Client, HttpMethod.Get, "/t/" + Studio)).Status);
-        var started = await Json(ada, "/t/" + Studio, "/t/" + Studio + "/new", new { id = Tids.Mint(), title = "Members only", body = "Just us here." });
+        var started = await Json(ada, "/t/" + Studio + "/new", "/t/" + Studio, new { id = Tids.Mint(), title = "Members only", body = "Just us here." });
         Assert.Equal(HttpStatusCode.Created, started.Status);
 
         // A visitor finds nothing there, as at an address with nothing.

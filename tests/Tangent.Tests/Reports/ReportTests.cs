@@ -5,6 +5,7 @@ using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
+using Tangent.Capture;
 using Tangent.Events;
 using Tangent.Space;
 using Tangent.Tangents;
@@ -172,7 +173,7 @@ public sealed partial class ReportTests
         await Reporting(tangentSpace);
         var topic = await Started(Bea, "Lanterns at dusk", "Who lights theirs first?");
         var reply = await Replied(topic, Bea, "Whoever is slowest, obviously.");
-        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), Workshop, "Slow lanterns", "", Ada, OriginId: reply.Id).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), Workshop, "Slow lanterns", "", Ada, OriginId: reply.Id).Send(Cancellation));
         for (var reporter = 0; reporter < Origins.TakenRead; reporter++)
         {
             var id = Persona.Id($"reporter{reporter}4reports");

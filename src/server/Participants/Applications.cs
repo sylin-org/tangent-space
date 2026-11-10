@@ -1,6 +1,5 @@
-using System.Globalization;
+using System.Linq.Expressions;
 using Koan.Data.Abstractions;
-using Koan.Data.Abstractions.Filtering;
 using Koan.Data.Core;
 using Koan.Data.Core.Commands;
 using Koan.Data.Core.Sorting;
@@ -11,12 +10,11 @@ using Tangent.Space;
 namespace Tangent.Participants;
 
 /// <summary>The applications of a place whose admission says apply: the participants who applied, waiting or declined.
-/// <see cref="Decide"/> is what <see cref="Admit"/> and <see cref="Decline"/> share; <see cref="Read"/> is one bounded
-/// page of them, newest application first, through <c>ix_participant_applications</c>
-/// (<see cref="Participant.AppliedAt"/>), continued from a <see cref="Cursor"/>. <see cref="Waiting"/> reads those that
-/// wait, by where they arrived in the log, through <c>ix_participant_waiting</c> (<see cref="Participant.WaitingSeq"/>),
-/// which is how they reach whoever decides them, and <see cref="ReadWaiting"/> is one bounded page of them alone, newest
-/// first, continued from the sequence the last held; nothing is counted past what one bounded read holds.</summary>
+/// <see cref="Decide"/> is what <see cref="Admit"/> and <see cref="Decline"/> share; <see cref="Among"/> is which of them a
+/// list reads, which <see cref="ApplicationsController"/> pages newest application first, a page of <see cref="PageSize"/>.
+/// <see cref="Waiting"/> reads those that wait, by where they arrived in the log, through <c>ix_participant_waiting</c>
+/// (<see cref="Participant.WaitingSeq"/>), which is how they reach whoever decides them; nothing is counted past what one
+/// bounded read holds.</summary>
 public static class Applications
 {
     /// <summary>The most applications one page holds.</summary>
@@ -53,55 +51,12 @@ public static class Applications
         return new Outcome<Participant>.Done(participant);
     }
 
-    /// <summary>A page of applications and where the next one starts; <see cref="Next"/> is null on the last page.</summary>
-    public sealed record Page(IReadOnlyList<Participant> Applicants, Cursor? Next);
-
-    /// <summary>The place of the last application a page held: when it was made, and the applicant's id, which orders
-    /// applications made at the same instant.</summary>
-    public sealed record Cursor(DateTimeOffset At, string Id)
-    {
-        public static Cursor After(Participant applicant) => new(applicant.AppliedAt ?? DateTimeOffset.MinValue, applicant.Id);
-
-        /// <summary>The cursor a query carries, or null when the text is not one.</summary>
-        public static Cursor? Parse(string? text)
-        {
-            var parts = text?.Split('.', 2) ?? [];
-            if (parts.Length != 2 || !Participant.IsId(parts[1])) return null;
-            if (!long.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out var ticks)
-                || ticks < DateTimeOffset.MinValue.UtcTicks || ticks > DateTimeOffset.MaxValue.UtcTicks) return null;
-            return new Cursor(new DateTimeOffset(ticks, TimeSpan.Zero), parts[1]);
-        }
-
-        public override string ToString() => At.UtcTicks.ToString(CultureInfo.InvariantCulture) + "." + Id;
-    }
-
-    /// <summary>The page of applications after <paramref name="after"/>, or the first page: one read, limited to the page
-    /// and one more, which says whether a next page exists.</summary>
-    public static async Task<Page> Read(Cursor? after, CancellationToken ct)
-    {
-        var query = new QueryDefinition { Filter = after is null ? null : Seek(after), Page = 1, PageSize = PageSize + 1 }
-            .WithSort<Participant>(sort => sort.OrderByDescending(participant => participant.AppliedAt).ThenByDescending(participant => participant.Id));
-        var applicants = (await Participant.Query(participant => participant.AppliedAt != null
-            && (participant.Standing == Standing.Applied || participant.Standing == Standing.Declined), query, ct)).ToList();
-        return applicants.Count > PageSize
-            ? new Page(applicants.GetRange(0, PageSize), Cursor.After(applicants[PageSize - 1]))
-            : new Page(applicants, null);
-    }
-
-    /// <summary>A page of the applications that wait and the log's sequence the next page reads before; <see cref="Next"/>
-    /// is null on the last page.</summary>
-    public sealed record WaitingPage(IReadOnlyList<Participant> Applicants, long? Next);
-
-    /// <summary>The page of the applications that wait whose arrival lies before the log's sequence
-    /// <paramref name="before"/>, or the first page: one range of <see cref="Waiting"/>, limited to the page and one more,
-    /// which says whether a next page exists.</summary>
-    public static async Task<WaitingPage> ReadWaiting(long? before, CancellationToken ct)
-    {
-        var applicants = (await Waiting(0, before ?? long.MaxValue, PageSize + 1, ct)).ToList();
-        return applicants.Count > PageSize
-            ? new WaitingPage(applicants.GetRange(0, PageSize), applicants[PageSize - 1].WaitingSeq)
-            : new WaitingPage(applicants, null);
-    }
+    /// <summary>The applications a list reads: those that wait alone where <paramref name="waiting"/>, otherwise every one,
+    /// waiting or declined.</summary>
+    public static Expression<Func<Participant, bool>> Among(bool waiting)
+        => waiting
+            ? participant => participant.Standing == Standing.Applied
+            : participant => participant.Standing == Standing.Applied || participant.Standing == Standing.Declined;
 
     /// <summary>At most <paramref name="limit"/> of the applications that wait, newest first: those whose arrival lies
     /// after the log's sequence <paramref name="after"/> and before <paramref name="before"/>, one range of
@@ -111,17 +66,4 @@ public static class Applications
         => Participant.Query(participant => participant.WaitingSeq > after && participant.WaitingSeq < before,
             new QueryDefinition { Page = 1, PageSize = limit }
                 .WithSort<Participant>(sort => sort.OrderByDescending(participant => participant.WaitingSeq)), ct);
-
-    /// <summary>The applications after the cursor, newest first: made no later than the cursor's, which the index answers
-    /// as a range, and, at the cursor's own instant, an id before the cursor's.</summary>
-    private static Filter Seek(Cursor after)
-    {
-        var at = FieldPath.Of(nameof(Participant.AppliedAt));
-        var id = FieldPath.Of(nameof(Participant.Id));
-        return Filter.All(
-            Filter.On(at, FilterOperator.Lte, FilterValue.Of(after.At)),
-            Filter.Any(
-                Filter.On(at, FilterOperator.Lt, FilterValue.Of(after.At)),
-                Filter.On(id, FilterOperator.Lt, FilterValue.Of(after.Id))));
-    }
 }

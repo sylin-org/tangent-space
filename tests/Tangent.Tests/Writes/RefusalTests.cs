@@ -22,11 +22,11 @@ public sealed class RefusalTests
         const string form = "/t/" + Workshop + "/new";
 
         var page = await Send(visitor, HttpMethod.Get, form);
-        var asJson = await Send(visitor, HttpMethod.Post, form, JsonBody(new { id = Tids.Mint(), title = "Hello", body = "Anyone?" }), json: true);
-        var onForm = await Send(visitor, HttpMethod.Post, form, FormBody(new Dictionary<string, string> { ["id"] = Tids.Mint(), ["title"] = "Hello", ["body"] = "Anyone?" }));
+        var asJson = await Send(visitor, HttpMethod.Post, "/t/" + Workshop, JsonBody(new { id = Tids.Mint(), title = "Hello", body = "Anyone?" }), json: true);
+        var onForm = await Send(visitor, HttpMethod.Post, "/t/" + Workshop, FormBody(new Dictionary<string, string> { ["id"] = Tids.Mint(), ["title"] = "Hello", ["body"] = "Anyone?" }));
         var reply = await Send(visitor, HttpMethod.Post, TopicPath(root), JsonBody(new { id = Tids.Mint(), body = "Anyone?" }), json: true);
-        var edit = await Send(visitor, HttpMethod.Post, PostPath(root, root) + "/edit", JsonBody(new { body = "Mine now.", version = 1 }), json: true);
-        var editForm = await Send(visitor, HttpMethod.Post, PostPath(root, root) + "/edit", FormBody(new Dictionary<string, string> { ["body"] = "Mine now.", ["version"] = "1" }));
+        var edit = await Send(visitor, HttpMethod.Patch, PostPath(root, root), JsonBody(new { body = "Mine now.", version = 1 }), json: true);
+        var editForm = await Send(visitor, HttpMethod.Post, PostPath(root, root), FormBody(new Dictionary<string, string> { ["_method"] = "PATCH", ["body"] = "Mine now.", ["version"] = "1" }));
 
         Assert.Equal(HttpStatusCode.Unauthorized, page.Status);
         Assert.Contains("data-word=\"sign-in\"", page.Body);
@@ -59,8 +59,8 @@ public sealed class RefusalTests
 
         var page = await Send(bea.Client, HttpMethod.Get, edit);
         // The edit page offers Bea no form, so her session's token comes from the Topic's page, which carries one.
-        var editJson = await Json(bea, TopicPath(root), edit, new { title = "Mine", body = "Mine now.", version = 1 });
-        var editForm = await Form(bea, TopicPath(root), edit, new Dictionary<string, string> { ["title"] = "Mine", ["body"] = "Mine now.", ["version"] = "1" });
+        var editJson = await Json(bea, TopicPath(root), HttpMethod.Patch, PostPath(root, root), new { title = "Mine", body = "Mine now.", version = 1 });
+        var editForm = await Form(bea, TopicPath(root), PostPath(root, root), As(HttpMethod.Patch, new Dictionary<string, string> { ["title"] = "Mine", ["body"] = "Mine now.", ["version"] = "1" }));
         var removeJson = await Json(bea, TopicPath(root), remove, new { });
         var removeForm = await Form(bea, TopicPath(root), remove, new Dictionary<string, string>());
 
@@ -135,11 +135,11 @@ public sealed class RefusalTests
 
         var form = await Send(ada.Client, HttpMethod.Get, "/t/" + Studio + "/new", json: true);
         var nowhere = await Send(ada.Client, HttpMethod.Get, "/t/nowhere/new", json: true);
-        var start = await Json(ada, page, "/t/" + Studio + "/new", new { id = Tids.Mint(), title = "In here", body = "Let me in." });
+        var start = await Json(ada, page, "/t/" + Studio, new { id = Tids.Mint(), title = "In here", body = "Let me in." });
         var startNowhere = await Json(ada, page, "/t/nowhere/new", new { id = Tids.Mint(), title = "In here", body = "Let me in." });
-        var startForm = await Form(ada, page, "/t/" + Studio + "/new", new Dictionary<string, string> { ["id"] = Tids.Mint(), ["title"] = "In here", ["body"] = "Let me in." });
+        var startForm = await Form(ada, page, "/t/" + Studio, new Dictionary<string, string> { ["id"] = Tids.Mint(), ["title"] = "In here", ["body"] = "Let me in." });
         var reply = await Json(ada, page, TopicPath(hidden), new { id = Tids.Mint(), body = "Let me in." });
-        var edit = await Json(ada, page, PostPath(hidden, hidden) + "/edit", new { body = "Let me in.", version = 1 });
+        var edit = await Json(ada, page, HttpMethod.Patch, PostPath(hidden, hidden), new { body = "Let me in.", version = 1 });
         var editPage = await Send(ada.Client, HttpMethod.Get, PostPath(hidden, hidden) + "/edit", json: true);
         var remove = await Json(ada, page, PostPath(hidden, hidden) + "/remove", new { });
         var removeForm = await Form(ada, page, PostPath(hidden, hidden) + "/remove", new Dictionary<string, string>());

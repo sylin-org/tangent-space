@@ -4,12 +4,12 @@ namespace Tangent.Tangents;
 
 /// <summary>A Tangent's settings, one resource both ways: its <see cref="Slug"/>, which never changes, and what may:
 /// its <see cref="Name"/>, <see cref="Description"/>, its <see cref="Accent"/>, empty for the <see cref="Tone"/> its slug gives
-/// it, its <see cref="Image"/>, empty or one of the <see cref="Covers"/> or an image brought in here, default <see cref="Kind"/> (one of <see cref="Kinds"/>), its
+/// it, its <see cref="Image"/>, empty or one of the <see cref="Covers"/> or an image brought in here, its default kind (<see cref="Kind"/>, one of <see cref="Kinds"/>), its
 /// <see cref="Audience"/> (one of <see cref="Audiences"/>, which is empty where the audience is fixed) and, for a
 /// reader who <see cref="Movable"/> it — who holds <c>ManageSpace</c>, since a move arranges the place's list — its place
 /// among the Tangents, between <see cref="Before"/> and <see cref="After"/>, the names of the nearest Tangents that
 /// reader may view, null at either end and for every other reader. <see cref="Change"/>, present only where the reader
-/// may change the Tangent, takes <c>name</c>, <c>description</c>, <c>accent</c>, <c>image</c>, <c>kind</c>, <c>audience</c> and <c>move</c>
+/// may change the Tangent, changes it at its own address, taking <c>name</c>, <c>description</c>, <c>accent</c>, <c>image</c>, <c>kind</c>, <c>audience</c> and <c>move</c>
 /// (<c>earlier</c> or <c>later</c>), each left as it is when not sent. <see cref="Fixed"/> says this is the moderators'
 /// Tangent, whose audience and place stay as they are. <see cref="Access"/> is where the roles' access to it is set
 /// (<see cref="TangentAccessPage"/>). <see cref="Can"/> is what the reader holds on the Tangent, and
@@ -106,12 +106,12 @@ public sealed record TangentSettingsPage(
         foreach (var item in fields)
         {
             yield return item;
-            if (item.Name == TangentWrites.ImageField && Change is { } change)
+            if (item.Name == TangentWrites.ImageField && Change is not null)
                 yield return new(Posts.NewMediaController.FileField, "", As: Render.Form.Input.File)
                 {
                     Label = "Or bring your own", Accept = "image/png,image/jpeg,image/webp",
                     Note = "A PNG, JPEG or WebP, square. Its tile wears it at once in place of its letter, wherever the Tangent is listed.",
-                    Sends = Render.Form.Posting(change.Action + "/" + TangentWrites.ImageSegment)
+                    Sends = Render.Form.Posting(Address + "/" + TangentWrites.SettingsSegment + "/" + TangentWrites.ImageSegment)
                         with { Tool = "change-tangent", Key = "tangent-image", Submit = "Use this image", Busy = "Bringing it in…", Multipart = true }
                 };
             if (Fixed && item.Name == TangentWrites.KindField)
@@ -122,7 +122,7 @@ public sealed record TangentSettingsPage(
     /// <summary>Where the Tangent stands among the Tangents, and, for a reader who may move it, one move earlier or later, the
     /// one at its end unpressable.</summary>
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Render.Form? Moves => !Movable ? null : new Render.Form(Change?.Action ?? "", HttpMethods.Post,
+    public Render.Form? Moves => !Movable ? null : new Render.Form(Change?.Action ?? "", HttpMethods.Patch,
         [
             new(TangentWrites.MoveField, Holds.TangentMove, As: Render.Form.Input.Switch)
             {

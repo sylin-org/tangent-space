@@ -1,9 +1,11 @@
-using System.Globalization;
 using System.ComponentModel;
-using Koan.Data.Core.Commands;
+using Koan.Data.Core.Querying;
 using Koan.Web.Attributes;
 using Koan.Web.Controllers;
+using Koan.Web.Hooks;
 using Koan.Web.Hosting;
+using Koan.Web.Queries;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
 using Tangent.Posts;
@@ -12,36 +14,28 @@ using Tangent.Space;
 
 namespace Tangent.Participants;
 
-/// <summary>What deciding an application sends, as a form or one JSON object.</summary>
-public sealed record DecideInput([Description(Holds.Applicant)] string? Participant = null, [Description(Holds.DecidedState)] string? State = null);
-
-/// <summary>What inviting an account sends, as a form or one JSON object.</summary>
-public sealed record InviteInput([Description(Holds.InviteHandle)] string? Handle = null);
-
-/// <summary>What withdrawing an invitation sends, as a form or one JSON object.</summary>
-public sealed record WithdrawInput([Description(Holds.Invitation)] string? Account = null);
+/// <summary>What reading the applications takes beside where its page continues: <c>waiting</c> for those that wait alone,
+/// and where the page of invitations continues.</summary>
+public sealed record ApplicationsInput(
+    [property: Description(Holds.ApplicationsState)] string? State = null,
+    [property: Description(Holds.InvitationsAfter)] string? Invited = null);
 
 /// <summary>The place's applications, a section of its settings at <c>/settings/applications</c>, for whoever holds
-/// <see cref="Bit.ManageStanding"/>. Its <c>GET</c> is one bounded page of them (<see cref="Applications.Read"/>), one
-/// resource both ways (<see cref="ApplicationsPage"/>), continued from the cursor in <c>after</c>, and, with
-/// <c>state=waiting</c>, those that wait alone (<see cref="Applications.ReadWaiting"/>), continued from the sequence in
-/// <c>after</c>, which is where the settings open the section (<see cref="WaitingAddress"/>); a cursor that is not one, or
-/// another state, is refused with <c>400</c>. The Doorway refuses every route here, before the action runs, to whoever
-/// does not hold <see cref="Bit.ManageStanding"/>, <c>401</c> to sign in and <c>403</c> otherwise, a page as the refusal's
-/// page and a JSON request as its problem, and answers a reader for whom the place does not exist what an address with
-/// nothing there receives. Its two <c>POST</c>s take the applicant's id in <c>participant</c>, as a form or a JSON object: <c>admit</c> sends
-/// <see cref="Admit"/>; <c>decline</c> sends <see cref="Decline"/>. A form is sent back to
-/// the applications, those that wait where it carries <c>state=waiting</c>; a JSON request reads the decision (<see cref="DecidedApplication"/>); a refusal reads the page again
-/// with the reason above the list, or a problem. Where admission says apply, either page also holds one bounded page of the
-/// invitations (<see cref="Invitations.Read"/>), continued from the cursor in <c>invited</c>, and two more <c>POST</c>s:
-/// <c>invite</c> takes a Bluesky handle in <c>handle</c>, reads whose account it
-/// names from its public profile, in the request and outside any command (<see cref="ProfileReader.Find"/>), and sends
-/// <see cref="Participants.Invite"/>; <c>withdraw</c> takes the account's DID in <c>account</c> and sends
-/// <see cref="WithdrawInvitation"/>. A form is sent back to the applications that wait, where the section opens, and a
-/// refusal of a handle reads that page again with the reason under the field and the handle kept; a JSON request reads
-/// where the invitation stands.</summary>
+/// <see cref="Bit.ManageStanding"/>: a declared collection of Koan's over <see cref="Participant"/>, which serves its read
+/// alone. Its <c>GET</c> is one bounded page of the participants who applied, waiting or declined, newest application first
+/// through <c>ix_participant_applications</c> (<see cref="Participant.AppliedAt"/>), continued from the sealed cursor in
+/// <c>after</c>, and with <c>state=waiting</c> those that wait alone, which is where the settings open the section
+/// (<see cref="WaitingAddress"/>); another state is refused with <c>400</c>, and so is a cursor that does not open. Its own
+/// options hook narrows the rows to the applications (<see cref="Applications.Among"/>), and its emit hook composes the page
+/// both ways (<see cref="ApplicationsPage"/>), which, where admission says apply, also holds one bounded page of the
+/// invitations (<see cref="Invitations.Read"/>), continued from the cursor in <c>invited</c>. The Doorway refuses it, before
+/// anything is bound, to whoever does not hold <see cref="Bit.ManageStanding"/>, <c>401</c> to sign in and <c>403</c>
+/// otherwise, a page as the refusal's page and a JSON request as its problem, and answers a reader for whom the place does
+/// not exist what an address with nothing there receives. Deciding and inviting are <see cref="ApplicationVerbsController"/>'s.</summary>
+[Route(Path)]
+[Declared]
 [Managing]
-public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerBase
+public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : EntityController<Participant>, IRequestOptionsHook<Participant>, IEmitHook<Participant>
 {
     public const string Path = "/settings/applications";
 
@@ -62,15 +56,6 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
     /// <summary>The query parameter that carries the cursor of the page of invitations to continue from.</summary>
     public const string InvitedQuery = "invited";
 
-    /// <summary>The refusal of a handle that cannot be one.</summary>
-    public static readonly Reason NotAHandle = Reason.Invalid(HandleField, "That is not a Bluesky handle, as alice.bsky.social.");
-
-    /// <summary>The refusal of a handle no account answers to.</summary>
-    public static Reason NoAccount(string handle) => Reason.Invalid(HandleField, "No Bluesky account answers to @" + handle + ". Check its spelling.");
-
-    /// <summary>The refusal of a withdrawal that names no invitation.</summary>
-    public static readonly Reason NotAnInvitation = Reason.Invalid(AccountField, "Name an invitation by the DID its row carries.");
-
     /// <summary>The field that names the applicant decided.</summary>
     public const string ParticipantField = "participant";
 
@@ -80,8 +65,64 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
     /// <summary>The query parameter, and the field of a decision, that narrows the applications to those that wait.</summary>
     public const string StateQuery = "state";
 
+    /// <summary>The order the applications are read in, newest application first.</summary>
+    public const string Newest = "-" + nameof(Participant.AppliedAt);
+
+    private static readonly Keyset<Participant> Order = Keyset<Participant>.By(Newest);
+
     /// <summary>The address of the applications that wait, under <paramref name="baseAddress"/>.</summary>
     public static string WaitingAddress(string baseAddress) => baseAddress + Path + "?" + StateQuery + "=" + ApplicationsPage.Waiting;
+
+    private bool _waiting;
+
+    private Invitations.Cursor? _invited;
+
+    [HttpGet("")]
+    [Tool(Name = "read_applications")]
+    [Description("Read who waits to be admitted and who was declined, or with state waiting those who wait alone, a page at a time, for whoever holds ManageStanding; where admission says apply, every application's page also lists who is invited. Then call admit or decline on an applicant's id, invite on a Bluesky handle, or withdraw_invitation on an invitation's account.")]
+    [Needs(Bit.ManageStanding)]
+    [Pagination(DefaultSize = Applications.PageSize, MaxSize = Applications.PageSize, DefaultSort = Newest)]
+    [Input<ApplicationsInput>]
+    public override Task<IActionResult> GetCollection(CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-store";
+        return base.GetCollection(ct);
+    }
+
+    /// <summary>The applications alone, those that wait alone where the input says <c>waiting</c>; another state, or an
+    /// invitations cursor that is not one, is refused before anything is read.</summary>
+    public Task OnBuildingOptions(HookContext<Participant> ctx, QueryOptions opts)
+    {
+        var input = ctx.Input<ApplicationsInput>();
+        if (!string.IsNullOrEmpty(input?.State) && input.State != ApplicationsPage.Waiting)
+            ctx.ShortCircuit(new Problem(StatusCodes.Status400BadRequest,
+                $"The {StateQuery} parameter is {ApplicationsPage.Waiting}, or left out for every application.") { Title = "Not a state of the applications" }.ToResult());
+        else if (input?.Invited is { } invited && (_invited = Invitations.Cursor.Parse(invited)) is null)
+            ctx.ShortCircuit(new Problem(StatusCodes.Status400BadRequest,
+                $"The {InvitedQuery} parameter is the cursor a page of the invitations names as its next.") { Title = "Not a page of the invitations" }.ToResult());
+        else
+        {
+            _waiting = input?.State == ApplicationsPage.Waiting;
+            opts.AddPredicate(Applications.Among(_waiting));
+        }
+        return Task.CompletedTask;
+    }
+
+    /// <summary>The page the rows read make, linking the next one by the cursor Koan sealed.</summary>
+    public async Task<EmitDecision> OnEmitCollection(HookContext<Participant> ctx, object payload)
+        => EmitDecision.With(await Compose(ctx.Http!, baseUrl, _waiting, ((IEnumerable<Participant>)payload).ToList(), ctx.Next,
+            ctx.Http!.Request.Query.ContainsKey(After), _invited, ctx.Ct));
+
+    /// <summary>The first page of the applications, of those that wait alone where <paramref name="waiting"/>, read afresh as
+    /// the list reads it, for a decision or an invitation refused, which reads the page again with its reason.</summary>
+    internal static async Task<ApplicationsPage> First(HttpContext http, KoanWebBaseUrl baseUrl, bool waiting, CancellationToken ct)
+    {
+        var page = await Participant.Page(Order, null, Applications.PageSize, Applications.Among(waiting), ct);
+        var next = page.Next is { } key
+            ? SealedCursor.Seal(http.RequestServices.GetRequiredService<IDataProtectionProvider>(), typeof(ApplicationsController).FullName!, Order, key)
+            : null;
+        return await Compose(http, baseUrl, waiting, page.Items, next, false, null, ct);
+    }
 
     /// <summary>The form that decides an application at <paramref name="action"/>: admit or decline, by the applicant's id,
     /// coming back to those that wait where <paramref name="waiting"/>.</summary>
@@ -91,207 +132,17 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
         return waiting ? form.Given(StateQuery, ApplicationsPage.Waiting) : form;
     }
 
-    [HttpGet(Path)]
-    [Tool(Name = "read_applications")]
-    [Description("Read who waits to be admitted and who was declined, or with state waiting those who wait alone, a page at a time, for whoever holds ManageStanding; where admission says apply, every application's page also lists who is invited. Then call admit or decline on an applicant's id, invite on a Bluesky handle, or withdraw_invitation on an invitation's account.")]
-    [Needs(Bit.ManageStanding)]
-    public async Task<IActionResult> Get([FromQuery(Name = After), Description(Holds.After)] string? after,
-        [FromQuery(Name = StateQuery), Description(Holds.ApplicationsState)] string? state,
-        [FromQuery(Name = InvitedQuery), Description(Holds.InvitationsAfter)] string? invited, CancellationToken ct)
+    /// <summary>One page of the applications, of those that wait alone where <paramref name="waiting"/>: the rows read and the
+    /// sealed cursor of the next page; where admission says apply, one page of the invitations too, continued from
+    /// <paramref name="invited"/>, with the forms that invite and withdraw.</summary>
+    private static async Task<ApplicationsPage> Compose(HttpContext http, KoanWebBaseUrl baseUrl, bool waiting, IReadOnlyList<Participant> read,
+        string? next, bool continued, Invitations.Cursor? invited, CancellationToken ct)
     {
-        Response.Headers.CacheControl = "no-store";
-        var personId = PostWrites.PersonId(User);
-        var place = Here.Of(HttpContext).Around;
-        if (!string.IsNullOrEmpty(state) && state != ApplicationsPage.Waiting)
-            return new Problem(StatusCodes.Status400BadRequest,
-                $"The {StateQuery} parameter is {ApplicationsPage.Waiting}, or left out for every application.") { Title = "Not a state of the applications" }.ToResult();
-        var waiting = state == ApplicationsPage.Waiting;
-        Applications.Cursor? cursor = null;
-        long? before = null;
-        if (after is not null && (waiting ? (before = Before(after)) is null : (cursor = Applications.Cursor.Parse(after)) is null))
-            return new Problem(StatusCodes.Status400BadRequest,
-                $"The {After} parameter is the cursor a page of the applications names as its next.") { Title = "Not a page of the applications" }.ToResult();
-
-        Invitations.Cursor? invitedAfter = null;
-        if (invited is not null && (invitedAfter = Invitations.Cursor.Parse(invited)) is null)
-            return new Problem(StatusCodes.Status400BadRequest,
-                $"The {InvitedQuery} parameter is the cursor a page of the invitations names as its next.") { Title = "Not a page of the invitations" }.ToResult();
-
-        return Ok(await Page(place, personId, waiting, cursor, before, ct, invitedAfter));
-    }
-
-    /// <summary>The log's sequence a page of those that wait names as its next, or null where the text is not one.</summary>
-    private static long? Before(string text)
-        => long.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var seq) && seq > 0 ? seq : null;
-
-    [HttpPost(AdmitPath)]
-    [RequestSizeLimit(PostWrites.RequestLimit)]
-    [Tool(Name = "admit", Destructive = true, Idempotent = true, OpenWorld = false)]
-    [Needs(Bit.ManageStanding)]
-    [Description("Admit an applicant from read_applications, who becomes a member, for whoever holds ManageStanding. It reverses a decline.")]
-    public Task<IActionResult> Admit(DecideInput input, CancellationToken ct) => Decide(input, true, ct);
-
-    [HttpPost(DeclinePath)]
-    [RequestSizeLimit(PostWrites.RequestLimit)]
-    [Tool(Name = "decline", Destructive = true, Idempotent = true, OpenWorld = false)]
-    [Needs(Bit.ManageStanding)]
-    [Description("Decline an applicant from read_applications, who goes on reading what a visitor reads and is told, for whoever holds ManageStanding. A later admit reverses it.")]
-    public Task<IActionResult> Decline(DecideInput input, CancellationToken ct) => Decide(input, false, ct);
-
-    [HttpPost(InvitePath)]
-    [RequestSizeLimit(PostWrites.RequestLimit)]
-    [Tool(Name = "invite", Destructive = false, Idempotent = true, OpenWorld = true)]
-    [Description("Invite a Bluesky account by its handle where admission says apply, for whoever holds ManageStanding: it is admitted, as a member, when it first signs in. Naming someone who already applied admits them now. withdraw_invitation takes it back.")]
-    [Needs(Bit.ManageStanding)]
-    public async Task<IActionResult> Invite(InviteInput input, CancellationToken ct)
-    {
-        Response.Headers.CacheControl = "no-store";
-        var personId = PostWrites.PersonId(User) ?? "";
-        if (Handle(input.Handle) is not { } handle) return await Uninvited(personId, NotAHandle, input.Handle, ct);
-        if (Here.Of(HttpContext).Rows.Space.Admission != Admission.Apply) return await Uninvited(personId, Participants.Invite.Joins, handle, ct);
-
-        ProfileAnswer found;
-        try
-        {
-            found = await HttpContext.RequestServices.GetRequiredService<ProfileReader>().Find(handle, ct);
-        }
-        catch (ProfileReadFailed)
-        {
-            return await Uninvited(personId, NoAccount(handle), handle, ct);
-        }
-
-        var outcome = await new Participants.Invite(personId, found.Did, handle, found.DisplayName, Monogram.Avatar(found.Avatar)).Send();
-        switch (outcome)
-        {
-            case Outcome<Participants.Invite.Result>.Done { Result: var result }:
-                if (!PostWrites.WantsJson(Request)) return Back(true);
-                var place = await Capabilities.Load(personId, null, null, ct);
-                return Ok(new InvitedAccount(found.Did, handle, found.DisplayName ?? handle, result.Admitted is null ? "invited" : "admitted",
-                    BaseAddress() + Path, place.Can));
-            case Outcome<Participants.Invite.Result>.Refused { Reason: var reason }:
-                return await Uninvited(personId, reason, handle, ct);
-            default:
-                return Answers.NotDone(HttpContext, outcome);
-        }
-    }
-
-    [HttpPost(WithdrawPath)]
-    [RequestSizeLimit(PostWrites.RequestLimit)]
-    [Tool(Name = "withdraw_invitation", Destructive = true, Idempotent = true, OpenWorld = false)]
-    [Description("Withdraw an invitation from read_applications, for whoever holds ManageStanding: whoever it named applies as anyone does.")]
-    [Needs(Bit.ManageStanding)]
-    public async Task<IActionResult> Withdraw(WithdrawInput input, CancellationToken ct)
-    {
-        Response.Headers.CacheControl = "no-store";
-        var personId = PostWrites.PersonId(User) ?? "";
-        if (input.Account is not { } account || !Participant.IsDid(account)) return await Refused(personId, NotAnInvitation, true, ct);
-        var outcome = await new WithdrawInvitation(personId, account).Send();
-        if (outcome is Outcome<string>.Refused { Reason: var reason }) return await Refused(personId, reason, true, ct);
-        if (outcome is not Outcome<string>.Done) return Answers.NotDone(HttpContext, outcome);
-        return PostWrites.WantsJson(Request) ? Ok(new WithdrawnInvitation(account, BaseAddress() + Path)) : Back(true);
-    }
-
-    /// <summary>A handle as atproto writes one, from what was typed: without spaces or a leading @, in lower case, at most
-    /// <see cref="Participants.SignIn.HandleLimit"/> characters of letters, digits, hyphens and dots, with a dot between two labels;
-    /// null where it cannot be one.</summary>
-    private static string? Handle(string? typed)
-    {
-        var handle = typed?.Trim().TrimStart('@').ToLowerInvariant();
-        return handle is { Length: > 2 and <= Participants.SignIn.HandleLimit } && handle.Contains('.') && handle[0] != '.' && handle[^1] != '.'
-               && !handle.Contains("..", StringComparison.Ordinal) && handle.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '.')
-            ? handle
-            : null;
-    }
-
-    /// <summary>A refused invitation: for a JSON request, the problem its reason answers as; for a form, the page again, read
-    /// afresh, with the reason under the handle field and the handle as it was typed, or above the list where the page
-    /// offers no invitation.</summary>
-    private async Task<IActionResult> Uninvited(string personId, Reason reason, string? typed, CancellationToken ct)
-    {
-        if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
-        var page = await Page(Here.Of(HttpContext).Around, personId, true, null, null, ct);
-        page = page.Invite is { } invite
-            ? page with { Invite = invite.Changing(HandleField, field => field with { Value = typed, Failure = reason.Text }) }
-            : page with { Failure = reason.Text };
-        return new ObjectResult(page) { StatusCode = Answers.Status(HttpContext, reason) };
-    }
-
-    /// <summary>A form sent back to the applications, to those that wait where <paramref name="waiting"/>.</summary>
-    private IActionResult Back(bool waiting)
-    {
-        Response.Headers.Location = waiting ? WaitingAddress(BaseAddress()) : BaseAddress() + Path;
-        return StatusCode(StatusCodes.Status303SeeOther);
-    }
-
-    private async Task<IActionResult> Decide(DecideInput input, bool admitting, CancellationToken ct)
-    {
-        Response.Headers.CacheControl = "no-store";
-        var personId = Here.Of(HttpContext).PersonId!;
-        var applicantId = input.Participant ?? "";
-        ICommand<Participant> command = admitting
-            ? new Participants.Admit(personId, applicantId)
-            : new Participants.Decline(personId, applicantId);
-        var outcome = await command.Send();
-        switch (outcome)
-        {
-            case Outcome<Participant>.Done { Result: var applicant }:
-                return await Decided(applicant, personId, input.State == ApplicationsPage.Waiting, ct);
-            case Outcome<Participant>.Refused { Reason: var reason }:
-                return await Refused(personId, reason, input.State == ApplicationsPage.Waiting, ct);
-            default:
-                return Answers.NotDone(HttpContext, outcome);
-        }
-    }
-
-    /// <summary>A decision that committed, or that found it already made: a form is sent back to the applications, to
-    /// those that wait where it came from them; a JSON request reads the applicant's standing now, with the decider's
-    /// <c>can</c>.</summary>
-    private async Task<IActionResult> Decided(Participant applicant, string? personId, bool waiting, CancellationToken ct)
-    {
-        var applications = BaseAddress() + Path;
-        if (!PostWrites.WantsJson(Request)) return Back(waiting);
-
-        var place = await Capabilities.Load(personId, null, null, ct);
-        var (name, handle) = (applicant.ShownName(), applicant.ShownHandle());
-        return new ObjectResult(new DecidedApplication(applicant.Id, name, handle, People.Word(applicant.StandingAt(DateTimeOffset.UtcNow)),
-            applications, place.Can))
-        {
-            ContentTypes = { "application/json" }
-        };
-    }
-
-    /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the page again, read afresh
-    /// for the reader the Doorway let in, with the reason above the list.</summary>
-    private async Task<IActionResult> Refused(string? personId, Reason reason, bool waiting, CancellationToken ct)
-    {
-        if (PostWrites.WantsJson(Request)) return Answers.Refused(HttpContext, reason);
-
-        var page = await Page(Here.Of(HttpContext).Around, personId, waiting, null, null, ct) with { Failure = reason.Text };
-        return new ObjectResult(page) { StatusCode = Answers.Status(HttpContext, reason) };
-    }
-
-    /// <summary>One page of the applications, of those that wait alone where <paramref name="waiting"/>, continued from
-    /// <paramref name="cursor"/> or, among those that wait, from before <paramref name="before"/>; where admission says apply,
-    /// one page of the invitations too, continued from <paramref name="invited"/>, with the forms that invite and
-    /// withdraw.</summary>
-    private async Task<ApplicationsPage> Page(Capabilities place, string? personId, bool waiting, Applications.Cursor? cursor, long? before,
-        CancellationToken ct, Invitations.Cursor? invited = null)
-    {
-        var baseAddress = BaseAddress();
+        var place = Here.Of(http).Around;
+        var personId = PostWrites.PersonId(http.User);
+        var baseAddress = baseUrl.Resolve(http);
         var here = baseUrl.PathBase + Path + (waiting ? "?" + StateQuery + "=" + ApplicationsPage.Waiting : "");
         var applications = waiting ? WaitingAddress(baseAddress) : baseAddress + Path;
-        IReadOnlyList<Participant> read;
-        string? next;
-        if (waiting)
-        {
-            var page = await Applications.ReadWaiting(before, ct);
-            (read, next) = (page.Applicants, page.Next?.ToString(CultureInfo.InvariantCulture));
-        }
-        else
-        {
-            var page = await Applications.Read(cursor, ct);
-            (read, next) = (page.Applicants, page.Next?.ToString());
-        }
 
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
         var inviting = space.Admission == Admission.Apply;
@@ -307,7 +158,7 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
                     applicant.AppliedAt ?? DateTimeOffset.MinValue);
             }).ToList(),
             next is null ? null : applications + (waiting ? "&" : "?") + After + "=" + Uri.EscapeDataString(next),
-            cursor is not null || before is not null,
+            continued,
             applications,
             waiting ? ApplicationsPage.Waiting : "",
             baseAddress + Path,
@@ -342,7 +193,4 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : ControllerB
         if (ids.Count == 0) return new Dictionary<string, Render.Person>();
         return (await Participant.Get(ids, ct)).OfType<Participant>().ToDictionary(row => row.Id, row => Render.Person.Of(row, baseAddress), StringComparer.Ordinal);
     }
-
-
-    private string BaseAddress() => baseUrl.Resolve(HttpContext);
 }

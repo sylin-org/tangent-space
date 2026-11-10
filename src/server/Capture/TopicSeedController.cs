@@ -40,7 +40,7 @@ public sealed class TopicSeedController(RoleCollection roles) : ControllerBase
         await Person(Mara, "mara.bsky.social", "Mara Lind", ParticipantKind.Person, Roles.Member, ct);
         await Person(Persona, "ada.bsky.social", "Ada Okafor", ParticipantKind.Person, Roles.Member, ct);
 
-        await Write(new CreateTangent("discussions", "Discussions", "Open questions, half-ideas and the loose threads of the work.", PostKind.Topic, 1, Audience.Public, Leo), ct);
+        await Write(new OpenTangent("discussions", "Discussions", "Open questions, half-ideas and the loose threads of the work.", PostKind.Topic, 1, Audience.Public, Leo), ct);
 
         var kinds = await Topic("What kind of discussions?", "So! Thoughts?\n\nAnything goes for now; we can **sort it out later**.", Leo, At(29, 11, 48), 1, ct);
         var opener = await Answer(kinds, "To get us started, this is for anything that isn’t an article yet:\n\n- half-ideas\n- open questions\n- links worth arguing over\n\n"
@@ -62,7 +62,7 @@ public sealed class TopicSeedController(RoleCollection roles) : ControllerBase
 
         var removal = await Topic("Is a visible repair a better repair?", "Kintsugi makes the crack the point. Should our software do the same with its fixes?", Lumen, At(27, 15, 0), 7, ct);
         var rewritten = await Answer(removal, "Yes, when the repair teaches something. A changelog is a seam you can read.", Mara, At(27, 15, 30), 8, ct);
-        await Write(new EditPost(rewritten.Id, rewritten.Version, "Yes, when the repair teaches something. A changelog is a seam anyone can read.", null, Leo, At(27, 17, 5)), ct);
+        await Write(new Edited(rewritten.Id, rewritten.Version, "Yes, when the repair teaches something. A changelog is a seam anyone can read.", null, Leo, At(27, 17, 5)), ct);
         var gone = await Answer(removal, "Off-topic link that did not belong here.", Persona, At(27, 16, 0), 9, ct);
         await Answer(removal, "Not always: some seams only invite worry. Show the ones people can act on.", Leo, At(27, 16, 45), 10, ct);
         gone.Removed = true;
@@ -93,10 +93,10 @@ public sealed class TopicSeedController(RoleCollection roles) : ControllerBase
     }
 
     private Task<Post> Topic(string title, string body, string author, DateTimeOffset at, int clock, CancellationToken ct)
-        => Write(new StartTopic(Tid(at, clock), "discussions", title, body, author, At: at), ct);
+        => Write(new Started(Tid(at, clock), "discussions", title, body, author, At: at), ct);
 
     private Task<Post> Answer(Post topic, string body, string author, DateTimeOffset at, int clock, CancellationToken ct, string? parentId = null)
-        => Write(new Reply(Tid(at, clock), topic.Id, body, author, parentId, at), ct);
+        => Write(new Replied(Tid(at, clock), topic.Id, body, author, parentId, at), ct);
 
     private Task Seen(Post topic, long sequence, CancellationToken ct)
         => Write(new Keep<Checkpoint>(Checkpoint.At(Persona, Scope.Topic(topic.Id), sequence)), ct);

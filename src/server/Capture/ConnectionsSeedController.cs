@@ -22,9 +22,9 @@ public sealed class ConnectionsSeedController(RoleCollection roles) : Controller
     {
         await new ArticleSeedController(roles).Seed(ct);
         var gold = (await Post.Query(post => post.Slug == "mending-with-gold", ct)).Single();
-        var leaf = await Write(new StartTopic(Tid(At(28, 10, 5), 8), "articles", "Gold leaf, not gold paint",
+        var leaf = await Write(new Started(Tid(At(28, 10, 5), 8), "articles", "Gold leaf, not gold paint",
             "Leaf sits on the lacquer; paint sits on the surface. Only one of them is still there in ten years.", Persona, At: At(28, 10, 5)), ct);
-        var bench = await Write(new StartTopic(Tid(At(30, 21, 40), 9), "articles", "The bench at night",
+        var bench = await Write(new Started(Tid(At(30, 21, 40), 9), "articles", "The bench at night",
             "Most of the mending happens after the shop closes, when nobody is asking for anything.", Persona, At: At(30, 21, 40)), ct);
 
         var since = At(27, 9, 0);
@@ -76,7 +76,7 @@ public sealed class ConnectionsSeedController(RoleCollection roles) : Controller
         for (var page = 1; page <= Receipt.PageSize + 5; page++)
         {
             var at = At(20, 8, 0).AddMinutes(page);
-            var note = await Write(new StartTopic(Tid(at, 10), "articles", "Notebook, page " + page,
+            var note = await Write(new Started(Tid(at, 10), "articles", "Notebook, page " + page,
                 "What the bench taught me on day " + page + ".", Persona, At: at), ct);
             await Write(new Keep<Receipt>(Written(note, at.AddSeconds(30), updated: false)), ct);
         }

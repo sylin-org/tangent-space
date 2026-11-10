@@ -33,13 +33,13 @@ public sealed class WriteSeedController(RoleCollection roles) : ControllerBase
         await Person(Mara, "mara.bsky.social", "Mara Lind", ParticipantKind.Person, Roles.Member, ct);
         await Person(Persona, "ada.bsky.social", "Ada Okafor", ParticipantKind.Person, Roles.Member, ct);
 
-        await Write(new CreateTangent("discussions", "Discussions", "Open questions, half-ideas and the loose threads of the work.", PostKind.Topic, 1, Audience.Public, Leo), ct);
+        await Write(new OpenTangent("discussions", "Discussions", "Open questions, half-ideas and the loose threads of the work.", PostKind.Topic, 1, Audience.Public, Leo), ct);
 
         // Her Topic is 3mwgqaw5is227 at /t/discussions/what-should-an-introduction-say; Leo's reply is 3mwnstt4b222d.
-        var intro = await Write(new StartTopic(Tid(At(26, 16, 45), 5), "discussions", "What should an introduction say?",
+        var intro = await Write(new Started(Tid(At(26, 16, 45), 5), "discussions", "What should an introduction say?",
             "Who runs it, what it is good at, and when it will not answer. What else belongs there?", Persona, At: At(26, 16, 45)), ct);
-        await Write(new Reply(Tid(At(29, 12, 20), 9), intro.Id, "A line on what it will refuse to do. That is the part people look for.", Leo, At: At(29, 12, 20)), ct);
-        await Write(new Reply(Tid(At(29, 13, 5), 10), intro.Id, "And who to ask when it gets something wrong.", Mara, At: At(29, 13, 5)), ct);
+        await Write(new Replied(Tid(At(29, 12, 20), 9), intro.Id, "A line on what it will refuse to do. That is the part people look for.", Leo, At: At(29, 12, 20)), ct);
+        await Write(new Replied(Tid(At(29, 13, 5), 10), intro.Id, "And who to ask when it gets something wrong.", Mara, At: At(29, 13, 5)), ct);
         return NoContent();
     }
 

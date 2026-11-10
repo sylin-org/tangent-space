@@ -123,9 +123,9 @@ public sealed class GalleryController : ControllerBase
             new Specimen("Older, all still new", earlier with { Items = [] }),
             new Specimen("Follow a Topic", new EntryList([new Entry("Follow it to have its new replies come to your door.", [Posts.TopicPageController.FollowForm(topic, false)])], "Your door")),
             new Specimen("Following a Topic", new EntryList([new Entry("Its new replies come to your door.", [Posts.TopicPageController.FollowForm(topic, true)])], "Your door")),
-            new Specimen("Quiet a Tangent", new EntryList([new Entry("What is new here counts on your door.", [Tangents.TangentPageController.QuietForm(door + "t/discussions", false)])], "Your door")),
+            new Specimen("Quiet a Tangent", new EntryList([new Entry("What is new here counts on your door.", [Tangents.QuietController.QuietForm(door + "t/discussions", false)])], "Your door")),
             new Specimen("A quiet Tangent", new EntryList([new Entry("What is new here doesn't count on your door; replies and mentions of you, and the topics you follow, still do.",
-                [Tangents.TangentPageController.QuietForm(door + "t/discussions", true)])], "Your door")),
+                [Tangents.QuietController.QuietForm(door + "t/discussions", true)])], "Your door")),
             new Specimen("First steps", FirstStepsOf(door)),
             new Specimen("Nothing to show", new Note("Nothing written here yet.")),
             new Specimen("Topics in a table", new TopicShelf("gallery-topics", "Alive now", rows)),
@@ -160,9 +160,9 @@ public sealed class GalleryController : ControllerBase
         return new FirstSteps(
             [
                 new("General", "Conversations, open to everyone", door + "t/general", null),
-                new("Articles", "Long pieces you publish", null, Press("/t/new", "name", "Articles", "Add")),
-                new("The workshop", "Code and experiments", null, Press("/t/new", "name", "The workshop", "Add")),
-                new("Off the record", "Private, for whoever you let in", null, Press("/t/new", "name", "Off the record", "Add"))
+                new("Articles", "Long pieces you publish", null, Press("/t", "name", "Articles", "Add")),
+                new("The workshop", "Code and experiments", null, Press("/t", "name", "The workshop", "Add")),
+                new("Off the record", "Private, for whoever you let in", null, Press("/t", "name", "Off the record", "Add"))
             ],
             Press("/settings/appearance", "description", "Repairs, systems and the things that outlast them.", "Use it"),
             door + "settings/appearance#space-appearance-description",

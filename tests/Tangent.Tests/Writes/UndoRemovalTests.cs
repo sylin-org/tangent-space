@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 using Koan.Data.Core.Commands;
 using Tangent.Access;
+using Tangent.Capture;
 using Tangent.Events;
 using Tangent.Participants;
 using Xunit;
@@ -106,9 +107,9 @@ public sealed class UndoRemovalTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
         var root = await Started(Ada, "Lanterns", "How do you hang yours?");
-        Assert.IsType<Outcome<Post>.Done>(await new EditPost(root.Id, 1, PostBody.Of("How do you hang yours, and where?"), null, Ada).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Edited(root.Id, 1, PostBody.Of("How do you hang yours, and where?"), null, Ada).Send(Cancellation));
         Assert.IsType<Outcome<Post>.Done>(await new RemovePost(root.Id, Mo).Send(Cancellation));
-        Assert.Equal(Capabilities.RootRemoved, Assert.IsType<Outcome<Post>.Refused>(await new Reply(Tids.Mint(), root.Id, "Still open?", Bea).Send(Cancellation)).Reason);
+        Assert.Equal(Capabilities.RootRemoved, Assert.IsType<Outcome<Post>.Refused>(await new Replied(Tids.Mint(), root.Id, "Still open?", Bea).Send(Cancellation)).Reason);
         using var mo = await SignedIn(tangentSpace, Mo);
         var html = WebUtility.HtmlDecode((await Send(mo.Client, HttpMethod.Get, TopicPath(root))).Body);
         Assert.Contains("The topic takes replies again.", html);
@@ -117,7 +118,7 @@ public sealed class UndoRemovalTests
 
         Assert.Equal((2L, "How do you hang yours, and where?"), ((await Post.Get(root.Id, Cancellation))?.Version, (await Post.Get(root.Id, Cancellation))?.Body));
         await Replied(root, Bea, "From a hook by the door.");
-        Assert.IsType<Outcome<Post>.Done>(await new EditPost(root.Id, 2, PostBody.Of("How do you hang yours, where and why?"), null, Ada).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Edited(root.Id, 2, PostBody.Of("How do you hang yours, where and why?"), null, Ada).Send(Cancellation));
         var history = (await Send(Agent(tangentSpace), HttpMethod.Get, TopicPath(root) + "/" + root.Id + "/" + PostHistoryController.Segment, json: true)).Json;
         Assert.Equal([2L, 1L], history.GetProperty("versions").EnumerateArray().Select(version => version.GetProperty("number").GetInt64()).ToList());
         Assert.Equal(["How do you hang yours, and where?", "How do you hang yours?"],

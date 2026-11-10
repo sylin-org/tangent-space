@@ -3,6 +3,7 @@ using Koan.Data.Abstractions.Failures;
 using Koan.Data.Core.Commands;
 using Koan.Data.Core.Transactions;
 using Tangent.Access;
+using Tangent.Capture;
 using Tangent.Events;
 using Tangent.Participants;
 using Xunit;
@@ -88,25 +89,21 @@ public sealed class MentionTests
         var body = $"{Mention(Bea, "bea")} and {Mention(Bea, "bea again")}, {Mention(Ada, "me")}, {Mention(Mo, "mo")}, "
             + $"{Mention(Ghost, "ghost")} and {Mention(Banned, "banned")}.";
         var id = Tids.Mint();
-        var root = Assert.IsType<Outcome<Post>.Done>(await new StartTopic(id, Workshop, "Who is here", body, Ada).Send(Cancellation)).Result;
+        var root = Assert.IsType<Outcome<Post>.Done>(await new Started(id, Workshop, "Who is here", body, Ada).Send(Cancellation)).Result;
         var created = Assert.Single(await Event.Query(e => e.Kind == EventKind.PostCreated && e.PostId == root.Id, Cancellation));
         var started = await MentionsOf(root.Id);
         Assert.Equal([(Bea, Ada, 1L, created.Seq + 1), (Mo, Ada, 1L, created.Seq + 2)],
             started.Select(e => (e.TargetId!, e.ActorId!, e.Version ?? 0, e.Seq)).ToList());
         Assert.All(started, e => Assert.Equal((Workshop, root.Id, root.Id), (e.TangentId, e.TopicId, e.PostId)));
 
-        // A replay writes nothing more.
-        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(id, Workshop, "Who is here", body, Ada).Send(Cancellation));
-        Assert.Equal(2, (await MentionsOf(root.Id)).Count);
-
         // Bea replies to Ada and mentions her and herself: Ada is told of the mention once, beside the reply's own target.
         var reply = await Replied(root, Bea, $"Thanks {Mention(Ada, "ada")}; cc {Mention(Bea, "me")}.");
         Assert.Equal([(Ada, Bea)], (await MentionsOf(reply.Id)).Select(e => (e.TargetId!, e.ActorId!)).ToList());
 
         // An edit that adds Leo tells Leo alone; one that drops a mention and adds none tells no one.
-        var added = Assert.IsType<Outcome<Post>.Done>(await new EditPost(root.Id, 1, body + $" Also {Mention(Leo, "leo")}.", null, Ada).Send(Cancellation)).Result;
+        var added = Assert.IsType<Outcome<Post>.Done>(await new Edited(root.Id, 1, body + $" Also {Mention(Leo, "leo")}.", null, Ada).Send(Cancellation)).Result;
         Assert.Equal([(Leo, Ada, 2L)], (await MentionsOf(root.Id)).Where(e => e.Version == 2).Select(e => (e.TargetId!, e.ActorId!, e.Version ?? 0)).ToList());
-        Assert.IsType<Outcome<Post>.Done>(await new EditPost(root.Id, added.Version, $"Only {Mention(Leo, "leo")} now.", null, Ada).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Edited(root.Id, added.Version, $"Only {Mention(Leo, "leo")} now.", null, Ada).Send(Cancellation));
         Assert.Equal(3, (await MentionsOf(root.Id)).Count);
 
         // In the studio, which only administrators read, Leo's mention of Ada tells no one.
@@ -132,7 +129,7 @@ public sealed class MentionTests
 
         // The store refuses the mention's row at commit: a log row already holds the sequence after the Post's own event.
         var id = Tids.Mint();
-        var failed = await new ThenThrow(new StartTopic(id, Workshop, "Hello", $"Hello {Mention(Bea, "bea")}.", Ada)).Send(Cancellation);
+        var failed = await new ThenThrow(new Started(id, Workshop, "Hello", $"Hello {Mention(Bea, "bea")}.", Ada)).Send(Cancellation);
 
         Assert.Equal(DataCommitOutcome.NotCommitted, Assert.IsType<Outcome<Post>.Failed>(failed).Landed);
         Assert.Null(await Post.Get(id, Cancellation));

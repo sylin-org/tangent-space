@@ -44,10 +44,8 @@ public static class ModeratorsTangent
     public static async Task<Tangents.Tangent> Create(string slug, string? actorId, DateTimeOffset at, CancellationToken ct)
     {
         var tangent = Tangents.Tangent.Create(slug, Name, Description, PostKind.Topic, Order);
-        var roles = Collection();
-        await Overwrites.SetAudience(roles, slug, Audience.Private, ct);
-        await roles.Overwrite(Overwrites.Resource(slug), OverwriteSubjectKind.Role, Roles.Moderator, Bits.Tokens(ModeratorBits), [], ct: ct);
-        tangent.LogSeq = (await Event.Append(EventKind.TangentChanged, at, ct, tangentId: tangent.Id, actorId: actorId, audience: Audience.Private)).Seq;
+        await TangentWriting.Opened(tangent, Audience.Private, actorId, at, ct);
+        await Collection().Overwrite(Overwrites.Resource(slug), OverwriteSubjectKind.Role, Roles.Moderator, Bits.Tokens(ModeratorBits), [], ct: ct);
         await tangent.Save(ct);
         return tangent;
     }

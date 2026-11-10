@@ -6,6 +6,7 @@ using Koan.Web.Hosting;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
+using Tangent.Capture;
 using Tangent.Events;
 using Tangent.Participants;
 using Tangent.Posts;
@@ -402,7 +403,7 @@ public sealed class OfferTests
         await Given.AParticipant(tangentSpace, Leo, [Roles.Administrator], ct: Cancellation);
         await Given.AParticipant(tangentSpace, Ada, [Roles.Member], ct: Cancellation);
         await Given.ATangent(tangentSpace, "workshop", ct: Cancellation);
-        Assert.IsType<Outcome<Post>.Done>(await new StartTopic(Tids.Mint(), "workshop", "Glazes", "Which glaze holds up?", Leo).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Started(Tids.Mint(), "workshop", "Glazes", "Which glaze holds up?", Leo).Send(Cancellation));
     }
 
     private static async Task<Browser> SignedIn(TangentSpaceFixture tangentSpace, string name, string did)

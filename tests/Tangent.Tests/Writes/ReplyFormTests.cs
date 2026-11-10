@@ -129,14 +129,15 @@ public sealed partial class ReplyFormTests
         Assert.Equal(root.Id, landed.Json.GetProperty("id").GetString());
 
         // The log names a Topic by its root's id: a Post's address under it moves to the same Post under the slug, and its history
-        // and a reply sent to it answer as at the slug's.
+        // and a reply to it sent to the Topic's address under that id answer as at the slug's.
         using var bea = await SignedIn(tangentSpace, Bea);
         var logged = (await Send(bea.Client, HttpMethod.Get, Events.EventsController.Path + "?since=0", json: true)).Json.GetProperty("events")
             .EnumerateArray().Single(row => row.GetProperty("post").GetString() == reply.Id);
         var underId = "/t/" + logged.GetProperty("tangent").GetString() + "/" + logged.GetProperty("topic").GetString() + "/" + reply.Id;
         var atPost = await Send(visitor, HttpMethod.Get, underId, json: true);
         var history = await Send(visitor, HttpMethod.Get, underId + "/" + PostHistoryController.Segment, json: true);
-        var answered = await Json(bea, underId, underId, new { body = "Noted twice." });
+        var topicUnderId = "/t/" + logged.GetProperty("tangent").GetString() + "/" + logged.GetProperty("topic").GetString();
+        var answered = await Json(bea, underId, topicUnderId, new { body = "Noted twice.", parent = reply.Id });
         Assert.Equal((HttpStatusCode.Found, AddressOf(root, reply)), (atPost.Status, atPost.Location));
         Assert.Equal((HttpStatusCode.OK, reply.Id), (history.Status, history.Json.GetProperty("postId").GetString()));
         Assert.Equal(HttpStatusCode.Created, answered.Status);

@@ -34,7 +34,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
     /// <summary>The most Tangents the door lists: the first page of those the reader may view
     /// (<see cref="ViewableTangents"/>), with the moderators' Tangent after them for whoever may view it, and, where more
     /// follow or the reader may post and so join a members-only one, a link to all of them (<see cref="TangentsController"/>).</summary>
-    public const int TangentLimit = TangentPageController.SwitcherLimit;
+    public const int TangentLimit = TopicsController.SwitcherLimit;
 
     public const int FeaturedLimit = 3;
 
@@ -167,7 +167,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
                 forYou is null ? null : new Unread.Badge(forYou.Count, forYou.AtLeast, door, forYou.Through, forYou.Applications)),
             DateOnly.FromDateTime(DateTime.UtcNow),
             Resume(baseAddress, through > 0 ? through : window.Count > 0 ? window[0].Seq : 0),
-            place.Holds(Bit.ManageSpace) ? baseAddress + NewTangentController.Route : null)
+            place.Holds(Bit.ManageSpace) ? baseAddress + TangentsController.NewRoute : null)
         {
             Around = Around(writers, people, window.Count >= LogWindow.Size),
             News = news,
@@ -211,7 +211,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
         }
 
         var roots = read.SelectMany(shelf => shelf.Topics).ToList();
-        var latest = await TangentPageController.LatestReplies(roots, ct);
+        var latest = await TopicList.LatestReplies(roots, ct);
         var people = new Dictionary<string, Render.Person>(known, StringComparer.Ordinal);
         foreach (var (id, person) in await People(baseAddress, roots
                      .SelectMany(root => root.RecentAuthorIds.Take(Post.RecentAuthorLimit).Append(root.AuthorId).Concat(root.MentionedIds))
@@ -226,7 +226,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             var address = PostWrites.TangentAddress(baseAddress, shelf.Tangent.Id);
             return new Door.Shelf(shelf.Tangent.Id, shelf.Tangent.Name, Word(shelf.Tangent.DefaultKind), shelf.Tangent.Description, address,
                 Tile.For(shelf.Tangent, baseAddress + "/"), shelf.Tangent.TopicCount,
-                shelf.Topics.Select(root => TangentPageController.Topic(root, address, people, latest, null, marks) with { Pinned = root.Id == shelf.Pinned }).ToList());
+                shelf.Topics.Select(root => TopicList.Entry(root, address, people, latest, null, marks) with { Pinned = root.Id == shelf.Pinned }).ToList());
         }).ToList();
     }
 
@@ -388,7 +388,7 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
             door,
             listed.Select(tangent => TangentEntry.Of(tangent, Address(tangent.Id), door)).ToList(),
             page.Next is not null || place.Holds(Bit.Post) ? baseAddress + TangentsController.Route : null,
-            place.Holds(Bit.ManageSpace) ? baseAddress + NewTangentController.Route : null,
+            place.Holds(Bit.ManageSpace) ? baseAddress + TangentsController.NewRoute : null,
             Who.Of(Person(people, reader.Id), Roles.Word(place.RoleIds), baseAddress + AuthConstants.Routes.Logout + "?return=" + back,
                 TangentSpaceSettingsController.Entry(place, baseAddress),
                 new Unread.Badge(forYou.Count, forYou.AtLeast, door, forYou.Through, forYou.Applications)),

@@ -17,12 +17,15 @@ namespace Tangent.Posts;
 /// Tangent, asked of the Tangent so a removed root is deleted too, or is refused with the gate word; a report stays
 /// (<see cref="ReportStays"/>); and <see cref="Replies"/> says how many replies go with it, as many as it holds, or the command
 /// is refused (<see cref="HoldsReplies"/>), so a reply that landed after its page was read refuses the delete: a Topic's count
-/// of replies only rises, and holds take turns. The Posts go a page of <see cref="Tangents.DeleteTangent.PostPage"/> at a
+/// of replies only rises, and holds take turns. The Posts go a page of <see cref="PostPage"/> at a
 /// time, each read finding what the last left; a Topic too large for one hold fails whole, and nothing changes.</summary>
 public sealed record DeleteTopic(string TopicId, string ActorId, int Replies = 0, DateTimeOffset? At = null) : ICommand<Post>
 {
     /// <summary>The word of a delete whose count of replies is not the Topic's.</summary>
     public const string HoldsRepliesWord = "holds-replies";
+
+    /// <summary>The most Posts one read of a delete or a move takes, of a Topic or of a whole Tangent.</summary>
+    public const int PostPage = 500;
 
     /// <summary>The answer to a delete of a report in the moderators' Tangent, which keeps every report.</summary>
     public static readonly Reason ReportStays = Reason.Invalid("A report stays in the moderators’ Tangent: remove its words instead.");
@@ -38,17 +41,17 @@ public sealed record DeleteTopic(string TopicId, string ActorId, int Replies = 0
 
     public async Task<Outcome<Post>> Run(CancellationToken ct)
     {
-        if (await Post.Get(TopicId, ct) is not { ParentId: null } root) return new Outcome<Post>.Refused(Reply.NoTopic);
+        if (await Post.Get(TopicId, ct) is not { ParentId: null } root) return new Outcome<Post>.Refused(Post.NoTopic);
         var around = await Capabilities.Load(ActorId, root.TangentId, null, ct);
-        if (!around.Exists || await Tangents.Tangent.Get(root.TangentId, ct) is not { } tangent) return new Outcome<Post>.Refused(Reply.NoTopic);
+        if (!around.Exists || await Tangents.Tangent.Get(root.TangentId, ct) is not { } tangent) return new Outcome<Post>.Refused(Post.NoTopic);
         if (around.Gate(Bit.Moderate) is { } gate) return new Outcome<Post>.Refused(gate);
         if ((await TangentSpace.Get(TangentSpace.SingleRow, ct))?.ModeratorsTangentId == root.TangentId) return new Outcome<Post>.Refused(ReportStays);
         if (root.ReplyCount != Replies) return new Outcome<Post>.Refused(HoldsReplies(root.ReplyCount));
 
-        var read = Tangents.DeleteTangent.PostPage;
-        while (read == Tangents.DeleteTangent.PostPage)
+        var read = PostPage;
+        while (read == PostPage)
         {
-            var posts = await Post.Query(post => post.TopicId == root.Id, new QueryDefinition { Page = 1, PageSize = Tangents.DeleteTangent.PostPage }, ct);
+            var posts = await Post.Query(post => post.TopicId == root.Id, new QueryDefinition { Page = 1, PageSize = PostPage }, ct);
             read = posts.Count;
             if (read > 0) await Rows(posts, ct);
         }

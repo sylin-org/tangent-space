@@ -58,9 +58,9 @@ public sealed class DoorSeedController(RoleCollection roles) : ControllerBase
         await Person(Mara, "mara.bsky.social", "Mara Lind", ParticipantKind.Person, Roles.Member, ct);
         await Person(Persona, "ada.bsky.social", "Ada Okafor", ParticipantKind.Person, Roles.Member, ct);
 
-        await Write(new CreateTangent("articles", "Articles About Everything", "Make room for the next thought.", PostKind.Article, 1, Audience.Public, Leo), ct);
-        await Write(new CreateTangent("discussions", "Discussions", "Open questions, half-ideas and the loose threads of the work.", PostKind.Topic, 2, Audience.Public, Leo), ct);
-        await Write(new CreateTangent("workshop", "The workshop", "Where things get made.", PostKind.Topic, 3, Audience.Public, Leo), ct);
+        await Write(new OpenTangent("articles", "Articles About Everything", "Make room for the next thought.", PostKind.Article, 1, Audience.Public, Leo), ct);
+        await Write(new OpenTangent("discussions", "Discussions", "Open questions, half-ideas and the loose threads of the work.", PostKind.Topic, 2, Audience.Public, Leo), ct);
+        await Write(new OpenTangent("workshop", "The workshop", "Where things get made.", PostKind.Topic, 3, Audience.Public, Leo), ct);
 
         if (shelves) await Older(ct);
 
@@ -92,7 +92,7 @@ public sealed class DoorSeedController(RoleCollection roles) : ControllerBase
         foreach (var (slug, accent, image) in new[] { ("articles", "iris", "paper-current"), ("discussions", "jade", ""), ("workshop", "coral", "midnight-workshop") })
         {
             var tangent = await Tangents.Tangent.Get(slug, ct) ?? throw new InvalidOperationException($"The {slug} Tangent is missing.");
-            tangent.Wear(accent, image);
+            (tangent.Accent, tangent.Image) = (accent, image);
             await Write(new Keep<Tangents.Tangent>(tangent), ct);
         }
 
@@ -100,9 +100,9 @@ public sealed class DoorSeedController(RoleCollection roles) : ControllerBase
         await Write(new BringMedia(bowl.Id, Leo), ct);
         var seam = await Media.Keep(ArticleSeedController.Bowl(1400, 900, 0.72, 0.4, 0.42), ct);
         await Write(new BringMedia(seam.Id, Mara), ct);
-        await Write(new StartTopic(Tid(At(8, 9, 0), 20), "articles", "Why I keep the broken ones",
+        await Write(new Started(Tid(At(8, 9, 0), 20), "articles", "Why I keep the broken ones",
             "A shelf of cracked things is a better teacher than a shelf of whole ones.", Leo, At(8, 9, 0), CoverId: bowl.Id), ct);
-        await Write(new StartTopic(Tid(At(12, 11, 0), 21), "articles", "Lacquer takes its time",
+        await Write(new Started(Tid(At(12, 11, 0), 21), "articles", "Lacquer takes its time",
             "Urushi cures in damp air, not dry. A workshop that hurries it gets a seam that looks finished and peels by spring.", Mara, At(12, 11, 0), CoverId: seam.Id), ct);
         await Topic("articles", "Small tools, long lives", "The handplane on my bench is older than my house, and it still takes a shaving thinner than paper.", Leo, At(15, 8, 0), 22, ct);
         var naming = await Topic("discussions", "How do you name a branch?", "Mine say what they do, not what they fix. I keep changing my mind on tense.", Mara, At(9, 10, 0), 23, ct);
@@ -124,10 +124,10 @@ public sealed class DoorSeedController(RoleCollection roles) : ControllerBase
     }
 
     private Task<Post> Topic(string tangent, string title, string body, string author, DateTimeOffset at, int clock, CancellationToken ct)
-        => Write(new StartTopic(Tid(at, clock), tangent, title, body, author, at), ct);
+        => Write(new Started(Tid(at, clock), tangent, title, body, author, at), ct);
 
     private Task<Post> Answer(Post topic, string body, string author, DateTimeOffset at, int clock, CancellationToken ct)
-        => Write(new Reply(Tid(at, clock), topic.Id, body, author, At: at), ct);
+        => Write(new Replied(Tid(at, clock), topic.Id, body, author, At: at), ct);
 
     private async Task<T> Write<T>(ICommand<T> command, CancellationToken ct) => await command.Send() switch
     {

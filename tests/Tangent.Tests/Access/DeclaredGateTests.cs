@@ -1,3 +1,4 @@
+using System.Net;
 using Koan.Data.Core.Commands;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
@@ -106,11 +107,14 @@ public sealed class DeclaredGateTests
         using var tools = await ToolClient.Connect(tangentSpace, ada);
 
         var renamed = await tools.Call("change_tangent", new { tangent = Workshop, name = "Ada's workshop" });
-        var deleted = await tools.Call("delete_tangent", new { tangent = Workshop, topics = "all of them" });
+        // A count the workshop does not hold would be refused as a conflict, were it read.
+        var deleted = await tools.Call("delete_tangent", new { tangent = Workshop, topics = 7 });
+        var unread = await Send(ada.Client, HttpMethod.Delete, "/t/" + Workshop + "?topics=all+of+them", json: true);
         var hidden = await tools.Call("delete_tangent", new { tangent = Studio });
 
         Assert.Equal((200, false), (renamed.Status, renamed.Failed));
         Assert.Equal((403, Capabilities.NoRoleGrants(Bit.ManageSpace).Word), (deleted.Status, deleted.Structured!.Value.GetProperty("word").GetString()));
+        Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageSpace).Word), (unread.Status, unread.Word));
         Assert.Equal(404, hidden.Status);
         Assert.Equal("Ada's workshop", (await Tangents.Tangent.Get(Workshop, Cancellation))!.Name);
     }

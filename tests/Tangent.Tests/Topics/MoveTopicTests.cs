@@ -5,6 +5,7 @@ using Koan.Identity.Access;
 using Koan.Identity.Roles;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
+using Tangent.Capture;
 using Tangent.Events;
 using Tangent.Space;
 using Tangent.Tangents;
@@ -75,7 +76,7 @@ public sealed class MoveTopicTests
         Assert.Equal(HttpStatusCode.OK, (await Send(visitor, HttpMethod.Get, TopicPath(stays))).Status);
 
         // The workshop's count is its own again, so deleting it with what it holds now lands.
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new DeleteTangent(Workshop, leo, Topics: left.TopicCount).Send(Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new DeleteTangentRow(Workshop, leo, left.TopicCount).Send(Cancellation));
         Assert.Equal(Porch, (await Post.Get(root.Id, Cancellation))?.TangentId);
     }
 
@@ -178,7 +179,7 @@ public sealed class MoveTopicTests
         Assert.IsType<Outcome<Checkpoint>.Done>(await new Seen(Ada, read.Sequence, root.Id).Send(Cancellation));
         // The archive begins in the log after every row of the Topic.
         var archive = Assert.IsType<Outcome<Tangents.Tangent>.Done>(
-            await new CreateTangent("archive", "Archive", "", PostKind.Topic, 3, Audience.Public, leo).Send(Cancellation)).Result;
+            await new OpenTangent("archive", "Archive", "", PostKind.Topic, 3, Audience.Public, leo).Send(Cancellation)).Result;
         Assert.All(await Event.Query(row => row.TopicId == root.Id, Cancellation), row => Assert.True(row.Seq < archive.LogSeq));
 
         Assert.IsType<Outcome<Post>.Done>(await new MoveTopic(root.Id, archive.Id, Mo).Send(Cancellation));
@@ -187,9 +188,9 @@ public sealed class MoveTopicTests
         Assert.Contains((await ada.ForYouNow(Cancellation)).Rows, row => row.PostId == unread.Id);
         Assert.Contains((await ada.Earlier(long.MaxValue, Cancellation)).Rows, row => row.PostId == read.Id);
         // Deleted with the Topic, the archive leaves its rows to no one, and none to a Tangent that takes its slug later.
-        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new DeleteTangent(archive.Id, leo, Topics: 1).Send(Cancellation));
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new DeleteTangentRow(archive.Id, leo, 1).Send(Cancellation));
         var again = Assert.IsType<Outcome<Tangents.Tangent>.Done>(
-            await new CreateTangent("archive", "Archive", "", PostKind.Topic, 3, Audience.Public, leo).Send(Cancellation)).Result;
+            await new OpenTangent("archive", "Archive", "", PostKind.Topic, 3, Audience.Public, leo).Send(Cancellation)).Result;
         var anew = (await Capabilities.LoadEach(Ada, [again.Id], Cancellation))[again.Id];
         Assert.All(await Event.Query(row => row.TopicId == root.Id, Cancellation), row => Assert.False(anew.Owns(row)));
     }

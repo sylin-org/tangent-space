@@ -6,6 +6,7 @@ using Koan.Data.Core.Commands;
 using Koan.Web.Attributes;
 using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
+using Tangent.Capture;
 using Tangent.Events;
 using Tangent.Lifecycle;
 using Tangent.Offers;
@@ -37,18 +38,18 @@ public sealed class TheToolsTests
     {
         ["arrive"] = Action<DoorController>(nameof(DoorController.Get)),
         ["seen"] = Action<SeenController>(nameof(SeenController.Say)),
-        ["read_tangents"] = Action<TangentsController>(nameof(TangentsController.Get)),
-        ["read_tangent"] = Action<TangentPageController>(nameof(TangentPageController.Get)),
-        ["quiet_tangent"] = Action<TangentPageController>(nameof(TangentPageController.Quiet)),
-        ["read_topic"] = Action<TopicPageController>(nameof(TopicPageController.Topic)),
-        ["read_post"] = Action<TopicPageController>(nameof(TopicPageController.AtPost)),
+        ["read_tangents"] = Action<TangentsController>(nameof(TangentsController.GetCollection)),
+        ["read_tangent"] = Action<TopicsController>(nameof(TopicsController.List)),
+        ["quiet_tangent"] = Action<QuietController>(nameof(QuietController.Quiet)),
+        ["read_topic"] = Action<TopicsController>(nameof(TopicsController.GetById)),
+        ["read_post"] = Action<PostsController>(nameof(PostsController.GetById)),
         ["follow_topic"] = Action<TopicPageController>(nameof(TopicPageController.Follow)),
         ["read_history"] = Action<PostHistoryController>(nameof(PostHistoryController.History)),
         ["search"] = Action<SearchController>(nameof(SearchController.Get)),
-        ["read_profile"] = Action<ProfileController>(nameof(ProfileController.Get)),
-        ["reply"] = Action<ReplyController>(nameof(ReplyController.Write)),
-        ["start_topic"] = Action<NewTopicController>(nameof(NewTopicController.Start)),
-        ["edit"] = Action<EditPostController>(nameof(EditPostController.Edit)),
+        ["read_profile"] = Action<ProfilesController>(nameof(ProfilesController.GetById)),
+        ["reply"] = Action<PostsController>(nameof(PostsController.Upsert)),
+        ["start_topic"] = Action<TopicsController>(nameof(TopicsController.Upsert)),
+        ["edit"] = Action<PostsController>(nameof(PostsController.Patch)),
         ["remove"] = Action<EditPostController>(nameof(EditPostController.Remove)),
         ["undo_removal"] = Action<EditPostController>(nameof(EditPostController.UndoRemoval)),
         ["move_topic"] = Action<TopicPageController>(nameof(TopicPageController.Move)),
@@ -66,11 +67,11 @@ public sealed class TheToolsTests
         ["read_appearance"] = Action<TangentSpaceSettingsController>(nameof(TangentSpaceSettingsController.GetAppearance)),
         ["change_appearance"] = Action<TangentSpaceSettingsController>(nameof(TangentSpaceSettingsController.ChangeAppearance)),
         ["close_first_steps"] = Action<FirstStepsController>(nameof(FirstStepsController.Close)),
-        ["read_applications"] = Action<ApplicationsController>(nameof(ApplicationsController.Get)),
-        ["admit"] = Action<ApplicationsController>(nameof(ApplicationsController.Admit)),
-        ["decline"] = Action<ApplicationsController>(nameof(ApplicationsController.Decline)),
-        ["invite"] = Action<ApplicationsController>(nameof(ApplicationsController.Invite)),
-        ["withdraw_invitation"] = Action<ApplicationsController>(nameof(ApplicationsController.Withdraw)),
+        ["read_applications"] = Action<ApplicationsController>(nameof(ApplicationsController.GetCollection)),
+        ["admit"] = Action<ApplicationVerbsController>(nameof(ApplicationVerbsController.Admit)),
+        ["decline"] = Action<ApplicationVerbsController>(nameof(ApplicationVerbsController.Decline)),
+        ["invite"] = Action<ApplicationVerbsController>(nameof(ApplicationVerbsController.Invite)),
+        ["withdraw_invitation"] = Action<ApplicationVerbsController>(nameof(ApplicationVerbsController.Withdraw)),
         ["read_people"] = Action<PeopleController>(nameof(PeopleController.Get)),
         ["time_out"] = Action<PeopleController>(nameof(PeopleController.PostTimeOut)),
         ["ban"] = Action<PeopleController>(nameof(PeopleController.PostBan)),
@@ -83,15 +84,14 @@ public sealed class TheToolsTests
         ["create_role"] = Action<RolesController>(nameof(RolesController.Create)),
         ["change_role"] = Action<RolesController>(nameof(RolesController.Change)),
         ["delete_role"] = Action<RolesController>(nameof(RolesController.Delete)),
-        ["create_tangent"] = Action<NewTangentController>(nameof(NewTangentController.Create)),
+        ["create_tangent"] = Action<TangentsController>(nameof(TangentsController.Upsert)),
         ["read_tangent_settings"] = Action<TangentSettingsController>(nameof(TangentSettingsController.Get)),
-        ["change_tangent"] = Action<TangentSettingsController>(nameof(TangentSettingsController.Change)),
-        ["delete_tangent"] = Action<TangentSettingsController>(nameof(TangentSettingsController.Delete)),
+        ["change_tangent"] = Action<TangentsController>(nameof(TangentsController.Patch)),
+        ["delete_tangent"] = Action<TangentsController>(nameof(TangentsController.Delete)),
         ["read_tangent_access"] = Action<TangentAccessController>(nameof(TangentAccessController.Get)),
         ["change_tangent_access"] = Action<TangentAccessController>(nameof(TangentAccessController.Change)),
         ["read_tangent_people"] = Action<TangentPeopleController>(nameof(TangentPeopleController.Get)),
         ["let_into_tangent"] = Action<TangentPeopleController>(nameof(TangentPeopleController.Let)),
-        ["change_tangent_joining"] = Action<TangentPeopleController>(nameof(TangentPeopleController.SetJoining)),
         ["join_tangent"] = Action<JoinController>(nameof(JoinController.Join)),
         ["leave_tangent"] = Action<JoinController>(nameof(JoinController.Leave)),
         ["use_offer"] = Action<OfferController>(nameof(OfferController.Use)),
@@ -106,11 +106,11 @@ public sealed class TheToolsTests
     /// <summary>Every public action that is not a tool, with why.</summary>
     private static readonly IReadOnlyDictionary<MethodInfo, string> NotTools = new Dictionary<MethodInfo, string>
     {
-        [Action<NewTopicController>(nameof(NewTopicController.Get))] = "only shows a form",
+        [Action<TopicsController>(nameof(TopicsController.GetNew))] = "only shows a form",
         [Action<EditPostController>(nameof(EditPostController.Get))] = "only shows a form",
         [Action<TopicPageController>(nameof(TopicPageController.MovePage))] = "only shows a form",
         [Action<ReportController>(nameof(ReportController.Get))] = "only shows a form",
-        [Action<NewTangentController>(nameof(NewTangentController.Get))] = "only shows a form",
+        [Action<TangentsController>(nameof(TangentsController.GetNew))] = "only shows a form",
         [Action<AppearancePreviewController>(nameof(AppearancePreviewController.Preview))] = "only shows the door in an appearance, saving nothing",
         [Action<TangentSpaceSettingsController>(nameof(TangentSpaceSettingsController.TakeImage))] = "a form's file, which an agent sends as bring_in and change_appearance's image",
         [Action<TangentSpaceSettingsController>(nameof(TangentSpaceSettingsController.TakeMark))] = "a form's file, which an agent sends as bring_in and change_appearance's mark",
@@ -182,7 +182,6 @@ public sealed class TheToolsTests
         ["delete_tangent"] = (true, true),
         ["change_tangent_access"] = (true, true),
         ["let_into_tangent"] = (true, true),
-        ["change_tangent_joining"] = (false, true),
         ["join_tangent"] = (false, true),
         ["leave_tangent"] = (true, false),
         ["use_offer"] = (true, true),
@@ -251,6 +250,7 @@ public sealed class TheToolsTests
         void Says(string holds, int limit) => Assert.Contains(" " + limit + " characters", holds);
         Says(Holds.TopicTitle, Post.TitleLimit);
         Says(Holds.EditTitle, Post.TitleLimit);
+        Says(Holds.Title, Post.TitleLimit);
         Says(Holds.TangentName, Tangents.Tangent.NameLimit);
         Says(Holds.ChangedTangentName, Tangents.Tangent.NameLimit);
         Says(Holds.TangentDescription, Tangents.Tangent.DescriptionLimit);
@@ -293,9 +293,10 @@ public sealed class TheToolsTests
         Assert.Contains("parent is the id of the Post you answer", says);
         Assert.Contains("the same Post", says);
         var fields = reply.GetProperty("inputSchema").GetProperty("properties");
-        Assert.Equal(Holds.ReplyBody, fields.GetProperty("body").GetProperty("description").GetString());
+        Assert.Equal(Holds.Body, fields.GetProperty("body").GetProperty("description").GetString());
         Assert.Equal(Holds.Id, fields.GetProperty("id").GetProperty("description").GetString());
-        Assert.Equal(Holds.Topic, fields.GetProperty("topic").GetProperty("description").GetString());
+        Assert.Equal(Holds.Parent, fields.GetProperty("parent").GetProperty("description").GetString());
+        Assert.True(fields.TryGetProperty("topic", out _));
         // An address names the Tangent and the Topic at once, so neither is required on its own.
         Assert.Contains("in place of tangent, topic", fields.GetProperty("address").GetProperty("description").GetString());
         Assert.False(reply.GetProperty("inputSchema").TryGetProperty("required", out _));
@@ -356,7 +357,7 @@ public sealed class TheToolsTests
 
         // arrive, then what an address names, read by its parts and by itself, a reply sent to it, and seen once it is read.
         var replied = (await Post.Get(replyId, Cancellation))!;
-        Assert.IsType<Outcome<Post>.Done>(await new Reply(Tids.Mint(), replied.TopicId, "So you say.", Bea, replyId).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Replied(Tids.Mint(), replied.TopicId, "So you say.", Bea, replyId).Send(Cancellation));
         var door = await Worked(mine, "arrive", new { });
         var news = door.GetProperty("news");
         var pointed = news.GetProperty("replies").GetProperty("posts")[0].GetProperty("address").GetString()!;

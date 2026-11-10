@@ -1,5 +1,4 @@
 using Koan.Data.Core.Commands;
-using Microsoft.AspNetCore.Mvc;
 using Tangent.Access;
 using Tangent.Posts;
 using Tangent.Render;
@@ -7,9 +6,8 @@ using Tangent.Space;
 
 namespace Tangent.Tangents;
 
-/// <summary>What the routes that create a Tangent, change its settings and delete it share: their fields and the words each field
-/// takes, who may manage a Tangent, what a refusal concerns, and the answer a write that committed gives. A write comes
-/// as a form or as JSON and is answered in kind, as a Post's write is (<see cref="PostWrites"/>).</summary>
+/// <summary>What the routes that create a Tangent, change its settings and delete it share (<see cref="TangentsController"/>):
+/// their fields and the words each field takes, the forms that send them, and what a write that committed reads as.</summary>
 public static class TangentWrites
 {
     public const string NameField = "name";
@@ -19,22 +17,20 @@ public static class TangentWrites
     public const string MoveField = "move";
     public const string AccentField = "accent";
     public const string ImageField = "image";
+    public const string JoiningField = "joining";
 
     /// <summary>The settings page's segment under a Tangent's address; <see cref="Slug.Reserved"/> keeps it from every
     /// Topic.</summary>
     public const string SettingsSegment = "settings";
-
-    /// <summary>Where a Tangent is deleted, under its settings.</summary>
-    public const string DeleteSegment = "delete";
 
     /// <summary>Where an image of a person's own comes in as a Tangent's, under its settings.</summary>
     public const string ImageSegment = "image";
 
     public const string TopicsField = "topics";
 
-    public static readonly Reason KindRule = Reason.Invalid("A Tangent’s default kind is topic or article.");
-    public static readonly Reason AudienceRule = Reason.Invalid("A Tangent’s audience is public or private.");
-    public static readonly Reason MoveRule = Reason.Invalid("A Tangent moves earlier or later.");
+    public static readonly Reason KindRule = Reason.Invalid(KindField, "A Tangent’s default kind is topic or article.");
+    public static readonly Reason AudienceRule = Reason.Invalid(AudienceField, "A Tangent’s audience is public or private.");
+    public static readonly Reason MoveRule = Reason.Invalid(MoveField, "A Tangent moves earlier or later.");
 
     /// <summary>The default kinds a Tangent may take, as words.</summary>
     public static readonly IReadOnlyList<string> Kinds = Enum.GetValues<PostKind>().Select(PostWrites.Word).ToList();
@@ -44,16 +40,6 @@ public static class TangentWrites
 
     /// <summary>The Tangents' moves, as words.</summary>
     public static readonly IReadOnlyList<string> Moves = Enum.GetValues<Move>().Select(Word).ToList();
-
-    /// <summary>What a refusal's reason concerns: the name's rules, the description's, the rest of what was sent, or a
-    /// gate.</summary>
-    public enum About
-    {
-        Name,
-        Description,
-        Sent,
-        Gate
-    }
 
     /// <summary>The form that creates a Tangent at <paramref name="action"/>: its name, and what else stands at its default
     /// until it is sent.</summary>
@@ -81,9 +67,9 @@ public static class TangentWrites
         new(Word(Audience.Private), "Private", "Only administrators, and roles given access, read it.")
     ];
 
-    /// <summary>The form that changes a Tangent's settings at <paramref name="action"/>, each field left as it is when not
-    /// sent: its audience only where it is not <paramref name="fixedAudience"/>, its place among the Tangents only where
-    /// the reader <paramref name="movable"/> it.</summary>
+    /// <summary>The form that changes the Tangent at <paramref name="action"/>, its address, each field left as it is when not
+    /// sent: its audience only where it is not <paramref name="fixedAudience"/>, its place among the Tangents only where the
+    /// reader <paramref name="movable"/> it.</summary>
     public static Form ChangeForm(string action, bool fixedAudience, bool movable)
     {
         List<Form.Field> fields =
@@ -97,13 +83,13 @@ public static class TangentWrites
         ];
         if (fixedAudience) fields.RemoveAll(field => field.Name == AudienceField);
         if (movable && !fixedAudience) fields.Add(new(MoveField, Holds.TangentMove, As: Form.Input.Switch));
-        return new Form(action, HttpMethods.Post, fields) { Tool = "change-tangent", Submit = "Save", Busy = "Saving…", Island = "submitting" };
+        return new Form(action, HttpMethods.Patch, fields) { Tool = "change-tangent", Submit = "Save", Busy = "Saving…", Island = "submitting" };
     }
 
     /// <summary>The form that deletes the Tangent <paramref name="slug"/> under <paramref name="baseAddress"/> with the
     /// <paramref name="topics"/> it holds, which go with it.</summary>
-    public static Form DeleteForm(string baseAddress, string slug, int topics) => Form.Posting(
-            PostWrites.TangentAddress(baseAddress, slug) + "/" + SettingsSegment + "/" + DeleteSegment,
+    public static Form DeleteForm(string baseAddress, string slug, int topics) => Form.Deleting(
+            PostWrites.TangentAddress(baseAddress, slug),
             new Form.Field(TopicsField, Holds.DeletedTopics, topics.ToString(System.Globalization.CultureInfo.InvariantCulture), Form.Input.Hidden))
         with { Tool = "delete-tangent", Submit = "Delete", Busy = "Deleting…" };
 
@@ -126,35 +112,13 @@ public static class TangentWrites
         return null;
     }
 
-    public static About Concerning(Reason reason) => reason.Kind == ReasonKind.Gated ? About.Gate
-        : reason == Tangent.NeedsName || reason == Tangent.NameTooLong ? About.Name
-        : reason == Tangent.DescriptionTooLong ? About.Description
-        : About.Sent;
-
-    /// <summary>A write that committed: a form is sent on to <paramref name="next"/>; a JSON request reads the Tangent as
-    /// it now stands with the sender's <c>can</c> on it, created (<c>201</c>) or changed (<c>200</c>), with its address
-    /// as its <c>Location</c>.</summary>
-    public static async Task<IActionResult> Written(HttpContext http, Tangent tangent, string baseAddress, string? personId, bool created,
-        string next, CancellationToken ct)
+    /// <summary>The value of <typeparamref name="TValue"/> a word names among <paramref name="words"/>, its values' words in
+    /// their order; null for none, and refused with <paramref name="rule"/> for a word that is not one of them.</summary>
+    public static TValue? Chosen<TValue>(string? word, IReadOnlyList<string> words, Reason rule) where TValue : struct, Enum
     {
-        http.Response.Headers.CacheControl = "no-store";
-        var address = PostWrites.TangentAddress(baseAddress, tangent.Id);
-        if (!PostWrites.WantsJson(http.Request))
-        {
-            http.Response.Headers.Location = PostWrites.Onward(http, baseAddress, next);
-            return new StatusCodeResult(StatusCodes.Status303SeeOther);
-        }
-
-        http.Response.Headers.Location = address;
-        var capabilities = await Capabilities.Load(personId, tangent.Id, null, ct);
-        var arranges = (await Capabilities.Load(personId, null, null, ct)).Holds(Bit.ManageSpace);
-        var audience = await Overwrites.AudienceOf(tangent.Id, ct);
-        return new ObjectResult(new WrittenTangent(tangent.Id, tangent.Name, tangent.Description, PostWrites.Word(tangent.DefaultKind),
-            Word(audience ?? Audience.Public), arranges ? tangent.Order : null, address, address + "/" + SettingsSegment, capabilities.Can))
-        {
-            StatusCode = created ? StatusCodes.Status201Created : StatusCodes.Status200OK,
-            ContentTypes = { "application/json" }
-        };
+        var index = Choice(word, words, out var valid);
+        if (!valid) throw new Refusal(rule);
+        return index is { } at ? Enum.GetValues<TValue>()[at] : null;
     }
 }
 
@@ -174,4 +138,18 @@ public sealed record WrittenTangent(
     int? Order,
     string Address,
     string Settings,
-    IReadOnlyList<string> Can);
+    IReadOnlyList<string> Can)
+{
+    /// <summary>The Tangent as it now stands for <paramref name="personId"/>, under <paramref name="baseAddress"/>: what they
+    /// hold there and in the place, and its audience, each a keyed read.</summary>
+    public static async Task<WrittenTangent> Of(Tangent tangent, string baseAddress, string? personId, CancellationToken ct)
+    {
+        var address = PostWrites.TangentAddress(baseAddress, tangent.Id);
+        var capabilities = await Capabilities.Load(personId, tangent.Id, null, ct);
+        var arranges = (await Capabilities.Load(personId, null, null, ct)).Holds(Bit.ManageSpace);
+        var audience = await Overwrites.AudienceOf(tangent.Id, ct);
+        return new WrittenTangent(tangent.Id, tangent.Name, tangent.Description, PostWrites.Word(tangent.DefaultKind),
+            TangentWrites.Word(audience ?? Space.Audience.Public), arranges ? tangent.Order : null, address,
+            address + "/" + TangentWrites.SettingsSegment, capabilities.Can);
+    }
+}

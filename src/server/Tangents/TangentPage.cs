@@ -19,7 +19,7 @@ namespace Tangent.Tangents;
 /// participant who joined a private Tangent leaves it, present only for them. <see cref="Month"/> and <see cref="Author"/>
 /// say what the page is narrowed to, a month's key and the participant, absent where it is not; in an articles Tangent,
 /// <see cref="Months"/> and <see cref="Authors"/> are every month its Topics started in and the authors who started the
-/// most (<see cref="TangentPageController.AuthorLimit"/>), the one the list is narrowed to among them, with how many each,
+/// most (<see cref="TopicsController.AuthorLimit"/>), the one the list is narrowed to among them, with how many each,
 /// as the Tangent keeps them, and where the list narrowed to each is.</summary>
 [Render.Page(Render.Layout.Home)]
 public sealed partial record TangentPage(
@@ -114,9 +114,9 @@ public sealed partial record TangentPage(
     {
         var query = string.Join("&", new[]
         {
-            month is null ? null : TangentPageController.Month + "=" + Uri.EscapeDataString(month),
-            author is null ? null : TangentPageController.Author + "=" + Uri.EscapeDataString(author),
-            after is null ? null : TangentPageController.After + "=" + Uri.EscapeDataString(after)
+            month is null ? null : TopicsController.Month + "=" + Uri.EscapeDataString(month),
+            author is null ? null : TopicsController.Author + "=" + Uri.EscapeDataString(author),
+            after is null ? null : TopicsController.After + "=" + Uri.EscapeDataString(after)
         }.OfType<string>());
         return query.Length == 0 ? address : address + "?" + query;
     }

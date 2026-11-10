@@ -1,5 +1,6 @@
 using System.Net;
 using Koan.Data.Core.Commands;
+using Tangent.Capture;
 using Tangent.Posts;
 using Xunit;
 using static Tangent.Posts.Writing;
@@ -128,7 +129,7 @@ public sealed class SeenTests
         await Form(bea, TopicPath(root), SeenController.Path, Fields(root, "1"));
         Assert.True((await Send(bea.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news").GetProperty("empty").GetBoolean());
 
-        Assert.IsType<Outcome<Post>.Done>(await new EditPost(old.Id, 1, PostBody.Of($"From a hook, [@bea](/p/{Bea})."), null, Mo).Send(Cancellation));
+        Assert.IsType<Outcome<Post>.Done>(await new Edited(old.Id, 1, PostBody.Of($"From a hook, [@bea](/p/{Bea})."), null, Mo).Send(Cancellation));
 
         var mentions = (await Send(bea.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news").GetProperty("mentions");
         Assert.Equal((1, old.Id), (mentions.GetProperty("count").GetInt32(), mentions.GetProperty("posts")[0].GetProperty("postId").GetString()));

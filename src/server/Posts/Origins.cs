@@ -15,7 +15,7 @@ namespace Tangent.Posts;
 public static class Origins
 {
     /// <summary>The most Tangents one page of destinations lists.</summary>
-    public const int DestinationLimit = TangentPageController.SwitcherLimit;
+    public const int DestinationLimit = TopicsController.SwitcherLimit;
 
     /// <summary>The most Topics taken from one Post that a page shows; past it, the page says "at least".</summary>
     public const int TakenLimit = 5;

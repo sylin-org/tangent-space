@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Koan.Data.Abstractions;
 using Koan.Data.Abstractions.Filtering;
 using Koan.Data.Core.Commands;
@@ -24,42 +25,43 @@ public sealed class Tangent : Entity<Tangent>
 
     public static readonly Reason NeedsSlug = Reason.Invalid("A Tangent's slug is lowercase letters and digits joined by single hyphens, at most 64 characters.");
     public static readonly Reason SlugReserved = Reason.Invalid("A Tangent's slug is never new, the address where a Tangent is created.");
-    public static readonly Reason NeedsName = Reason.Invalid("A Tangent has a name.");
-    public static readonly Reason NameTooLong = Reason.Invalid("A Tangent's name holds at most 80 characters.");
-    public static readonly Reason DescriptionTooLong = Reason.Invalid("A Tangent's description holds at most 1000 characters.");
-    public static readonly Reason AccentRule = Reason.Invalid("A Tangent's accent is one of six: choose amber, coral, jade, sky, iris or rose, or send it empty for the one its slug gives it.");
-    public static readonly Reason ImageRule = Reason.Invalid("A Tangent's image is one of the bundled covers, by its name, or an image brought in here, as /media/ and its id; empty takes it away.");
+    public static readonly Reason NeedsName = Reason.Invalid(TangentWrites.NameField, "A Tangent has a name.");
+    public static readonly Reason NameTooLong = Reason.Invalid(TangentWrites.NameField, "A Tangent's name holds at most 80 characters.");
+    public static readonly Reason DescriptionTooLong = Reason.Invalid(TangentWrites.DescriptionField, "A Tangent's description holds at most 1000 characters.");
+    public static readonly Reason AccentRule = Reason.Invalid(TangentWrites.AccentField, "A Tangent's accent is one of six: choose amber, coral, jade, sky, iris or rose, or send it empty for the one its slug gives it.");
+    public static readonly Reason ImageRule = Reason.Invalid(TangentWrites.ImageField, "A Tangent's image is one of the bundled covers, by its name, or an image brought in here, as /media/ and its id; empty takes it away.");
 
+    /// <summary>The answer for a slug no Tangent has, or one absent to its reader.</summary>
+    public static readonly Reason NoTangent = Reason.Absent("No Tangent has this slug.");
+
+    /// <summary>The answer to a change of the moderators' Tangent's audience, place or joining, or of its access.</summary>
+    public static readonly Reason Fixed = Reason.Invalid("The moderators’ Tangent keeps its audience and its place: only moderators read it, and it comes after every other Tangent.");
+
+    [Description(Render.Holds.TangentName)]
     public string Name { get; set; } = "";
 
+    [Description(Render.Holds.TangentDescription)]
     public string Description { get; set; } = "";
 
     /// <summary>The tone its tile and its accent wear, one of <see cref="Render.Tile.Tones"/>; empty for the one its slug gives
     /// it (<see cref="Render.Tile.For(Tangent, string)"/>).</summary>
+    [Description(Render.Holds.TangentAccent)]
     public string Accent { get; set; } = "";
 
     /// <summary>The image its tile wears in place of its letter: a bundled cover's name (<see cref="Space.Art"/>) or an image
     /// brought in here, as <c>/media/{id}</c>; empty for none.</summary>
+    [Description(Render.Holds.TangentImage)]
     public string Image { get; set; } = "";
 
-    /// <summary>Takes <paramref name="accent"/> and <paramref name="image"/>, each left as it is where null and trimmed,
-    /// judged as the row is saved (<see cref="Holds"/>). Answers whether anything changed.</summary>
-    public bool Wear(string? accent, string? image)
-    {
-        var tone = accent?.Trim() ?? Accent;
-        var picture = image is null ? Image : Space.Art.Judged(image) ?? image;
-        if (tone == Accent && picture == Image) return false;
-        (Accent, Image) = (tone, picture);
-        return true;
-    }
-
     /// <summary>The kind a Topic started here has unless its author says otherwise.</summary>
+    [Description(Render.Holds.TangentKind)]
     public PostKind DefaultKind { get; set; }
 
     /// <summary>Its place among the Tangents, lowest first.</summary>
     public int Order { get; set; }
 
     /// <summary>How a participant outside it comes in while it is private.</summary>
+    [Description(Render.Holds.Joining)]
     public Joining Joining { get; set; }
 
     /// <summary>How many Topics it holds: raised in the commit that starts one or moves one in, lowered in the one that
@@ -97,23 +99,15 @@ public sealed class Tangent : Entity<Tangent>
     }
 
     /// <summary>The log's sequence of the <see cref="Events.EventKind.TangentChanged"/> that created it, written by the
-    /// command that creates it; zero where none was written. Its own rows of the log begin there: a row of its slug before it
-    /// belongs to a Tangent deleted before this one took the slug (<see cref="DeleteTangent"/>).</summary>
+    /// write that creates it (<see cref="TangentWriting.Opened"/>); zero where none was written. Its own rows of the log begin
+    /// there: a row of its slug before it belongs to a Tangent deleted before this one took the slug
+    /// (<see cref="TangentWriting.Deleting"/>).</summary>
     public long LogSeq { get; set; }
 
     /// <summary>A Tangent of this slug, name, description, default kind and order, the name trimmed, judged as it is saved
     /// (<see cref="Holds"/>).</summary>
     public static Tangent Create(string slug, string name, string description, PostKind defaultKind, int order)
         => new() { Id = slug, Name = name.Trim(), Description = description, DefaultKind = defaultKind, Order = order };
-
-    /// <summary>Renames, describes and sets the default kind, judged as the row is saved (<see cref="Holds"/>); the slug
-    /// stays. Answers whether anything changed.</summary>
-    public bool Change(string name, string description, PostKind defaultKind)
-    {
-        if (Name == name.Trim() && Description == description && DefaultKind == defaultKind) return false;
-        (Name, Description, DefaultKind) = (name.Trim(), description, defaultKind);
-        return true;
-    }
 
     /// <summary><paramref name="slug"/>, or the first numbered suffix of it that no Tangent holds and that is not
     /// <see cref="NewSegment"/>, each one keyed read; null past <see cref="SuffixBound"/>.</summary>
@@ -222,8 +216,4 @@ public sealed class Tangent : Entity<Tangent>
         if (count > 0) counts[key] = count;
         else counts.Remove(key);
     }
-
-    /// <summary>Whether this row says what the command says.</summary>
-    public bool Same(string name, string description, PostKind defaultKind, int order) =>
-        Name == name.Trim() && Description == description && DefaultKind == defaultKind && Order == order;
 }

@@ -73,12 +73,12 @@ public sealed class TypedMentionTests
         Assert.Equal(HttpStatusCode.Created, (await Json(ada, page, page, asJson)).Status);
         var edit = PostPath(root, root) + "/edit";
         var edited = new Dictionary<string, string> { ["body"] = "How do you hang yours, @bea4writes.example?", ["version"] = "1" };
-        Assert.Equal(HttpStatusCode.SeeOther, (await Form(ada, edit, edit, new Dictionary<string, string>(edited))).Status);
+        Assert.Equal(HttpStatusCode.SeeOther, (await Form(ada, edit, PostPath(root, root), As(HttpMethod.Patch, new Dictionary<string, string>(edited)))).Status);
         Assert.IsType<Outcome<Participant>.Done>(await new RecordSignIn(Mo, Persona.Did(Mo), "bea4writes.example").Send(Cancellation));
         var before = await Counted();
 
         var replyAgain = await Json(ada, page, page, asJson);
-        var editAgain = await Form(ada, edit, edit, new Dictionary<string, string>(edited));
+        var editAgain = await Form(ada, edit, PostPath(root, root), As(HttpMethod.Patch, new Dictionary<string, string>(edited)));
 
         Assert.Equal((HttpStatusCode.Created, replyId), (replyAgain.Status, replyAgain.Json.GetProperty("id").GetString()));
         Assert.Equal($"Over to {Mention(Bea, "@bea4writes.example")}.", replyAgain.Json.GetProperty("body").GetString());
@@ -89,7 +89,7 @@ public sealed class TypedMentionTests
         Assert.DoesNotContain(await Event.Query(e => e.Kind == EventKind.Mention, Cancellation), e => e.TargetId == Mo);
 
         // An edit from the version it shows now is no replay: the handle typed in it names Mo now.
-        Assert.Equal(HttpStatusCode.SeeOther, (await Form(ada, edit, edit, new Dictionary<string, string>(edited) { ["version"] = "2" })).Status);
+        Assert.Equal(HttpStatusCode.SeeOther, (await Form(ada, edit, PostPath(root, root), As(HttpMethod.Patch, new Dictionary<string, string>(edited) { ["version"] = "2" }))).Status);
         var renamed = (await Post.Get(root.Id, Cancellation))!;
         Assert.Equal((Mo, 3L), (Assert.Single(renamed.MentionedIds), renamed.Version));
     }
@@ -179,7 +179,7 @@ public sealed class TypedMentionTests
             "https://bsky.app/profile/@bea4writes.example and https://example.org/(@bea4writes.example) are URLs, \\@bea4writes.example is escaped");
         var id = MintedId((await Send(ada.Client, HttpMethod.Get, form)).Body);
 
-        var started = await Form(ada, form, form, new Dictionary<string, string>
+        var started = await Form(ada, form, "/t/" + Workshop, new Dictionary<string, string>
         {
             ["id"] = id, ["title"] = "Who to ask", ["body"] = untouched + ", and **@bea4writes.example** is Bea."
         });
@@ -232,10 +232,10 @@ public sealed class TypedMentionTests
         var root = await Started(Ada, "Lanterns", "How do you hang yours?");
         var edit = PostPath(root, root) + "/edit";
 
-        var added = await Form(ada, edit, edit, new Dictionary<string, string> { ["body"] = "How do you hang yours, @bea4writes.example?", ["version"] = "1" });
+        var added = await Form(ada, edit, PostPath(root, root), As(HttpMethod.Patch, new Dictionary<string, string> { ["body"] = "How do you hang yours, @bea4writes.example?", ["version"] = "1" }));
         // The editor sends the words again with the mention as typed and a sentence more: Bea is already mentioned.
-        var again = await Form(ada, edit, edit,
-            new Dictionary<string, string> { ["body"] = "How do you hang yours, @bea4writes.example? From a hook, I hope.", ["version"] = "2" });
+        var again = await Form(ada, edit, PostPath(root, root), As(HttpMethod.Patch,
+            new Dictionary<string, string> { ["body"] = "How do you hang yours, @bea4writes.example? From a hook, I hope.", ["version"] = "2" }));
 
         Assert.Equal((HttpStatusCode.SeeOther, HttpStatusCode.SeeOther), (added.Status, again.Status));
         var edited = (await Post.Get(root.Id, Cancellation))!;
