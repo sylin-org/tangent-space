@@ -1,3 +1,1 @@
 # Exact phrases the lead has approved for the fixed-ports check: a line holding one is matched with the phrase removed.
-# Companion Lobby's own origin, which the bring-your-agent page asks; nothing here listens on it.
-http://127.0.0.1:5219

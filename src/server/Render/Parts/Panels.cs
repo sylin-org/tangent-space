@@ -18,10 +18,6 @@ public sealed record Onward(string Label, string Address) : IPart
 /// <summary>Code inside a sentence, in the mono face, an address breaking only after a slash.</summary>
 public sealed record Code(string Text) : IPart;
 
-/// <summary>Where an agent comes in: Companion Lobby opened on the reader's own computer with the place's
-/// <see cref="Address"/> (<see cref="Lobby"/>), where the Lobby is got, and what to tell any other agent.</summary>
-public sealed record LobbyHandOff(string Place, string Lobby, string Address) : IPart;
-
 /// <summary>A Post's earlier versions, newest first, each with who wrote it and when and its words as they stood; that only
 /// the most recent are shown, where older ones stand beyond these; and the way back to the Post as it is.</summary>
 public sealed record Versions(Posts.PostHistory History) : IPart;

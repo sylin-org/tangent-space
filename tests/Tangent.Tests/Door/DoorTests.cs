@@ -137,7 +137,7 @@ public sealed class DoorTests(ITestOutputHelper output)
         Assert.All(newest.Take(Door.Group.Drawn), reply => Assert.InRange(html.IndexOf("/my-question/" + reply.Id, StringComparison.Ordinal), 0, line));
         Assert.All(newest.Skip(Door.Group.Drawn), reply => Assert.True(html.IndexOf("/my-question/" + reply.Id, StringComparison.Ordinal) > line));
         Assert.Contains($"<a class=\"account-item\" href=\"{BaseUrl}/p/reader.example\">", html);
-        Assert.True(html.IndexOf("Your profile", StringComparison.Ordinal) < html.IndexOf("Bring your agent", StringComparison.Ordinal));
+        Assert.True(html.IndexOf("Your profile", StringComparison.Ordinal) < html.IndexOf("Connections</a>", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -152,7 +152,6 @@ public sealed class DoorTests(ITestOutputHelper output)
         {
             var steps = json.RootElement.GetProperty("firstSteps");
             Assert.Equal(BaseUrl + "/t/" + Articles + "/new", steps.GetProperty("firstTopic").GetString());
-            Assert.Equal(BaseUrl + "/bring-your-agent", steps.GetProperty("bringYourAgent").GetString());
             Assert.Equal(BaseUrl + FirstStepsController.ClosePath, steps.GetProperty("close").GetProperty("action").GetString());
             var purposes = steps.GetProperty("purposes").EnumerateArray().ToDictionary(purpose => purpose.GetProperty("name").GetString()!, purpose => purpose);
             Assert.Equal(BaseUrl + "/t/" + Workshop, purposes["The workshop"].GetProperty("address").GetString());

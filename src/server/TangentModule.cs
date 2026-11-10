@@ -107,7 +107,6 @@ public sealed class TangentModule : KoanModule
             .Add<RolesPage>(page => "Roles · " + page.Place, frame: RolesPage.Frame)
             .Add<Lifecycle.ExportSettingsPage>(page => "Export · " + page.Place, frame: Lifecycle.ExportSettingsPage.Frame)
             .Add<Posts.SearchPage>(page => (page.Text is { } text ? text + " · Search · " : "Search · ") + page.Place, frame: Posts.SearchPage.Frame)
-            .Add<Participants.BringYourAgent>(page => "Bring your agent · " + page.Place, frame: Participants.BringYourAgent.Frame)
             .Add<Connections.ConnectionsPage>(page => "Connections · " + page.Place, frame: Connections.ConnectionsPage.Frame)
 #if TANGENT_CAPTURE
             // The capture host's gallery of every part in its states.

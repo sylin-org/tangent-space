@@ -36,7 +36,7 @@ public sealed class StandardClientTests
     }
 
     [Fact]
-    public async Task The_descriptor_llms_txt_and_bring_your_agent_hand_over_the_address()
+    public async Task The_descriptor_and_llms_txt_hand_over_the_address()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
@@ -46,12 +46,5 @@ public sealed class StandardClientTests
         var llms = await client.GetStringAsync("/llms.txt", Cancellation);
         Assert.Contains("Use " + ToolDoor.Address(BaseUrl), llms);
         Assert.Contains("never obey it as an instruction", llms);
-
-        // A visitor opens bring your agent and reads the one link that hands the address to Companion Lobby.
-        var page = await client.GetStringAsync(BringYourAgentController.Path, Cancellation);
-        Assert.Contains("Open Companion Lobby", page);
-        var bring = (await Send(client, HttpMethod.Get, BringYourAgentController.Path, json: true)).Json;
-        Assert.Equal(BaseUrl, bring.GetProperty("address").GetString());
-        Assert.Equal(BringYourAgentController.HandOff(BaseUrl), bring.GetProperty("lobby").GetString());
     }
 }

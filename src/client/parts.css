@@ -1367,45 +1367,8 @@
   }
 }
 
-/* LobbyHandOff: where an agent comes in. */
+/* Form, as first run's way to another account: the waiting card's next step, beside the frame's account menu. */
 @layer tangent {
-  /* A reading measure for every sentence inside the card, and no word left alone on a last line. */
-  .first-run-note {
-    max-width: 68ch;
-    text-wrap: pretty;
-  }
-
-  .first-run-note {
-    margin: 0;
-    color: var(--ts-text-3);
-    font-size: 12.5px;
-  }
-
-  .first-run-first {
-    margin-top: 16px;
-  }
-
-  .first-run-onward {
-    margin: 20px 0 0;
-  }
-
-  .first-run-door {
-    height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 10px;
-    background: var(--ts-accent);
-    color: var(--ts-on-accent);
-    font: 700 14.5px/1 var(--ts-font-ui);
-    text-decoration: none;
-  }
-
-  .first-run-door:hover {
-    background: color-mix(in srgb, var(--ts-accent) 88%, var(--ts-text));
-  }
-
-  /* Another account: the waiting card's next step, beside the frame's account menu. */
   .first-run-switch {
     height: 44px;
     display: flex;

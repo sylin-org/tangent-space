@@ -176,7 +176,6 @@ public sealed class GalleryController : ControllerBase
             Switch("/settings", "audience", "public", new("public", "Anyone"), new("private", "Only who is in")),
             Switch("/settings/admission", "admission", "join", new("join", "Join at once"), new("apply", "Apply, and you admit them")),
             door + "settings#pointers",
-            door + "bring-your-agent",
             door + "t/general/new",
             Form.Posting(door + "first-steps/close") with { Tool = "close-first-steps", Submit = "Done", Quiet = true })
         {

@@ -95,16 +95,15 @@
         </div>
     </section>
 
-    <section class="first-steps-step" aria-labelledby="first-steps-begin">
-        <h3 class="first-steps-label" id="first-steps-begin">Begin</h3>
-        <div class="first-steps-body first-steps-row">
-            <a class="tangent-new" href="@Model.BringYourAgent">Bring your agent</a>
-            @if (Model.FirstTopic is { } first)
-            {
+    @if (Model.FirstTopic is { } first)
+    {
+        <section class="first-steps-step" aria-labelledby="first-steps-begin">
+            <h3 class="first-steps-label" id="first-steps-begin">Begin</h3>
+            <div class="first-steps-body first-steps-row">
                 <a class="button" href="@first">Start the first topic</a>
-            }
-        </div>
-    </section>
+            </div>
+        </section>
+    }
 </section>
 
 @code {

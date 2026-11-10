@@ -18,9 +18,8 @@ namespace Tangent.Space;
 /// (<see cref="Purposes"/>); the line under its name, offered from their Bluesky profile where it says one
 /// (<see cref="Line"/>); how it looks — its accent, its image, the banner and the picture their Bluesky account shows as its
 /// image and its mark; who reads it and how a newcomer arrives; where its site is pointed here, the pointers in the general
-/// settings (<see cref="Site"/>); their
-/// agent and the first Topic. <see cref="Close"/> ends them for good, and whatever they set, the settings change
-/// later.</summary>
+/// settings (<see cref="Site"/>); and the first Topic. <see cref="Close"/> ends them for good, and whatever they set, the
+/// settings change later.</summary>
 public sealed record FirstSteps(
     IReadOnlyList<FirstSteps.Purpose> Purposes,
     Form? Line,
@@ -33,7 +32,6 @@ public sealed record FirstSteps(
     Form Readers,
     Form Arrival,
     string Site,
-    string BringYourAgent,
     string? FirstTopic,
     Form Close) : IPart
 {
@@ -125,7 +123,6 @@ public sealed record FirstSteps(
                 [new(TangentSpaceSettingsController.Word(Admission.Join), "Join at once"), new(TangentSpaceSettingsController.Word(Admission.Apply), "Apply, and you admit them")]))
                 with { Tool = "change-admission", Key = "first-steps-arrival" }),
             baseAddress + TangentSpaceSettingsController.Path + "#" + Pointing.Anchor,
-            baseAddress + BringYourAgentController.Path,
             open.FirstOrDefault() is { } first ? PostWrites.TangentAddress(baseAddress, first.Id) + "/" + TangentPageController.NewTopicSegment : null,
             Form.Posting(baseAddress + FirstStepsController.ClosePath) with { Tool = "close-first-steps", Submit = "Done", Busy = "Closing…", Quiet = true })
         {

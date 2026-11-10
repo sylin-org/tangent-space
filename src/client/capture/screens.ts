@@ -267,15 +267,6 @@ export const screens: Readonly<Record<string, Screen>> = {
       { name: 'refused', signedIn: true },
     ],
   },
-  // The page as a visitor reads it and as the persona does: the link that opens Companion Lobby with the address, and
-  // the one that gets it.
-  'bring-your-agent': {
-    path: '/bring-your-agent',
-    states: [
-      { name: 'visitor' },
-      { name: 'signed-in', signedIn: true },
-    ],
-  },
   // The form that starts a Topic in the discussions Tangent, the composer on it: empty for the persona, a member; her
   // words typed, then the page opened again, which brings them back; sent with a body of nothing but spaces, refused
   // above the fields; opened by a visitor, refused with the sign-in; and opened in a place where newcomers apply by the
@@ -658,8 +649,8 @@ export const screens: Readonly<Record<string, Screen>> = {
 }
 
 // The reference's screens by width, as file names under its screens/ folder. Each is drawn at one size
-// and switches theme by its ?theme= query. The door, take this on a tangent, bring your agent and
-// connections have no reference screen; their target is the mock Leo approves.
+// and switches theme by its ?theme= query. The door, take this on a tangent and connections have no
+// reference screen; their target is the mock Leo approves.
 export const references: Readonly<Record<string, Partial<Record<Width, string>>>> = {
   'tangent-discussions': { 1440: '03-tangent-discussions.html', 390: '21-phone-discussions.html' },
   'tangent-articles': { 1440: '02-tangent-articles.html' },
