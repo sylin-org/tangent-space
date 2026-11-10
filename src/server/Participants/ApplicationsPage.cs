@@ -9,8 +9,8 @@ namespace Tangent.Participants;
 /// for a page that <see cref="Continued"/> from a cursor. <see cref="State"/> is <c>waiting</c> where the page holds those
 /// that wait alone, as the settings open it, empty where it holds every application, declined ones too, and
 /// <see cref="All"/> the address of every application. Only whoever holds <c>ManageStanding</c> reads it.
-/// <see cref="Admit"/> and <see cref="Decline"/> are the forms that decide, each taking the applicant's id in
-/// <c>participant</c>; a waiting application is admitted or declined, a declined one only admitted. <see cref="Can"/> is
+/// <see cref="Standing"/> is the form that decides, giving the applicant a standing their <c>can</c> lists
+/// (<see cref="PeopleController.Giving"/>): a waiting application is admitted or declined, a declined one only admitted. <see cref="Can"/> is
 /// what the reader holds in the place, and <see cref="Day"/> the UTC day the times are written for. After a refusal the
 /// page says why above the list. Where admission says apply, either page also holds <see cref="Invitations"/>, one bounded
 /// page of the accounts invited, newest
@@ -26,8 +26,7 @@ public sealed record ApplicationsPage(
     string First,
     string State,
     string All,
-    Form Admit,
-    Form Decline,
+    Form Standing,
     IReadOnlyList<string> Can,
     string Place,
     string Door,
@@ -36,8 +35,15 @@ public sealed record ApplicationsPage(
     string? Failure = null)
 {
     /// <summary>One applicant: their id, the name to show, their handle, their profile's address, the state of their
-    /// application (<c>waiting</c> or <c>declined</c>) and when they applied.</summary>
-    public sealed record Applicant(string Id, string Name, string Handle, string Profile, string State, DateTimeOffset AppliedAt);
+    /// application (<c>waiting</c> or <c>declined</c>), when they applied, and the standings the reader may give them in
+    /// <see cref="Can"/>, drawn from <see cref="Gives"/>, the rows of <see cref="Participant.Standings"/> from where they
+    /// stand.</summary>
+    public sealed record Applicant(string Id, string Name, string Handle, string Profile, string State, DateTimeOffset AppliedAt,
+        [property: Newtonsoft.Json.JsonIgnore] IReadOnlyList<Participant.Transition> Gives)
+    {
+        /// <summary>The standings the reader may give them, by the word <c>to</c> takes.</summary>
+        public IReadOnlyList<string> Can => Participant.Can(Gives);
+    }
 
     /// <summary>One account invited: its DID, its handle and the name and picture its public profile showed, when it was
     /// invited and by whom.</summary>
@@ -73,21 +79,9 @@ public sealed record ApplicationsPage(
         with { Tool = "applications-state read-applications", Key = "applications-state" };
 
     /// <summary>Each applicant: who, linked to their profile, their handle, when they applied and whether they were declined, and
-    /// what the reader may decide — admit, and for one waiting, decline, confirmed in the page.</summary>
+    /// what the reader may decide, a button for each standing they may give them (<see cref="PeopleForms.Buttons"/>).</summary>
     [Render.Slot(Render.Slot.Column), Newtonsoft.Json.JsonIgnore]
-    public Render.EntryList Listed => new(Applications.Select(applicant => new Render.Entry(null,
-    [
-        Admit.Given(ApplicationsController.ParticipantField, applicant.Id) with { Tool = "admit", Submit = "Admit" },
-        .. applicant.State == Waiting
-            ? new Render.IPart[]
-            {
-                Decline.Given(ApplicationsController.ParticipantField, applicant.Id) with
-                {
-                    Tool = "decline", Opens = "Decline", Submit = "Decline", Confirm = "They keep reading what a visitor reads, and you can still admit them later."
-                }
-            }
-            : []
-    ])
+    public Render.EntryList Listed => new(Applications.Select(applicant => new Render.Entry(null, [.. PeopleForms.Buttons(Standing, applicant.Id, applicant.Gives)])
     {
         Subject = new Render.Person(applicant.Id, applicant.Handle, applicant.Name, "person", null, applicant.Profile),
         Detail = Render.Sentence.Plain("@" + applicant.Handle + " · applied " + Render.Wording.When(applicant.AppliedAt, Day)
@@ -135,8 +129,3 @@ public sealed record InvitedAccount(string Account, string Handle, string Name, 
 
 /// <summary>An invitation withdrawn, for an agent: the account it named and the applications' address.</summary>
 public sealed record WithdrawnInvitation(string Account, string Applications);
-
-/// <summary>An application as a decision leaves it, for an agent: the applicant's id, name and handle, their standing
-/// now (<c>admitted</c> or <c>declined</c>), the applications' address, and what the decider <see cref="Can"/> do in the
-/// place.</summary>
-public sealed record DecidedApplication(string Id, string Name, string Handle, string Standing, string Applications, IReadOnlyList<string> Can);

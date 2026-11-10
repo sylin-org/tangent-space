@@ -110,7 +110,7 @@ public sealed class ProofDoorTests
         await using var tangentSpace = await Start(directory);
         await Place(tangentSpace);
         using var held = await SignedInByProof(tangentSpace, Scout);
-        Assert.IsType<Outcome<Participant>.Done>(await new Ban(Mo, (await Persona.Arrived(Scout.Did, Cancellation))!.Id).Send(Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new SetStanding(Mo, (await Persona.Arrived(Scout.Did, Cancellation))!.Id, Standing.Banned).Send(Cancellation));
 
         Assert.Equal("absent", (await Send(held.Client, HttpMethod.Get, "/", json: true)).Kind);
 

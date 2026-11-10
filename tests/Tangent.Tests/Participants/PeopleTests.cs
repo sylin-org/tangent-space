@@ -84,18 +84,20 @@ public sealed class PeopleTests
         Assert.Contains("People", listed.Json.GetProperty("sections").EnumerateArray().Select(section => section.GetProperty("name").GetString()));
         var adaRow = Row(listed.Json, Ada);
         Assert.Equal(("admitted", "person"), (adaRow.GetProperty("standing").GetString(), adaRow.GetProperty("person").GetProperty("kind").GetString()));
-        Assert.Equal([People.Verb.TimeOut, People.Verb.Ban], Strings(adaRow, "can"));
+        Assert.Equal(["timed-out", "banned"], Strings(adaRow, "can"));
         Assert.Empty(Offered(adaRow, "give"));
         Assert.Equal(["Member"], Strings(adaRow, "roles"));
-        Assert.Equal(["hour", "day", "week"], Strings(listed.Json.GetProperty("forms"), "durations"));
+        Assert.Equal([PeopleController.ParticipantField, PeopleController.ToField, PeopleController.ForField],
+            FieldNames(listed.Json.GetProperty("forms").GetProperty("standing")));
         var html = (await Send(mo.Client, HttpMethod.Get, path)).Body;
         Assert.Contains("<summary class=\"button\">Time out</summary>", html);
         Assert.Contains("href=\"" + BaseUrl + "/p/ada4writes.example\"", html);
         var before = await Head();
 
-        var timed = await Form(mo, path, PeopleController.TimeOutPath, new Dictionary<string, string>
+        var timed = await Form(mo, path, PeopleController.StandingPath, new Dictionary<string, string>
         {
-            [PeopleController.ParticipantField] = Ada, [PeopleController.ForField] = "hour", [PeopleController.BackField] = path
+            [PeopleController.ParticipantField] = Ada, [PeopleController.ToField] = "timed-out", [PeopleController.ForField] = "hour",
+            [Render.Form.ReturnField] = path
         });
 
         Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + path), (timed.Status, timed.Location));
@@ -121,12 +123,13 @@ public sealed class PeopleTests
         Assert.Contains("You’re timed out until", (await Send(ada.Client, HttpMethod.Get, "/")).Body);
         var timedRow = Row((await Send(mo.Client, HttpMethod.Get, path, json: true)).Json, Ada);
         Assert.Equal("timed-out", timedRow.GetProperty("standing").GetString());
-        Assert.Equal([People.Verb.Lift, People.Verb.Ban], Strings(timedRow, "can"));
+        Assert.Equal(["admitted", "banned"], Strings(timedRow, "can"));
+        Assert.Contains(">Lift the timeout</button>", (await Send(mo.Client, HttpMethod.Get, path)).Body);
 
         // Lifted, as JSON: the answer is her row as the moderator now finds it; she posts again and her door says she is back.
-        var lifted = await Json(mo, path, PeopleController.LiftPath, new { participant = Ada });
+        var lifted = await Json(mo, path, PeopleController.StandingPath, new { participant = Ada, to = "admitted" });
         Assert.Equal((HttpStatusCode.OK, "admitted"), (lifted.Status, lifted.Json.GetProperty("standing").GetString()));
-        Assert.Equal([People.Verb.TimeOut, People.Verb.Ban], Strings(lifted.Json, "can"));
+        Assert.Equal(["timed-out", "banned"], Strings(lifted.Json, "can"));
         Assert.Equal(HttpStatusCode.Created, (await StartIn(ada, "Back again")).Status);
         var back = await Send(ada.Client, HttpMethod.Get, "/", json: true);
         Assert.False(back.Json.TryGetProperty("gate", out _));
@@ -135,19 +138,24 @@ public sealed class PeopleTests
         Assert.Contains("lifted your timeout: you’re back", (await Send(ada.Client, HttpMethod.Get, "/")).Body);
         // Lifting what is lifted writes nothing.
         var events = await Head();
-        Assert.Equal(HttpStatusCode.OK, (await Json(mo, path, PeopleController.LiftPath, new { participant = Ada })).Status);
+        Assert.Equal(HttpStatusCode.OK, (await Json(mo, path, PeopleController.StandingPath, new { participant = Ada, to = "admitted" })).Status);
         Assert.Equal(events, await Head());
 
-        // A timeout that has run its course is over: she posts, and the people list her admitted.
+        // A timeout that has run its course is over: she posts, the people list her admitted, and she can be timed out again.
         var start = DateTimeOffset.UtcNow.AddMinutes(-61);
-        Assert.IsType<Outcome<Participant>.Done>(await new TimeOut(Mo, Ada, start.AddHours(1), start).Send(Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new SetStanding(Mo, Ada, Standing.TimedOut, start.AddHours(1), start).Send(Cancellation));
         Assert.Equal(HttpStatusCode.Created, (await StartIn(ada, "After it passed")).Status);
         Assert.Equal("admitted", Row((await Send(mo.Client, HttpMethod.Get, path, json: true)).Json, Ada).GetProperty("standing").GetString());
+        var again = await Json(mo, path, PeopleController.StandingPath, new { participant = Ada, to = "timed-out", @for = "day" });
+        Assert.Equal((HttpStatusCode.OK, "timed-out"), (again.Status, again.Json.GetProperty("standing").GetString()));
+        Assert.InRange((await Participant.Get(Ada, Cancellation))!.StandingUntil!.Value, DateTimeOffset.UtcNow.AddHours(23), DateTimeOffset.UtcNow.AddHours(25));
 
-        // A duration that is not offered is refused, and nothing is written.
+        // A duration that is not offered, and a standing that is none, are refused, and nothing is written.
         events = await Head();
-        var unknown = await Json(mo, path, PeopleController.TimeOutPath, new { participant = Ada, @for = "year" });
+        var unknown = await Json(mo, path, PeopleController.StandingPath, new { participant = Ada, to = "timed-out", @for = "year" });
         Assert.Equal(HttpStatusCode.BadRequest, unknown.Status);
+        var nothing = await Json(mo, path, PeopleController.StandingPath, new { participant = Ada, to = "applied" });
+        Assert.Equal((HttpStatusCode.BadRequest, People.NotAStanding.Word), (nothing.Status, nothing.Word));
         Assert.Equal(events, await Head());
     }
 
@@ -164,9 +172,9 @@ public sealed class PeopleTests
         Assert.Contains("<summary class=\"button\">Ban</summary>", (await Send(mo.Client, HttpMethod.Get, path)).Body);
         var before = await Head();
 
-        var banned = await Form(mo, path, PeopleController.BanPath, new Dictionary<string, string>
+        var banned = await Form(mo, path, PeopleController.StandingPath, new Dictionary<string, string>
         {
-            [PeopleController.ParticipantField] = Ada, [PeopleController.BackField] = path
+            [PeopleController.ParticipantField] = Ada, [PeopleController.ToField] = "banned", [Render.Form.ReturnField] = path
         });
 
         Assert.Equal(HttpStatusCode.SeeOther, banned.Status);
@@ -181,12 +189,29 @@ public sealed class PeopleTests
             Assert.Equal(HttpStatusCode.NotFound, again.Response.StatusCode);
         var bannedRow = Row((await Send(mo.Client, HttpMethod.Get, path, json: true)).Json, Ada);
         Assert.Equal("banned", bannedRow.GetProperty("standing").GetString());
-        Assert.Equal([People.Verb.Lift], Strings(bannedRow, "can"));
-        // A banned participant is lifted before anything else.
-        var timedOut = await Json(mo, path, PeopleController.TimeOutPath, new { participant = Ada, @for = "day" });
-        Assert.Equal((HttpStatusCode.Conflict, Participant.BannedFirst.Text), (timedOut.Status, timedOut.Json.GetProperty("detail").GetString()));
+        Assert.Equal(["admitted"], Strings(bannedRow, "can"));
+        Assert.Contains(">Lift the ban</button>", (await Send(mo.Client, HttpMethod.Get, path)).Body);
+        // A banned participant is lifted before anything else: Koan's table refuses the timeout, as JSON and as a form, which reads
+        // the page again with its sentence.
+        var timedOut = await Json(mo, path, PeopleController.StandingPath, new { participant = Ada, to = "timed-out", @for = "day" });
+        Assert.Equal((HttpStatusCode.Conflict, "transition"), (timedOut.Status, timedOut.Word));
+        Assert.Equal("Standing does not go from banned to timed-out; from banned it goes to admitted.", timedOut.Json.GetProperty("detail").GetString());
+        var formRefused = await Form(mo, path, PeopleController.StandingPath, new Dictionary<string, string>
+        {
+            [PeopleController.ParticipantField] = Ada, [PeopleController.ToField] = "timed-out", [PeopleController.ForField] = "day", [Render.Form.ReturnField] = path
+        });
+        Assert.Equal(HttpStatusCode.Conflict, formRefused.Status);
+        Assert.Contains("ada4writes.example", formRefused.Body);
+        // A return that names no path reads the people again.
+        var nowhere = await Form(mo, path, PeopleController.StandingPath, new Dictionary<string, string>
+        {
+            [PeopleController.ParticipantField] = Ada, [PeopleController.ToField] = "declined", [Render.Form.ReturnField] = "abc"
+        });
+        Assert.Equal(HttpStatusCode.Conflict, nowhere.Status);
+        Assert.Contains("ada4writes.example", nowhere.Body);
+        Assert.Equal(Standing.Banned, (await Participant.Get(Ada, Cancellation))!.Standing);
 
-        Assert.Equal(HttpStatusCode.OK, (await Json(mo, path, PeopleController.LiftPath, new { participant = Ada })).Status);
+        Assert.Equal(HttpStatusCode.OK, (await Json(mo, path, PeopleController.StandingPath, new { participant = Ada, to = "admitted" })).Status);
         var door = await Send(ada.Client, HttpMethod.Get, "/", json: true);
         Assert.Equal(HttpStatusCode.OK, door.Status);
         Assert.Equal("banned", door.Json.GetProperty("news").GetProperty("lifted").GetProperty("was").GetString());
@@ -216,26 +241,30 @@ public sealed class PeopleTests
 
         foreach (var (target, reason) in new[] { (Leo, People.NotBelow.Word), (Mia, People.NotBelow.Word), (Mo, People.Themselves.Word), (Otto, People.Operator.Word) })
         {
-            foreach (var verb in new[] { PeopleController.BanPath, PeopleController.LiftPath })
+            foreach (var to in new[] { "banned", "admitted" })
             {
-                var refused = await Json(mo, path, verb, new { participant = target });
+                var refused = await Json(mo, path, PeopleController.StandingPath, new { participant = target, to });
                 Assert.Equal((HttpStatusCode.Forbidden, reason), (refused.Status, refused.Word));
             }
 
-            var timed = await Json(mo, path, PeopleController.TimeOutPath, new { participant = target, @for = "hour" });
+            var timed = await Json(mo, path, PeopleController.StandingPath, new { participant = target, to = "timed-out", @for = "hour" });
             Assert.Equal((HttpStatusCode.Forbidden, reason), (timed.Status, timed.Word));
             Assert.Equal(Standing.Admitted, (await Participant.Get(target, Cancellation))!.Standing);
         }
 
         // A form refused reads the page again, the reason above the list.
-        var form = await Form(mo, path, PeopleController.BanPath, new Dictionary<string, string> { [PeopleController.ParticipantField] = Leo });
+        var form = await Form(mo, path, PeopleController.StandingPath, new Dictionary<string, string>
+        {
+            [PeopleController.ParticipantField] = Leo, [PeopleController.ToField] = "banned"
+        });
         Assert.Equal(HttpStatusCode.Forbidden, form.Status);
         Assert.Contains(People.NotBelow.Text, form.Body);
 
         // An administrator acts on moderators and members, never on another administrator or the operator.
-        Assert.Equal([People.Verb.TimeOut, People.Verb.Ban], Strings(Row((await Send(leo.Client, HttpMethod.Get, path, json: true)).Json, Mia), "can"));
-        Assert.Equal((HttpStatusCode.Forbidden, People.Operator.Word), Refusal(await Json(leo, path, PeopleController.BanPath, new { participant = Otto })));
-        Assert.Equal(HttpStatusCode.NotFound, (await Json(mo, path, PeopleController.BanPath, new { participant = Persona.Id("nobody") })).Status);
+        Assert.Equal(["timed-out", "banned"], Strings(Row((await Send(leo.Client, HttpMethod.Get, path, json: true)).Json, Mia), "can"));
+        Assert.Equal((HttpStatusCode.Forbidden, People.Operator.Word),
+            Refusal(await Json(leo, path, PeopleController.StandingPath, new { participant = Otto, to = "banned" })));
+        Assert.Equal(HttpStatusCode.NotFound, (await Json(mo, path, PeopleController.StandingPath, new { participant = Persona.Id("nobody"), to = "banned" })).Status);
         Assert.Empty(await Since(before));
     }
 
@@ -261,14 +290,16 @@ public sealed class PeopleTests
         using var mo = await SignedIn(tangentSpace, Mo);
         var row = Row((await Send(mo.Client, HttpMethod.Get, PeopleController.Path, json: true)).Json, cy);
         Assert.Equal("admitted", row.GetProperty("standing").GetString());
-        Assert.Equal([People.Verb.TimeOut, People.Verb.Ban], Strings(row, "can"));
+        Assert.Equal(["timed-out", "banned"], Strings(row, "can"));
         var events = await Head();
-        var lifted = await Json(mo, PeopleController.Path, PeopleController.LiftPath, new { participant = cy });
+        var lifted = await Json(mo, PeopleController.Path, PeopleController.StandingPath, new { participant = cy, to = "admitted" });
         Assert.Equal((HttpStatusCode.OK, "admitted"), (lifted.Status, lifted.Json.GetProperty("standing").GetString()));
-        var admitted = await Json(mo, PeopleController.Path, ApplicationsController.AdmitPath, new { participant = cy });
-        Assert.Equal((HttpStatusCode.OK, "admitted"), (admitted.Status, admitted.Json.GetProperty("standing").GetString()));
         Assert.Equal(events, await Head());
         Assert.False((await Send(signedIn.Client, HttpMethod.Get, "/", json: true)).Json.TryGetProperty("gate", out _));
+
+        // Stored as timed out, it takes what the standing in force offers: a ban.
+        var banned = await Json(mo, PeopleController.Path, PeopleController.StandingPath, new { participant = cy, to = "banned" });
+        Assert.Equal((HttpStatusCode.OK, "banned"), (banned.Status, banned.Json.GetProperty("standing").GetString()));
     }
 
     [Fact]
@@ -315,7 +346,7 @@ public sealed class PeopleTests
         Assert.Single(await Since(before));
 
         // The new moderator times out a member.
-        var timed = await Json(bea, path, PeopleController.TimeOutPath, new { participant = Ada, @for = "day" });
+        var timed = await Json(bea, path, PeopleController.StandingPath, new { participant = Ada, to = "timed-out", @for = "day" });
         Assert.Equal((HttpStatusCode.OK, "timed-out"), (timed.Status, timed.Json.GetProperty("standing").GetString()));
 
         // Taken back, as JSON: her door says so, and she times out no one.
@@ -323,7 +354,7 @@ public sealed class PeopleTests
         Assert.Equal(HttpStatusCode.OK, taken.Status);
         Assert.DoesNotContain("Moderator", Strings(taken.Json, "roles"));
         Assert.Contains("took your moderator role", (await Send(bea.Client, HttpMethod.Get, "/")).Body);
-        var refused = await Json(bea, "/t/" + Workshop, PeopleController.LiftPath, new { participant = Ada });
+        var refused = await Json(bea, "/t/" + Workshop, PeopleController.StandingPath, new { participant = Ada, to = "admitted" });
         Assert.Equal((HttpStatusCode.Forbidden, Capabilities.NoRoleGrants(Bit.ManageStanding).Word), (refused.Status, refused.Word));
         // The member role is admission's, never given here.
         Assert.Equal(HttpStatusCode.BadRequest, (await Json(leo, path, PeopleController.TakePath, new { participant = Ada, role = "member" })).Status);
@@ -418,8 +449,8 @@ public sealed class PeopleTests
         var roles = tangentSpace.Services.GetRequiredService<RoleCollection>();
         using var leo = await SignedIn(tangentSpace, Leo);
         var path = PeopleController.Path;
-        Assert.IsType<Outcome<Participant>.Done>(await new TimeOut(Mo, Ada, DateTimeOffset.UtcNow.AddHours(1)).Send(Cancellation));
-        Assert.IsType<Outcome<Participant>.Done>(await new Ban(Mo, Bea).Send(Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new SetStanding(Mo, Ada, Standing.TimedOut, DateTimeOffset.UtcNow.AddHours(1)).Send(Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new SetStanding(Mo, Bea, Standing.Banned).Send(Cancellation));
         // A timeout that has run its course counts as none.
         var cy = Persona.Id("cy4people");
         Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(new Participant
@@ -500,15 +531,16 @@ public sealed class PeopleTests
         var profile = "/p/ada4writes.example";
 
         var read = await Send(mo.Client, HttpMethod.Get, profile, json: true);
-        Assert.Equal([People.Verb.TimeOut, People.Verb.Ban], Strings(read.Json.GetProperty("listed"), "can"));
-        Assert.Equal(BaseUrl + PeopleController.TimeOutPath, read.Json.GetProperty("forms").GetProperty("timeOut").GetProperty("action").GetString());
+        Assert.Equal(["timed-out", "banned"], Strings(read.Json.GetProperty("listed"), "can"));
+        Assert.Equal(BaseUrl + PeopleController.StandingPath, read.Json.GetProperty("forms").GetProperty("standing").GetProperty("action").GetString());
         var html = (await Send(mo.Client, HttpMethod.Get, profile)).Body;
         Assert.Contains("is admitted here.", html);
         Assert.Contains("<summary class=\"button\">Ban</summary>", html);
 
-        var timed = await Form(mo, profile, PeopleController.TimeOutPath, new Dictionary<string, string>
+        Assert.Contains("name=\"return\" value=\"" + profile + "\"", html);
+        var timed = await Form(mo, profile, PeopleController.StandingPath, new Dictionary<string, string>
         {
-            [PeopleController.ParticipantField] = Ada, [PeopleController.ForField] = "week", [PeopleController.BackField] = profile
+            [PeopleController.ParticipantField] = Ada, [PeopleController.ToField] = "timed-out", [PeopleController.ForField] = "week", [Render.Form.ReturnField] = profile
         });
         Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + profile), (timed.Status, timed.Location));
         Assert.Contains("is timed out here until", (await Send(mo.Client, HttpMethod.Get, profile)).Body);
@@ -516,9 +548,9 @@ public sealed class PeopleTests
         // A member reads the profile without anyone's standing or a change; a page outside the place's is never where a form returns.
         var member = await Send(bea.Client, HttpMethod.Get, profile, json: true);
         Assert.False(member.Json.TryGetProperty("listed", out var listed) && listed.ValueKind != JsonValueKind.Null);
-        var elsewhere = await Form(mo, profile, PeopleController.LiftPath, new Dictionary<string, string>
+        var elsewhere = await Form(mo, profile, PeopleController.StandingPath, new Dictionary<string, string>
         {
-            [PeopleController.ParticipantField] = Ada, [PeopleController.BackField] = "//elsewhere.example/p/x"
+            [PeopleController.ParticipantField] = Ada, [PeopleController.ToField] = "admitted", [Render.Form.ReturnField] = "//elsewhere.example/p/x"
         });
         Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + PeopleController.Path), (elsewhere.Status, elsewhere.Location));
     }

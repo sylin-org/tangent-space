@@ -1,5 +1,6 @@
 using Koan.Data.Abstractions.Annotations;
 using Koan.Data.Core.Commands;
+using Koan.Data.Core.Lifecycle;
 using Koan.Data.Core.Model;
 using Koan.Jobs;
 using Tangent.Space;
@@ -81,14 +82,8 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
         return true;
     }
 
-    /// <summary>The refusal a decision meets for a participant whose standing is not an application's.</summary>
-    public static readonly Reason NotAnApplication = Reason.Conflict("Only an application waiting or declined is decided.");
-
-    /// <summary>The refusal a timeout, a ban, a lift or a change of roles meets for an applicant, waiting or declined.</summary>
-    public static readonly Reason NotAdmitted = Reason.Conflict("An applicant is admitted or declined among the applications before anything else changes their standing or roles.");
-
-    /// <summary>The refusal a timeout meets for a banned participant.</summary>
-    public static readonly Reason BannedFirst = Reason.Conflict("They are banned: lift the ban before timing them out.");
+    /// <summary>The refusal a change of roles meets for an applicant, waiting or declined.</summary>
+    public static readonly Reason NotAdmitted = Reason.Conflict("An applicant is admitted among the applications before their roles change.");
 
     /// <summary>The refusal a timeout meets whose end is not after its start.</summary>
     public static readonly Reason TimeoutEnds = Reason.Invalid("A timeout ends after it begins.");
@@ -124,86 +119,56 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
     }
 
     /// <summary>Records that the participant's arrival took the log's sequence <paramref name="seq"/>: what is new to them
-    /// begins there, and where they applied, their application waits at it.</summary>
-    public void Arrived(long seq)
-    {
-        ArrivedSeq = seq;
-        WaitingSeq = Standing == Standing.Applied ? seq : null;
-    }
-
-    /// <summary>Admits an applicant, waiting or declined: they stand admitted and their application is closed. False,
-    /// with nothing changed, for one who stands admitted at <paramref name="now"/>, a timeout that has ended among them;
-    /// a timed-out or banned participant is refused with <see cref="NotAnApplication"/>.</summary>
-    public bool Admit(DateTimeOffset now)
-    {
-        var standing = StandingAt(now);
-        if (standing == Standing.Admitted) return false;
-        if (standing is not (Standing.Applied or Standing.Declined)) throw new Refusal(NotAnApplication);
-        Standing = Standing.Admitted;
-        AppliedAt = null;
-        WaitingSeq = null;
-        return true;
-    }
-
-    /// <summary>Declines a waiting application: the applicant keeps reading what a visitor reads, the application stays
-    /// listed as declined and no longer waits, and a later <see cref="Admit"/> reverses it. False, with nothing changed,
-    /// for one already declined; anyone else is refused with <see cref="NotAnApplication"/>, read at
-    /// <paramref name="now"/>.</summary>
-    public bool Decline(DateTimeOffset now)
-    {
-        var standing = StandingAt(now);
-        if (standing == Standing.Declined) return false;
-        if (standing != Standing.Applied) throw new Refusal(NotAnApplication);
-        Standing = Standing.Declined;
-        WaitingSeq = null;
-        return true;
-    }
+    /// begins there, and where they applied, their application waits at it (<see cref="Holds"/>).</summary>
+    public void Arrived(long seq) => ArrivedSeq = seq;
 
     /// <summary>The standing in force at <paramref name="now"/>, which every decision about the participant reads: a
     /// timeout whose end has come reads as admitted, and the row keeps it as it was written.</summary>
     public Standing StandingAt(DateTimeOffset now)
         => Standing == Standing.TimedOut && StandingUntil is { } until && until <= now ? Standing.Admitted : Standing;
 
-    /// <summary>Times the participant out until <paramref name="until"/>: until then they read and report, and post,
-    /// reply and start nothing. False,
-    /// with nothing changed, where they are already timed out until that instant; an applicant is refused with
-    /// <see cref="NotAdmitted"/>, a banned participant with <see cref="BannedFirst"/>, and an end not after
-    /// <paramref name="now"/> with <see cref="TimeoutEnds"/>.</summary>
-    public bool TimeOut(DateTimeOffset until, DateTimeOffset now)
-    {
-        if (until <= now) throw new Refusal(TimeoutEnds);
-        var standing = StandingAt(now);
-        if (standing is Standing.Applied or Standing.Declined) throw new Refusal(NotAdmitted);
-        if (standing == Standing.Banned) throw new Refusal(BannedFirst);
-        if (standing == Standing.TimedOut && StandingUntil == until) return false;
-        Standing = Standing.TimedOut;
-        StandingUntil = until;
-        return true;
-    }
+    /// <summary>One way a standing changes: from <see cref="From"/> to <see cref="To"/>, with the word its button carries and,
+    /// where the page confirms it, the sentence it confirms with.</summary>
+    public sealed record Transition(Standing From, Standing To, string Button, string? Confirm = null);
 
-    /// <summary>Bans the participant: the place is absent to them until someone lifts it. False, with nothing changed,
-    /// for one already banned; an applicant is refused with <see cref="NotAdmitted"/>.</summary>
-    public bool Ban(DateTimeOffset now)
-    {
-        var standing = StandingAt(now);
-        if (standing is Standing.Applied or Standing.Declined) throw new Refusal(NotAdmitted);
-        if (standing == Standing.Banned) return false;
-        Standing = Standing.Banned;
-        StandingUntil = null;
-        return true;
-    }
+    private const string BanConfirm = "This place disappears for them, every page and every stream, until you lift the ban.";
 
-    /// <summary>Lifts a timeout or a ban: the participant stands admitted again. False, with nothing changed, for one
-    /// who stands admitted, a timeout that has ended among them; an applicant is refused with
-    /// <see cref="NotAdmitted"/>.</summary>
-    public bool Lift(DateTimeOffset now)
+    /// <summary>What follows what, the one place that says it: an applicant is admitted or declined, and one declined is
+    /// admitted later; someone admitted is timed out or banned; a timeout is lifted or turned into a ban; a ban is lifted. Koan
+    /// refuses any other save of a standing (<see cref="TangentModule"/>), and a row's <c>can</c> and every button that changes
+    /// a standing are drawn from it, read from the standing in force (<see cref="StandingAt"/>). Every row from admitted is a
+    /// row from timed out, or leaves a timeout that has ended stored as it stands, so the stored standing Koan reads takes each
+    /// change the standing in force offers.</summary>
+    public static readonly IReadOnlyList<Transition> Standings =
+    [
+        new(Standing.Applied, Standing.Admitted, "Admit"),
+        new(Standing.Applied, Standing.Declined, "Decline", "They keep reading what a visitor reads, and you can still admit them later."),
+        new(Standing.Declined, Standing.Admitted, "Admit"),
+        new(Standing.Admitted, Standing.TimedOut, "Time out",
+            "They keep reading and reporting here, and post, reply and start nothing until it ends; you can lift it sooner."),
+        new(Standing.Admitted, Standing.Banned, "Ban", BanConfirm),
+        new(Standing.TimedOut, Standing.Admitted, "Lift the timeout"),
+        new(Standing.TimedOut, Standing.Banned, "Ban", BanConfirm),
+        new(Standing.Banned, Standing.Admitted, "Lift the ban")
+    ];
+
+    /// <summary>The changes <see cref="Standings"/> offers from the standing <paramref name="from"/>, in its order.</summary>
+    public static IEnumerable<Transition> From(Standing from) => Standings.Where(transition => transition.From == from);
+
+    /// <summary>The standings <paramref name="gives"/> give, by the word <c>to</c> takes: a row's <c>can</c>.</summary>
+    public static IReadOnlyList<string> Can(IEnumerable<Transition> gives) => [.. gives.Select(transition => People.Word(transition.To))];
+
+    /// <summary>What every participant's row holds, however it is written — an arrival, a change of standing, a seed —
+    /// compiled as it is saved, as its lifecycle (<see cref="TangentModule"/>): a timeout's end only on one timed out, when
+    /// they applied only on an applicant, waiting or declined, and <see cref="WaitingSeq"/> their arrival's sequence while
+    /// they wait, null for everyone else.</summary>
+    public static EntityLifecycleResult Holds(EntityLifecycleContext<Participant> context)
     {
-        var standing = StandingAt(now);
-        if (standing is Standing.Applied or Standing.Declined) throw new Refusal(NotAdmitted);
-        if (standing == Standing.Admitted) return false;
-        Standing = Standing.Admitted;
-        StandingUntil = null;
-        return true;
+        var participant = context.Current;
+        if (participant.Standing != Standing.TimedOut) participant.StandingUntil = null;
+        if (participant.Standing is not (Standing.Applied or Standing.Declined)) participant.AppliedAt = null;
+        participant.WaitingSeq = participant.Standing == Standing.Applied ? participant.ArrivedSeq : null;
+        return context.Proceed();
     }
 
     /// <summary>The DID of the account the participant <paramref name="id"/> is bound to now, in one keyed read; empty

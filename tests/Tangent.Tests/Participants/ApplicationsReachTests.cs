@@ -83,14 +83,14 @@ public sealed class ApplicationsReachTests
         using var leo = await SignedIn(tangentSpace, Leo);
         Assert.Equal((2, 2), (Count(await Send(mo.Client, HttpMethod.Get, "/", json: true)), Count(await Send(leo.Client, HttpMethod.Get, "/", json: true))));
 
-        Assert.IsType<Outcome<Participant>.Done>(await new Admit(Leo, Grace).Send(Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new SetStanding(Leo, Grace, Standing.Admitted).Send(Cancellation));
 
         var door = (await Send(mo.Client, HttpMethod.Get, "/", json: true)).Json;
         Assert.Equal((1, 1), (door.GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32(),
             door.GetProperty("applications").GetProperty("count").GetInt32()));
         Assert.Null((await Participant.Get(Grace, Cancellation))!.WaitingSeq);
 
-        Assert.IsType<Outcome<Participant>.Done>(await new Decline(Leo, Hal).Send(Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new SetStanding(Leo, Hal, Standing.Declined).Send(Cancellation));
 
         door = (await Send(mo.Client, HttpMethod.Get, "/", json: true)).Json;
         Assert.Equal(0, door.GetProperty("who").GetProperty("forYou").GetProperty("count").GetInt32());
@@ -156,7 +156,7 @@ public sealed class ApplicationsReachTests
         Assert.Equal(arrived.WaitingSeq, arrived.ArrivedSeq);
         var waited = await Started(Ada, "While Grace waited", "Posted while she waited.");
 
-        Assert.IsType<Outcome<Participant>.Done>(await new Admit(Mo, Grace).Send(Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new SetStanding(Mo, Grace, Standing.Admitted).Send(Cancellation));
         Assert.Null(await Checkpoint.Get(Checkpoint.Key(Grace, Scope.Place), Cancellation));
 
         var door = (await Send(grace.Client, HttpMethod.Get, "/", json: true)).Json.GetProperty("news");

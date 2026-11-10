@@ -81,7 +81,7 @@ public sealed class FormTests
         var root = await Started(Ada, "Lanterns", "How do you hang yours?");
         using var visitor = Agent(tangentSpace);
         using var bea = await SignedIn(tangentSpace, Bea);
-        Assert.IsType<Outcome<Participant>.Done>(await new TimeOut(Mo, Bea, DateTimeOffset.UtcNow.AddHours(1)).Send(Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new SetStanding(Mo, Bea, Standing.TimedOut, DateTimeOffset.UtcNow.AddHours(1)).Send(Cancellation));
 
         var asVisitor = await Send(visitor, HttpMethod.Get, TopicPath(root), json: true);
         var asTimedOut = await Send(bea.Client, HttpMethod.Get, TopicPath(root), json: true);

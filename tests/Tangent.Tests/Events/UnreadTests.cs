@@ -185,7 +185,7 @@ public sealed class UnreadTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
         var until = DateTimeOffset.UtcNow.AddHours(1);
-        Assert.IsType<Outcome<Participant>.Done>(await new TimeOut(Mo, Ada, until).Send(Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new SetStanding(Mo, Ada, Standing.TimedOut, until).Send(Cancellation));
         using var ada = await SignedIn(tangentSpace, Ada);
 
         var door = await Door(ada);
@@ -206,7 +206,7 @@ public sealed class UnreadTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Place(tangentSpace);
         var then = DateTimeOffset.UtcNow.AddHours(-2);
-        Assert.IsType<Outcome<Participant>.Done>(await new TimeOut(Mo, Ada, then.AddHours(1), then).Send(Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new SetStanding(Mo, Ada, Standing.TimedOut, then.AddHours(1), then).Send(Cancellation));
         using var ada = await SignedIn(tangentSpace, Ada);
 
         var door = await Door(ada);
@@ -222,7 +222,7 @@ public sealed class UnreadTests
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
         await Applying(tangentSpace);
         Assert.IsType<Outcome<Participant>.Done>(await new FirstArrival(Grace, Persona.Did(Grace), "grace4unread.example").Send(Cancellation));
-        Assert.IsType<Outcome<Participant>.Done>(await new Decline(Mo, Grace).Send(Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new SetStanding(Mo, Grace, Standing.Declined).Send(Cancellation));
         using var grace = await SignedIn(tangentSpace, Grace);
 
         var door = await Door(grace);

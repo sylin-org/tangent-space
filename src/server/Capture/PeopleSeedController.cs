@@ -45,7 +45,7 @@ public sealed class PeopleSeedController(RoleCollection roles) : ControllerBase
     public async Task<IActionResult> TimedOut(CancellationToken ct)
     {
         var keeper = await PersonaArrived(ct);
-        await Write(new TimeOut(keeper, Persona, new DateTimeOffset(2030, 11, 2, 9, 0, 0, TimeSpan.Zero)), ct);
+        await Write(new SetStanding(keeper, Persona, Standing.TimedOut, new DateTimeOffset(2030, 11, 2, 9, 0, 0, TimeSpan.Zero)), ct);
         return NoContent();
     }
 
@@ -55,8 +55,8 @@ public sealed class PeopleSeedController(RoleCollection roles) : ControllerBase
     public async Task<IActionResult> Lifted(CancellationToken ct)
     {
         var keeper = await PersonaArrived(ct);
-        await Write(new TimeOut(keeper, Persona, DateTimeOffset.UtcNow.AddDays(1)), ct);
-        await Write(new Lift(keeper, Persona), ct);
+        await Write(new SetStanding(keeper, Persona, Standing.TimedOut, DateTimeOffset.UtcNow.AddDays(1)), ct);
+        await Write(new SetStanding(keeper, Persona, Standing.Admitted), ct);
         await Write(new ChangeRole(keeper, Persona, Roles.Moderator, Give: true), ct);
         return NoContent();
     }

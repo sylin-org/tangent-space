@@ -93,7 +93,7 @@ public sealed class UndoRemovalTests
         var root = await Started(Bea, "Lanterns", "How do you hang yours?");
         var own = await Replied(root, Ada, "From the porch beam.");
         Assert.IsType<Outcome<Post>.Done>(await new RemovePost(own.Id, Ada).Send(Cancellation));
-        Assert.IsType<Outcome<Participant>.Done>(await new TimeOut(Mo, Ada, DateTimeOffset.UtcNow.AddHours(1)).Send(Cancellation));
+        Assert.IsType<Outcome<Participant>.Done>(await new SetStanding(Mo, Ada, Standing.TimedOut, DateTimeOffset.UtcNow.AddHours(1)).Send(Cancellation));
 
         var refused = Assert.IsType<Outcome<Post>.Refused>(await new UndoRemoval(own.Id, Ada).Send(Cancellation));
 

@@ -109,7 +109,7 @@ public sealed class ProfilesController(KoanWebBaseUrl baseUrl, RoleCollection ro
         if (reader is not null && PeopleController.ReadGate(place) is null)
         {
             listed = await (await PeopleController.Lister.Load(roles, place, reader.Id, baseAddress, ct)).Row(subject, ct);
-            forms = PeopleController.Forms(place, baseAddress, baseUrl.PathBase + ProfilePage.Segment + Uri.EscapeDataString(shownHandle));
+            forms = PeopleController.Forms(place, baseAddress, baseUrl.PathBase, ProfilePage.Segment + Uri.EscapeDataString(shownHandle));
             http.Response.Headers.CacheControl = "no-cache, no-store";
         }
 

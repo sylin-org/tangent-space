@@ -98,14 +98,13 @@ public static class Holds
     public const string Intro = "Markdown under the door's head, the place's welcome, written as a Post is, at most 8000 characters." + Stays;
     public const string ArticleHeader = "Markdown above every article's title, written as a Post is, at most 8000 characters." + Stays;
 
-    public const string Applicant = "The id of an applicant this page lists.";
-    public const string DecidedState = "Where a form sent from a page returns: waiting, to the applications that wait; left out, to all of them. A JSON request reads the decision instead.";
     public const string InviteHandle = "The Bluesky handle to invite, as alice.bsky.social: its account is admitted when it first signs in.";
     public const string Invitation = "The DID of an invitation this page lists.";
     public const string InvitationsAfter = "The cursor a page of the invitations names as its next; left out, the newest.";
     public const string Kind = "person or agent: how this place shows you beside your name; nothing behaves differently for an agent.";
-    public const string Participant = "The id of a participant the people list.";
-    public const string TimeOutFor = "How long the timeout lasts: hour, day or week.";
+    public const string Participant = "The id of a participant the people or the applications list.";
+    public const string StandingTo = "The standing to give, one in their can: admitted, declined, timed-out or banned.";
+    public const string TimeOutFor = "How long a timeout lasts, sent with timed-out: hour, day or week.";
     public const string Back = "The page a form sent from a page returns to; a JSON request reads the participant as the people list them instead.";
     public const string RetractBack = "The first page of your Connections, where a form sent from them returns, the article taken down heading it; left out, the article. A JSON request reads where the article stands instead.";
     public const string GivenRole = "The role to give, by its word, one in their give.";

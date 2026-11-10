@@ -84,23 +84,23 @@ public sealed class AgentRolesTests
         var settings = await Page(scout, Under(Who(door).GetProperty("settings").GetString()!));
         var section = Assert.Single(settings.GetProperty("sections").EnumerateArray(), section => section.GetProperty("name").GetString() == TangentSpaceSettingsController.PeopleSection);
         var managed = await Page(scout, Under(section.GetProperty("address").GetString()!));
-        Assert.Contains(People.Verb.TimeOut, Strings(Row(managed, Ada), "can"));
+        Assert.Contains("timed-out", Strings(Row(managed, Ada), "can"));
         var forms = managed.GetProperty("forms");
         Assert.False(forms.TryGetProperty("give", out var give) && give.ValueKind != JsonValueKind.Null);
         // Sent as a form, with the token in the field it names, as well as one JSON object with the token in its header.
-        var timedOut = await Follow(scout, forms.GetProperty("timeOut"),
-            new Dictionary<string, string> { [PeopleController.ParticipantField] = Ada, [PeopleController.ForField] = "hour" }, json: false);
+        var timedOut = await Follow(scout, forms.GetProperty("standing"),
+            new Dictionary<string, string> { [PeopleController.ParticipantField] = Ada, [PeopleController.ToField] = "timed-out", [PeopleController.ForField] = "hour" }, json: false);
         Assert.True(timedOut.Status == HttpStatusCode.SeeOther, timedOut.Body);
         Assert.Equal(Capabilities.TimedOut.Word, (await Page(ada, "/")).GetProperty("gate").GetString());
         Assert.Equal((Standing.TimedOut, Scout), await StoodBy(Ada));
 
         // The same rules hold it: nothing against anyone not below it, and whoever stands above it times it out.
         Assert.Empty(Strings(Row(await Page(scout, PeopleController.Path), Leo), "can"));
-        var refused = await Follow(scout, (await Page(scout, PeopleController.Path)).GetProperty("forms").GetProperty("ban"),
-            new Dictionary<string, string> { [PeopleController.ParticipantField] = Leo });
+        var refused = await Follow(scout, (await Page(scout, PeopleController.Path)).GetProperty("forms").GetProperty("standing"),
+            new Dictionary<string, string> { [PeopleController.ParticipantField] = Leo, [PeopleController.ToField] = "banned" });
         Assert.Equal((HttpStatusCode.Forbidden, People.NotBelow.Text), (refused.Status, refused.Json.GetProperty("detail").GetString()));
-        var timedOutAgent = await Follow(leo, (await Page(leo, PeopleController.Path)).GetProperty("forms").GetProperty("timeOut"),
-            new Dictionary<string, string> { [PeopleController.ParticipantField] = Scout, [PeopleController.ForField] = "hour" });
+        var timedOutAgent = await Follow(leo, (await Page(leo, PeopleController.Path)).GetProperty("forms").GetProperty("standing"),
+            new Dictionary<string, string> { [PeopleController.ParticipantField] = Scout, [PeopleController.ToField] = "timed-out", [PeopleController.ForField] = "hour" });
         Assert.True(timedOutAgent.Status == HttpStatusCode.OK, timedOutAgent.Body);
         Assert.Equal(Capabilities.TimedOut.Word, (await Page(scout, "/")).GetProperty("gate").GetString());
     }
@@ -160,8 +160,8 @@ public sealed class AgentRolesTests
             new Dictionary<string, string> { [PeopleController.ParticipantField] = Bea, [PeopleController.RoleField] = word! });
         Assert.True(gave.Status == HttpStatusCode.OK, gave.Body);
         Assert.Empty(Strings(Row(byRook, Scout), "can"));
-        var banned = await Follow(rook, byRook.GetProperty("forms").GetProperty("ban"),
-            new Dictionary<string, string> { [PeopleController.ParticipantField] = Scout });
+        var banned = await Follow(rook, byRook.GetProperty("forms").GetProperty("standing"),
+            new Dictionary<string, string> { [PeopleController.ParticipantField] = Scout, [PeopleController.ToField] = "banned" });
         Assert.Equal((HttpStatusCode.Forbidden, People.Operator.Text), (banned.Status, banned.Json.GetProperty("detail").GetString()));
     }
 

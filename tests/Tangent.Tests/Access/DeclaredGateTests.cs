@@ -89,11 +89,14 @@ public sealed class DeclaredGateTests
         Assert.Contains($"value=\"{named}\"", role.Body);
         Assert.Contains("Moderator", role.Body);
 
-        var decided = await Form(lea, Participants.ApplicationsController.Path, Participants.ApplicationsController.DeclinePath,
-            new Dictionary<string, string> { [Participants.ApplicationsController.ParticipantField] = Persona.Id("nobody4gates") });
+        var decided = await Form(lea, Participants.ApplicationsController.Path, Participants.PeopleController.StandingPath,
+            new Dictionary<string, string>
+            {
+                [Participants.PeopleController.ParticipantField] = Persona.Id("nobody4gates"), [Participants.PeopleController.ToField] = "declined",
+                [Render.Form.ReturnField] = Participants.ApplicationsController.Path
+            });
         Assert.Equal(System.Net.HttpStatusCode.NotFound, decided.Status);
-        Assert.Contains(Participants.Applications.NoApplicant.Text, decided.Body);
-        Assert.Contains("No one is waiting to be admitted.", decided.Body);
+        Assert.Contains(Koan.Web.Controllers.Answers.Nothing, decided.Body);
     }
 
     [Fact]
@@ -129,7 +132,7 @@ public sealed class DeclaredGateTests
 
         var admission = await tools.Call("change_admission", new { admission = "neither" });
         var role = await tools.Call("create_role", new { name = "Mine", permissions = new[] { "Nothing" } });
-        var banned = await tools.Call("ban", new { participant = Bea });
+        var banned = await tools.Call("set_standing", new { participant = Bea, to = "banned" });
 
         Assert.Equal((403, Capabilities.NoRoleGrants(Bit.ManageSpace).Word), (admission.Status, admission.Structured!.Value.GetProperty("word").GetString()));
         Assert.Equal((403, Capabilities.NoRoleGrants(Bit.ManageRoles).Word), (role.Status, role.Structured!.Value.GetProperty("word").GetString()));

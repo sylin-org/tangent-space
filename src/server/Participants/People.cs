@@ -23,9 +23,9 @@ namespace Tangent.Participants;
 /// role, in Koan's order of its members. <see cref="Refusal"/> is the one rule every change of standing or role answers to: the roles
 /// stand in Koan's one order (<see cref="Role.Position"/>) and the operator above every role, and a participant changes
 /// the standing or roles only of someone whose highest role stands below theirs (<see cref="RoleBag.Highest"/>), never
-/// their own, never the operator's; they give and take only the roles they manage (<see cref="Manages"/>).
-/// <see cref="Offered"/> asks the same rule for what a page offers, so a page offers only what the command would
-/// do.</summary>
+/// their own, never the operator's; they give and take only the roles they manage (<see cref="Manages"/>). What follows
+/// what is <see cref="Participant.Standings"/>'s. <see cref="Offered"/> asks the same rule and the same table for what a
+/// page offers, so a page offers only what the command would do.</summary>
 public static class People
 {
     /// <summary>The most participants one page holds.</summary>
@@ -33,16 +33,6 @@ public static class People
 
     /// <summary>The purpose a cursor is sealed under, which no other protected value shares.</summary>
     public const string CursorPurpose = "Participant.Cursor";
-
-    /// <summary>The standing verbs, as a page offers them and a row's <c>can</c> lists them.</summary>
-    public static class Verb
-    {
-        public const string TimeOut = "time-out";
-
-        public const string Ban = "ban";
-
-        public const string Lift = "lift";
-    }
 
     /// <summary>The seeded roles given and taken here, by the word a form sends (<see cref="Roles.Word(string)"/>).</summary>
     public const string Moderator = "moderator";
@@ -69,14 +59,23 @@ public static class People
 
     public static readonly Reason NotADuration = Reason.Invalid(PeopleController.ForField, "A timeout lasts an hour, a day or a week: send hour, day or week.");
 
+    /// <summary>The standings a change gives, by the word <c>to</c> takes: each that <see cref="Participant.Standings"/> goes to.</summary>
+    public static readonly IReadOnlyList<Standing> Given = [.. Participant.Standings.Select(transition => transition.To).Distinct()];
+
+    public static readonly Reason NotAStanding = Reason.Invalid(PeopleController.ToField,
+        "Give one of the standings a participant's can lists: " + Render.Wording.Joined([.. Given.Select(Word)], "or") + ".");
+
+    /// <summary>The standing a change's word gives, one of <see cref="Given"/>; null for any other word.</summary>
+    public static Standing? Giving(string? word) => Given.Where(standing => Word(standing) == word).Select(standing => (Standing?)standing).FirstOrDefault();
+
     /// <summary>How long a timeout lasts, by the word a form sends, shortest first.</summary>
-    public static readonly IReadOnlyList<(string Word, TimeSpan Length)> Durations =
-        [("hour", TimeSpan.FromHours(1)), ("day", TimeSpan.FromDays(1)), ("week", TimeSpan.FromDays(7))];
+    public static readonly IReadOnlyList<(string Word, TimeSpan Length, string Label)> Durations =
+        [("hour", TimeSpan.FromHours(1), "For an hour"), ("day", TimeSpan.FromDays(1), "For a day"), ("week", TimeSpan.FromDays(7), "For a week")];
 
     /// <summary>The length a duration's word names; null for any other word.</summary>
     public static TimeSpan? Length(string? word)
     {
-        foreach (var (named, length) in Durations)
+        foreach (var (named, length, _) in Durations)
         {
             if (named == word) return length;
         }
@@ -94,15 +93,15 @@ public static class People
     /// <summary>Null where the reader <paramref name="actorId"/>, who holds <paramref name="actor"/> in the place, may
     /// change <paramref name="target"/>'s standing (<see cref="Bit.ManageStanding"/>) or roles
     /// (<see cref="Bit.ManageRoles"/>), Koan's bag for the target being <paramref name="targetBag"/>; otherwise why not,
-    /// the first of: the verb's gate in the place; the target is the reader; an applicant, decided among the
-    /// applications; the operator, whom no one changes; a target whose highest role does not stand below the reader's,
+    /// the first of: the verb's gate in the place; the target is the reader; for a change of roles, an applicant, admitted
+    /// among the applications first; the operator, whom no one changes; a target whose highest role does not stand below the reader's,
     /// the operator standing above every role. The target's standing is read as it stands at <paramref name="now"/>.</summary>
     public static Reason? Refusal(Capabilities actor, string actorId, Participant target, RoleBag targetBag, TangentSpace space, Bit verb,
         DateTimeOffset now)
     {
         if (actor.Gate(verb) is { } gate) return gate;
         if (target.Id == actorId) return Themselves;
-        if (target.StandingAt(now) is Standing.Applied or Standing.Declined) return Participant.NotAdmitted;
+        if (verb == Bit.ManageRoles && target.StandingAt(now) is Standing.Applied or Standing.Declined) return Participant.NotAdmitted;
         if (target.Id == space.OperatorId) return Operator;
         return Height(actorId, actor.Bag, space) > Height(target.Id, targetBag, space) ? null : NotBelow;
     }
@@ -124,33 +123,25 @@ public static class People
     /// <summary>Whether <paramref name="actor"/> holds each of <paramref name="bits"/> in the place.</summary>
     public static bool Holds(Capabilities actor, Bit bits) => actor.Holds(bits);
 
-    /// <summary>What a reader may do to one participant, by <see cref="Refusal"/>: the standing verbs (<see cref="Verb"/>),
-    /// in <c>can</c>, and the roles they may give and take, each by its word and its name.</summary>
-    public sealed record Offer(IReadOnlyList<string> Can, IReadOnlyList<PeoplePage.Offered> Give, IReadOnlyList<PeoplePage.Offered> Take)
+    /// <summary>What a reader may do to one participant, by <see cref="Refusal"/>: the rows of
+    /// <see cref="Participant.Standings"/> they may give them, and the roles they may give and take, each by its word and its name.</summary>
+    public sealed record Offer(IReadOnlyList<Participant.Transition> Gives, IReadOnlyList<PeoplePage.Offered> Give, IReadOnlyList<PeoplePage.Offered> Take)
     {
         public static readonly Offer None = new([], [], []);
     }
 
     /// <summary>What <paramref name="actorId"/>, holding <paramref name="actor"/> in the place, may do to
-    /// <paramref name="target"/>, in <paramref name="targetBag"/>, at <paramref name="now"/>: time out and ban someone
-    /// admitted, lift and ban someone timed out, lift someone banned; of the roles of <paramref name="given"/> given here
+    /// <paramref name="target"/>, in <paramref name="targetBag"/>, at <paramref name="now"/>: the rows of
+    /// <see cref="Participant.Standings"/> from the one they stand at; of the roles of <paramref name="given"/> given here
     /// (<see cref="Roles.Given"/>) that they manage and whose permissions they hold, take each from someone who holds it,
     /// and give each to someone not banned who does not. Nothing for a visitor.</summary>
     public static Offer Offered(Capabilities actor, string? actorId, Participant target, RoleBag targetBag, TangentSpace space,
         IReadOnlyList<Role> given, DateTimeOffset now)
     {
         if (actorId is null) return Offer.None;
-        var can = new List<string>();
-        if (Refusal(actor, actorId, target, targetBag, space, Bit.ManageStanding, now) is null)
-        {
-            can.AddRange(target.StandingAt(now) switch
-            {
-                Standing.Admitted => [Verb.TimeOut, Verb.Ban],
-                Standing.TimedOut => [Verb.Lift, Verb.Ban],
-                Standing.Banned => [Verb.Lift],
-                _ => []
-            });
-        }
+        IReadOnlyList<Participant.Transition> gives = Refusal(actor, actorId, target, targetBag, space, Bit.ManageStanding, now) is null
+            ? [.. Participant.From(target.StandingAt(now))]
+            : [];
 
         var give = new List<PeoplePage.Offered>();
         var take = new List<PeoplePage.Offered>();
@@ -164,7 +155,7 @@ public static class People
             }
         }
 
-        return new Offer(can, give, take);
+        return new Offer(gives, give, take);
     }
 
     /// <summary>What a change of standing or role judges by, read inside the command: the place's row, what the actor
@@ -187,26 +178,6 @@ public static class People
             return new Judged(space, actor, null, null, NoOne);
         var bag = await AppHost.GetRequiredService<RoleCollection>(nameof(People)).Bag(target.Id, authenticated: true, ct);
         return new Judged(space, actor, target, bag, Refusal(actor, actorId, target, bag, space, verb, now));
-    }
-
-    /// <summary>One change of standing, by <paramref name="actorId"/>, judged by <see cref="Judge"/>: where
-    /// <paramref name="change"/> changes the participant's standing at <paramref name="at"/>, or now, it appends one
-    /// <see cref="EventKind.StandingChanged"/> with the actor, the participant as its target, the standing it left them
-    /// with and the one they held before, so their door tells them; a change that changes nothing writes nothing, and a
-    /// refusal the participant throws refuses it.</summary>
-    public static async Task<Outcome<Participant>> ChangeStanding(string actorId, string participantId,
-        Func<Participant, DateTimeOffset, bool> change, DateTimeOffset? at, CancellationToken ct)
-    {
-        var now = at ?? DateTimeOffset.UtcNow;
-        var judged = await Judge(actorId, participantId, Bit.ManageStanding, now, ct);
-        if (judged.Refusal is { } refusal) return new Outcome<Participant>.Refused(refusal);
-        var target = judged.Target!;
-        var before = target.StandingAt(now);
-        if (!change(target, now)) return new Outcome<Participant>.Done(target);
-        await target.Save(ct);
-        await Event.Append(EventKind.StandingChanged, now, ct, actorId: actorId, targetId: target.Id, standing: target.Standing,
-            before: before);
-        return new Outcome<Participant>.Done(target);
     }
 
     /// <summary>Where a participant stands among the roles: where the highest role of their bag stands in Koan's order,

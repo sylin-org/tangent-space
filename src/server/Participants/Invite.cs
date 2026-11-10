@@ -10,7 +10,7 @@ namespace Tangent.Participants;
 /// admission says apply: the place exists for the actor, who holds <see cref="Bit.ManageStanding"/>, or is refused with the
 /// gate word; admission says apply, or the command is refused, since whoever signs in is admitted already
 /// (<see cref="Joins"/>). Someone bound to that account who applied, waiting or declined, is admitted at once, as
-/// <see cref="Admit"/> admits them; anyone else bound to it arrived already and is refused (<see cref="Arrived"/>). An
+/// <see cref="SetStanding"/> admits them; anyone else bound to it arrived already and is refused (<see cref="Arrived"/>). An
 /// invitation already waiting for the account is answered as it stands, so a repeat writes nothing.</summary>
 public sealed record Invite(string ActorId, string Did, string Handle, string? Name, string? Avatar, DateTimeOffset? At = null) : ICommand<Invite.Result>
 {
@@ -36,15 +36,12 @@ public sealed record Invite(string ActorId, string Did, string Handle, string? N
         {
             var now = At ?? DateTimeOffset.UtcNow;
             if (bound.StandingAt(now) is not (Standing.Applied or Standing.Declined)) return new Outcome<Result>.Refused(Arrived(Handle));
-            switch (await Applications.Decide(ActorId, bound.Id, (applicant, at) => applicant.Admit(at), now, ct))
+            return await new SetStanding(ActorId, bound.Id, Standing.Admitted, At: now).Run(ct) switch
             {
-                case Outcome<Participant>.Done { Result: var admitted }:
-                    await MemberRole.Join(admitted, ct);
-                    return new Outcome<Result>.Done(new Result(null, admitted));
-                case Outcome<Participant>.Refused { Reason: var reason }:
-                    return new Outcome<Result>.Refused(reason);
-            }
-
+                Outcome<Participant>.Done { Result: var admitted } => new Outcome<Result>.Done(new Result(null, admitted)),
+                Outcome<Participant>.Refused { Reason: var reason } => new Outcome<Result>.Refused(reason),
+                var other => throw new InvalidOperationException($"Admitting an applicant answered {other}.")
+            };
         }
 
         if (await Invitation.Get(Did, ct) is { } waiting) return new Outcome<Result>.Done(new Result(waiting, null));

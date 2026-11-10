@@ -60,10 +60,14 @@ public sealed class TangentModule : KoanModule
         // The data folder is marked in use while the Tangent Space runs, so a restore refuses it.
         services.AddHostedService<RunningMark>();
 
-        // What every row of a Post, a Tangent and the place holds, judged wherever it is saved: a command, a seed, a snapshot.
+        // What every row of a Post, a Tangent, the place and a participant holds, judged wherever it is saved: a command, a seed,
+        // a snapshot; and the one way a standing changes.
         Posts.Post.Lifecycle.BeforeUpsert(Posts.Post.Holds);
         Tangents.Tangent.Lifecycle.BeforeUpsert(Tangents.Tangent.Holds);
         TangentSpace.Lifecycle.BeforeUpsert(TangentSpace.Holds);
+        Participants.Participant.Lifecycle.BeforeUpsert(Participants.Participant.Holds)
+            .Transitions(participant => participant.Standing, Participants.People.Word,
+                [.. Participants.Participant.Standings.Select(transition => (transition.From, transition.To))]);
 
         // The Doorway judges every route that declares its bit, before anything is bound, and a 401 names the proof door.
         services.AddScoped<Koan.Web.Authorization.IAuthorizationProvider, Access.Doorway>();

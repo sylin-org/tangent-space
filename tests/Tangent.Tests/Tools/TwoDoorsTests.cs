@@ -395,10 +395,10 @@ public sealed class TwoDoorsTests
         Assert.True((await Post.Get(root.Id, Cancellation))!.Removed);
 
         // People, the same.
-        var timedOut = await moTools.Call("time_out", new { participant = Bea, @for = "hour" });
+        var timedOut = await moTools.Call("set_standing", new { participant = Bea, to = "timed-out", @for = "hour" });
         Assert.Equal((200, "timed-out"), (timedOut.Status, timedOut.Structured!.Value.GetProperty("standing").GetString()));
-        var refused = await doors.AdaTools.Call("time_out", new { participant = Bea, @for = "hour" });
-        var refusedHttp = await doors.Posted(PeopleController.TimeOutPath, new { participant = Bea, @for = "hour" });
+        var refused = await doors.AdaTools.Call("set_standing", new { participant = Bea, to = "timed-out", @for = "hour" });
+        var refusedHttp = await doors.Posted(PeopleController.StandingPath, new { participant = Bea, to = "timed-out", @for = "hour" });
         Assert.Equal(HttpStatusCode.Forbidden, refusedHttp.Status);
         SameRefusal(refusedHttp, refused);
     }

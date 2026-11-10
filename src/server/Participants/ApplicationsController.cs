@@ -31,17 +31,14 @@ public sealed record ApplicationsInput(
 /// invitations (<see cref="Invitations.Read"/>), continued from the cursor in <c>invited</c>. The Doorway refuses it, before
 /// anything is bound, to whoever does not hold <see cref="Bit.ManageStanding"/>, <c>401</c> to sign in and <c>403</c>
 /// otherwise, a page as the refusal's page and a JSON request as its problem, and answers a reader for whom the place does
-/// not exist what an address with nothing there receives. Deciding and inviting are <see cref="ApplicationVerbsController"/>'s.</summary>
+/// not exist what an address with nothing there receives. An applicant is decided as any standing is given, at
+/// <see cref="PeopleController.StandingPath"/>; inviting is <see cref="ApplicationVerbsController"/>'s.</summary>
 [Route(Path)]
 [Declared]
 [Managing]
 public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : EntityController<Participant>, IRequestOptionsHook<Participant>, IEmitHook<Participant>
 {
     public const string Path = "/settings/applications";
-
-    public const string AdmitPath = Path + "/admit";
-
-    public const string DeclinePath = Path + "/decline";
 
     public const string InvitePath = Path + "/invite";
 
@@ -56,13 +53,10 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : EntityContr
     /// <summary>The query parameter that carries the cursor of the page of invitations to continue from.</summary>
     public const string InvitedQuery = "invited";
 
-    /// <summary>The field that names the applicant decided.</summary>
-    public const string ParticipantField = "participant";
-
     /// <summary>The query parameter that carries the cursor of the page to continue from.</summary>
     public const string After = "after";
 
-    /// <summary>The query parameter, and the field of a decision, that narrows the applications to those that wait.</summary>
+    /// <summary>The query parameter that narrows the applications to those that wait.</summary>
     public const string StateQuery = "state";
 
     /// <summary>The order the applications are read in, newest application first.</summary>
@@ -79,7 +73,7 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : EntityContr
 
     [HttpGet("")]
     [Tool(Name = "read_applications")]
-    [Description("Read who waits to be admitted and who was declined, or with state waiting those who wait alone, a page at a time, for whoever holds ManageStanding; where admission says apply, every application's page also lists who is invited. Then call admit or decline on an applicant's id, invite on a Bluesky handle, or withdraw_invitation on an invitation's account.")]
+    [Description("Read who waits to be admitted and who was declined, or with state waiting those who wait alone, a page at a time, for whoever holds ManageStanding; where admission says apply, every application's page also lists who is invited. Then call set_standing on an applicant's id with a standing in their can, invite on a Bluesky handle, or withdraw_invitation on an invitation's account.")]
     [Needs(Bit.ManageStanding)]
     [Pagination(DefaultSize = Applications.PageSize, MaxSize = Applications.PageSize, DefaultSort = Newest)]
     [Input<ApplicationsInput>]
@@ -124,14 +118,6 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : EntityContr
         return await Compose(http, baseUrl, waiting, page.Items, next, false, null, ct);
     }
 
-    /// <summary>The form that decides an application at <paramref name="action"/>: admit or decline, by the applicant's id,
-    /// coming back to those that wait where <paramref name="waiting"/>.</summary>
-    private static Form Deciding(string action, bool waiting)
-    {
-        var form = Form.Posting(action, new Form.Field(ParticipantField, Holds.Applicant));
-        return waiting ? form.Given(StateQuery, ApplicationsPage.Waiting) : form;
-    }
-
     /// <summary>One page of the applications, of those that wait alone where <paramref name="waiting"/>: the rows read and the
     /// sealed cursor of the next page; where admission says apply, one page of the invitations too, continued from
     /// <paramref name="invited"/>, with the forms that invite and withdraw.</summary>
@@ -143,6 +129,7 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : EntityContr
         var baseAddress = baseUrl.Resolve(http);
         var here = baseUrl.PathBase + Path + (waiting ? "?" + StateQuery + "=" + ApplicationsPage.Waiting : "");
         var applications = waiting ? WaitingAddress(baseAddress) : baseAddress + Path;
+        var now = DateTimeOffset.UtcNow;
 
         var space = await TangentSpace.Get(TangentSpace.SingleRow, ct) ?? TangentSpace.Unestablished();
         var inviting = space.Admission == Admission.Apply;
@@ -155,15 +142,14 @@ public sealed class ApplicationsController(KoanWebBaseUrl baseUrl) : EntityContr
                 var (name, handle) = (applicant.ShownName(), applicant.ShownHandle());
                 return new ApplicationsPage.Applicant(applicant.Id, name, handle, baseAddress + "/p/" + Uri.EscapeDataString(handle),
                     applicant.Standing == Standing.Declined ? ApplicationsPage.Declined : ApplicationsPage.Waiting,
-                    applicant.AppliedAt ?? DateTimeOffset.MinValue);
+                    applicant.AppliedAt ?? DateTimeOffset.MinValue, [.. Participant.From(applicant.StandingAt(now))]);
             }).ToList(),
             next is null ? null : applications + (waiting ? "&" : "?") + After + "=" + Uri.EscapeDataString(next),
             continued,
             applications,
             waiting ? ApplicationsPage.Waiting : "",
             baseAddress + Path,
-            Deciding(baseAddress + AdmitPath, waiting),
-            Deciding(baseAddress + DeclinePath, waiting),
+            PeopleController.Giving(baseAddress, here[(baseUrl.PathBase.Value?.Length ?? 0)..]),
             place.Can,
             space.Name,
             baseAddress + "/",

@@ -36,12 +36,16 @@ public sealed record PeoplePage(
     /// <summary>One participant as the reader of the people finds them: their id, the name to show, their handle, their
     /// profile's address, their kind (<c>person</c> or <c>agent</c>), their standing (<c>admitted</c>,
     /// <c>timed-out</c>, <c>banned</c>, or for an applicant <c>applied</c> or <c>declined</c>) with when a timeout
-    /// ends, the roles they hold by name, highest first, and what the reader may do to them: the standing verbs in
-    /// <see cref="Can"/> (<c>time-out</c>, <c>ban</c>, <c>lift</c>) and the roles they may <see cref="Give"/> and
-    /// <see cref="Take"/>, lowest first. Nothing is offered that the reader may not do.</summary>
-    public sealed record Listed(Render.Person Person, string Standing, DateTimeOffset? Until, IReadOnlyList<string> Roles, IReadOnlyList<string> Can,
-        IReadOnlyList<Offered> Give, IReadOnlyList<Offered> Take)
+    /// ends, the roles they hold by name, highest first, and what the reader may do to them: the standings they may give
+    /// them in <see cref="Can"/>, drawn from <see cref="Gives"/>, the rows of <see cref="Participant.Standings"/> from where
+    /// they stand, and the roles they may <see cref="Give"/> and <see cref="Take"/>, lowest first. Nothing is offered that
+    /// the reader may not do.</summary>
+    public sealed record Listed(Render.Person Person, string Standing, DateTimeOffset? Until, IReadOnlyList<string> Roles,
+        [property: Newtonsoft.Json.JsonIgnore] IReadOnlyList<Participant.Transition> Gives, IReadOnlyList<Offered> Give, IReadOnlyList<Offered> Take)
     {
+        /// <summary>The standings the reader may give them, by the word <c>to</c> takes.</summary>
+        public IReadOnlyList<string> Can => Participant.Can(Gives);
+
         /// <summary>Where they stand, in words, with when a timeout ends.</summary>
         [Newtonsoft.Json.JsonIgnore]
         public string Stands => Until is { } until ? "timed out until " + Render.Wording.Until(until) : Standing;
@@ -123,39 +127,20 @@ public sealed record PeoplePage(
 }
 
 /// <summary>The forms of the inline changes of standing and roles, each taking the participant's id in
-/// <c>participant</c> and the page it returns to in <c>back</c>: <see cref="TimeOut"/>, with how long in <c>for</c>, one
-/// of <see cref="Durations"/>, <see cref="Ban"/> and <see cref="Lift"/>, present where the reader holds
-/// <c>ManageStanding</c>; <see cref="Give"/> and <see cref="Take"/>, with the role in <c>role</c>, present where they hold
-/// <c>ManageRoles</c>. A participant's own row says which of them the reader may use on them.</summary>
-public sealed record PeopleForms(Form? TimeOut, Form? Ban, Form? Lift, Form? Give, Form? Take, IReadOnlyList<string> Durations)
+/// <c>participant</c>: <see cref="Standing"/>, with the standing in <c>to</c> and for a timeout how long in <c>for</c>, sending
+/// a page's form on to the page it names in <c>return</c>, present where the reader holds <c>ManageStanding</c>;
+/// <see cref="Give"/> and <see cref="Take"/>, with the role in <c>role</c> and the page they return to in <c>back</c>, present
+/// where they hold <c>ManageRoles</c>. A participant's own row says which of them the reader may use on them.</summary>
+public sealed record PeopleForms(Form? Standing, Form? Give, Form? Take)
 {
-    /// <summary>What the reader may change of <paramref name="person"/>, inline, each change a form naming them: lift, at once;
-    /// time out, which opens in place to say what a timeout leaves and offers its durations; each role given or taken; and ban,
-    /// which opens in place to say what a ban does, confirmed there.</summary>
+    /// <summary>What the reader may change of <paramref name="person"/>, inline, each change a form naming them: each role
+    /// given or taken, then each standing they may give them (<see cref="Buttons"/>).</summary>
     public IReadOnlyList<Render.IPart> For(PeoplePage.Listed person)
     {
         var answers = new List<Render.IPart>();
         Form Naming(Form form) => form.Value(PeopleController.BackField) is { } back
             ? form.Given(PeopleController.ParticipantField, person.Person.Id).Given(PeopleController.BackField, back)
             : form.Given(PeopleController.ParticipantField, person.Person.Id);
-        if (person.Can.Contains(People.Verb.Lift) && Lift is { } lift)
-            answers.Add(Naming(lift) with { Tool = "lift", Submit = person.Standing == People.Word(Standing.Banned) ? "Lift the ban" : "Lift the timeout" });
-        if (person.Can.Contains(People.Verb.TimeOut) && TimeOut is { } timeOut)
-            answers.Add(Naming(timeOut).Changing(PeopleController.ForField, item => item with
-            {
-                As = Form.Input.Switch,
-                Choices = Durations.Select(duration => new Form.Choice(duration, duration switch
-                {
-                    "hour" => "For an hour",
-                    "day" => "For a day",
-                    "week" => "For a week",
-                    _ => "For a " + duration
-                })).ToList()
-            }) with
-            {
-                Tool = "time-out", Opens = "Time out",
-                Confirm = "They keep reading and reporting here, and post, reply and start nothing until it ends; you can lift it sooner."
-            });
         if (Give is { } give)
             answers.AddRange(person.Give.Select(role => (Render.IPart)(Naming(give).Given(PeopleController.RoleField, role.Word) with
             {
@@ -166,11 +151,28 @@ public sealed record PeopleForms(Form? TimeOut, Form? Ban, Form? Lift, Form? Giv
             {
                 Tool = "take-role", Submit = "Take " + role.Name + " role", Quiet = true
             })));
-        if (person.Can.Contains(People.Verb.Ban) && Ban is { } ban)
-            answers.Add(Naming(ban) with
-            {
-                Tool = "ban", Opens = "Ban", Submit = "Ban", Confirm = "This place disappears for them, every page and every stream, until you lift the ban."
-            });
+        if (Standing is { } standing) answers.AddRange(Buttons(standing, person.Person.Id, person.Gives));
         return answers;
+    }
+
+    /// <summary>A button for each of <paramref name="gives"/>, rows of <see cref="Participant.Standings"/>, on
+    /// <paramref name="form"/>, the form that gives a standing (<see cref="PeopleController.Giving"/>), naming the participant
+    /// <paramref name="id"/>: its word, and where the row confirms, opening in place to say its sentence, confirmed there; a
+    /// timeout offering its lengths, each one press. Each carries the tool it sends, <c>set_standing</c>.</summary>
+    public static IEnumerable<Render.IPart> Buttons(Form form, string id, IEnumerable<Participant.Transition> gives)
+    {
+        foreach (var transition in gives)
+        {
+            var to = People.Word(transition.To);
+            var button = form.Given(PeopleController.ParticipantField, id).Given(PeopleController.ToField, to) with { Tool = PeopleController.StandingTool };
+            if (transition.Confirm is { } confirm) button = button with { Opens = transition.Button, Confirm = confirm };
+            yield return transition.To == Participants.Standing.TimedOut
+                ? button.Changing(PeopleController.ForField, field => field with
+                {
+                    As = Form.Input.Switch,
+                    Choices = People.Durations.Select(duration => new Form.Choice(duration.Word, duration.Label)).ToList()
+                })
+                : button.Keeping(PeopleController.ParticipantField, PeopleController.ToField) with { Submit = transition.Button };
+        }
     }
 }
