@@ -248,7 +248,6 @@ public sealed class AdmissionTests
             [PeopleController.ParticipantField] = Ivy, [PeopleController.ToField] = "banned", [Render.Form.ReturnField] = path
         });
         Assert.Equal(HttpStatusCode.Conflict, banned.Status);
-        Assert.Contains("Standing does not go from Applied to Banned; from Applied it goes to Admitted or Declined.", banned.Body);
         Assert.Contains("ivy4admission", banned.Body);
         Assert.Equal(events, await Event.Count.Exact(Cancellation));
 

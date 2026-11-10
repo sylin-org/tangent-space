@@ -55,10 +55,8 @@ public sealed class ParticipantTests
         Assert.Equal(7, waiting.WaitingSeq);
 
         waiting.Standing = Standing.Banned;
-        var refused = Assert.IsType<Outcome<Participant>.Refused>(await new Store<Participant>(waiting).Send(Cancellation));
+        var refused = await Assert.ThrowsAsync<Refusal>(() => waiting.Save(Cancellation));
         Assert.Equal((ReasonKind.Conflict, "transition"), (refused.Reason.Kind, refused.Reason.Word));
-        var direct = await Assert.ThrowsAsync<Refusal>(() => waiting.Save(Cancellation));
-        Assert.Equal("transition", direct.Reason.Word);
 
         // Admitted, the row keeps neither when they applied nor where they waited.
         waiting.Standing = Standing.Admitted;

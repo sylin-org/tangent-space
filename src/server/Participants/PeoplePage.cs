@@ -44,7 +44,7 @@ public sealed record PeoplePage(
         [property: Newtonsoft.Json.JsonIgnore] IReadOnlyList<Participant.Transition> Gives, IReadOnlyList<Offered> Give, IReadOnlyList<Offered> Take)
     {
         /// <summary>The standings the reader may give them, by the word <c>to</c> takes.</summary>
-        public IReadOnlyList<string> Can => [.. Gives.Select(transition => Participants.People.Word(transition.To))];
+        public IReadOnlyList<string> Can => Participant.Can(Gives);
 
         /// <summary>Where they stand, in words, with when a timeout ends.</summary>
         [Newtonsoft.Json.JsonIgnore]
@@ -158,25 +158,19 @@ public sealed record PeopleForms(Form? Standing, Form? Give, Form? Take)
     /// <summary>A button for each of <paramref name="gives"/>, rows of <see cref="Participant.Standings"/>, on
     /// <paramref name="form"/>, the form that gives a standing (<see cref="PeopleController.Giving"/>), naming the participant
     /// <paramref name="id"/>: its word, and where the row confirms, opening in place to say its sentence, confirmed there; a
-    /// timeout offering its lengths, each one press. Each is classed by the standing it gives.</summary>
+    /// timeout offering its lengths, each one press. Each carries the tool it sends, <c>set_standing</c>.</summary>
     public static IEnumerable<Render.IPart> Buttons(Form form, string id, IEnumerable<Participant.Transition> gives)
     {
         foreach (var transition in gives)
         {
             var to = People.Word(transition.To);
-            var button = form.Given(PeopleController.ParticipantField, id).Given(PeopleController.ToField, to) with { Tool = to };
+            var button = form.Given(PeopleController.ParticipantField, id).Given(PeopleController.ToField, to) with { Tool = PeopleController.StandingTool };
             if (transition.Confirm is { } confirm) button = button with { Opens = transition.Button, Confirm = confirm };
             yield return transition.To == Participants.Standing.TimedOut
                 ? button.Changing(PeopleController.ForField, field => field with
                 {
                     As = Form.Input.Switch,
-                    Choices = People.Durations.Select(duration => new Form.Choice(duration.Word, duration.Word switch
-                    {
-                        "hour" => "For an hour",
-                        "day" => "For a day",
-                        "week" => "For a week",
-                        _ => "For a " + duration.Word
-                    })).ToList()
+                    Choices = People.Durations.Select(duration => new Form.Choice(duration.Word, duration.Label)).ToList()
                 })
                 : button.Keeping(PeopleController.ParticipantField, PeopleController.ToField) with { Submit = transition.Button };
         }

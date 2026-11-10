@@ -65,6 +65,9 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
 
     public const string StandingPath = Path + "/standing";
 
+    /// <summary>The name a standing's form carries, its tool's (<c>set_standing</c>) with hyphens.</summary>
+    public const string StandingTool = "set-standing";
+
     public const string GivePath = Path + "/give";
 
     public const string TakePath = Path + "/take";
@@ -183,8 +186,8 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
     /// <c>return</c> names them, those that wait where it names those, and the people otherwise.</summary>
     private async Task<object?> Again(string personId, Problem refused, CancellationToken ct)
     {
-        var onward = Request.Form[Form.ReturnField].ToString();
-        if (new PathString(onward.Split('?')[0]) == ApplicationsController.Path)
+        var onward = refused.Sent?.GetValueOrDefault(Form.ReturnField)?.LastOrDefault() ?? "";
+        if (onward.Split('?')[0] == ApplicationsController.Path)
             return await ApplicationsController.First(HttpContext, baseUrl, onward == ApplicationsController.WaitingAddress(""), ct) with { Failure = refused.Detail };
         return await Page(Here.Of(HttpContext).Around, personId, Narrowed.None, null, null, null, ct) with { Failure = refused.Detail };
     }

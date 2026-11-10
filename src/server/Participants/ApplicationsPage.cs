@@ -42,7 +42,7 @@ public sealed record ApplicationsPage(
         [property: Newtonsoft.Json.JsonIgnore] IReadOnlyList<Participant.Transition> Gives)
     {
         /// <summary>The standings the reader may give them, by the word <c>to</c> takes.</summary>
-        public IReadOnlyList<string> Can => [.. Gives.Select(transition => People.Word(transition.To))];
+        public IReadOnlyList<string> Can => Participant.Can(Gives);
     }
 
     /// <summary>One account invited: its DID, its handle and the name and picture its public profile showed, when it was

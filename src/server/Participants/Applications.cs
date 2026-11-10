@@ -20,9 +20,6 @@ public static class Applications
     /// <summary>The answer to a decider for whom the place does not exist.</summary>
     public static readonly Reason NoPlace = Reason.Absent("No Tangent Space is here.");
 
-    /// <summary>The answer to a decision about someone who never arrived.</summary>
-    public static readonly Reason NoApplicant = Reason.Absent("No one by that id has arrived here.");
-
     /// <summary>The applications a list reads: those that wait alone where <paramref name="waiting"/>, otherwise every one,
     /// waiting or declined.</summary>
     public static Expression<Func<Participant, bool>> Among(bool waiting)

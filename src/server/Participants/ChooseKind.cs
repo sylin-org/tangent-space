@@ -10,7 +10,7 @@ public sealed record ChooseKind(string PersonId, ParticipantKind Kind) : IComman
 {
     public async Task<Outcome<Participant>> Run(CancellationToken ct)
     {
-        if (await Participant.Get(PersonId, ct) is not { } participant) return new Outcome<Participant>.Refused(Applications.NoApplicant);
+        if (await Participant.Get(PersonId, ct) is not { } participant) return new Outcome<Participant>.Refused(People.NoOne);
         if (participant.Choose(Kind)) await participant.Save(ct);
         return new Outcome<Participant>.Done(participant);
     }

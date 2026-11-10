@@ -66,24 +66,16 @@ public static class People
         "Give one of the standings a participant's can lists: " + Render.Wording.Joined([.. Given.Select(Word)], "or") + ".");
 
     /// <summary>The standing a change's word gives, one of <see cref="Given"/>; null for any other word.</summary>
-    public static Standing? Giving(string? word)
-    {
-        foreach (var standing in Given)
-        {
-            if (Word(standing) == word) return standing;
-        }
-
-        return null;
-    }
+    public static Standing? Giving(string? word) => Given.Where(standing => Word(standing) == word).Select(standing => (Standing?)standing).FirstOrDefault();
 
     /// <summary>How long a timeout lasts, by the word a form sends, shortest first.</summary>
-    public static readonly IReadOnlyList<(string Word, TimeSpan Length)> Durations =
-        [("hour", TimeSpan.FromHours(1)), ("day", TimeSpan.FromDays(1)), ("week", TimeSpan.FromDays(7))];
+    public static readonly IReadOnlyList<(string Word, TimeSpan Length, string Label)> Durations =
+        [("hour", TimeSpan.FromHours(1), "For an hour"), ("day", TimeSpan.FromDays(1), "For a day"), ("week", TimeSpan.FromDays(7), "For a week")];
 
     /// <summary>The length a duration's word names; null for any other word.</summary>
     public static TimeSpan? Length(string? word)
     {
-        foreach (var (named, length) in Durations)
+        foreach (var (named, length, _) in Durations)
         {
             if (named == word) return length;
         }

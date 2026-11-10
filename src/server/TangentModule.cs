@@ -66,7 +66,8 @@ public sealed class TangentModule : KoanModule
         Tangents.Tangent.Lifecycle.BeforeUpsert(Tangents.Tangent.Holds);
         TangentSpace.Lifecycle.BeforeUpsert(TangentSpace.Holds);
         Participants.Participant.Lifecycle.BeforeUpsert(Participants.Participant.Holds)
-            .Transitions(participant => participant.Standing, [.. Participants.Participant.Standings.Select(transition => (transition.From, transition.To))]);
+            .Transitions(participant => participant.Standing, Participants.People.Word,
+                [.. Participants.Participant.Standings.Select(transition => (transition.From, transition.To))]);
 
         // The Doorway judges every route that declares its bit, before anything is bound, and a 401 names the proof door.
         services.AddScoped<Koan.Web.Authorization.IAuthorizationProvider, Access.Doorway>();

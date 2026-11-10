@@ -195,13 +195,20 @@ public sealed class PeopleTests
         // the page again with its sentence.
         var timedOut = await Json(mo, path, PeopleController.StandingPath, new { participant = Ada, to = "timed-out", @for = "day" });
         Assert.Equal((HttpStatusCode.Conflict, "transition"), (timedOut.Status, timedOut.Word));
-        Assert.Equal("Standing does not go from Banned to TimedOut; from Banned it goes to Admitted.", timedOut.Json.GetProperty("detail").GetString());
+        Assert.Equal("Standing does not go from banned to timed-out; from banned it goes to admitted.", timedOut.Json.GetProperty("detail").GetString());
         var formRefused = await Form(mo, path, PeopleController.StandingPath, new Dictionary<string, string>
         {
             [PeopleController.ParticipantField] = Ada, [PeopleController.ToField] = "timed-out", [PeopleController.ForField] = "day", [Render.Form.ReturnField] = path
         });
         Assert.Equal(HttpStatusCode.Conflict, formRefused.Status);
-        Assert.Contains("Standing does not go from Banned to TimedOut", formRefused.Body);
+        Assert.Contains("ada4writes.example", formRefused.Body);
+        // A return that names no path reads the people again.
+        var nowhere = await Form(mo, path, PeopleController.StandingPath, new Dictionary<string, string>
+        {
+            [PeopleController.ParticipantField] = Ada, [PeopleController.ToField] = "declined", [Render.Form.ReturnField] = "abc"
+        });
+        Assert.Equal(HttpStatusCode.Conflict, nowhere.Status);
+        Assert.Contains("ada4writes.example", nowhere.Body);
         Assert.Equal(Standing.Banned, (await Participant.Get(Ada, Cancellation))!.Standing);
 
         Assert.Equal(HttpStatusCode.OK, (await Json(mo, path, PeopleController.StandingPath, new { participant = Ada, to = "admitted" })).Status);

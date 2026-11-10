@@ -155,6 +155,9 @@ public sealed class Participant : Entity<Participant>, IKoanJob<Participant>
     /// <summary>The changes <see cref="Standings"/> offers from the standing <paramref name="from"/>, in its order.</summary>
     public static IEnumerable<Transition> From(Standing from) => Standings.Where(transition => transition.From == from);
 
+    /// <summary>The standings <paramref name="gives"/> give, by the word <c>to</c> takes: a row's <c>can</c>.</summary>
+    public static IReadOnlyList<string> Can(IEnumerable<Transition> gives) => [.. gives.Select(transition => People.Word(transition.To))];
+
     /// <summary>What every participant's row holds, however it is written — an arrival, a change of standing, a seed —
     /// compiled as it is saved, as its lifecycle (<see cref="TangentModule"/>): a timeout's end only on one timed out, when
     /// they applied only on an applicant, waiting or declined, and <see cref="WaitingSeq"/> their arrival's sequence while
