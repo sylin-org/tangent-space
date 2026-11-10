@@ -32,11 +32,14 @@ public sealed class TangentsEndpointTests
             or HttpStatusCode.BadRequest or HttpStatusCode.Forbidden);
         Assert.Null(await Tangent.Get("many", Cancellation));
 
-        // No caller names a partition, and a list takes no word it does not declare.
+        // No caller names a partition, and a list honours no word it does not declare: a filter that would narrow it is ignored.
         var partitioned = await Send(leo.Client, HttpMethod.Get, "/t?set=audit", json: true);
         Assert.Equal((HttpStatusCode.BadRequest, "invalid"), (partitioned.Status, partitioned.Kind));
         Assert.True(partitioned.Json.GetProperty("errors").TryGetProperty("set", out _), partitioned.Body);
-        Assert.Equal(HttpStatusCode.BadRequest, (await Send(leo.Client, HttpMethod.Get, "/t?filter=%7B%7D", json: true)).Status);
+        var filtered = await Send(leo.Client, HttpMethod.Get, "/t?filter=%7B%22name%22%3A%22nothing%22%7D", json: true);
+        Assert.Equal(HttpStatusCode.OK, filtered.Status);
+        Assert.Equal(Slugs((await Send(leo.Client, HttpMethod.Get, "/t", json: true)).Json), Slugs(filtered.Json));
+        Assert.NotEmpty(Slugs(filtered.Json));
 
         // A create writes its name, description and default kind, and nothing else of the row: not its slug, not its place.
         var placed = await Json(leo, "/t/new", "/t", new { name = "Placed", order = 1 });

@@ -92,7 +92,6 @@ public sealed class TangentsController(KoanWebBaseUrl baseUrl) : EntityControlle
     private TangentClosed? _closed;
 
     [HttpGet("")]
-    [HttpHead("")]
     [Tool(Name = "read_tangents")]
     [Description("List the Tangents you may read, a page at a time, and the members-only ones you may join or ask to join, which carry joining. Then call read_tangent on one's slug, start_topic in it, or join_tangent.")]
     [Needs(Bit.View)]

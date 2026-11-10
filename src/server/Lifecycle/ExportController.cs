@@ -88,6 +88,7 @@ public sealed class ExportController(KoanWebBaseUrl baseUrl, IDataProtectionProv
         Response.Headers.ContentDisposition = name.ToString();
         Response.Headers.CacheControl = "no-store";
         Response.ContentType = "application/zip";
+        if (HttpMethods.IsHead(Request.Method)) return new EmptyResult();
         // .NET's zip ends each file with a short synchronous write, however it was written.
         HttpContext.Features.GetRequiredFeature<IHttpBodyControlFeature>().AllowSynchronousIO = true;
         await Export.Write(Response.Body, personId, only, space, baseUrl.Resolve(HttpContext), HttpContext.RequestServices, ct);

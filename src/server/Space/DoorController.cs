@@ -52,7 +52,6 @@ public sealed class DoorController(KoanWebBaseUrl baseUrl, AddressOffers offers)
     public const string Before = "before";
 
     [HttpGet("/")]
-    [HttpHead("/")]
     [LlmsText.Pointer]
     [Tool(Name = "arrive")]
     [Description("Call this first when you come back, to see who you are here, what is new since you were here and what you may do, with links. Then call read_tangent on a Tangent's slug, read_topic or read_post on what a new Post's address names, /t/{tangent}/{topic}/{post}, and seen with news.through once you have read it. news.following.topics lists the Topics you follow with replies new to you. With before, a sequence such as the one news.older names, the things for you before it that are no longer new, newest first, in older.items, and older.next for the page before them.")]

@@ -255,10 +255,36 @@ public sealed class DoorTests(ITestOutputHelper output)
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
             using var response = await browser.Client.SendAsync(request, Cancellation);
             output.WriteLine($"{method} {path}: {(int)response.StatusCode}");
-            Assert.True(method == HttpMethod.Head || response.IsSuccessStatusCode, $"{method} {path} answered {response.StatusCode}");
+            Assert.True(response.IsSuccessStatusCode, $"{method} {path} answered {response.StatusCode}");
         }
 
         Assert.Equal(before, await Written());
+    }
+
+    /// <summary>Every read answers HEAD as it answers GET, with its status and its type and no body, at addresses that never declared HEAD
+    /// (Koan's WEB-0091): a search, the place's settings as its manager reads them, and the health check.</summary>
+    [Fact]
+    public async Task A_read_that_never_declared_head_answers_it_as_its_get_with_no_body()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(TestConnector, ct: Cancellation);
+        await Place(tangentSpace);
+        using var browser = new Browser(tangentSpace);
+        (await browser.SignIn("leo", "leo", Cancellation)).Dispose();
+
+        foreach (var path in new[] { "/search?q=x", TangentSpaceSettingsController.Path, "/health/live" })
+        {
+            using var get = new HttpRequestMessage(HttpMethod.Get, path);
+            using var head = new HttpRequestMessage(HttpMethod.Head, path);
+            get.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
+            head.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
+            using var read = await browser.Client.SendAsync(get, Cancellation);
+            using var asked = await browser.Client.SendAsync(head, Cancellation);
+
+            Assert.Equal(HttpStatusCode.OK, read.StatusCode);
+            Assert.Equal((read.StatusCode, read.Content.Headers.ContentType?.MediaType), (asked.StatusCode, asked.Content.Headers.ContentType?.MediaType));
+            Assert.NotEmpty(await read.Content.ReadAsByteArrayAsync(Cancellation));
+            Assert.Empty(await asked.Content.ReadAsByteArrayAsync(Cancellation));
+        }
     }
 
     /// <summary>What a read could write: the log, every checkpoint and every Offer decided.</summary>

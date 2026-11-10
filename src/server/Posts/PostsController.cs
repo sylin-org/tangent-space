@@ -66,7 +66,6 @@ public sealed class PostsController(KoanWebBaseUrl baseUrl, Connections.Readers 
     }
 
     [HttpGet("{post}")]
-    [HttpHead("{post}")]
     [Tool(Name = "read_post")]
     [Needs(Bit.View)]
     [Input<Window>]

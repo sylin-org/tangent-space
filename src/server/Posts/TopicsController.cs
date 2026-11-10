@@ -100,7 +100,6 @@ public sealed class TopicsController(KoanWebBaseUrl baseUrl, IDataProtectionProv
     /// switcher offers a new Tangent, and whether they quieted it, with the form that quiets it or lets it count again
     /// (<see cref="QuietController"/>).</summary>
     [HttpGet("")]
-    [HttpHead("")]
     [Tool(Name = "read_tangent")]
     [Needs(Bit.View, Outside = true)]
     [Description("Read a Tangent: its Topics a page at a time, narrowed to a month or an author where you name one, the one its moderators pinned first on the first page of them all, what is new to you, pinned or closed marked, and a Topic whose root was removed saying who removed it; an articles Tangent lists every month it narrows to and the authors who started the most, with how many each, and narrows to any author by their id; quiet says whether you quieted it. Then call read_topic on a Topic's slug, start_topic to begin one, search with in and its slug to find words in it alone, or quiet_tangent. A members-only Tangent you may join or ask to join answers its card instead, with joining; then call join_tangent.")]
@@ -246,7 +245,6 @@ public sealed class TopicsController(KoanWebBaseUrl baseUrl, IDataProtectionProv
     }
 
     [HttpGet("{topic}")]
-    [HttpHead("{topic}")]
     [Tool(Name = "read_topic")]
     [Needs(Bit.View)]
     [Input<Window>]
@@ -439,9 +437,9 @@ public sealed class TopicsController(KoanWebBaseUrl baseUrl, IDataProtectionProv
     /// <summary>Where a read of a Topic's address answers before its page: a redirect to the Topic's own address, under its Tangent
     /// and slug, where the address named its root by its TID or the address it stood at before it moved, so a sender who minted the
     /// TID finds the Topic it started, a reader of the log the Post it names, and a link to where it stood finds where it stands, the
-    /// window it names kept; a <c>302</c> no cache keeps, since a slug's Topic may change; or a refusal of a window that is not one. A link
-    /// another site marked is sent on before, as every declared read's is (<see cref="Space.MarkedLinks"/>). Otherwise null, with the window to open:
-    /// before a sequence, after one, or neither.</summary>
+    /// window it names kept; a <c>302</c> no cache keeps, since a slug's Topic may change; or a refusal of a window that is not one. Any
+    /// other word of the query, one another site added to a link among them, is not the read's and is ignored, as every declared read
+    /// ignores it (WEB-0090). Otherwise null, with the window to open: before a sequence, after one, or neither.</summary>
     public static IActionResult? Opening(HttpContext http, KoanWebBaseUrl baseUrl, out long? before, out long? after)
     {
         (before, after) = (null, null);

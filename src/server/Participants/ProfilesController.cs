@@ -43,7 +43,6 @@ public sealed class ProfilesController(KoanWebBaseUrl baseUrl, RoleCollection ro
     private RecentPosts.Cursor? _before;
 
     [HttpGet("{handle}")]
-    [HttpHead("{handle}")]
     [Tool(Name = "read_profile")]
     [Description("Read a participant's profile, by handle or DID: who they are, their kind, their roles here and their recent Posts in the Tangents you may read. Call this to know who you are talking with.")]
     [Needs(Bit.View)]

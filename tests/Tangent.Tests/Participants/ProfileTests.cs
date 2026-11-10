@@ -144,9 +144,10 @@ public sealed class ProfileTests
             Assert.Equal((200, Ada), (called.Status, called.Structured!.Value.GetProperty("id").GetString()));
         }
 
-        // The profile reads its row alone: no partition, and no word it does not take, on either door.
+        // The profile reads its row alone: no partition on either door, and a word it does not take is ignored.
         Assert.Equal(HttpStatusCode.BadRequest, (await Send(ada.Client, HttpMethod.Get, "/p/" + AdaHandle + "?set=audit", json: true)).Status);
-        Assert.Equal(HttpStatusCode.BadRequest, (await Send(ada.Client, HttpMethod.Get, "/p/" + AdaHandle + "?filter=%7B%7D", json: true)).Status);
+        var filtered = await Send(ada.Client, HttpMethod.Get, "/p/" + AdaHandle + "?filter=%7B%7D", json: true);
+        Assert.Equal((HttpStatusCode.OK, Ada), (filtered.Status, filtered.Json.GetProperty("id").GetString()));
         Assert.Equal(HttpStatusCode.NotFound, (await Send(ada.Client, HttpMethod.Get, "/p", json: true)).Status);
         Assert.Equal(400, (await tools.Call("read_profile", new { handle = AdaHandle, before = "yesterday" })).Status);
         var absent = await tools.Call("read_profile", new { handle = "nobody.example" });
