@@ -105,6 +105,32 @@ public sealed class StartAndReplyTests
     }
 
     [Fact]
+    public async Task A_start_and_a_reply_sent_again_by_someone_banned_since_answer_absent_and_write_nothing()
+    {
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
+        await Place(tangentSpace);
+        using var ada = await SignedIn(tangentSpace, Ada);
+        const string form = "/t/" + Workshop + "/new";
+        var (topicId, replyId) = (Tids.Mint(), Tids.Mint());
+        var start = new { id = topicId, title = "Lanterns", body = "How do you hang yours?" };
+        var started = await Json(ada, form, Start, start);
+        var topic = started.Location![BaseUrl.Length..];
+        var reply = new { id = replyId, body = "From the porch beam." };
+        Assert.Equal((HttpStatusCode.Created, HttpStatusCode.Created), (started.Status, (await Json(ada, form, topic[..topic.LastIndexOf('/')], reply)).Status));
+        var participant = (await Participants.Participant.Get(Ada, Cancellation))!;
+        participant.Standing = Participants.Standing.Banned;
+        Assert.IsType<Outcome<Participants.Participant>.Done>(await new Store<Participants.Participant>(participant).Send(Cancellation));
+        var logged = await Event.Count.Exact(Cancellation);
+
+        var startAgain = await Json(ada, form, Start, start);
+        var replyAgain = await Json(ada, form, topic[..topic.LastIndexOf('/')], reply);
+
+        Assert.All(new[] { startAgain, replyAgain }, again => Assert.Equal((HttpStatusCode.NotFound, "absent"), (again.Status, again.Word)));
+        Assert.All(new[] { startAgain, replyAgain }, again => Assert.DoesNotContain("From the porch beam.", again.Body));
+        Assert.Equal(logged, await Event.Count.Exact(Cancellation));
+    }
+
+    [Fact]
     public async Task An_id_a_post_holds_elsewhere_or_out_of_sight_answers_one_refusal_that_names_nothing_and_writes_nothing_while_a_replay_still_answers_the_post()
     {
         await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);

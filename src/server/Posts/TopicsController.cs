@@ -438,9 +438,9 @@ public sealed class TopicsController(KoanWebBaseUrl baseUrl, IDataProtectionProv
 
     /// <summary>Where a read of a Topic's address answers before its page: a redirect to the Topic's own address, under its Tangent
     /// and slug, where the address named its root by its TID or the address it stood at before it moved, so a sender who minted the
-    /// TID finds the Topic it started, a reader of the log the Post it names, and a link to where it stood finds where it stands; the
-    /// same address without what its query holds beside a window, as a link another site marked carries it; a <c>302</c> no cache
-    /// keeps, since a slug's Topic may change; or a refusal of a window that is not one. Otherwise null, with the window to open:
+    /// TID finds the Topic it started, a reader of the log the Post it names, and a link to where it stood finds where it stands, the
+    /// window it names kept; a <c>302</c> no cache keeps, since a slug's Topic may change; or a refusal of a window that is not one. A link
+    /// another site marked is sent on before, as every declared read's is (<see cref="Space.MarkedLinks"/>). Otherwise null, with the window to open:
     /// before a sequence, after one, or neither.</summary>
     public static IActionResult? Opening(HttpContext http, KoanWebBaseUrl baseUrl, out long? before, out long? after)
     {
@@ -448,9 +448,7 @@ public sealed class TopicsController(KoanWebBaseUrl baseUrl, IDataProtectionProv
         var here = Here.Of(http);
         var (tangent, root, anchor) = (here.Tangent!, here.Root!, here.Post);
         var query = http.Request.Query;
-        // A partition is named only to be refused, which the endpoint does.
-        var marked = query.Keys.Any(key => key is not (TopicPageController.Before or TopicPageController.After or Koan.Web.Infrastructure.KoanWebConstants.Query.Set));
-        if (marked || http.GetRouteValue(Doorway.TopicValue) as string != (root.Slug ?? root.Id) || http.GetRouteValue(Doorway.TangentValue) as string != tangent.Id)
+        if (http.GetRouteValue(Doorway.TopicValue) as string != (root.Slug ?? root.Id) || http.GetRouteValue(Doorway.TangentValue) as string != tangent.Id)
         {
             var moved = PostWrites.TopicAddress(baseUrl.Resolve(http), tangent.Id, root.Slug ?? root.Id);
             var window = string.Join("&", query.Where(pair => pair.Key is TopicPageController.Before or TopicPageController.After)

@@ -127,6 +127,7 @@ public sealed class TangentModule : KoanModule
             mvc.Filters.Add<ETagFilter>();
             mvc.Filters.Add<FirstRunGate>();
             mvc.Filters.Add<PrivatePlaceGate>();
+            mvc.Filters.Add<MarkedLinks>();
         });
         services.WithExceptionHandler();
         services.AddExceptionHandler(handler => handler.ExceptionHandler = ProblemExceptionHandler.Answer);
