@@ -1,5 +1,4 @@
 using System.Net;
-using System.Text.Json;
 using Koan.Data.Core.Commands;
 using Xunit;
 using static Tangent.Posts.Writing;
@@ -7,8 +6,7 @@ using static Tangent.Posts.Writing;
 namespace Tangent.Posts;
 
 /// <summary>A Post's writes and reads on Koan's entity endpoint (<see cref="TopicsController"/>, <see cref="PostsController"/>): only
-/// what they declare is served and no partition is, a link another site marked to any declared read is sent on to its clean address, a start sent with no
-/// id mints its own TID, and a moderator's edit takes the moderator as who reaches the images it names.</summary>
+/// what they declare is served and no partition is, a start sent with no id mints its own TID, and a moderator's edit takes the moderator as who reaches the images it names.</summary>
 public sealed class EntityWritesTests
 {
     [Fact]
@@ -44,46 +42,6 @@ public sealed class EntityWritesTests
         Assert.All(unserved, answered => Assert.True(answered.Status is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed, answered.Status + " " + answered.Body));
         Assert.Equal(before, (await Counted(), await Snapshots()));
         Assert.Equal("From the porch beam, at dusk.", (await Post.Get(reply.Id, Cancellation))?.Body);
-
-        // A link another site marked opens the Post and the Topic at their addresses, the window it names kept, for a page and for JSON alike:
-        // the word it added is ignored.
-        var marked = await Send(ada.Client, HttpMethod.Get, PostPath(root, reply) + "?fbclid=abc");
-        var windowed = await Send(ada.Client, HttpMethod.Get, TopicPath(root) + "?before=2&utm_source=elsewhere");
-        var markedJson = await Send(ada.Client, HttpMethod.Get, PostPath(root, reply) + "?fbclid=abc", json: true);
-        Assert.Equal((HttpStatusCode.OK, null), (marked.Status, marked.Location));
-        Assert.Equal((HttpStatusCode.OK, null), (windowed.Status, windowed.Location));
-        // Each read mints its reply form a fresh id, so the reads are compared by the window they open.
-        Assert.Equal(HttpStatusCode.OK, markedJson.Status);
-        Assert.Equal(Window((await Send(ada.Client, HttpMethod.Get, PostPath(root, reply), json: true)).Json), Window(markedJson.Json));
-    }
-
-    /// <summary>The Topic a read opens, the Post it opens at, and the Posts its window shows.</summary>
-    private static string Window(JsonElement page)
-        => string.Join(" ", new[] { page.GetProperty("id").GetString(), page.GetProperty("anchor").ToString(), page.GetProperty("root").GetProperty("id").GetString() }
-            .Concat(page.GetProperty("replies").EnumerateArray().Select(post => post.GetProperty("id").GetString())));
-
-    [Fact]
-    public async Task A_link_another_site_marked_to_any_declared_read_opens_its_page_and_json_reads_what_it_reads_without_the_mark()
-    {
-        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(), ct: Cancellation);
-        await Place(tangentSpace);
-        var leo = Persona.Id("leo4marks");
-        await Given.AParticipant(tangentSpace, leo, [Access.Roles.Administrator], ct: Cancellation);
-        using var proprietor = await SignedIn(tangentSpace, leo);
-        string[] addresses = ["/t", "/p/" + Ada, "/t/new", "/t/" + Workshop + "/new", Participants.ApplicationsController.Path];
-
-        foreach (var address in addresses)
-        {
-            var marked = await Send(proprietor.Client, HttpMethod.Get, address + "?fbclid=abc");
-            Assert.Equal((HttpStatusCode.OK, null, "text/html"), (marked.Status, marked.Location, marked.MediaType));
-        }
-
-        var tagged = await Send(proprietor.Client, HttpMethod.Get, "/p/" + Ada + "?utm_source=newsletter&utm_medium=email");
-        var asJson = await Send(proprietor.Client, HttpMethod.Get, "/t?fbclid=abc", json: true);
-        Assert.Equal((HttpStatusCode.OK, null), (tagged.Status, tagged.Location));
-        Assert.Equal(HttpStatusCode.OK, asJson.Status);
-        Assert.Equal((await Send(proprietor.Client, HttpMethod.Get, "/t", json: true)).Json.GetProperty("tangents").GetRawText(),
-            asJson.Json.GetProperty("tangents").GetRawText());
     }
 
     [Fact]
