@@ -27,14 +27,43 @@ PLAN holds the roles, the order of the packages and the decisions they wait on. 
 
 ## The order
 
-Each package delivers one thing a person or an agent meets, and builds the seam it needs inside it. Koan work happens only as a feature needs it, under Koan's law, and lands by rebase and fast-forward with the pinned revision following. No two packages in flight touch the same files; the lead schedules by the files. Every package lands with the tree working, carries its own words (the ARCHITECTURE paragraph, the LANGUAGE words, the FEATURES rows), and moves a stored shape with a one-off script at `scripts/once/<what-it-moves>`, run once after its merge and then deleted. A live walk of the real place, in a browser and at `/mcp` as Lumen, follows every two or three packages, and its findings become the next work.
+The end is Leo's, in his words: "Your own place", with Discord-like capabilities to manage articles. Three lines mark the way to it, and he checks each one himself.
 
-The packages, as `id · what you get · what it absorbs from the design · after`:
+1. **His own place is live.** It runs from a published build at an address he chooses. He signs in with his own Bluesky account, publishes an article, and a reply from Bluesky shows under it.
+2. **Someone else runs one.** A download, a README a stranger follows, a build that carries an older data folder forward, the polish stage and the phone layouts.
+3. **Beyond Bluesky.** A seam a second protocol fits, then Webmention and Mastodon.
 
-1. export-and-archive-are-one-copy · The place as you or as a visitor, and each Tangent, as one static copy; retirement, the restore verb and the archive's second host go · life-1, life-2, cut-1; Koan k-snapshot · none
-2. webmention-and-mastodon · A Post goes out by Webmention and to Mastodon under its author's own account, and replies come back as references · the brief's protocols · none
+Until the first line is crossed, nothing that works is rebuilt and no Koan change starts unless its brief names what a person or an agent newly meets, or which state, kept by hand today, it wraps where it belongs.
 
-The design's other packages (forms and pages from routes, standing in one command, people from Koan's person, the sweep, the islands, the Markdown dialect, the test kit, feeds, backup, keyset pages, the connector's profile and identifiers, each consumer's build) fold into the first feature that needs them, or wait; none runs for its own sake.
+Each package delivers one thing a person or an agent meets, and builds the seam it needs inside it. Koan work happens only as a feature needs it, under Koan's law, and lands by rebase and fast-forward with the pinned revision following. No two packages in flight touch the same files; the lead schedules by the files. Every package lands with the tree working and carries its own words (the ARCHITECTURE paragraph, the LANGUAGE words, the FEATURES rows). No place holds data to carry before the first line, so a stored shape changes with no script; past it, a stored shape moves with a one-off script at `scripts/once/<what-it-moves>`, run once after its merge and then deleted. The crawl at `.local/walk/crawl.ts` follows every package: every page a visitor, a member and the proprietor reach, the same addresses as JSON, and `/mcp`. Leo's own walk of the running place follows every two or three, and its findings become the next work.
+
+The packages, as `id · what you get · what it absorbs · after`:
+
+To the first line:
+
+1. rest-one-branch · Topics, Posts, Tangents, the applications and a profile each answer at one declared entity endpoint of Koan's, for a page's form, a JSON client and a tool alike; a stale edit keeps its sender's words, a Tangent's list neither repeats nor drops a Topic between pages, and `change_tangent` takes joining · the branches `claude/rest-posts`, `claude/rest-tangents` and `claude/rest-lists`, brought together and nothing added · none
+2. the-operation-in-the-hook · koan · A declared controller's hooks are told which operation runs and whether its write was made or replayed, and one step of the controller answers a refused form with its page, so no controller keeps that state in fields of its own · — · decision 16
+3. rest-finished · The place's settings answer at one declared endpoint at `/settings`, `change_settings` takes admission, appearance and first steps, every verb answers through Koan's `Answers`, and nothing the move replaced stays · the settings as a singleton and the removal of Tangent's own copies of Koan's answers · rest-one-branch, the-operation-in-the-hook
+4. your-place-runs · The place runs from a published build at a public address, set up by Leo alone: the README says how, with a proxy, TLS on the default port, the Production environment and the operator named, and a public place limits how fast anyone signs in or writes · — · rest-finished
+
+The move onto Koan's entity endpoints is finished when every create, change and delete of a row Tangent owns (a Topic, a Post, a Tangent, the place) is a declared operation, every verb that sends its own command stays a verb and answers through Koan's `Answers`, and no type stays without a caller. Roles stay with `RolesController`, since their rows are Koan's.
+
+The check of the first line is Leo's walk with his own account, on loopback first and then at the address: what the real network shows wrong becomes a package of its own.
+
+To the second line, in no order yet:
+
+- export-and-archive-are-one-copy · The place as you or as a visitor, and each Tangent, as one static copy, which a retired place's agents read too · the design's lifecycle packages; Koan's snapshot
+- upgrades · A newer build carries an older data folder forward, and says so where it cannot
+- handing-over · The operator hands the place to someone else, and may then leave
+- a-download-and-a-readme · One file to download and a README a stranger follows to a running place
+- The polish stage, as [FEATURES](FEATURES.md) lists it.
+
+To the third line:
+
+- a-second-protocol-fits · The core hands a protocol package URIs, versions and receipts, and atproto is one such package
+- webmention-and-mastodon · A Post goes out by Webmention and to Mastodon under its author's own account, and replies come back as references · the brief's protocols
+
+A package of the 4 November design that names nothing a person or an agent meets folds into the first feature that needs it, or waits; none runs for its own sake.
 
 ## Open for Leo
 
@@ -43,10 +72,10 @@ Each decision is cited by its number, and each package builds the default given 
 - **1 · Positions and volume.** May a position reveal how much happened where its reader cannot see? Until he answers it may not, and events-4 keeps the scan that hides it.
 - **2 · `read(address)`.** It is offered beside the thirteen named read tools. The measure, five reading tasks by a fresh agent each way, took 8 calls with `read` against 6 with the named reads and lost two tasks, so the named reads stay until he says otherwise.
 - **4 · ARCH-0143.** Amending it a day after its acceptance is a Koan decision for him, not for a package. ARCH-0145, its amendment of §1, §2 and §4, is in Koan as a proposal; the §5 and §3 amendments come with the HTML projection and the answer packages, each a proposal until he answers.
-- **5 · Companion Lobby's move.** Should one release keep aliases for the tools that change, and `Form.Token` past render-3? Until he answers, no: Tangent shapes nothing for the Lobby.
+- **5 · Companion Lobby's adapter.** Every form's JSON carries `token` for it (`Form.Token`), which nothing here reads. Does it stay? Until he answers it stays, and Tangent shapes nothing else for the Lobby.
 - **7 · Standard MCP clients.** A client with no atproto identity stays a visitor. That is product scope, named for him.
 - **8 · The profile at sign-in.** Does sign-in wait a short bound for the public profile, or does the fill run just after? Until he answers, k-atproto-1 reads the profile in the sign-in step, best-effort within a short bound, and sign-in never fails on it.
 - **10 · The deferred layout.** Settings in three pages, and verbs as panels, wait for the polish stage unless he calls them now.
 - **11 · Holds as the only model.** This is his second ordered Koan step. Commands judging inside their hold rely on it; until he answers, commands keep their holds as they are.
 - **13 · His lines in BRIEF.** `docs/BRIEF.md:3` names ADR 0014 as the record of which earlier records bind. `:55` says background work runs in background workers. Until he answers, BRIEF stays as it is, and each package that meets the conflict reports it.
-- **15 · The token of a list of Tangents.** k-page's keyset token is encoded, not sealed, by default, and an encoded token's order can tell a reader how many Tangents they cannot view come before the last one they see. He answers before k-page starts.
+- **16 · The states kept by hand.** Each declared controller keeps fields of its own so its hooks know which operation runs, where a form is sent on and what a refused form reads again; five controllers hold eleven such fields, in three different ways. Does Koan's hook take that state (the-operation-in-the-hook), or do the plain states of the domain, a Topic closed, pinned or followed and a Tangent quieted, fold into their entity's declared write, or both? Until he answers, the-operation-in-the-hook waits, and rest-finished starts only once he has.
