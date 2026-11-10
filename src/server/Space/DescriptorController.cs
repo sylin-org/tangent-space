@@ -15,7 +15,6 @@ public sealed class DescriptorController(KoanWebBaseUrl baseUrl, IOptions<McpSer
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
     [HttpGet("/tangent.json")]
-    [HttpHead("/tangent.json")]
     public async Task<IActionResult> Descriptor(CancellationToken ct)
     {
         var space = await Row(ct);
@@ -33,7 +32,6 @@ public sealed class DescriptorController(KoanWebBaseUrl baseUrl, IOptions<McpSer
 
     /// <summary>Plain text, since a browser shows it where it would offer a Markdown file for download.</summary>
     [HttpGet("/llms.txt")]
-    [HttpHead("/llms.txt")]
     public async Task<IActionResult> Llms(CancellationToken ct)
         => ServedFile.Answer(HttpContext, LlmsText.For(await Row(ct), Address, baseUrl.Current is not null, edge.Value.ReadByAddress).Llms, "text/plain; charset=utf-8");
 

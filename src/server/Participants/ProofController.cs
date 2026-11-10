@@ -33,7 +33,6 @@ public sealed class ProofController(AtprotoServiceAuth proofs, KoanWebBaseUrl ba
 
     /// <summary>What the door takes, with every address and word a client needs to prove itself here and nowhere else.</summary>
     [HttpGet(ProofDoor.StatementPath)]
-    [HttpHead(ProofDoor.StatementPath)]
     public async Task<IActionResult> Statement(CancellationToken ct)
     {
         if (baseUrl.Current is not { } place) return Unaddressed();

@@ -322,7 +322,10 @@ public sealed class AdmissionTests
             older.Structured!.Value.GetProperty("applications").EnumerateArray().Select(applicant => applicant.GetProperty("id").GetString()));
         Assert.Equal(400, (await tools.Call("read_applications", new { state = "declined" })).Status);
         Assert.Equal(HttpStatusCode.BadRequest, (await Send(mo.Client, HttpMethod.Get, ApplicationsController.Path + "?set=audit", json: true)).Status);
-        Assert.Equal(HttpStatusCode.BadRequest, (await Send(mo.Client, HttpMethod.Get, ApplicationsController.Path + "?page=2", json: true)).Status);
+        // The list pages by its cursor alone, so a page number is ignored and the first page answers.
+        var numbered = await Send(mo.Client, HttpMethod.Get, ApplicationsController.Path + "?page=2", json: true);
+        Assert.Equal(HttpStatusCode.OK, numbered.Status);
+        Assert.Equal(Persona.Id("seeklate"), numbered.Json.GetProperty("applications")[0].GetProperty("id").GetString());
     }
 
     [Fact]

@@ -16,22 +16,18 @@ namespace Tangent.Posts;
 public sealed class FeedsController(KoanWebBaseUrl baseUrl) : ControllerBase
 {
     [HttpGet("/t/{tangent}/" + Feeds.TangentSegment + AtomFeed.Extension)]
-    [HttpHead("/t/{tangent}/" + Feeds.TangentSegment + AtomFeed.Extension)]
     public async Task<IActionResult> TangentAtom(string tangent, CancellationToken ct)
         => await OfTangent(tangent, ct) is { } feed ? Atom(feed) : this.Refused(Capabilities.Absent);
 
     [HttpGet("/t/{tangent}/" + Feeds.TangentSegment + JsonFeed.Extension)]
-    [HttpHead("/t/{tangent}/" + Feeds.TangentSegment + JsonFeed.Extension)]
     public async Task<IActionResult> TangentJson(string tangent, CancellationToken ct)
         => await OfTangent(tangent, ct) is { } feed ? Json(feed) : this.Refused(Capabilities.Absent);
 
     [HttpGet(Feeds.ArticlesPath + AtomFeed.Extension)]
-    [HttpHead(Feeds.ArticlesPath + AtomFeed.Extension)]
     public async Task<IActionResult> ArticlesAtom(CancellationToken ct)
         => await OfArticles(ct) is { } feed ? Atom(feed) : this.Refused(Capabilities.Absent);
 
     [HttpGet(Feeds.ArticlesPath + JsonFeed.Extension)]
-    [HttpHead(Feeds.ArticlesPath + JsonFeed.Extension)]
     public async Task<IActionResult> ArticlesJson(CancellationToken ct)
         => await OfArticles(ct) is { } feed ? Json(feed) : this.Refused(Capabilities.Absent);
 
