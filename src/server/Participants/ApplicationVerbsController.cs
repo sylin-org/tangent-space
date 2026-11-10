@@ -12,21 +12,14 @@ using static Tangent.Participants.ApplicationsController;
 
 namespace Tangent.Participants;
 
-/// <summary>What deciding an application sends, as a form or one JSON object.</summary>
-public sealed record DecideInput([Description(Holds.Applicant)] string? Participant = null, [Description(Holds.DecidedState)] string? State = null);
-
 /// <summary>What inviting an account sends, as a form or one JSON object.</summary>
 public sealed record InviteInput([Description(Holds.InviteHandle)] string? Handle = null);
 
 /// <summary>What withdrawing an invitation sends, as a form or one JSON object.</summary>
 public sealed record WithdrawInput([Description(Holds.Invitation)] string? Account = null);
 
-/// <summary>What is decided among the applications (<see cref="ApplicationsController"/>), each for whoever holds
-/// <see cref="Bit.ManageStanding"/>. Two <c>POST</c>s take the applicant's id in <c>participant</c>, as a form or a JSON
-/// object: <c>admit</c> sends <see cref="Admit"/>; <c>decline</c> sends <see cref="Decline"/>. A form is sent back to the
-/// applications, those that wait where it carries <c>state=waiting</c>; a JSON request reads the decision
-/// (<see cref="DecidedApplication"/>); a refusal reads the first page again with the reason above the list, or a problem.
-/// Where admission says apply, two more: <c>invite</c> takes a Bluesky handle in <c>handle</c>, reads whose account it names
+/// <summary>Who is invited among the applications (<see cref="ApplicationsController"/>), for whoever holds
+/// <see cref="Bit.ManageStanding"/>, where admission says apply: <c>invite</c> takes a Bluesky handle in <c>handle</c>, reads whose account it names
 /// from its public profile, in the request and outside any command (<see cref="ProfileReader.Find"/>), and sends
 /// <see cref="Participants.Invite"/>; <c>withdraw</c> takes the account's DID in <c>account</c> and sends
 /// <see cref="WithdrawInvitation"/>. A form is sent back to the applications that wait, where the section opens, and a
@@ -43,20 +36,6 @@ public sealed class ApplicationVerbsController(KoanWebBaseUrl baseUrl) : Control
 
     /// <summary>The refusal of a withdrawal that names no invitation.</summary>
     public static readonly Reason NotAnInvitation = Reason.Invalid(AccountField, "Name an invitation by the DID its row carries.");
-
-    [HttpPost(AdmitPath)]
-    [RequestSizeLimit(PostWrites.RequestLimit)]
-    [Tool(Name = "admit", Destructive = true, Idempotent = true, OpenWorld = false)]
-    [Needs(Bit.ManageStanding)]
-    [Description("Admit an applicant from read_applications, who becomes a member, for whoever holds ManageStanding. It reverses a decline.")]
-    public Task<IActionResult> Admit(DecideInput input, CancellationToken ct) => Decide(input, true, ct);
-
-    [HttpPost(DeclinePath)]
-    [RequestSizeLimit(PostWrites.RequestLimit)]
-    [Tool(Name = "decline", Destructive = true, Idempotent = true, OpenWorld = false)]
-    [Needs(Bit.ManageStanding)]
-    [Description("Decline an applicant from read_applications, who goes on reading what a visitor reads and is told, for whoever holds ManageStanding. A later admit reverses it.")]
-    public Task<IActionResult> Decline(DecideInput input, CancellationToken ct) => Decide(input, false, ct);
 
     [HttpPost(InvitePath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
@@ -141,42 +120,6 @@ public sealed class ApplicationVerbsController(KoanWebBaseUrl baseUrl) : Control
     {
         Response.Headers.Location = waiting ? WaitingAddress(BaseAddress()) : BaseAddress() + ApplicationsController.Path;
         return StatusCode(StatusCodes.Status303SeeOther);
-    }
-
-    private async Task<IActionResult> Decide(DecideInput input, bool admitting, CancellationToken ct)
-    {
-        Response.Headers.CacheControl = "no-store";
-        var personId = Here.Of(HttpContext).PersonId!;
-        var applicantId = input.Participant ?? "";
-        ICommand<Participant> command = admitting
-            ? new Participants.Admit(personId, applicantId)
-            : new Participants.Decline(personId, applicantId);
-        var outcome = await command.Send();
-        switch (outcome)
-        {
-            case Outcome<Participant>.Done { Result: var applicant }:
-                return await Decided(applicant, personId, input.State == ApplicationsPage.Waiting, ct);
-            case Outcome<Participant>.Refused { Reason: var reason }:
-                return await Refused(reason, input.State == ApplicationsPage.Waiting, ct);
-            default:
-                return Answers.NotDone(HttpContext, outcome);
-        }
-    }
-
-    /// <summary>A decision that committed, or that found it already made: a form is sent back to the applications, to
-    /// those that wait where it came from them; a JSON request reads the applicant's standing now, with the decider's
-    /// <c>can</c>.</summary>
-    private async Task<IActionResult> Decided(Participant applicant, string? personId, bool waiting, CancellationToken ct)
-    {
-        if (!PostWrites.WantsJson(Request)) return Back(waiting);
-
-        var place = await Capabilities.Load(personId, null, null, ct);
-        var (name, handle) = (applicant.ShownName(), applicant.ShownHandle());
-        return new ObjectResult(new DecidedApplication(applicant.Id, name, handle, People.Word(applicant.StandingAt(DateTimeOffset.UtcNow)),
-            BaseAddress() + ApplicationsController.Path, place.Can))
-        {
-            ContentTypes = { "application/json" }
-        };
     }
 
     /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the first page again, read

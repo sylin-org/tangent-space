@@ -68,14 +68,10 @@ public sealed class TheToolsTests
         ["change_appearance"] = Action<TangentSpaceSettingsController>(nameof(TangentSpaceSettingsController.ChangeAppearance)),
         ["close_first_steps"] = Action<FirstStepsController>(nameof(FirstStepsController.Close)),
         ["read_applications"] = Action<ApplicationsController>(nameof(ApplicationsController.GetCollection)),
-        ["admit"] = Action<ApplicationVerbsController>(nameof(ApplicationVerbsController.Admit)),
-        ["decline"] = Action<ApplicationVerbsController>(nameof(ApplicationVerbsController.Decline)),
         ["invite"] = Action<ApplicationVerbsController>(nameof(ApplicationVerbsController.Invite)),
         ["withdraw_invitation"] = Action<ApplicationVerbsController>(nameof(ApplicationVerbsController.Withdraw)),
         ["read_people"] = Action<PeopleController>(nameof(PeopleController.Get)),
-        ["time_out"] = Action<PeopleController>(nameof(PeopleController.PostTimeOut)),
-        ["ban"] = Action<PeopleController>(nameof(PeopleController.PostBan)),
-        ["lift"] = Action<PeopleController>(nameof(PeopleController.PostLift)),
+        ["set_standing"] = Action<PeopleController>(nameof(PeopleController.PostStanding)),
         ["give_role"] = Action<PeopleController>(nameof(PeopleController.PostGive)),
         ["take_role"] = Action<PeopleController>(nameof(PeopleController.PostTake)),
         ["leave_place"] = Action<PeopleController>(nameof(PeopleController.Leave)),
@@ -163,13 +159,9 @@ public sealed class TheToolsTests
         ["change_admission"] = (true, true),
         ["change_appearance"] = (true, true),
         ["close_first_steps"] = (false, true),
-        ["admit"] = (true, true),
-        ["decline"] = (true, true),
         ["invite"] = (false, true),
         ["withdraw_invitation"] = (true, true),
-        ["time_out"] = (true, false),
-        ["ban"] = (true, true),
-        ["lift"] = (true, true),
+        ["set_standing"] = (true, true),
         ["give_role"] = (true, true),
         ["take_role"] = (true, true),
         ["leave_place"] = (true, true),
@@ -378,10 +370,12 @@ public sealed class TheToolsTests
         await Worked(admin, "give_role", new { participant = Bea, role = given });
         var again = (await Worked(admin, "read_people", new { })).GetProperty("people").EnumerateArray().Single(row => row.GetProperty("person").GetProperty("id").GetString() == Bea);
         await Worked(admin, "take_role", new { participant = Bea, role = again.GetProperty("take")[0].GetProperty("word").GetString() });
-        await Worked(admin, "time_out", new { participant = Bea, @for = "hour" });
-        await Worked(admin, "lift", new { participant = Bea });
-        await Worked(admin, "ban", new { participant = Bea });
-        await Worked(admin, "lift", new { participant = Bea });
+        foreach (var to in new[] { "timed-out", "admitted", "banned", "admitted" })
+        {
+            var row = (await Worked(admin, "read_people", new { })).GetProperty("people").EnumerateArray().Single(row => row.GetProperty("person").GetProperty("id").GetString() == Bea);
+            Assert.Contains(to, row.GetProperty("can").EnumerateArray().Select(each => each.GetString()));
+            await Worked(admin, "set_standing", new { participant = Bea, to, @for = "hour" });
+        }
 
         // read_roles and read_tangent_access, then what they list.
         await Worked(admin, "create_role", new { name = "Lamplighters", permissions = Array.Empty<string>() });
@@ -392,13 +386,12 @@ public sealed class TheToolsTests
         await Worked(admin, "change_tangent_access", new { tangent = slug, role = access.GetProperty("word").GetString(), access = access.GetProperty("offered")[0].GetString() });
         await Worked(admin, "delete_role", new { role = word });
 
-        // read_applications, then admit on an applicant's id.
-        var waiting = (await Participant.Get(Bea, Cancellation))!;
-        waiting.Standing = Standing.Applied;
-        waiting.AppliedAt = DateTimeOffset.UtcNow;
-        await waiting.Save(Cancellation);
-        var applicant = (await Worked(admin, "read_applications", new { })).GetProperty("applications")[0].GetProperty("id").GetString();
-        await Worked(admin, "admit", new { participant = applicant });
+        // read_applications, then set_standing on an applicant's id with a standing in their can.
+        var arriving = Persona.Id("applicant4tools");
+        await Participant.Arrive(arriving, Persona.Did(arriving), "applicant4tools.example", Admission.Apply, DateTimeOffset.UtcNow).Save(Cancellation);
+        var applicant = (await Worked(admin, "read_applications", new { })).GetProperty("applications")[0];
+        Assert.Equal(["admitted", "declined"], applicant.GetProperty("can").EnumerateArray().Select(each => each.GetString()));
+        await Worked(admin, "set_standing", new { participant = applicant.GetProperty("id").GetString(), to = "admitted" });
     }
 
     private static async Task FollowAddress(ToolClient client, string address)

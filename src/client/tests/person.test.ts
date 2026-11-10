@@ -15,8 +15,11 @@ const profile =
   '<span class="profile-roles">Moderators</span><span>Here since <time>3 November 2026</time></span></p>' +
   '<p class="tangent-description profile-description">Makes lanterns.</p></div></div></section>' +
   '<section class="profile-standing"><div class="door-offer bar participant"><p class="door-offer-line">Lumen is a member.</p>' +
-  '<div class="people-answers"><form method="post" action="/settings/people/ban"><input type="hidden" name="participant" value="did:plc:lumen">' +
-  '<input type="hidden" name="back" value="/p/lumen.example"><button type="submit">Ban</button></form></div></div></section></main>'
+  '<div class="people-answers"><form method="post" action="/settings/people/give"><input type="hidden" name="participant" value="did:plc:lumen">' +
+  '<input type="hidden" name="back" value="/p/lumen.example"><button type="submit">Give Moderator role</button></form>' +
+  '<form method="post" action="/settings/people/standing"><input type="hidden" name="return" value="/p/lumen.example">' +
+  '<input type="hidden" name="participant" value="did:plc:lumen"><input type="hidden" name="to" value="banned">' +
+  '<button type="submit">Ban</button></form></div></div></section></main>'
 
 let fetched: ReturnType<typeof vi.fn>
 let mounted: MountedIsland[] = []
@@ -59,6 +62,7 @@ test('a click on a mention opens the card beside it, read from the profile, and 
   expect(actions.map((action) => action.textContent)).toEqual(['Profile', 'Copy link', 'On Bluesky ↗'])
   expect(actions[2]!.getAttribute('href')).toBe('https://bsky.app/profile/did:plc:lumen')
   expect(card()!.querySelector<HTMLInputElement>('input[name="back"]')!.value).toBe('/t/workshop/lanterns')
+  expect(card()!.querySelector<HTMLInputElement>('input[name="return"]')!.value).toBe('/t/workshop/lanterns')
   expect(card()!.closest('dialog')).toBeNull()
   expect(mention.getAttribute('aria-expanded')).toBe('true')
 

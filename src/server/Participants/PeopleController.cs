@@ -17,16 +17,11 @@ using Tangent.Space;
 
 namespace Tangent.Participants;
 
-/// <summary>What timing someone out sends, as a form or one JSON object.</summary>
-public sealed record TimeOutInput(
-    [Description(Holds.Participant)] string? Participant = null,
-    [Description(Holds.TimeOutFor)] string? For = null,
-    [Description(Holds.Back)] string? Back = null);
-
-/// <summary>What changing someone's standing sends, as a form or one JSON object.</summary>
+/// <summary>What giving someone a standing sends, as a form or one JSON object.</summary>
 public sealed record StandingInput(
     [Description(Holds.Participant)] string? Participant = null,
-    [Description(Holds.Back)] string? Back = null);
+    [Description(Holds.StandingTo)] string? To = null,
+    [Description(Holds.TimeOutFor)] string? For = null);
 
 /// <summary>What giving someone a role sends, as a form or one JSON object.</summary>
 public sealed record GiveRoleInput(
@@ -53,12 +48,13 @@ public sealed record ChooseKindInput([Description(Holds.Kind)] string? Kind = nu
 /// <see cref="Bit.ManageStanding"/>, and each change to whoever does not hold the bit it needs, <c>401</c> to sign in and
 /// <c>403</c> otherwise, a page as the refusal's page and a JSON request as its problem, and answers a reader for whom the
 /// place does not exist what an address with nothing there receives. Its <c>POST</c>s take the participant's id in <c>participant</c>, as a form or a JSON
-/// object, and send one command: <c>time-out</c> sends <see cref="TimeOut"/> for the duration in <c>for</c>;
-/// <c>ban</c>, <see cref="Ban"/>; <c>lift</c>, <see cref="Lift"/>, after which the participant joins the member role
-/// where they lack it (<see cref="MemberRole"/>); <c>give</c> and <c>take</c>, <see cref="ChangeRole"/> for the role in
-/// <c>role</c>. A form is sent back to the page in <c>back</c> — this one, the participant's profile, where the same
-/// forms are, or the page their card was opened on — and a JSON request reads the participant as this page now lists them; a refusal reads the page again with
-/// the reason above the list, or a problem. Two changes are a participant's own, offered on their own profile: <c>/leave</c> ends the
+/// object, and send one command: <c>standing</c> sends <see cref="SetStanding"/> for the standing in <c>to</c>, one of the
+/// row's <c>can</c>, and for <c>timed-out</c> the duration in <c>for</c>, answered through Koan's <see cref="Answers"/>: a
+/// form is sent on to the page its <c>return</c> names — this one, the applications, the participant's profile, or the page
+/// their card was opened on — and a refused form reads the applications again where <c>return</c> names them, this page
+/// otherwise, with the reason above the list; <c>give</c> and <c>take</c> send <see cref="ChangeRole"/> for the role in
+/// <c>role</c>, a form sent back to the page in <c>back</c>, a refusal reading this page again. A JSON request reads the
+/// participant as this page now lists them, or a problem. Two changes are a participant's own, offered on their own profile: <c>/leave</c> ends the
 /// place's grant to write as the account they hold now, sends <see cref="LeavePlace"/> and has Koan erase their person,
 /// signing them out, a form sent on to the door; <c>/kind</c> sends <see cref="ChooseKind"/> for the kind in <c>kind</c>,
 /// a form sent back to their profile; a JSON request reads where each left them.</summary>
@@ -67,11 +63,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
 {
     public const string Path = "/settings/people";
 
-    public const string TimeOutPath = Path + "/time-out";
-
-    public const string BanPath = Path + "/ban";
-
-    public const string LiftPath = Path + "/lift";
+    public const string StandingPath = Path + "/standing";
 
     public const string GivePath = Path + "/give";
 
@@ -99,6 +91,9 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
     /// <summary>The field that names the participant changed.</summary>
     public const string ParticipantField = "participant";
 
+    /// <summary>The field that names the standing given, by the word <c>can</c> lists it by.</summary>
+    public const string ToField = "to";
+
     /// <summary>The field that says how long a timeout lasts: one of <see cref="People.Durations"/>.</summary>
     public const string ForField = "for";
 
@@ -106,7 +101,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
     /// participant's <c>give</c> or <c>take</c>.</summary>
     public const string RoleField = "role";
 
-    /// <summary>The field that names the page a form returns to.</summary>
+    /// <summary>The field that names the page a form that gives or takes a role returns to.</summary>
     public const string BackField = "back";
 
     /// <summary>The query parameter that carries the cursor of the page to continue from.</summary>
@@ -126,7 +121,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
 
     [HttpGet(Path)]
     [Tool(Name = "read_people")]
-    [Description("Find the participants admitted here, a page at a time, by the start of a handle, by standing or by a role they hold, with what you may change of each, for whoever holds ManageStanding or ManageRoles. Then call time_out, ban, lift, give_role or take_role where one's entry allows it.")]
+    [Description("Find the participants admitted here, a page at a time, by the start of a handle, by standing or by a role they hold, with what you may change of each, for whoever holds ManageStanding or ManageRoles. Then call set_standing, give_role or take_role where one's entry allows it.")]
     [Needs(Bit.ManageStanding, AnyOf = Bit.ManageRoles)]
     public async Task<IActionResult> Get([FromQuery(Name = After), Description(Holds.After)] string? after, [FromQuery(Name = HandleQuery), Description(Holds.HandleStart)] string? handle,
         [FromQuery(Name = StandingQuery), Description(Holds.PeopleStanding)] string? standing, [FromQuery(Name = RoleQuery), Description(Holds.PeopleRole)] string? role,
@@ -161,29 +156,38 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
             Role is null ? "" : RoleQuery + "=" + Uri.EscapeDataString(Role)).TrimStart('?');
     }
 
-    [HttpPost(TimeOutPath)]
+    [HttpPost(StandingPath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
-    [Tool(Name = "time_out", Destructive = true, Idempotent = false, OpenWorld = false)]
+    [Tool(Name = "set_standing", Destructive = true, Idempotent = true, OpenWorld = false)]
     [Needs(Bit.ManageStanding)]
-    [Description("Time a participant out for an hour, a day or a week, for whoever holds ManageStanding: they read and report, and post nothing, and they are told. lift ends it early.")]
-    public Task<IActionResult> PostTimeOut(TimeOutInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) =>
-        People.Length(input.For) is { } length
-            ? new TimeOut(actor, participant, DateTimeOffset.UtcNow + length)
-            : null, People.NotADuration, ct);
+    [Description("Give a participant a standing listed in their can in read_people or read_applications, for whoever holds ManageStanding, and they are told: admitted takes part here, which admits an applicant and lifts a timeout or a ban; declined declines an applicant, who goes on reading what a visitor reads; timed-out, with for set to hour, day or week, lets them read and report and post nothing until it ends; banned makes the place disappear for them, every page and every stream. Giving the standing they hold changes nothing.")]
+    public async Task<IActionResult> PostStanding(StandingInput input, CancellationToken ct)
+    {
+        var personId = Here.Of(HttpContext).PersonId!;
+        return await this.Kept(await Give(personId, input, ct), refused => Again(personId, refused, ct));
+    }
 
-    [HttpPost(BanPath)]
-    [RequestSizeLimit(PostWrites.RequestLimit)]
-    [Tool(Name = "ban", Destructive = true, Idempotent = true, OpenWorld = false)]
-    [Needs(Bit.ManageStanding)]
-    [Description("Ban a participant, for whoever holds ManageStanding: the place disappears for them, every page and every stream, as an address with nothing at it answers. lift reverses it.")]
-    public Task<IActionResult> PostBan(StandingInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) => new Ban(actor, participant), null, ct);
+    /// <summary>The standing <paramref name="input"/> names, given by <paramref name="personId"/>, and its answer: the
+    /// participant's row as the people list them, written, or the refusal.</summary>
+    private async Task<IActionResult> Give(string personId, StandingInput input, CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-store";
+        if (People.Giving(input.To) is not { } to) return this.Refused(People.NotAStanding);
+        var length = People.Length(input.For);
+        if (to == Standing.TimedOut && length is null) return this.Refused(People.NotADuration);
+        return await this.Answer(await new SetStanding(personId, input.Participant ?? "", to, DateTimeOffset.UtcNow + length).Send(),
+            async participant => this.Written(Path, await Row(participant, personId, ct), created: false));
+    }
 
-    [HttpPost(LiftPath)]
-    [RequestSizeLimit(PostWrites.RequestLimit)]
-    [Tool(Name = "lift", Destructive = true, Idempotent = true, OpenWorld = false)]
-    [Needs(Bit.ManageStanding)]
-    [Description("Lift a participant's timeout or ban, so they take part again, for whoever holds ManageStanding.")]
-    public Task<IActionResult> PostLift(StandingInput input, CancellationToken ct) => Change(input.Participant, input.Back, (actor, participant) => new Lift(actor, participant), null, ct);
+    /// <summary>The page a refused form reads again, with the reason above the list: the applications where its
+    /// <c>return</c> names them, those that wait where it names those, and the people otherwise.</summary>
+    private async Task<object?> Again(string personId, Problem refused, CancellationToken ct)
+    {
+        var onward = Request.Form[Form.ReturnField].ToString();
+        if (new PathString(onward.Split('?')[0]) == ApplicationsController.Path)
+            return await ApplicationsController.First(HttpContext, baseUrl, onward == ApplicationsController.WaitingAddress(""), ct) with { Failure = refused.Detail };
+        return await Page(Here.Of(HttpContext).Around, personId, Narrowed.None, null, null, null, ct) with { Failure = refused.Detail };
+    }
 
     [HttpPost(GivePath)]
     [RequestSizeLimit(PostWrites.RequestLimit)]
@@ -320,9 +324,15 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
             return StatusCode(StatusCodes.Status303SeeOther);
         }
 
+        return new ObjectResult(await Row(participant, personId, ct)) { ContentTypes = { "application/json" } };
+    }
+
+    /// <summary>One participant as the people list them for the reader <paramref name="personId"/>.</summary>
+    private async Task<PeoplePage.Listed> Row(Participant participant, string? personId, CancellationToken ct)
+    {
         var place = await Capabilities.Load(personId, null, null, ct);
         var lister = await Lister.Load(roles, place, personId, BaseAddress(), ct);
-        return new ObjectResult(await lister.Row(participant, ct)) { ContentTypes = { "application/json" } };
+        return await lister.Row(participant, ct);
     }
 
     /// <summary>A refusal: for a JSON request, the problem its reason answers as; for a form, the page again, read afresh
@@ -373,7 +383,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
             narrowed.Role ?? "",
             held?.Name,
             people,
-            Forms(place, baseAddress, here),
+            Forms(place, baseAddress, baseUrl.PathBase, here[(baseUrl.PathBase.Value?.Length ?? 0)..]),
             place.Can,
             lister.Space.Name,
             baseAddress + "/",
@@ -388,28 +398,31 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
         => place.Holds(Bit.ManageStanding) || place.Holds(Bit.ManageRoles) ? null : place.Gate(Bit.ManageStanding);
 
     /// <summary>The forms of the changes the reader of <paramref name="place"/> may make, under
-    /// <paramref name="baseAddress"/>, returning to <paramref name="back"/>,
-    /// a path under the base URL; null where they may not read the people.</summary>
-    public static PeopleForms? Forms(Capabilities place, string baseAddress, string back)
+    /// <paramref name="baseAddress"/>, returning to <paramref name="here"/>, a path of this place under
+    /// <paramref name="pathBase"/>; null where they may not read the people.</summary>
+    public static PeopleForms? Forms(Capabilities place, string baseAddress, PathString pathBase, string here)
     {
         if (ReadGate(place) is not null) return null;
-        var standing = place.Holds(Bit.ManageStanding);
         var roles = place.Holds(Bit.ManageRoles);
-        var durations = People.Durations.Select(duration => duration.Word).ToList();
         Form Changing(string path, string whose, params Form.Field[] more) => Form.Posting(baseAddress + path,
         [
             new Form.Field(ParticipantField, $"The id of a participant listed here with {whose}."),
             .. more,
-            new Form.Field(BackField, Holds.Back, back)
+            new Form.Field(BackField, Holds.Back, pathBase + here)
         ]);
         return new PeopleForms(
-            standing ? Changing(TimeOutPath, "time-out in their can", new Form.Field(ForField, "How long the timeout lasts: " + Wording.Joined(durations, "or") + ".")) : null,
-            standing ? Changing(BanPath, "ban in their can") : null,
-            standing ? Changing(LiftPath, "lift in their can") : null,
+            place.Holds(Bit.ManageStanding) ? Giving(baseAddress, here) : null,
             roles ? Changing(GivePath, "the role in their give", new Form.Field(RoleField, Holds.GivenRole)) : null,
-            roles ? Changing(TakePath, "the role in their take", new Form.Field(RoleField, Holds.TakenRole)) : null,
-            durations);
+            roles ? Changing(TakePath, "the role in their take", new Form.Field(RoleField, Holds.TakenRole)) : null);
     }
+
+    /// <summary>The form that gives a standing, under <paramref name="baseAddress"/>, sending a page's form on to
+    /// <paramref name="onward"/>, a path of this place: the participant, the standing in <c>to</c>, and for a timeout how
+    /// long in <c>for</c>.</summary>
+    public static Form Giving(string baseAddress, string onward) => Form.Posting(baseAddress + StandingPath,
+        new Form.Field(ParticipantField, Holds.Participant),
+        new Form.Field(ToField, Holds.StandingTo),
+        new Form.Field(ForField, Holds.TimeOutFor)) with { Return = onward };
 
     /// <summary>The page a form returns to: the path it sent in <c>back</c> where that is under the base URL's, of visible
     /// characters, without scheme or authority — the people, a profile, or the page a person's card was opened on; the
@@ -489,7 +502,7 @@ public sealed class PeopleController(KoanWebBaseUrl baseUrl, RoleCollection role
                 People.Word(standing),
                 standing == Standing.TimedOut ? participant.StandingUntil : null,
                 names.OrderByDescending(name => name.Position).ThenBy(name => name.Name, StringComparer.Ordinal).Select(name => name.Name).ToList(),
-                offer.Can,
+                offer.Gives,
                 offer.Give,
                 offer.Take);
         }

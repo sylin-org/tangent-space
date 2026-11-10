@@ -25,6 +25,8 @@ export const person = defineComponent({
   },
   setup(props) {
     const profiles = new URL('p/', new URL(props.door, location.href)).pathname
+    // The place's own path, which a path a form returns to is written under.
+    const base = profiles.slice(0, -'/p/'.length)
     let card: HTMLElement | null = null
     let opener: HTMLElement | null = null
     let pressed: ReturnType<typeof setTimeout> | undefined
@@ -115,7 +117,10 @@ export const person = defineComponent({
       if (standing) {
         const changes = standing.cloneNode(true) as HTMLElement
         changes.classList.add('person-card-standing')
+        // A role's form returns to the page by its path, a standing's by its path under the place's own (Koan's return).
         for (const back of changes.querySelectorAll<HTMLInputElement>('input[name="back"]')) back.value = location.pathname + location.search
+        for (const onward of changes.querySelectorAll<HTMLInputElement>('input[name="return"]'))
+          onward.value = location.pathname.slice(base.length) + location.search
         into.append(changes)
       }
 

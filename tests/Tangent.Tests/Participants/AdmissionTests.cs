@@ -192,14 +192,18 @@ public sealed class AdmissionTests
         var html = await Send(mo.Client, HttpMethod.Get, path);
         Assert.Contains("href=\"" + BaseUrl + "/p/grace4admission.example\"", html.Body);
         Assert.Contains("<summary class=\"button\">Decline</summary>", html.Body);
+        Assert.Equal(["admitted", "declined"], listed.Json.GetProperty("applications")[0].GetProperty("can").EnumerateArray().Select(to => to.GetString()));
         var before = await Event.Count.Exact(Cancellation);
 
-        var admitted = await Form(mo, path, ApplicationsController.AdmitPath, new Dictionary<string, string> { [ApplicationsController.ParticipantField] = Grace });
-        var declined = await Json(mo, path, ApplicationsController.DeclinePath, new { participant = Hal });
+        var admitted = await Form(mo, path, PeopleController.StandingPath, new Dictionary<string, string>
+        {
+            [PeopleController.ParticipantField] = Grace, [PeopleController.ToField] = "admitted", [Render.Form.ReturnField] = path
+        });
+        var declined = await Json(mo, path, PeopleController.StandingPath, new { participant = Hal, to = "declined" });
 
         Assert.Equal((HttpStatusCode.SeeOther, BaseUrl + path), (admitted.Status, admitted.Location));
         Assert.Equal((HttpStatusCode.OK, "declined"), (declined.Status, declined.Json.GetProperty("standing").GetString()));
-        Assert.Contains(nameof(Bit.ManageStanding), declined.Json.GetProperty("can").EnumerateArray().Select(verb => verb.GetString()));
+        Assert.Equal(["admitted"], declined.Json.GetProperty("can").EnumerateArray().Select(to => to.GetString()));
         var graceRow = (await Participant.Get(Grace, Cancellation))!;
         Assert.Equal((Standing.Admitted, (DateTimeOffset?)null), (graceRow.Standing, graceRow.AppliedAt));
         Assert.True(await IsMember(tangentSpace, Grace));
@@ -225,16 +229,27 @@ public sealed class AdmissionTests
         var after = await Send(mo.Client, HttpMethod.Get, path, json: true);
         Assert.Equal([(Hal, "declined")], after.Json.GetProperty("applications").EnumerateArray()
             .Select(applicant => (applicant.GetProperty("id").GetString(), applicant.GetProperty("state").GetString())));
-        Assert.Equal(HttpStatusCode.OK, (await Json(mo, path, ApplicationsController.AdmitPath, new { participant = Hal })).Status);
+        Assert.Equal(["admitted"], after.Json.GetProperty("applications")[0].GetProperty("can").EnumerateArray().Select(to => to.GetString()));
+        Assert.DoesNotContain("<summary class=\"button\">Decline</summary>", (await Send(mo.Client, HttpMethod.Get, path)).Body);
+        Assert.Equal(HttpStatusCode.OK, (await Json(mo, path, PeopleController.StandingPath, new { participant = Hal, to = "admitted" })).Status);
         Assert.True(await IsMember(tangentSpace, Hal));
         // Deciding an admitted participant again: admitting writes nothing, and declining is refused.
         using var ivy = await SignedIn(tangentSpace, Ivy);
         var events = await Event.Count.Exact(Cancellation);
         // No application is listed now, so the token comes from the page of a Tangent, which carries a form.
         var settings = "/t/" + General;
-        Assert.Equal(HttpStatusCode.OK, (await Json(mo, settings, ApplicationsController.AdmitPath, new { participant = Hal })).Status);
-        Assert.Equal(HttpStatusCode.Conflict, (await Json(mo, settings, ApplicationsController.DeclinePath, new { participant = Grace })).Status);
-        Assert.Equal(HttpStatusCode.NotFound, (await Json(mo, settings, ApplicationsController.AdmitPath, new { participant = Persona.Id("nobody") })).Status);
+        Assert.Equal(HttpStatusCode.OK, (await Json(mo, settings, PeopleController.StandingPath, new { participant = Hal, to = "admitted" })).Status);
+        var redeclined = await Json(mo, settings, PeopleController.StandingPath, new { participant = Grace, to = "declined" });
+        Assert.Equal((HttpStatusCode.Conflict, "transition"), (redeclined.Status, redeclined.Word));
+        Assert.Equal(HttpStatusCode.NotFound, (await Json(mo, settings, PeopleController.StandingPath, new { participant = Persona.Id("nobody"), to = "admitted" })).Status);
+        // An applicant is never banned before they are admitted: a form from the applications reads them again with Koan's sentence.
+        var banned = await Form(mo, path, PeopleController.StandingPath, new Dictionary<string, string>
+        {
+            [PeopleController.ParticipantField] = Ivy, [PeopleController.ToField] = "banned", [Render.Form.ReturnField] = path
+        });
+        Assert.Equal(HttpStatusCode.Conflict, banned.Status);
+        Assert.Contains("Standing does not go from Applied to Banned; from Applied it goes to Admitted or Declined.", banned.Body);
+        Assert.Contains("ivy4admission", banned.Body);
         Assert.Equal(events, await Event.Count.Exact(Cancellation));
 
         // A member sees no applications, in the rail or the page, and is refused.
@@ -245,7 +260,7 @@ public sealed class AdmissionTests
         Assert.DoesNotContain("ivy4admission", (await Send(ada.Client, HttpMethod.Get, path)).Body);
         Assert.DoesNotContain("Applications", (await Send(ada.Client, HttpMethod.Get, TangentSpaceSettingsController.Path, json: true)).Json
             .GetProperty("sections").EnumerateArray().Select(section => section.GetProperty("name").GetString()));
-        var refused = await Json(ada, "/t/" + General, ApplicationsController.AdmitPath, new { participant = Ivy });
+        var refused = await Json(ada, "/t/" + General, PeopleController.StandingPath, new { participant = Ivy, to = "admitted" });
         Assert.Equal((HttpStatusCode.Forbidden, gate), (refused.Status, refused.Word));
         Assert.Equal(Standing.Applied, (await Participant.Get(Ivy, Cancellation))!.Standing);
         using var visitor = Agent(tangentSpace);
@@ -340,7 +355,7 @@ public sealed class AdmissionTests
         {
             var applicant = Participant.Arrive(Persona.Id($"waiting{i:D2}"), Persona.Did(Persona.Id($"waiting{i:D2}")), $"waiting{i:D2}.example", Admission.Apply, start.AddMinutes(i));
             applicant.Arrived(i + 1);
-            if (i >= count) applicant.Decline(DateTimeOffset.UtcNow);
+            if (i >= count) applicant.Standing = Standing.Declined;
             Assert.IsType<Outcome<Participant>.Done>(await new Store<Participant>(applicant).Send(Cancellation));
         }
 
@@ -368,9 +383,10 @@ public sealed class AdmissionTests
 
         // A decision sent from those that wait comes back to them, and the one decided no longer waits there.
         var newest = Persona.Id($"waiting{count - 1:D2}");
-        var admitted = await Form(mo, path + "?state=waiting", ApplicationsController.AdmitPath, new Dictionary<string, string>
+        Assert.Contains("name=\"return\" value=\"" + ApplicationsController.WaitingAddress("") + "\"", WebUtility.HtmlDecode((await Send(mo.Client, HttpMethod.Get, path + "?state=waiting")).Body));
+        var admitted = await Form(mo, path + "?state=waiting", PeopleController.StandingPath, new Dictionary<string, string>
         {
-            [ApplicationsController.ParticipantField] = newest, [ApplicationsController.StateQuery] = "waiting"
+            [PeopleController.ParticipantField] = newest, [PeopleController.ToField] = "admitted", [Render.Form.ReturnField] = ApplicationsController.WaitingAddress("")
         });
         Assert.Equal((HttpStatusCode.SeeOther, ApplicationsController.WaitingAddress(BaseUrl)), (admitted.Status, admitted.Location));
         Assert.Equal(Persona.Id($"waiting{count - 2:D2}"),
