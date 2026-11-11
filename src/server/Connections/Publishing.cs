@@ -24,8 +24,9 @@ public sealed record Publishing(string State, string Sentence, string? Detail, F
     /// its author's Connection and, for its author, that Connection. A reader other than the author and an author who said
     /// not now read no line; an article that is not public or is removed reads none either, unless its copy is still out,
     /// which its author is told, with what takes it down; one they took down is coming down until it is, and is then
-    /// offered again; and one written as an account they are no longer bound to stays with that account
-    /// (<see cref="EarlierSentence"/>).</summary>
+    /// offered again; one their Connection publishes on its own (<see cref="Connection.OnItsOwn"/>) is publishing, or
+    /// says its trouble, until its receipt stands; and one written as an account they are no longer bound to stays with
+    /// that account (<see cref="EarlierSentence"/>).</summary>
     public static async Task<(Publishing? Line, string? Document)> For(Post root, Participants.Participant? reader, bool open,
         string articleAddress, string baseAddress, CancellationToken ct)
     {
@@ -57,6 +58,10 @@ public sealed record Publishing(string State, string Sentence, string? Detail, F
                 publish, Form.Posting(baseAddress + PublishController.NotNowPath, new Form.Field(PublishController.BackField, "The page to come back to.",
                     PublishController.Back(articleAddress, baseAddress))), null, connections), document);
         if (connection.State == ConnectionState.NotNow) return (null, document);
+        if (receipt is null && !connection.NeedsGrant && connection.OnItsOwn(root.LogSeq) && Receipt.Theirs(root, null))
+            return (connection.Trouble is { } trouble
+                ? new Publishing(ConnectionsController.Word(ArticleState.Trying), trouble, null, null, null, null, connections)
+                : new Publishing(ConnectionsController.Word(ArticleState.Publishing), PublishingSentence, null, null, null, null, connections), document);
         if (receipt is null || receipt.Retracted || receipt is { Withheld: true, Document: null })
             return (connection.NeedsGrant
                 ? new Publishing(ConnectionsController.Word(ArticleState.NeedsGrant), Syndication.Ungranted, null, publish, null, null, connections)
@@ -72,7 +77,7 @@ public sealed record Publishing(string State, string Sentence, string? Detail, F
                 connection.NeedsGrant ? Form.Posting(baseAddress + PublishController.GrantPath) : null, null, elsewhere, connections),
             ArticleState.EditedByOthers => new Publishing(word, "Someone else edited this since it went out. Publish this version as yours?",
                 "Until you do, your copy on Bluesky stays as you wrote it.", publish, null, elsewhere, connections),
-            ArticleState.Publishing => new Publishing(word, "Publishing on Bluesky as you…", null, null, null, null, connections),
+            ArticleState.Publishing => new Publishing(word, PublishingSentence, null, null, null, null, connections),
             ArticleState.Updating => new Publishing(word, "Updating it on Bluesky…", null, null, null, elsewhere, connections),
             ArticleState.Trying => new Publishing(word, connection.Trouble ?? Syndication.Unreachable, null, null, null, elsewhere, connections),
             ArticleState.NeedsGrant => new Publishing(word, Syndication.Ungranted, null, publish, null, elsewhere, connections),
@@ -80,6 +85,9 @@ public sealed record Publishing(string State, string Sentence, string? Detail, F
             _ => new Publishing(word, "Published on Bluesky as you.", null, null, null, elsewhere, connections)
         }) with { Retract = retract }, document);
     }
+
+    /// <summary>What the author reads of an article on its way out, chosen or going out on its own.</summary>
+    public const string PublishingSentence = "Publishing on Bluesky as you…";
 
     /// <summary>What the author of an article written as a Bluesky account they are no longer bound to reads: it, and any
     /// copy of it, stays with that account, and their Connection publishes only what they write as the one they hold.</summary>

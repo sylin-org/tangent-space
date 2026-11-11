@@ -70,7 +70,7 @@ public sealed class Elsewhere : Entity<Elsewhere>, IKoanJob<Elsewhere>
 
         var reading = context.Services.GetRequiredService<Readers>().Lately(elsewhere.Id);
         elsewhere.Quiet = reading ? 0 : Math.Min(elsewhere.Quiet + 1, 10);
-        // The next read is a job of its own: a run that defers itself keeps nothing it changed.
+        // The next read is a job of its own, since a poll outlives a job's deadline.
         await elsewhere.Job.Submit("", TimeSpan.FromSeconds(Math.Min(LongestWait.TotalSeconds, Reading.TotalSeconds * Math.Pow(2, elsewhere.Quiet))), ct);
     }
 
