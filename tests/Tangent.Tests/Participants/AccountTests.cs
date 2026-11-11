@@ -101,7 +101,7 @@ public sealed class AccountTests
     }
 
     /// <summary>The clock moved on by <see cref="By"/>.</summary>
-    private sealed class Ahead : TimeProvider
+    internal sealed class Ahead : TimeProvider
     {
         public TimeSpan By { get; set; }
 

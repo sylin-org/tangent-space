@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Text.Json.Nodes;
 using Koan.Data.Core.Commands;
+using Koan.Jobs;
 using Koan.Web.Auth.Connector.Atproto.Protocol;
 using Microsoft.Extensions.DependencyInjection;
 using Tangent.Access;
@@ -265,6 +266,128 @@ public sealed class PublishTests
         await Until(() => repository.Uploads.Count == 2 && repository.Records[publication]["icon"]!.ToJsonString() == repository.Uploads.Last().Blob.ToJsonString());
     }
 
+    [Fact]
+    public async Task A_publish_that_fails_says_why_waits_longer_each_time_and_goes_out_once_bluesky_answers()
+    {
+        var repository = new Repository { Unreachable = true };
+        var clock = new Participants.AccountTests.Ahead();
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(),
+            services => services.AddSingleton<IAtprotoRepository>(repository).AddSingleton<TimeProvider>(clock), Cancellation);
+        await Place(tangentSpace);
+        var article = await Started(Ada, "Mending with gold", "A cracked bowl tells you where it was weak.", Articles);
+        var page = TopicPath(article);
+        using var ada = await SignedIn(tangentSpace, Ada);
+        await Form(ada, page, page + "/" + PublishController.Segment, []);
+
+        var first = await Failed(1);
+        Assert.InRange(Waited(first, repository.Unanswered.First()), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30) + Close);
+        var body = (await Send(ada.Client, HttpMethod.Get, page)).Body;
+        Assert.Contains("data-state=\"" + ConnectionsController.Word(ArticleState.Trying) + "\"", body);
+        Assert.Contains(System.Text.Encodings.Web.HtmlEncoder.Default.Encode(Syndication.Unreachable), body);
+        Assert.Equal("trouble", (await Send(ada.Client, HttpMethod.Get, ConnectionsController.Path, json: true)).Json
+            .GetProperty("bluesky").GetProperty("state").GetString());
+
+        Past(first);
+        var second = await Failed(2);
+        Assert.InRange(Waited(second, repository.Unanswered.Last()), TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60) + Close);
+
+        repository.Unreachable = false;
+        Past(second);
+        await Until(() => repository.Records.ContainsKey($"at://{Persona.Did(Ada)}/{AtprotoAdapter.Documents}/{article.Id}"));
+        await Until(async () => (await Connection.Get(Ada, Cancellation))?.Trouble is null);
+        Assert.Contains("Published on Bluesky as you.", (await Send(ada.Client, HttpMethod.Get, page)).Body);
+
+        // The stored Connection once its run has failed the given number of times in a row, the run settled.
+        async Task<Connection> Failed(int times)
+        {
+            await Settled(async () => (await Connection.Get(Ada, Cancellation))?.Failures >= times);
+            var connection = (await Connection.Get(Ada, Cancellation))!;
+            Assert.True(repository.Unanswered.Count >= times, "The run never reached the author's repository.");
+            Assert.Equal((times, Syndication.Unreachable), (connection.Failures, connection.Trouble));
+            Assert.NotNull(connection.RetryAt);
+            await Until(async () => await connection.Job.Status(Cancellation) == JobStatus.Queued);
+            return connection;
+        }
+
+        // Moves the clock past the next attempt, its jitter included, while no run is in flight.
+        void Past(Connection troubled) => clock.By += troubled.RetryAt!.Value - DateTimeOffset.UtcNow + TimeSpan.FromSeconds(3);
+    }
+
+    [Fact]
+    public async Task A_connection_a_page_or_more_behind_reads_through_and_its_newer_article_goes_out_on_its_own()
+    {
+        var repository = new Repository();
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(),
+            services => services.AddSingleton<IAtprotoRepository>(repository), Cancellation);
+        await Place(tangentSpace);
+        var stream = tangentSpace.Services.GetRequiredService<Events.EventStream>();
+        var from = await stream.Head(Cancellation);
+        Assert.IsType<Outcome<Connection>.Done>(await new Store<Connection>(new Connection
+        {
+            Id = Ada, State = ConnectionState.Publishing, From = from, Cursor = from, Since = DateTimeOffset.UtcNow
+        }).Send(Cancellation));
+        tangentSpace.Services.GetRequiredService<Nudge>().Changed();
+
+        var talk = await Started(Bea, "Kintsugi", "Who has tried it?");
+        Assert.IsType<Outcome<int>.Done>(await new Events.UnreadTests.Many(Events.EventKind.Mention, Bea, Mo, talk, Syndication.Page + 50).Send(Cancellation));
+        var article = await Started(Ada, "Mending with gold", "A cracked bowl tells you where it was weak.", Articles);
+
+        var head = await stream.Head(Cancellation);
+        await Settled(async () => (await Connection.Get(Ada, Cancellation))?.Cursor >= head);
+        Assert.Equal(head, (await Connection.Get(Ada, Cancellation))?.Cursor);
+        await Until(() => repository.Records.ContainsKey($"at://{Persona.Did(Ada)}/{AtprotoAdapter.Documents}/{article.Id}"));
+    }
+
+    [Fact]
+    public async Task An_article_going_out_on_its_own_says_its_trouble_and_never_offers_a_publish()
+    {
+        var repository = new Repository { Unreachable = true };
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(),
+            services => services.AddSingleton<IAtprotoRepository>(repository), Cancellation);
+        await Place(tangentSpace);
+        var head = await tangentSpace.Services.GetRequiredService<Events.EventStream>().Head(Cancellation);
+        Assert.IsType<Outcome<Connection>.Done>(await new ChooseToPublish(Ada, null, null, 0, head, DateTimeOffset.UtcNow).Send(Cancellation));
+        tangentSpace.Services.GetRequiredService<Nudge>().Changed();
+        var article = await Started(Ada, "Mending with gold", "A cracked bowl tells you where it was weak.", Articles);
+        using var ada = await SignedIn(tangentSpace, Ada);
+
+        await Until(async () => (await Connection.Get(Ada, Cancellation))?.Trouble == Syndication.Unreachable);
+        var body = (await Send(ada.Client, HttpMethod.Get, TopicPath(article))).Body;
+        Assert.Contains("data-state=\"" + ConnectionsController.Word(ArticleState.Trying) + "\"", body);
+        Assert.Contains(System.Text.Encodings.Web.HtmlEncoder.Default.Encode(Syndication.Unreachable), body);
+        Assert.DoesNotContain("Publish this on Bluesky", body);
+        Assert.Null(await Receipt.Get(Receipt.Key(Ada, article.Id), Cancellation));
+    }
+
+    [Fact]
+    public async Task An_article_the_connection_read_past_while_its_tangent_was_private_offers_a_publish_once_it_is_public()
+    {
+        var repository = new Repository();
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(),
+            services => services.AddSingleton<IAtprotoRepository>(repository), Cancellation);
+        await Place(tangentSpace);
+        const string drafts = "drafts";
+        await Given.ATangent(tangentSpace, drafts, Audience.Private, Cancellation, PostKind.Article);
+        var head = await tangentSpace.Services.GetRequiredService<Events.EventStream>().Head(Cancellation);
+        Assert.IsType<Outcome<Connection>.Done>(await new ChooseToPublish(Ada, null, null, 0, head, DateTimeOffset.UtcNow).Send(Cancellation));
+        tangentSpace.Services.GetRequiredService<Nudge>().Changed();
+        var article = await Started(Ada, "Mending with gold", "A cracked bowl tells you where it was weak.", drafts);
+        await ReadThrough(tangentSpace);
+
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new ChangeTangentRow(drafts, Mo, Audience: Audience.Public).Send(Cancellation));
+        using var ada = await SignedIn(tangentSpace, Ada);
+        var body = (await Send(ada.Client, HttpMethod.Get, TopicPath(article))).Body;
+        Assert.Contains("Publish this on Bluesky too?", body);
+        Assert.DoesNotContain("data-state=\"" + ConnectionsController.Word(ArticleState.Publishing) + "\"", body);
+    }
+
+    /// <summary>How long a failed run waits before its next attempt: its <see cref="Connection.RetryAt"/> less when the
+    /// repository last went unanswered, which is when the run ended.</summary>
+    private static TimeSpan Waited(Connection troubled, DateTimeOffset ended) => troubled.RetryAt!.Value - ended;
+
+    /// <summary>How near a wait measured from outside the run comes to the one it set.</summary>
+    private static readonly TimeSpan Close = TimeSpan.FromSeconds(1);
+
     /// <summary>The record's basic theme as its background, foreground, accent and accent foreground, each as r,g,b and each
     /// a <c>site.standard.theme.color#rgb</c>; null for none.</summary>
     private static string? Theme(JsonObject record)
@@ -298,6 +421,14 @@ public sealed class PublishTests
         while (!await landed()) await Task.Delay(TimeSpan.FromMilliseconds(100), bound.Token);
     }
 
+    /// <summary>Waits until <paramref name="landed"/> holds or <see cref="Landing"/> passes, so the proof after it says
+    /// what stands either way.</summary>
+    private static async Task Settled(Func<Task<bool>> landed)
+    {
+        var until = DateTimeOffset.UtcNow + Landing;
+        while (!await landed() && DateTimeOffset.UtcNow < until) await Task.Delay(TimeSpan.FromMilliseconds(100), Cancellation);
+    }
+
     /// <summary>An author's repository that holds their grant and keeps every record put in it.</summary>
     internal sealed class Repository : IAtprotoRepository
     {
@@ -313,8 +444,20 @@ public sealed class PublishTests
 
         public Task<bool> Holds(string did, IReadOnlyCollection<string> scopes, CancellationToken ct = default) => Task.FromResult(Holding(did));
 
+        /// <summary>Whether the author's server answers: while it does not, every put fails as a request that got no answer.</summary>
+        public bool Unreachable { get; set; }
+
+        /// <summary>When each put went unanswered, in order.</summary>
+        public ConcurrentQueue<DateTimeOffset> Unanswered { get; } = [];
+
         public Task<AtprotoRecord> Put(string did, string collection, string rkey, JsonObject record, CancellationToken ct = default)
         {
+            if (Unreachable)
+            {
+                Unanswered.Enqueue(DateTimeOffset.UtcNow);
+                throw new HttpRequestException("The author's server did not answer.");
+            }
+
             var address = $"at://{did}/{collection}/{rkey}";
             Records[address] = (JsonObject)record.DeepClone();
             return Task.FromResult(new AtprotoRecord(address, "bafyrei" + Interlocked.Increment(ref _cids)));

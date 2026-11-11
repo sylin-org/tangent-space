@@ -295,7 +295,7 @@ public sealed class UnreadTests
 
     /// <summary>Appends <paramref name="Times"/> events of <paramref name="Kind"/> about <paramref name="Root"/> by
     /// <paramref name="ActorId"/> targeting <paramref name="TargetId"/>, in one transaction.</summary>
-    private sealed record Many(string Kind, string ActorId, string TargetId, Post Root, int Times) : ICommand<int>
+    internal sealed record Many(string Kind, string ActorId, string TargetId, Post Root, int Times) : ICommand<int>
     {
         public async Task<Outcome<int>> Run(CancellationToken ct)
         {
