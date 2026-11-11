@@ -25,7 +25,8 @@ public sealed record Publishing(string State, string Sentence, string? Detail, F
     /// not now read no line; an article that is not public or is removed reads none either, unless its copy is still out,
     /// which its author is told, with what takes it down; one they took down is coming down until it is, and is then
     /// offered again; one their Connection publishes on its own (<see cref="Connection.OnItsOwn"/>) is publishing, or
-    /// says its trouble, until its receipt stands; and one written as an account they are no longer bound to stays with
+    /// says its trouble, while the Connection has yet to read its arrival (<see cref="Connection.Cursor"/>), and one it
+    /// read past without sending is offered; and one written as an account they are no longer bound to stays with
     /// that account (<see cref="EarlierSentence"/>).</summary>
     public static async Task<(Publishing? Line, string? Document)> For(Post root, Participants.Participant? reader, bool open,
         string articleAddress, string baseAddress, CancellationToken ct)
@@ -58,7 +59,7 @@ public sealed record Publishing(string State, string Sentence, string? Detail, F
                 publish, Form.Posting(baseAddress + PublishController.NotNowPath, new Form.Field(PublishController.BackField, "The page to come back to.",
                     PublishController.Back(articleAddress, baseAddress))), null, connections), document);
         if (connection.State == ConnectionState.NotNow) return (null, document);
-        if (receipt is null && !connection.NeedsGrant && connection.OnItsOwn(root.LogSeq) && Receipt.Theirs(root, null))
+        if (receipt is null && !connection.NeedsGrant && connection.OnItsOwn(root.LogSeq) && root.LogSeq > connection.Cursor && Receipt.Theirs(root, null))
             return (connection.Trouble is { } trouble
                 ? new Publishing(ConnectionsController.Word(ArticleState.Trying), trouble, null, null, null, null, connections)
                 : new Publishing(ConnectionsController.Word(ArticleState.Publishing), PublishingSentence, null, null, null, null, connections), document);

@@ -359,6 +359,28 @@ public sealed class PublishTests
         Assert.Null(await Receipt.Get(Receipt.Key(Ada, article.Id), Cancellation));
     }
 
+    [Fact]
+    public async Task An_article_the_connection_read_past_while_its_tangent_was_private_offers_a_publish_once_it_is_public()
+    {
+        var repository = new Repository();
+        await using var tangentSpace = await TangentSpaceFixture.StartAsync(Settings(),
+            services => services.AddSingleton<IAtprotoRepository>(repository), Cancellation);
+        await Place(tangentSpace);
+        const string drafts = "drafts";
+        await Given.ATangent(tangentSpace, drafts, Audience.Private, Cancellation, PostKind.Article);
+        var head = await tangentSpace.Services.GetRequiredService<Events.EventStream>().Head(Cancellation);
+        Assert.IsType<Outcome<Connection>.Done>(await new ChooseToPublish(Ada, null, null, 0, head, DateTimeOffset.UtcNow).Send(Cancellation));
+        tangentSpace.Services.GetRequiredService<Nudge>().Changed();
+        var article = await Started(Ada, "Mending with gold", "A cracked bowl tells you where it was weak.", drafts);
+        await ReadThrough(tangentSpace);
+
+        Assert.IsType<Outcome<Tangents.Tangent>.Done>(await new ChangeTangentRow(drafts, Mo, Audience: Audience.Public).Send(Cancellation));
+        using var ada = await SignedIn(tangentSpace, Ada);
+        var body = (await Send(ada.Client, HttpMethod.Get, TopicPath(article))).Body;
+        Assert.Contains("Publish this on Bluesky too?", body);
+        Assert.DoesNotContain("data-state=\"" + ConnectionsController.Word(ArticleState.Publishing) + "\"", body);
+    }
+
     /// <summary>How long a failed run waits before its next attempt: its <see cref="Connection.RetryAt"/> less when the
     /// repository last went unanswered, which is when the run ended.</summary>
     private static TimeSpan Waited(Connection troubled, DateTimeOffset ended) => troubled.RetryAt!.Value - ended;
